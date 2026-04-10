@@ -1,0 +1,71 @@
+name: Azure App Service Staging Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: azure-appservice-staging
+  cancel-in-progress: true
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: staging
+    env:
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'flow-staging-api' }}
+      PACKAGE_PATH: ./.azure/backend-package
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment inputs
+        run: |
+          if [[ -z "${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}" ]]; then
+            echo "Missing GitHub secret: AZURE_WEBAPP_PUBLISH_PROFILE"
+            exit 1
+          fi
+
+          if [[ -z "${AZURE_WEBAPP_NAME}" ]]; then
+            echo "Missing GitHub variable: AZURE_WEBAPP_NAME"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build backend
+        run: pnpm build
+
+      - name: Prune to production dependencies
+        run: pnpm prune --prod
+
+      - name: Prepare deployment package
+        run: |
+          rm -rf "${PACKAGE_PATH}"
+          mkdir -p "${PACKAGE_PATH}"
+
+          cp package.json "${PACKAGE_PATH}/"
+          cp pnpm-lock.yaml "${PACKAGE_PATH}/"
+          cp -R dist "${PACKAGE_PATH}/dist"
+          cp -R node_modules "${PACKAGE_PATH}/node_modules"
+          cp -R prisma "${PACKAGE_PATH}/prisma"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ env.PACKAGE_PATH }}

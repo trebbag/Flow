@@ -298,28 +298,53 @@ node dist/server.js
 
 ### Edit the generated GitHub Actions workflow
 
-Because this repo uses `pnpm`, and because the startup command expects `dist/server.js`, edit the Azure-generated workflow so it builds the backend correctly.
+You no longer need to hand-edit a generated Azure backend workflow for this repo.
 
-Open the new workflow file in `.github/workflows/` and make sure the build step includes the equivalent of:
+A repo-managed backend deployment workflow now exists here:
 
-```yaml
-- uses: actions/checkout@v4
+- [azure-appservice-staging.yml](/Users/gregorygabbert/Documents/GitHub/Flow/.github/workflows/azure-appservice-staging.yml)
 
-- uses: actions/setup-node@v4
-  with:
-    node-version: 20
+What it does:
 
-- name: Enable Corepack
-  run: corepack enable
+1. installs backend dependencies with `pnpm`
+2. runs `pnpm build`
+3. prunes to production dependencies
+4. packages `dist`, `node_modules`, `prisma`, `package.json`, and `pnpm-lock.yaml`
+5. deploys that package to Azure App Service using `azure/webapps-deploy`
 
-- name: Install dependencies
-  run: pnpm install --frozen-lockfile
+What you need to configure in GitHub before running it:
 
-- name: Build backend
-  run: pnpm build
+1. Repository or environment secret:
+
+```text
+AZURE_WEBAPP_PUBLISH_PROFILE
 ```
 
-The final deploy artifact must contain `dist/server.js`.
+2. Repository or environment variable:
+
+```text
+AZURE_WEBAPP_NAME=flow-staging-api
+```
+
+How to get the publish profile:
+
+1. Open your Azure Web App.
+2. In the Overview page or top command bar, click `Get publish profile`.
+3. Download the publish profile file.
+4. Open the file locally.
+5. Copy the full XML contents.
+6. In GitHub, go to `Settings` -> `Secrets and variables` -> `Actions`.
+7. Add a new secret named `AZURE_WEBAPP_PUBLISH_PROFILE`.
+8. Paste the full XML contents.
+
+How to run the workflow:
+
+1. Open the GitHub repository.
+2. Go to `Actions`.
+3. Open `Azure App Service Staging Deploy`.
+4. Click `Run workflow`.
+
+This workflow is intentionally manual-only right now so staging deploys do not happen on every push by accident.
 
 ## Part 5: Create the Frontend in Azure Static Web Apps
 
@@ -361,36 +386,88 @@ This repo’s frontend lives in a subdirectory, so use `Custom` build settings:
 5. Click `Review + create`
 6. Click `Create`
 
-Azure will create a GitHub Actions workflow for the frontend deployment.
+Azure may offer to generate a GitHub Actions workflow for the frontend deployment.
 
-### Edit the generated Static Web Apps workflow
+### Use the repo-managed Static Web Apps workflow
 
-The generated workflow must build the frontend from the subfolder and inject the `VITE_*` variables at build time.
+This repo now includes its own staging workflow at:
 
-Open the new `azure-static-web-apps-*.yml` file in `.github/workflows/` and make sure:
+- [.github/workflows/azure-static-webapp-staging.yml](/Users/gregorygabbert/Documents/GitHub/Flow/.github/workflows/azure-static-webapp-staging.yml)
 
-1. `app_location` is `docs/Flow Frontend`
-2. `api_location` is empty
-3. `output_location` is `dist`
-4. Add a custom app build command:
+Use that workflow instead of relying on Azure’s generated `azure-static-web-apps-*.yml`.
 
-```yaml
-app_build_command: "corepack enable && pnpm install --frozen-lockfile && pnpm run build"
-```
+Why:
 
-Because this is a Vite app, frontend environment variables must be available during the build. Azure Static Web Apps app settings do not provide frontend build variables; they apply to the backend API side only.
+1. This frontend is in a subfolder: `docs/Flow Frontend`
+2. It is a Vite build, so `VITE_*` values must exist during GitHub Actions build time
+3. This repo is cleaner if backend and frontend staging deploys are both controlled from checked-in workflows
 
-Add these build-time variables to the workflow `env:` block or GitHub repository secrets/variables used by the workflow:
+If Azure creates a generated `azure-static-web-apps-*.yml` file or PR, do not keep it as the active deploy path. Use the repo-managed workflow above.
+
+The repo-managed frontend workflow does this:
+
+1. installs dependencies from `docs/Flow Frontend`
+2. builds the Vite app with the required Entra settings
+3. deploys the prebuilt `dist` folder to Static Web Apps
+
+Required GitHub configuration before you run it:
+
+1. Secret:
 
 ```text
-VITE_API_BASE_URL=https://<your-backend-app>.azurewebsites.net
+AZURE_STATIC_WEB_APPS_API_TOKEN
+```
+
+2. Variable:
+
+```text
+STAGING_FRONTEND_API_BASE_URL=https://<your-backend-app>.azurewebsites.net
+```
+
+The workflow already injects these known Entra values at build time:
+
+```text
 VITE_DEFAULT_AUTH_MODE=microsoft
 VITE_ENTRA_TENANT_ID=b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
+VITE_ENTRA_AUTHORITY=https://login.microsoftonline.com/b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
 VITE_ENTRA_CLIENT_ID=020f7909-e66e-4ec8-810b-cfdf58e70014
 VITE_ENTRA_API_SCOPE=api://89658fe4-9844-439a-97b0-ee31ace455da/access_as_user
 VITE_ENTRA_REDIRECT_PATH=/login
 VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH=/login
 ```
+
+The frontend now also includes Azure Static Web Apps SPA routing support at:
+
+- [docs/Flow Frontend/public/staticwebapp.config.json](/Users/gregorygabbert/Documents/GitHub/Flow/docs/Flow%20Frontend/public/staticwebapp.config.json)
+
+That file ensures routes like `/login` correctly rewrite to `index.html` in Azure.
+
+### Get the Static Web Apps deployment token
+
+After the Static Web App resource exists:
+
+1. Open the Static Web App resource in Azure.
+2. Look for the deployment token action in the portal.
+3. Copy the deployment token.
+4. In GitHub, open `Settings` -> `Secrets and variables` -> `Actions`.
+5. Add a new repository or environment secret named:
+
+```text
+AZURE_STATIC_WEB_APPS_API_TOKEN
+```
+
+6. Add the backend base URL as a GitHub variable:
+
+```text
+STAGING_FRONTEND_API_BASE_URL=https://<your-backend-app>.azurewebsites.net
+```
+
+### Run the frontend staging workflow
+
+1. Open the GitHub repository.
+2. Go to `Actions`.
+3. Open `Azure Static Web Apps Staging Deploy`.
+4. Click `Run workflow`.
 
 After the first successful deployment, Azure will give you a staging frontend URL like:
 
