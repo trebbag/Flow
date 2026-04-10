@@ -40,7 +40,8 @@ Notes:
 
 - `JWT_AUDIENCE` can stay as the Application ID URI, for example `api://<backend-api-app-id>`.
 - Flow now also accepts the bare Entra app/client ID form of that same audience during JWT validation, because Microsoft access tokens may present `aud` that way in some configurations.
-- In the Entra API app manifest, set `accessTokenAcceptedVersion` to `2`. If it stays `null` or `1`, the token issuer will be `https://sts.windows.net/<tenant-id>/` instead of the expected `.../v2.0`, and Flow will reject the token with `401 Unauthorized`.
+- In the Entra API app manifest, set `requestedAccessTokenVersion` to `2`. In the current Microsoft Graph-style manifest this may appear inside the `api` object as `api.requestedAccessTokenVersion`. Some Microsoft docs still refer to the older `accessTokenAcceptedVersion` wording, but the current Entra manifest property is `requestedAccessTokenVersion`. If it stays `null` or `1`, the token issuer will be `https://sts.windows.net/<tenant-id>/` instead of the expected `.../v2.0`, and Flow will reject the token with `401 Unauthorized`.
+- Flow also tolerates the legacy `https://sts.windows.net/<tenant-id>/` issuer for the configured tenant as a staging-safe fallback, but the preferred Entra configuration is still `requestedAccessTokenVersion = 2`.
 
 ## Frontend Settings
 
@@ -96,7 +97,8 @@ Check these in order:
    - `JWT_AUDIENCE=api://<backend-api-app-id>`
    - `JWT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys`
 2. In the Entra API app registration manifest, confirm:
-   - `accessTokenAcceptedVersion` is `2`
+   - `requestedAccessTokenVersion` is `2`
+   - in some portal manifests this appears as `api.requestedAccessTokenVersion`
 3. In the Flow database, confirm the signed-in user exists and is active, and that either:
    - their Flow email matches Entra `email` / `upn` / `preferred_username`, or
    - their Entra Object ID is stored in `User.cognitoSub`

@@ -46,6 +46,20 @@ const jwtClinicClaims = env.JWT_CLINIC_ID_CLAIMS.split(",")
 const jwtFacilityClaims = env.JWT_FACILITY_ID_CLAIMS.split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const jwtIssuers = Array.from(
+  new Set(
+    [env.JWT_ISSUER]
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => {
+        const derived = [value.trim()];
+        const v2IssuerMatch = /^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0\/?$/i.exec(value.trim());
+        if (v2IssuerMatch?.[1]) {
+          derived.push(`https://sts.windows.net/${v2IssuerMatch[1]}/`);
+        }
+        return derived;
+      })
+  )
+);
 const jwtAudiences = Array.from(
   new Set(
     env.JWT_AUDIENCE.split(",")
@@ -170,7 +184,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
 
   try {
     const verifyOptions = {
-      issuer: env.JWT_ISSUER || undefined,
+      issuer: jwtIssuers.length > 0 ? jwtIssuers : undefined,
       audience: jwtAudiences.length > 0 ? jwtAudiences : undefined
     };
 
@@ -277,7 +291,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       {
         authStage: "jwt_verify_failed",
         error: error instanceof Error ? error.message : String(error),
-        configuredIssuer: env.JWT_ISSUER || null,
+        configuredIssuer: jwtIssuers,
         configuredAudience: jwtAudiences,
         tokenIssuer,
         tokenAudience

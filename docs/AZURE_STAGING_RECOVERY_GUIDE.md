@@ -188,10 +188,14 @@ JWT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
 2. In the Entra API app registration manifest, confirm:
 
 ```json
-"accessTokenAcceptedVersion": 2
+"api": {
+  "requestedAccessTokenVersion": 2
+}
 ```
 
-If that value is `null` or `1`, the token issuer will usually be `https://sts.windows.net/<tenant-id>/` and Flow will reject it because it expects the v2 issuer.
+If that value is `null` or `1`, the token issuer will usually be `https://sts.windows.net/<tenant-id>/` and Flow will reject it because it expects the v2 issuer. Some older Microsoft docs still refer to `accessTokenAcceptedVersion`, but the current Entra manifest property is `requestedAccessTokenVersion`, and in the current portal it may appear nested under `api`.
+
+Flow staging also accepts the legacy `https://sts.windows.net/<tenant-id>/` issuer for the configured tenant as a fallback, but you should still set `requestedAccessTokenVersion` to `2` so the tenant issues the cleaner v2 token shape going forward.
 
 3. In Azure `Log stream`, look for these Flow auth warning markers:
    - `jwt_verify_failed`
