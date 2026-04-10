@@ -188,6 +188,8 @@ Fix:
 
 The current backend workflow now builds a portable production dependency tree for Azure and then copies the generated Prisma client artifacts into the package.
 
+If this error is replaced by a different startup error after redeploy, that is progress: the package-resolution problem is gone and the next issue is in runtime config or app startup.
+
 ## Current Repo Limitation
 
 Azure infrastructure can be repaired with this guide, but one code-level staging blocker still remains:

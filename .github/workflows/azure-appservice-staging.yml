@@ -49,8 +49,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm prisma generate
-        # or: npx prisma generate
+        run: pnpm db:generate
 
       - name: Build backend
         run: pnpm build
@@ -68,10 +67,23 @@ jobs:
           npm install --omit=dev --no-package-lock
           cd -
 
+          PRISMA_CLIENT_DIR="$(node -e "const fs = require('fs'); const path = require('path'); const { createRequire } = require('module'); const req = createRequire(process.cwd() + '/'); const pkg = req.resolve('@prisma/client/package.json', { paths: [process.cwd()] }); process.stdout.write(fs.realpathSync(path.dirname(pkg)));")"
+          GENERATED_PRISMA_DIR="$(node -e "const fs = require('fs'); const path = require('path'); const { createRequire } = require('module'); const req = createRequire(process.cwd() + '/'); const pkg = req.resolve('@prisma/client/package.json', { paths: [process.cwd()] }); const clientDir = fs.realpathSync(path.dirname(pkg)); process.stdout.write(path.resolve(clientDir, '..', '..', '.prisma'));")"
+
+          if [[ ! -d "${PRISMA_CLIENT_DIR}" ]]; then
+            echo "Resolved Prisma client directory not found: ${PRISMA_CLIENT_DIR}"
+            exit 1
+          fi
+
+          if [[ ! -d "${GENERATED_PRISMA_DIR}" ]]; then
+            echo "Resolved generated Prisma directory not found: ${GENERATED_PRISMA_DIR}"
+            exit 1
+          fi
+
           rm -rf "${PACKAGE_PATH}/node_modules/@prisma/client" "${PACKAGE_PATH}/node_modules/.prisma"
           mkdir -p "${PACKAGE_PATH}/node_modules/@prisma"
-          cp -RL node_modules/@prisma/client "${PACKAGE_PATH}/node_modules/@prisma/client"
-          cp -RL node_modules/.prisma "${PACKAGE_PATH}/node_modules/.prisma"
+          cp -RL "${PRISMA_CLIENT_DIR}" "${PACKAGE_PATH}/node_modules/@prisma/client"
+          cp -RL "${GENERATED_PRISMA_DIR}" "${PACKAGE_PATH}/node_modules/.prisma"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
