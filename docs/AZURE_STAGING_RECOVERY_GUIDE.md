@@ -170,6 +170,50 @@ That usually means one of:
 2. `/health` is not reachable
 3. backend `CORS_ORIGINS` does not include the exact Static Web App host
 
+## Step 8b: If Entra Login Returns `Unauthorized. Provide a valid Bearer token`
+
+That means the request reached Flow and included a bearer token, but Flow rejected it during JWT validation or could not map it to an active Flow user.
+
+Check these in order:
+
+1. In the backend Web App app settings, confirm:
+
+```text
+AUTH_MODE=jwt
+JWT_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
+JWT_AUDIENCE=api://<backend-api-app-id>
+JWT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
+```
+
+2. In the Entra API app registration manifest, confirm:
+
+```json
+"accessTokenAcceptedVersion": 2
+```
+
+If that value is `null` or `1`, the token issuer will usually be `https://sts.windows.net/<tenant-id>/` and Flow will reject it because it expects the v2 issuer.
+
+3. In Azure `Log stream`, look for these Flow auth warning markers:
+   - `jwt_verify_failed`
+   - `jwt_subject_missing`
+   - `jwt_user_not_mapped`
+
+These warnings include:
+
+- configured issuer
+- configured audience
+- token issuer
+- token audience
+
+That makes it easy to distinguish an issuer/audience mismatch from a missing user mapping.
+
+4. Confirm the signed-in user exists in Flow and is active. Flow resolves Entra users by:
+   - `User.id`
+   - `User.cognitoSub`
+   - `email`
+
+For the pilot role accounts, the safest mapping is storing the Entra Object ID in `User.cognitoSub`.
+
 ## Step 9: If Backend Logs Say `Cannot find package 'fastify'`
 
 If `Log stream` shows an error like:

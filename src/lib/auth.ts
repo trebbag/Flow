@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { RoleName } from "@prisma/client";
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from "jose";
 import { env } from "./env.js";
 import { prisma } from "./prisma.js";
 
@@ -46,6 +46,21 @@ const jwtClinicClaims = env.JWT_CLINIC_ID_CLAIMS.split(",")
 const jwtFacilityClaims = env.JWT_FACILITY_ID_CLAIMS.split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const jwtAudiences = Array.from(
+  new Set(
+    env.JWT_AUDIENCE.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .flatMap((value) => {
+        const derived = [value];
+        const appIdUriMatch = /^api:\/\/([^/]+)$/.exec(value);
+        if (appIdUriMatch?.[1]) {
+          derived.push(appIdUriMatch[1]);
+        }
+        return derived;
+      })
+  )
+);
 
 if (env.AUTH_MODE === "jwt" && !jwtSecret && !remoteJwks) {
   throw new Error("AUTH_MODE=jwt requires JWT_SECRET or JWT_JWKS_URI");
@@ -156,7 +171,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
   try {
     const verifyOptions = {
       issuer: env.JWT_ISSUER || undefined,
-      audience: env.JWT_AUDIENCE || undefined
+      audience: jwtAudiences.length > 0 ? jwtAudiences : undefined
     };
 
     const { payload } = jwtSecret
@@ -164,7 +179,16 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       : await jwtVerify(token, remoteJwks!, verifyOptions);
 
     const subject = firstClaim(payload, jwtSubjectClaims);
-    if (!subject) return null;
+    if (!subject) {
+      request.log.warn(
+        {
+          authStage: "jwt_subject_missing",
+          subjectClaims: jwtSubjectClaims
+        },
+        "JWT verified but no supported subject claim was present"
+      );
+      return null;
+    }
 
     const emailClaim = firstClaim(payload, jwtEmailClaims)?.toLowerCase() || null;
     const tokenRoles = roleClaims(payload);
@@ -190,6 +214,17 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
     });
 
     if (!user || user.roles.length === 0 || user.status !== "active") {
+      request.log.warn(
+        {
+          authStage: "jwt_user_not_mapped",
+          subject,
+          emailClaim,
+          userFound: Boolean(user),
+          userStatus: user?.status || null,
+          roleCount: user?.roles.length || 0
+        },
+        "JWT verified but no active Flow user mapping was found"
+      );
       return null;
     }
 
@@ -226,7 +261,29 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       availableFacilityIds: facilityScopeResult.availableFacilityIds,
       authSource: "jwt"
     };
-  } catch {
+  } catch (error) {
+    let tokenIssuer: string | null = null;
+    let tokenAudience: string | string[] | null = null;
+    try {
+      const decoded = decodeJwt(token);
+      tokenIssuer = claimToString(decoded.iss);
+      tokenAudience = Array.isArray(decoded.aud)
+        ? decoded.aud.filter((value): value is string => typeof value === "string")
+        : claimToString(decoded.aud);
+    } catch {
+      // Ignore decode errors; the verification failure details are still useful.
+    }
+    request.log.warn(
+      {
+        authStage: "jwt_verify_failed",
+        error: error instanceof Error ? error.message : String(error),
+        configuredIssuer: env.JWT_ISSUER || null,
+        configuredAudience: jwtAudiences,
+        tokenIssuer,
+        tokenAudience
+      },
+      "JWT verification failed"
+    );
     return null;
   }
 }

@@ -36,6 +36,12 @@ JWT_AUDIENCE=api://<backend-api-app-id>
 JWT_SUBJECT_CLAIMS=sub,oid,objectidentifier
 ```
 
+Notes:
+
+- `JWT_AUDIENCE` can stay as the Application ID URI, for example `api://<backend-api-app-id>`.
+- Flow now also accepts the bare Entra app/client ID form of that same audience during JWT validation, because Microsoft access tokens may present `aud` that way in some configurations.
+- In the Entra API app manifest, set `accessTokenAcceptedVersion` to `2`. If it stays `null` or `1`, the token issuer will be `https://sts.windows.net/<tenant-id>/` instead of the expected `.../v2.0`, and Flow will reject the token with `401 Unauthorized`.
+
 ## Frontend Settings
 
 Set in `docs/Flow Frontend/.env`:
@@ -77,6 +83,29 @@ If you prefer, you can use `VITE_ENTRA_AUTHORITY` instead of `VITE_ENTRA_TENANT_
 4. Make sure pilot users exist in Flow and map by email or `cognitoSub`.
 5. Run local auth verification.
 6. Run staging role-proof verification with real Entra accounts.
+
+## If Staging Says "Unauthorized. Provide a valid Bearer token"
+
+That message means the frontend did send a bearer token, but the backend rejected it during JWT validation or could not map it to an active Flow user.
+
+Check these in order:
+
+1. In the backend Web App app settings, confirm:
+   - `AUTH_MODE=jwt`
+   - `JWT_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0`
+   - `JWT_AUDIENCE=api://<backend-api-app-id>`
+   - `JWT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys`
+2. In the Entra API app registration manifest, confirm:
+   - `accessTokenAcceptedVersion` is `2`
+3. In the Flow database, confirm the signed-in user exists and is active, and that either:
+   - their Flow email matches Entra `email` / `upn` / `preferred_username`, or
+   - their Entra Object ID is stored in `User.cognitoSub`
+4. In Azure `Log stream`, look for Flow auth warnings:
+   - `jwt_verify_failed`
+   - `jwt_subject_missing`
+   - `jwt_user_not_mapped`
+
+Those warnings now include the configured issuer/audience and the token issuer/audience so you can tell whether the failure is claim mismatch or user mapping.
 
 ## Local Commands
 
