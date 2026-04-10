@@ -21,7 +21,8 @@ Current checkpoint as of April 10, 2026:
 1. Azure PostgreSQL connectivity: confirmed
 2. `pnpm db:push:postgres`: succeeded
 3. `pnpm db:preflight:postgres`: succeeded after schema push
-4. Next step: `pnpm db:import:postgres artifacts/sqlite-snapshot.json`
+4. Backend runtime PostgreSQL switch: implemented
+5. Next step: `pnpm db:import:postgres artifacts/sqlite-snapshot.json`
 
 Note on SSL:
 
@@ -86,4 +87,8 @@ pnpm test
 pnpm build
 ```
 
-For pilot cutover, point runtime DB settings to PostgreSQL only after import validation succeeds.
+For pilot cutover:
+
+1. keep local development on SQLite by leaving `POSTGRES_DATABASE_URL` unset
+2. set `POSTGRES_DATABASE_URL` in staging/pilot runtime settings after import validation succeeds
+3. redeploy the backend so the packaged PostgreSQL Prisma client is available in the running app

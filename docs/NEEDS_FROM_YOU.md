@@ -9,7 +9,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - Azure staging PostgreSQL schema push and preflight both succeeded on April 10, 2026.
    - Remaining database steps:
      - run `pnpm db:import:postgres artifacts/sqlite-snapshot.json` against the Azure staging target
-     - implement runtime PostgreSQL support in the backend app before Azure staging can run live on that database
+     - redeploy the backend after setting `POSTGRES_DATABASE_URL` so Azure staging runs live on that database
    - If using Azure-managed staging/pilot, also choose:
      - Azure subscription
      - Azure region
@@ -70,9 +70,9 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 
 - Local Entra pilot mapping, local bearer verification, browser redirect proof, and local threshold-alert evidence were re-run on **April 9, 2026**.
 - Azure PostgreSQL staging target is now known as of **April 10, 2026**, and both schema push and preflight have succeeded.
-- The remaining Azure database blocker is no longer connectivity or schema creation; it is:
+- The remaining Azure database blocker is no longer connectivity, schema creation, or runtime code support; it is:
   - importing the staging snapshot
-  - enabling runtime PostgreSQL support in the backend
+  - redeploying the backend against the PostgreSQL runtime environment
 - New local evidence files:
   - [entra-local-auth-20260409.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/entra-local-auth-20260409.md)
   - [entra-browser-redirect-20260409.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/entra-browser-redirect-20260409.md)

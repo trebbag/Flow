@@ -14,17 +14,23 @@ The Azure PostgreSQL staging target has now advanced past connectivity setup:
 1. Azure PostgreSQL connectivity: complete
 2. PostgreSQL schema push: complete
 3. PostgreSQL preflight: complete
-4. Next database step: import the SQLite snapshot into Azure PostgreSQL
-5. Remaining backend staging blocker: runtime PostgreSQL support is still not enabled in the app
+4. Runtime PostgreSQL support: complete
+5. Next database step: import the SQLite snapshot into Azure PostgreSQL
+6. Next staging step after import: redeploy backend so Azure App Service boots with `POSTGRES_DATABASE_URL`
 
-## Important Current Blocker
+## Current Runtime Behavior
 
-Before the backend can truly run against Azure PostgreSQL, one code change is still required in the app:
+The backend runtime now supports both database modes:
 
-- The current runtime Prisma setup is hardcoded to SQLite in [src/lib/prisma.ts](/Users/gregorygabbert/Documents/GitHub/Flow/src/lib/prisma.ts).
-- The migration scripts and docs already support PostgreSQL import/cutover, but the runtime app does not yet switch to a PostgreSQL adapter in staging/pilot.
+- local / fallback: SQLite via `DATABASE_URL`
+- staging / pilot: PostgreSQL via `POSTGRES_DATABASE_URL`
 
-You can still create all Azure resources now, wire Entra now, and load PostgreSQL now. The final backend cutover step should happen only after the runtime database selection is updated.
+At runtime, Flow now:
+
+1. uses PostgreSQL when `POSTGRES_DATABASE_URL` is present
+2. falls back to SQLite when it is not
+
+The Azure backend deploy workflow also generates and packages the dedicated PostgreSQL Prisma client needed for App Service.
 
 ## Recommended Azure Resource Names
 
@@ -186,7 +192,10 @@ POSTGRES_DATABASE_URL='postgresql://...' pnpm db:import:postgres artifacts/sqlit
 Important:
 
 - This successfully prepares the Azure PostgreSQL database.
-- Do not assume the backend runtime is using PostgreSQL yet until the runtime SQLite/PostgreSQL switch is implemented.
+- The backend runtime switch is now implemented, but Azure will only use PostgreSQL after:
+  - the snapshot import is complete
+  - `POSTGRES_DATABASE_URL` is present in App Service settings
+  - the backend is redeployed
 - If `pnpm db:preflight:postgres` says required tables are missing, the connection worked and the next step is to run `pnpm db:push:postgres` before retrying preflight.
 - `pnpm db:push:postgres` exists because Prisma 7 reads datasource URLs from `prisma.config.ts`; the helper script maps `POSTGRES_DATABASE_URL` into Prisma’s expected `DATABASE_URL` for the PostgreSQL schema push.
 - As of April 10, 2026, `db:push:postgres` and `db:preflight:postgres` have already been confirmed against the Azure staging database. The next live step is `pnpm db:import:postgres`.

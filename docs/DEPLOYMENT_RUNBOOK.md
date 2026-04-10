@@ -41,7 +41,9 @@ PILOT_API_BASE_URL=https://your-api.example.com pnpm pilot:preflight
    - `POSTGRES_DATABASE_URL='postgresql://...' pnpm db:preflight:postgres`
 4. Import snapshot:
    - `POSTGRES_DATABASE_URL='postgresql://...' pnpm db:import:postgres artifacts/sqlite-snapshot.json`
-5. Switch app env vars to PostgreSQL and restart API.
+5. Set `POSTGRES_DATABASE_URL` in the runtime environment.
+6. Deploy or redeploy the backend package generated from the PostgreSQL-aware staging workflow.
+7. Restart API and verify `/health` plus authenticated `/auth/context`.
 
 ## Verification Gate
 

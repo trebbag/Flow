@@ -48,8 +48,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma Client
-        run: pnpm db:generate
+      - name: Generate Prisma Clients
+        run: |
+          pnpm db:generate
+          pnpm db:generate:postgres
 
       - name: Build backend
         run: pnpm build
@@ -61,6 +63,7 @@ jobs:
 
           cp package.json "${PACKAGE_PATH}/"
           cp -R dist "${PACKAGE_PATH}/dist"
+          cp -R generated "${PACKAGE_PATH}/generated"
           cp -R prisma "${PACKAGE_PATH}/prisma"
 
           cd "${PACKAGE_PATH}"
