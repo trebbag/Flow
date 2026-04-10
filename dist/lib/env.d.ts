@@ -1,0 +1,28 @@
+import "dotenv/config";
+export declare const env: {
+    CORS_ALLOWED_ORIGINS: string[];
+    AUTH_MODE: "dev_header" | "jwt" | "hybrid";
+    AUTH_ALLOW_DEV_HEADERS: boolean;
+    NODE_ENV: "development" | "test" | "production";
+    HOST: string;
+    PORT: number;
+    CORS_ORIGIN: string;
+    SAFETY_WORD: string;
+    RATE_LIMIT_MAX: number;
+    RATE_LIMIT_WINDOW: string;
+    TRUST_PROXY: boolean;
+    AUTH_ALLOW_IMPLICIT_ADMIN: boolean;
+    JWT_SUBJECT_CLAIMS: string;
+    JWT_ROLE_CLAIMS: string;
+    JWT_EMAIL_CLAIMS: string;
+    JWT_CLINIC_ID_CLAIMS: string;
+    JWT_FACILITY_ID_CLAIMS: string;
+    ATHENA_TIMEOUT_MS: number;
+    ATHENA_RETRY_COUNT: number;
+    ATHENA_RETRY_BACKOFF_MS: number;
+    CORS_ORIGINS?: string;
+    JWT_ISSUER?: string;
+    JWT_AUDIENCE?: string;
+    JWT_JWKS_URI?: string;
+    JWT_SECRET?: string;
+};

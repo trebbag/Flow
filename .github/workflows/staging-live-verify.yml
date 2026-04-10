@@ -1,0 +1,73 @@
+name: Staging Frontend Live Verify
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      FRONTEND_API_BASE_URL: ${{ vars.STAGING_FRONTEND_API_BASE_URL }}
+      FRONTEND_BEARER_TOKEN: ${{ secrets.STAGING_FRONTEND_BEARER_TOKEN }}
+      VITE_BEARER_TOKEN: ${{ secrets.STAGING_FRONTEND_BEARER_TOKEN }}
+      VITE_DEV_USER_ID: ${{ secrets.STAGING_VITE_DEV_USER_ID }}
+      FRONTEND_DEV_USER_ID: ${{ secrets.STAGING_VITE_DEV_USER_ID }}
+      VITE_DEV_ROLE: ${{ vars.STAGING_VITE_DEV_ROLE }}
+      FRONTEND_DEV_ROLE: ${{ vars.STAGING_VITE_DEV_ROLE }}
+      FRONTEND_E2E_PORT: ${{ vars.STAGING_FRONTEND_E2E_PORT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+
+      - name: Install backend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install frontend dependencies
+        run: pnpm -C "docs/Flow Frontend" install --frozen-lockfile
+
+      - name: Validate staging env
+        run: |
+          if [[ -z "${FRONTEND_API_BASE_URL}" ]]; then
+            echo "Missing vars.STAGING_FRONTEND_API_BASE_URL"
+            exit 1
+          fi
+
+          if [[ -z "${VITE_BEARER_TOKEN}" && -z "${VITE_DEV_USER_ID}" ]]; then
+            echo "Missing auth credentials. Set secrets.STAGING_FRONTEND_BEARER_TOKEN (preferred) or secrets.STAGING_VITE_DEV_USER_ID."
+            exit 1
+          fi
+
+          if [[ -z "${VITE_DEV_ROLE}" ]]; then
+            echo "VITE_DEV_ROLE=Admin" >> "$GITHUB_ENV"
+            echo "FRONTEND_DEV_ROLE=Admin" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -n "${VITE_BEARER_TOKEN}" ]]; then
+            echo "VITE_DEFAULT_AUTH_MODE=bearer" >> "$GITHUB_ENV"
+            echo "VITE_ENABLE_DEV_HEADERS=false" >> "$GITHUB_ENV"
+            echo "VITE_ENABLE_DEV_HEADER_LOGIN=false" >> "$GITHUB_ENV"
+          fi
+
+          if [[ -z "${FRONTEND_E2E_PORT}" ]]; then
+            echo "FRONTEND_E2E_PORT=4173" >> "$GITHUB_ENV"
+          fi
+
+      - name: Frontend live verification (staging API)
+        run: pnpm frontend:verify-live
+
+      - name: Frontend bundle budgets
+        run: pnpm -C "docs/Flow Frontend" run test:bundle-budget

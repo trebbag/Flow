@@ -1,0 +1,27 @@
+{
+  "capturedAt": "2026-03-03T21:43:35.704Z",
+  "apiBaseUrl": "http://127.0.0.1:4000",
+  "frontendBaseUrl": "http://localhost:4173",
+  "encounter": {
+    "id": "f615a618-6219-4111-9134-b96a0927a718",
+    "clinicId": "745fe6f9-89d6-467e-8a20-13b5ba94394d",
+    "reasonId": "dac28451-e0f1-40dd-9bda-04a26fb53cd7",
+    "reasonName": "Follow-up"
+  },
+  "facilityId": "626c062e-c3a5-4ad9-a3d0-6875d3407033",
+  "mode": "bearer",
+  "skippedScreens": [
+    {
+      "name": "encounter-rooming.png",
+      "reason": "Unexpected Application Error"
+    },
+    {
+      "name": "encounter-ready-provider.png",
+      "reason": "Unexpected Application Error"
+    },
+    {
+      "name": "encounter-optimizing.png",
+      "reason": "Unexpected Application Error"
+    }
+  ]
+}

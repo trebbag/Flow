@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-03-05T19:13:08.091Z",
+  "apiBaseUrl": "http://localhost:4000",
+  "frontendBaseUrl": "http://localhost:4173",
+  "encounter": {
+    "id": "ae96a14c-c804-4749-8009-eafe5f6ab79c",
+    "clinicId": "383134d8-c0ef-458e-af15-23c19704e46e",
+    "reasonId": "34e694f6-5d71-44dc-af4e-f208863b043b",
+    "reasonName": "E2E Reason 1772737688257"
+  },
+  "facilityId": "39f4cbe9-ac38-4f40-b179-dd69906c3651",
+  "mode": "dev-header",
+  "skippedScreens": []
+}

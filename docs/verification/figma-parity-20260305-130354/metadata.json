@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-03-05T18:04:04.270Z",
+  "apiBaseUrl": "http://127.0.0.1:4000",
+  "frontendBaseUrl": "http://localhost:4173",
+  "encounter": {
+    "id": "1ca86d68-a977-4569-81f1-6ff9f46c9717",
+    "clinicId": "745fe6f9-89d6-467e-8a20-13b5ba94394d",
+    "reasonId": "dac28451-e0f1-40dd-9bda-04a26fb53cd7",
+    "reasonName": "Follow-up"
+  },
+  "facilityId": "626c062e-c3a5-4ad9-a3d0-6875d3407033",
+  "mode": "bearer",
+  "skippedScreens": []
+}

@@ -1,0 +1,1208 @@
+import { Prisma, RoleName, ScheduleSource } from "@prisma/client";
+import { parse as parseCsv } from "csv-parse/sync";
+import { DateTime } from "luxon";
+import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
+import { ApiError, assert } from "../lib/errors.js";
+import { normalizeDate, parseAppointmentAt, dateRangeForDay } from "../lib/dates.js";
+import { requireRoles } from "../lib/auth.js";
+import { formatClinicDisplayName, formatProviderDisplayName, formatReasonDisplayName } from "../lib/display-names.js";
+const incomingDispositionReasons = [
+    "no_show",
+    "left_without_being_seen",
+    "arrived_late",
+    "telehealth_fail",
+    "late_cancel",
+    "provider_out",
+    "emergency",
+    "scheduling_error",
+    "administrative_block",
+    "other"
+];
+const importSchema = z.object({
+    clinicId: z.string().uuid().optional(),
+    dateOfService: z.string().optional(),
+    csvText: z.string().min(1),
+    fileName: z.string().optional(),
+    source: z.nativeEnum(ScheduleSource).optional(),
+    facilityId: z.string().uuid().optional()
+});
+const intakeSchema = z.object({
+    intakeData: z.record(z.string(), z.unknown()).default({})
+});
+const updateIncomingSchema = z.object({
+    patientId: z.string().optional(),
+    dateOfService: z.string().optional(),
+    appointmentTime: z.string().nullable().optional(),
+    providerLastName: z.string().nullable().optional(),
+    reasonText: z.string().nullable().optional()
+});
+const incomingRetrySchema = z.object({
+    clinicId: z.string().uuid().optional(),
+    patientId: z.string().optional(),
+    dateOfService: z.string().optional(),
+    appointmentTime: z.string().nullable().optional(),
+    providerLastName: z.string().nullable().optional(),
+    reasonText: z.string().nullable().optional()
+});
+const dispositionSchema = z.object({
+    reason: z.enum(incomingDispositionReasons),
+    note: z.string().optional()
+});
+function isUuid(value) {
+    return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
+}
+function normalizeName(value) {
+    return (value || "").trim().toLowerCase();
+}
+function normalizeAlias(value) {
+    return normalizeName(value).replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+const providerCredentialSuffixes = new Set([
+    "md",
+    "do",
+    "np",
+    "pa",
+    "rn",
+    "fnp",
+    "fnpbc",
+    "aprn",
+    "arnp",
+    "cnp",
+    "dnp",
+    "msn",
+    "mph",
+    "phd",
+    "dds",
+    "dmd"
+]);
+function stripProviderCredentials(value) {
+    const parts = String(value || "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    while (parts.length > 1) {
+        const suffix = parts[parts.length - 1]?.replace(/[^a-z0-9]/gi, "").toLowerCase();
+        if (!suffix || !providerCredentialSuffixes.has(suffix))
+            break;
+        parts.pop();
+    }
+    return parts.join(" ").trim();
+}
+function normalizeCsvHeaderKey(value) {
+    return normalizeName(value).replace(/[^a-z0-9]/g, "");
+}
+function normalizeCsvRow(rawRow) {
+    const normalized = new Map();
+    Object.entries(rawRow || {}).forEach(([key, rawValue]) => {
+        const normalizedKey = normalizeCsvHeaderKey(key);
+        if (!normalizedKey)
+            return;
+        const value = typeof rawValue === "string" ? rawValue.trim() : String(rawValue ?? "").trim();
+        if (!value)
+            return;
+        if (!normalized.has(normalizedKey)) {
+            normalized.set(normalizedKey, value);
+        }
+    });
+    return normalized;
+}
+function csvValue(row, ...aliases) {
+    for (const alias of aliases) {
+        const key = normalizeCsvHeaderKey(alias);
+        const value = row.get(key);
+        if (value !== undefined && value !== null && String(value).trim() !== "") {
+            return String(value).trim();
+        }
+    }
+    return "";
+}
+function providerLastName(value) {
+    const raw = stripProviderCredentials(value);
+    if (!raw)
+        return "";
+    const parts = raw.split(/\s+/).filter(Boolean);
+    return normalizeName(parts[parts.length - 1] || raw);
+}
+function providerFullName(value) {
+    return normalizeName(stripProviderCredentials(value));
+}
+function clinicAliasVariants(input) {
+    const name = (input.name || "").trim();
+    const shortCode = (input.shortCode || "").trim();
+    const id = (input.id || "").trim();
+    const aliases = new Set();
+    [id, name, shortCode].forEach((value) => {
+        if (value)
+            aliases.add(value);
+    });
+    if (name && shortCode) {
+        [
+            `${name} (${shortCode})`,
+            `${shortCode} - ${name}`,
+            `${shortCode} ${name}`,
+            `${name} ${shortCode}`
+        ].forEach((value) => {
+            if (value)
+                aliases.add(value);
+        });
+    }
+    return Array.from(aliases);
+}
+function clinicAliasForms(input) {
+    return Array.from(new Set(clinicAliasVariants(input).map((value) => normalizeAlias(value)).filter(Boolean)));
+}
+function resolveDateOfServiceInput(rawDate, fallbackDate, timezone) {
+    const value = String(rawDate || fallbackDate || "").trim();
+    if (!value) {
+        return { date: null, isoDate: null, error: "Missing appointment date" };
+    }
+    try {
+        const normalized = normalizeDate(value, timezone);
+        const normalizedIso = DateTime.fromJSDate(normalized, { zone: "utc" }).setZone(timezone).toISODate() ||
+            DateTime.now().setZone(timezone).toISODate();
+        const today = DateTime.now().setZone(timezone).startOf("day");
+        const candidate = DateTime.fromJSDate(normalized, { zone: "utc" }).setZone(timezone).startOf("day");
+        if (candidate < today) {
+            return { date: normalized, isoDate: normalizedIso, error: "Appointment date cannot be in the past" };
+        }
+        return { date: normalized, isoDate: normalizedIso, error: null };
+    }
+    catch {
+        return { date: null, isoDate: null, error: `Invalid appointment date '${value}'. Expected YYYY-MM-DD format` };
+    }
+}
+async function getClinicTimezone(clinicId) {
+    const clinic = await prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { timezone: true }
+    });
+    assert(clinic, 404, "Clinic not found");
+    return clinic.timezone;
+}
+async function getFacilityTimezone(facilityId) {
+    const facility = facilityId
+        ? await prisma.facility.findUnique({
+            where: { id: facilityId },
+            select: { timezone: true }
+        })
+        : await prisma.facility.findFirst({
+            where: { status: "active" },
+            orderBy: { createdAt: "asc" },
+            select: { timezone: true }
+        });
+    return facility?.timezone || "America/New_York";
+}
+function assertClinicInUserScope(user, clinic) {
+    if (user.clinicId && clinic.id !== user.clinicId) {
+        throw new ApiError(403, "Clinic is outside your assigned scope");
+    }
+    if (user.facilityId && clinic.facilityId !== user.facilityId) {
+        throw new ApiError(403, "Clinic is outside your assigned scope");
+    }
+}
+async function resolveScopedClinic(user, clinicId) {
+    const clinic = await prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { id: true, facilityId: true, timezone: true, status: true, maRun: true }
+    });
+    assert(clinic, 404, "Clinic not found");
+    assertClinicInUserScope(user, clinic);
+    return clinic;
+}
+async function resolveScopedFacility(user, requestedFacilityId) {
+    const requested = requestedFacilityId?.trim() || user.facilityId || null;
+    if (requested) {
+        const facility = await prisma.facility.findUnique({
+            where: { id: requested },
+            select: { id: true, timezone: true, status: true }
+        });
+        assert(facility, 404, "Facility not found");
+        if (user.facilityId && facility.id !== user.facilityId) {
+            throw new ApiError(403, "Facility is outside your assigned scope");
+        }
+        return facility;
+    }
+    const facility = await prisma.facility.findFirst({
+        where: { status: { not: "archived" } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, timezone: true, status: true }
+    });
+    assert(facility, 404, "Facility not found");
+    if (user.facilityId && facility.id !== user.facilityId) {
+        throw new ApiError(403, "Facility is outside your assigned scope");
+    }
+    return facility;
+}
+async function getProviderReasonMaps(clinicId) {
+    const [clinic, providers, reasons, assignment] = await Promise.all([
+        prisma.clinic.findUnique({
+            where: { id: clinicId },
+            select: { id: true, timezone: true, maRun: true, facilityId: true }
+        }),
+        prisma.provider.findMany({
+            where: { clinicId, active: true },
+            select: { id: true, name: true }
+        }),
+        prisma.reasonForVisit.findMany({
+            where: {
+                status: "active",
+                OR: [{ clinicAssignments: { some: { clinicId } } }, { clinicId }]
+            },
+            select: { id: true, name: true }
+        }),
+        prisma.clinicAssignment.findUnique({
+            where: { clinicId },
+            include: {
+                providerUser: { select: { id: true, name: true, status: true } },
+                maUser: { select: { id: true, name: true, status: true } }
+            }
+        })
+    ]);
+    assert(clinic, 404, "Clinic not found");
+    const clinics = await prisma.clinic.findMany({
+        where: {
+            status: "active",
+            facilityId: clinic.facilityId || undefined
+        },
+        select: { id: true, name: true, shortCode: true }
+    });
+    const providerByLastName = new Map(providers.map((provider) => [providerLastName(provider.name), provider.id]));
+    const providerByName = new Map(providers.map((provider) => [providerFullName(provider.name), provider.id]));
+    if (assignment?.providerUser && assignment.providerUser.status === "active" && assignment.providerId) {
+        const assignedProviderLastName = providerLastName(assignment.providerUser.name);
+        const assignedProviderName = providerFullName(assignment.providerUser.name);
+        if (assignedProviderLastName) {
+            providerByLastName.set(assignedProviderLastName, providerByLastName.get(assignedProviderLastName) || assignment.providerId);
+        }
+        if (assignedProviderName) {
+            providerByName.set(assignedProviderName, providerByName.get(assignedProviderName) || assignment.providerId);
+        }
+    }
+    const maLastNames = new Set();
+    if (assignment?.maUser && assignment.maUser.status === "active") {
+        const maLastName = providerLastName(assignment.maUser.name);
+        if (maLastName)
+            maLastNames.add(maLastName);
+    }
+    return {
+        clinicTimezone: clinic.timezone,
+        maRun: clinic.maRun,
+        providerById: new Set(providers.map((provider) => provider.id)),
+        providerByLastName,
+        providerByName,
+        reasonById: new Set(reasons.map((reason) => reason.id)),
+        reasonByName: new Map(reasons.map((reason) => [normalizeName(reason.name), reason.id])),
+        clinicNames: new Set(clinics.flatMap((entry) => clinicAliasForms(entry))),
+        maLastNames
+    };
+}
+function validateIncomingRow(row, defaultDateOfService, maps, facilityTimezone) {
+    const patientId = (row.patientId || "").trim();
+    const dateOfService = resolveDateOfServiceInput(row.dateOfService, defaultDateOfService, facilityTimezone);
+    const appointmentTimeRaw = (row.appointmentTime || "").trim();
+    const providerLastNameRaw = (row.providerLastName || row.providerName || "").trim();
+    const reasonTextRaw = (row.reasonForVisit || row.reason || "").trim();
+    const errors = [];
+    if (!patientId)
+        errors.push("Missing patient ID");
+    if (dateOfService.error)
+        errors.push(dateOfService.error);
+    if (!appointmentTimeRaw)
+        errors.push("Missing appointment time");
+    if (!providerLastNameRaw)
+        errors.push("Missing provider last name");
+    if (!reasonTextRaw)
+        errors.push("Missing reason for visit");
+    const appointment = dateOfService.date
+        ? parseAppointmentAt(appointmentTimeRaw, dateOfService.date, maps.clinicTimezone)
+        : { appointmentTime: appointmentTimeRaw || null, appointmentAt: null, error: null };
+    if (appointment.error)
+        errors.push(appointment.error);
+    const normalizedProviderLastName = providerLastName(providerLastNameRaw);
+    const normalizedProviderName = providerFullName(providerLastNameRaw);
+    const providerIdFromLastName = normalizedProviderLastName
+        ? maps.providerByLastName.get(normalizedProviderLastName) || null
+        : null;
+    const providerIdFromName = normalizedProviderName ? maps.providerByName.get(normalizedProviderName) || null : null;
+    const providerIdFromUuid = isUuid(row.providerId) && maps.providerById.has(row.providerId) ? row.providerId : null;
+    const providerId = providerIdFromLastName || providerIdFromName || providerIdFromUuid;
+    const clinicNameMatch = maps.maRun && maps.clinicNames.has(normalizeAlias(providerLastNameRaw));
+    const maLastNameMatch = maps.maRun && maps.maLastNames.has(providerLastName(providerLastNameRaw));
+    if (providerLastNameRaw && !providerId && !clinicNameMatch && !maLastNameMatch) {
+        errors.push(maps.maRun
+            ? "Provider must match an active provider, assigned MA last name, or valid clinic name for MA-run clinics"
+            : `Provider not found for '${providerLastNameRaw}' in selected clinic`);
+    }
+    const normalizedReason = normalizeName(reasonTextRaw);
+    const reasonIdFromName = normalizedReason ? maps.reasonByName.get(normalizedReason) || null : null;
+    const reasonIdFromUuid = isUuid(row.reasonForVisitId) && maps.reasonById.has(row.reasonForVisitId) ? row.reasonForVisitId : null;
+    const reasonForVisitId = reasonIdFromName || reasonIdFromUuid;
+    if (reasonTextRaw && !reasonForVisitId) {
+        errors.push(`Reason '${reasonTextRaw}' is not configured`);
+    }
+    return {
+        dateOfService: dateOfService.date,
+        dateOfServiceIso: dateOfService.isoDate,
+        patientId,
+        providerLastName: providerLastNameRaw || null,
+        reasonText: reasonTextRaw || null,
+        providerId: providerId || null,
+        reasonForVisitId: reasonForVisitId || null,
+        appointmentTime: appointment.appointmentTime,
+        appointmentAt: appointment.appointmentAt,
+        validationErrors: errors,
+        isValid: errors.length === 0
+    };
+}
+function dedupeKey(row) {
+    const date = DateTime.fromJSDate(row.dateOfService).toUTC().toISODate();
+    const appointment = (row.appointmentTime || "").trim() || (row.appointmentAt ? DateTime.fromJSDate(row.appointmentAt).toUTC().toISO() : "");
+    return `${row.patientId.trim().toLowerCase()}|${date || ""}|${appointment}`;
+}
+function scoreIncomingRow(row) {
+    return ((row.isValid ? 4 : 0) +
+        (row.providerId ? 2 : 0) +
+        (row.reasonForVisitId ? 2 : 0) +
+        (row.appointmentAt ? 1 : 0) +
+        (row.importBatch?.createdAt?.getTime() || 0) / 1e15);
+}
+function projectIncomingRows(rows) {
+    return rows.map((row) => {
+        const providerLabel = formatProviderDisplayName({
+            name: row.provider?.name || row.providerLastName || null,
+            active: row.provider?.active
+        });
+        const reasonLabel = formatReasonDisplayName({
+            name: row.reason?.name || row.reasonText || null,
+            status: row.reason?.status || null
+        }) ||
+            null;
+        const clinicLabel = formatClinicDisplayName({
+            name: row.clinic?.name || null,
+            status: row.clinic?.status || null
+        });
+        return {
+            ...row,
+            clinicName: clinicLabel,
+            providerLastName: providerLabel === "Unassigned" ? null : providerLabel,
+            reasonText: reasonLabel,
+            isValid: row.isValid && Boolean(providerLabel !== "Unassigned" && reasonLabel && row.reasonForVisitId && row.appointmentAt)
+        };
+    });
+}
+async function importRows(facilityId, clinicId, dateOfService, rows, source, fileName) {
+    const [clinic, facility] = await Promise.all([
+        prisma.clinic.findUnique({
+            where: { id: clinicId },
+            select: { timezone: true, status: true }
+        }),
+        prisma.facility.findUnique({
+            where: { id: facilityId },
+            select: { timezone: true }
+        })
+    ]);
+    assert(clinic, 404, "Clinic not found");
+    assert(clinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
+    const facilityTimezone = facility?.timezone || "America/New_York";
+    const normalizedDate = resolveDateOfServiceInput(undefined, dateOfService, facilityTimezone).date ||
+        DateTime.now().setZone(facilityTimezone).startOf("day").toUTC().toJSDate();
+    const maps = await getProviderReasonMaps(clinicId);
+    const batch = await prisma.incomingImportBatch.create({
+        data: {
+            facilityId,
+            clinicId,
+            date: normalizedDate,
+            source,
+            fileName,
+            rowCount: 0,
+            acceptedRowCount: 0,
+            pendingRowCount: 0,
+            status: "processed"
+        }
+    });
+    const acceptedRows = [];
+    const pendingIssues = [];
+    for (const row of rows) {
+        const validated = validateIncomingRow(row, dateOfService, maps, facilityTimezone);
+        if (!validated.patientId && !validated.providerLastName && !validated.reasonText && !validated.appointmentTime) {
+            continue;
+        }
+        if (validated.isValid) {
+            const entry = await prisma.incomingSchedule.create({
+                data: {
+                    clinicId,
+                    dateOfService: validated.dateOfService || normalizedDate,
+                    patientId: validated.patientId,
+                    appointmentTime: validated.appointmentTime,
+                    appointmentAt: validated.appointmentAt,
+                    providerId: validated.providerId,
+                    providerLastName: validated.providerLastName,
+                    reasonForVisitId: validated.reasonForVisitId,
+                    reasonText: validated.reasonText,
+                    intakeData: row.intakeData,
+                    source,
+                    rawPayloadJson: (row.rawPayload || row),
+                    isValid: true,
+                    validationErrors: null,
+                    importBatchId: batch.id
+                }
+            });
+            acceptedRows.push(entry);
+            continue;
+        }
+        const issue = await prisma.incomingImportIssue.create({
+            data: {
+                batchId: batch.id,
+                facilityId,
+                clinicId,
+                dateOfService: validated.dateOfService || normalizedDate,
+                rawPayloadJson: (row.rawPayload || row),
+                normalizedJson: {
+                    clinicId,
+                    dateOfService: validated.dateOfServiceIso,
+                    patientId: validated.patientId,
+                    appointmentTime: validated.appointmentTime,
+                    providerLastName: validated.providerLastName,
+                    reasonText: validated.reasonText
+                },
+                validationErrors: validated.validationErrors,
+                status: "pending",
+                retryCount: 0
+            }
+        });
+        pendingIssues.push(issue);
+    }
+    await prisma.incomingImportBatch.update({
+        where: { id: batch.id },
+        data: {
+            rowCount: acceptedRows.length + pendingIssues.length,
+            acceptedRowCount: acceptedRows.length,
+            pendingRowCount: pendingIssues.length,
+            status: pendingIssues.length > 0 ? "pending_review" : "processed"
+        }
+    });
+    return {
+        batch,
+        acceptedRows,
+        pendingIssues
+    };
+}
+export async function registerIncomingRoutes(app) {
+    app.get("/incoming/reference", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const query = request.query;
+        const user = request.user;
+        const facility = await resolveScopedFacility(user, query.facilityId);
+        if (query.clinicId) {
+            const scopedClinic = await resolveScopedClinic(user, query.clinicId);
+            assert(scopedClinic.facilityId === facility.id, 400, "Clinic is outside selected facility");
+        }
+        const clinicWhere = {
+            facilityId: facility.id,
+            status: { in: ["active", "inactive"] },
+            ...(query.clinicId ? { id: query.clinicId } : {})
+        };
+        const [clinics, providers, assignments, reasons] = await Promise.all([
+            prisma.clinic.findMany({
+                where: clinicWhere,
+                select: { id: true, name: true, shortCode: true },
+                orderBy: { name: "asc" }
+            }),
+            prisma.provider.findMany({
+                where: {
+                    active: true,
+                    clinic: clinicWhere
+                },
+                select: { id: true, name: true },
+                orderBy: { name: "asc" }
+            }),
+            prisma.clinicAssignment.findMany({
+                where: {
+                    clinic: clinicWhere,
+                    providerUser: { status: "active" }
+                },
+                select: {
+                    clinicId: true,
+                    providerUser: { select: { name: true } }
+                }
+            }),
+            prisma.reasonForVisit.findMany({
+                where: {
+                    facilityId: facility.id,
+                    status: "active",
+                    ...(query.clinicId
+                        ? {
+                            OR: [{ clinicAssignments: { some: { clinicId: query.clinicId } } }, { clinicId: query.clinicId }]
+                        }
+                        : {})
+                },
+                select: { id: true, name: true },
+                orderBy: { name: "asc" }
+            })
+        ]);
+        const providerLastNames = Array.from(new Set([...providers.map((provider) => provider.name), ...assignments.map((assignment) => assignment.providerUser?.name || "")]
+            .map((providerName) => providerLastName(providerName))
+            .filter(Boolean))).slice(0, 20);
+        return {
+            facilityId: facility.id,
+            clinicId: query.clinicId || null,
+            requiredHeaders: [
+                {
+                    key: "appointmentDate",
+                    label: "Appointment Date",
+                    required: false,
+                    format: "YYYY-MM-DD (required if batch date is not provided)",
+                    aliases: ["date", "apptDate", "serviceDate", "dos"],
+                },
+                {
+                    key: "clinic",
+                    label: "Clinic",
+                    required: !query.clinicId,
+                    format: "Clinic name, short code, combined alias, or UUID",
+                    aliases: ["clinicName", "clinicShortCode", "clinicShortName", "clinicCode", "team", "careTeam"]
+                },
+                {
+                    key: "patientId",
+                    label: "Patient ID",
+                    required: true,
+                    format: "String identifier from schedule/EHR",
+                    aliases: ["patient_id", "mrn"]
+                },
+                {
+                    key: "appointmentTime",
+                    label: "Appointment Time",
+                    required: true,
+                    format: "HH:mm or HH:mm:ss",
+                    aliases: ["apptTime", "time"]
+                },
+                {
+                    key: "providerLastName",
+                    label: "Provider Last Name",
+                    required: true,
+                    format: "Provider last name in selected clinic scope",
+                    aliases: ["provider", "providerName"]
+                },
+                {
+                    key: "reasonForVisit",
+                    label: "Visit Reason",
+                    required: true,
+                    format: "Reason name or reason UUID",
+                    aliases: ["reason", "reasonForVisitId"]
+                }
+            ],
+            samples: {
+                clinics: clinics.map((clinic) => ({
+                    id: clinic.id,
+                    name: clinic.name,
+                    shortCode: clinic.shortCode || null,
+                    aliases: clinicAliasVariants(clinic)
+                })),
+                providerLastNames,
+                reasonNames: reasons.map((reason) => reason.name).slice(0, 20)
+            }
+        };
+    });
+    app.get("/incoming/pending", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const query = request.query;
+        const user = request.user;
+        const facility = await resolveScopedFacility(user, query.facilityId);
+        if (query.clinicId) {
+            const scopedClinic = await resolveScopedClinic(user, query.clinicId);
+            assert(scopedClinic.facilityId === facility.id, 400, "Clinic is outside selected facility");
+        }
+        const timezone = (await getFacilityTimezone(facility.id)) || facility.timezone;
+        const normalizedDate = query.date ? normalizeDate(query.date, timezone) : undefined;
+        const issues = await prisma.incomingImportIssue.findMany({
+            where: {
+                facilityId: facility.id,
+                status: { in: ["pending", "error"] },
+                ...(query.clinicId ? { clinicId: query.clinicId } : {}),
+                ...(normalizedDate ? { dateOfService: normalizedDate } : {})
+            },
+            include: {
+                clinic: { select: { id: true, name: true, shortCode: true } },
+                batch: { select: { id: true, source: true, fileName: true, createdAt: true, status: true } }
+            },
+            orderBy: [{ createdAt: "desc" }]
+        });
+        return issues;
+    });
+    app.post("/incoming/pending/:id/retry", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const issueId = request.params.id;
+        const dto = incomingRetrySchema.parse(request.body);
+        const user = request.user;
+        const issue = await prisma.incomingImportIssue.findUnique({
+            where: { id: issueId },
+            include: {
+                batch: true
+            }
+        });
+        assert(issue, 404, "Pending issue not found");
+        const facility = await resolveScopedFacility(user, issue.facilityId);
+        assert(issue.facilityId === facility.id, 403, "Pending issue is outside your assigned scope");
+        const clinicId = dto.clinicId || issue.clinicId || issue.normalizedJson?.clinicId;
+        assert(clinicId, 400, "Clinic is required to retry this pending row");
+        const clinic = await resolveScopedClinic(user, clinicId);
+        assert(clinic.facilityId === facility.id, 400, "Clinic is outside selected facility");
+        assert(clinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
+        const normalized = issue.normalizedJson || {};
+        const rawPayload = issue.rawPayloadJson || {};
+        const facilityTimezone = facility.timezone || "America/New_York";
+        const candidate = {
+            clinicId,
+            patientId: (dto.patientId ?? String(normalized.patientId || rawPayload.patientId || "")).trim(),
+            dateOfService: dto.dateOfService ??
+                normalized.dateOfService ??
+                rawPayload.appointmentDate ??
+                rawPayload.apptDate ??
+                rawPayload.date ??
+                rawPayload.serviceDate ??
+                rawPayload.dos ??
+                null,
+            appointmentTime: dto.appointmentTime ?? normalized.appointmentTime ?? rawPayload.appointmentTime ?? null,
+            providerLastName: dto.providerLastName ??
+                normalized.providerLastName ??
+                rawPayload.providerLastName ??
+                rawPayload.providerName ??
+                null,
+            reasonForVisit: dto.reasonText ??
+                normalized.reasonText ??
+                rawPayload.reasonForVisit ??
+                rawPayload.reason ??
+                null,
+            reasonForVisitId: rawPayload.reasonForVisitId ?? null,
+            providerId: rawPayload.providerId ?? null,
+            intakeData: rawPayload.intakeData || {},
+            rawPayload
+        };
+        const maps = await getProviderReasonMaps(clinicId);
+        const validated = validateIncomingRow(candidate, DateTime.fromJSDate(issue.dateOfService, { zone: "utc" }).setZone(facilityTimezone).toISODate() || undefined, maps, facilityTimezone);
+        const retryCount = issue.retryCount + 1;
+        if (!validated.isValid) {
+            const updated = await prisma.incomingImportIssue.update({
+                where: { id: issue.id },
+                data: {
+                    clinicId,
+                    dateOfService: validated.dateOfService || issue.dateOfService,
+                    normalizedJson: {
+                        clinicId,
+                        dateOfService: validated.dateOfServiceIso,
+                        patientId: validated.patientId,
+                        appointmentTime: validated.appointmentTime,
+                        providerLastName: validated.providerLastName,
+                        reasonText: validated.reasonText
+                    },
+                    validationErrors: validated.validationErrors,
+                    status: "pending",
+                    retryCount
+                }
+            });
+            return {
+                status: "pending",
+                issue: updated
+            };
+        }
+        const created = await prisma.$transaction(async (tx) => {
+            const incoming = await tx.incomingSchedule.create({
+                data: {
+                    clinicId,
+                    dateOfService: validated.dateOfService || issue.dateOfService,
+                    patientId: validated.patientId,
+                    appointmentTime: validated.appointmentTime,
+                    appointmentAt: validated.appointmentAt,
+                    providerId: validated.providerId,
+                    providerLastName: validated.providerLastName,
+                    reasonForVisitId: validated.reasonForVisitId,
+                    reasonText: validated.reasonText,
+                    intakeData: (candidate.intakeData || {}),
+                    source: issue.batch.source,
+                    rawPayloadJson: rawPayload,
+                    isValid: true,
+                    validationErrors: null,
+                    importBatchId: issue.batchId
+                }
+            });
+            const updatedIssue = await tx.incomingImportIssue.update({
+                where: { id: issue.id },
+                data: {
+                    clinicId,
+                    dateOfService: validated.dateOfService || issue.dateOfService,
+                    normalizedJson: {
+                        clinicId,
+                        dateOfService: validated.dateOfServiceIso,
+                        patientId: validated.patientId,
+                        appointmentTime: validated.appointmentTime,
+                        providerLastName: validated.providerLastName,
+                        reasonText: validated.reasonText
+                    },
+                    validationErrors: Prisma.JsonNull,
+                    status: "resolved",
+                    retryCount,
+                    resolvedIncomingId: incoming.id
+                }
+            });
+            await tx.incomingImportBatch.update({
+                where: { id: issue.batchId },
+                data: {
+                    acceptedRowCount: { increment: 1 },
+                    pendingRowCount: { decrement: 1 }
+                }
+            });
+            const pendingLeft = await tx.incomingImportIssue.count({
+                where: { batchId: issue.batchId, status: { in: ["pending", "error"] } }
+            });
+            await tx.incomingImportBatch.update({
+                where: { id: issue.batchId },
+                data: {
+                    status: pendingLeft > 0 ? "pending_review" : "processed"
+                }
+            });
+            return { incoming, issue: updatedIssue };
+        });
+        return {
+            status: "accepted",
+            row: created.incoming,
+            issue: created.issue
+        };
+    });
+    app.post("/incoming/import", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const dto = importSchema.parse(request.body);
+        const user = request.user;
+        const facility = await resolveScopedFacility(user, dto.facilityId);
+        if (dto.clinicId) {
+            const scopedClinic = await resolveScopedClinic(user, dto.clinicId);
+            assert(scopedClinic.facilityId === facility.id, 400, "Clinic is outside selected facility");
+            assert(scopedClinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
+        }
+        const records = parseCsv(dto.csvText, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true
+        });
+        const clinics = await prisma.clinic.findMany({
+            where: {
+                status: "active",
+                facilityId: facility.id,
+                ...(user.clinicId ? { id: user.clinicId } : {})
+            },
+            select: { id: true, name: true, shortCode: true }
+        });
+        if (clinics.length === 0) {
+            throw new ApiError(403, "No active clinics are available in your assigned scope");
+        }
+        const clinicLookup = new Map();
+        for (const clinic of clinics) {
+            for (const alias of clinicAliasForms(clinic)) {
+                if (!clinicLookup.has(alias))
+                    clinicLookup.set(alias, new Set());
+                clinicLookup.get(alias).add(clinic.id);
+            }
+        }
+        const facilityTimezone = facility.timezone || "America/New_York";
+        const groupedRows = new Map();
+        const unresolvedClinicRows = [];
+        records.forEach((row, index) => {
+            const normalizedRow = normalizeCsvRow(row);
+            const clinicValue = csvValue(normalizedRow, "clinic", "clinicName", "clinicShortCode", "clinicShortName", "clinicCode", "team", "careTeam");
+            const matches = clinicLookup.get(normalizeAlias(clinicValue));
+            const resolvedClinicId = matches && matches.size === 1 ? Array.from(matches)[0] : dto.clinicId || null;
+            const patientId = csvValue(normalizedRow, "patientId", "patient_id", "mrn");
+            const appointmentDate = csvValue(normalizedRow, "appointmentDate", "apptDate", "date", "serviceDate", "dos") || dto.dateOfService || "";
+            const appointmentTime = csvValue(normalizedRow, "appointmentTime", "apptTime", "time") || null;
+            const providerId = csvValue(normalizedRow, "providerId") || null;
+            const providerName = csvValue(normalizedRow, "providerName") || null;
+            const providerLastName = csvValue(normalizedRow, "providerLastName", "provider") || null;
+            const reasonForVisitId = csvValue(normalizedRow, "reasonForVisitId") || null;
+            const reasonForVisit = csvValue(normalizedRow, "reasonForVisit", "reason") || null;
+            const normalizedDraft = {
+                clinicId: resolvedClinicId,
+                dateOfService: appointmentDate || null,
+                patientId,
+                appointmentTime,
+                providerLastName: providerLastName || providerName || null,
+                reasonText: reasonForVisit || null
+            };
+            if (matches && matches.size > 1) {
+                unresolvedClinicRows.push({
+                    row,
+                    message: `Row ${index + 2}: clinic '${clinicValue}' matches multiple clinics`,
+                    normalized: normalizedDraft,
+                    clinicId: null,
+                    dateOfService: resolveDateOfServiceInput(appointmentDate, undefined, facilityTimezone).date
+                });
+                return;
+            }
+            if (!resolvedClinicId) {
+                unresolvedClinicRows.push({
+                    row,
+                    message: `Row ${index + 2}: missing or invalid clinic value`,
+                    normalized: normalizedDraft,
+                    clinicId: null,
+                    dateOfService: resolveDateOfServiceInput(appointmentDate, undefined, facilityTimezone).date
+                });
+                return;
+            }
+            const resolvedDate = resolveDateOfServiceInput(appointmentDate, undefined, facilityTimezone);
+            if (resolvedDate.error) {
+                unresolvedClinicRows.push({
+                    row,
+                    message: `Row ${index + 2}: ${resolvedDate.error}`,
+                    normalized: {
+                        ...normalizedDraft,
+                        clinicId: resolvedClinicId,
+                        dateOfService: appointmentDate || null
+                    },
+                    clinicId: resolvedClinicId,
+                    dateOfService: resolvedDate.date
+                });
+                return;
+            }
+            const groupKey = `${resolvedClinicId}:${resolvedDate.isoDate}`;
+            const currentGroup = groupedRows.get(groupKey) || {
+                clinicId: resolvedClinicId,
+                dateOfService: resolvedDate.isoDate || appointmentDate,
+                rows: []
+            };
+            currentGroup.rows.push({
+                clinic: clinicValue || null,
+                clinicId: resolvedClinicId,
+                patientId,
+                dateOfService: resolvedDate.isoDate,
+                appointmentTime,
+                providerId,
+                providerName,
+                providerLastName,
+                reasonForVisitId,
+                reasonForVisit,
+                rawPayload: row
+            });
+            groupedRows.set(groupKey, currentGroup);
+        });
+        const createdRows = [];
+        const pendingIssues = [];
+        for (const group of groupedRows.values()) {
+            await resolveScopedClinic(user, group.clinicId);
+            const created = await importRows(facility.id, group.clinicId, group.dateOfService, group.rows, dto.source || ScheduleSource.csv, dto.fileName);
+            createdRows.push(...created.acceptedRows);
+            pendingIssues.push(...created.pendingIssues);
+        }
+        if (unresolvedClinicRows.length > 0) {
+            const normalizedDate = resolveDateOfServiceInput(undefined, dto.dateOfService, facilityTimezone).date ||
+                DateTime.now().setZone(facilityTimezone).startOf("day").toUTC().toJSDate();
+            const unresolvedBatch = await prisma.incomingImportBatch.create({
+                data: {
+                    facilityId: facility.id,
+                    clinicId: null,
+                    date: normalizedDate,
+                    source: dto.source || ScheduleSource.csv,
+                    fileName: dto.fileName,
+                    rowCount: unresolvedClinicRows.length,
+                    acceptedRowCount: 0,
+                    pendingRowCount: unresolvedClinicRows.length,
+                    status: "pending_review"
+                }
+            });
+            for (const issue of unresolvedClinicRows) {
+                const createdIssue = await prisma.incomingImportIssue.create({
+                    data: {
+                        batchId: unresolvedBatch.id,
+                        facilityId: facility.id,
+                        clinicId: issue.clinicId || null,
+                        dateOfService: issue.dateOfService || normalizedDate,
+                        rawPayloadJson: issue.row,
+                        normalizedJson: issue.normalized,
+                        validationErrors: [issue.message],
+                        status: "pending",
+                        retryCount: 0
+                    }
+                });
+                pendingIssues.push(createdIssue);
+            }
+        }
+        return {
+            acceptedRows: createdRows,
+            pendingIssues,
+            acceptedCount: createdRows.length,
+            pendingCount: pendingIssues.length
+        };
+    });
+    app.post("/incoming/:id/intake", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.Admin) }, async (request) => {
+        const incomingId = request.params.id;
+        const dto = intakeSchema.parse(request.body);
+        const existing = await prisma.incomingSchedule.findUnique({
+            where: { id: incomingId },
+            include: {
+                clinic: {
+                    select: { id: true, facilityId: true }
+                }
+            }
+        });
+        assert(existing, 404, "Incoming row not found");
+        assertClinicInUserScope(request.user, {
+            id: existing.clinicId,
+            facilityId: existing.clinic?.facilityId || null
+        });
+        return prisma.incomingSchedule.update({
+            where: { id: incomingId },
+            data: {
+                intakeData: dto.intakeData
+            }
+        });
+    });
+    app.post("/incoming/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const incomingId = request.params.id;
+        const dto = updateIncomingSchema.parse(request.body);
+        const existing = await prisma.incomingSchedule.findUnique({
+            where: { id: incomingId },
+            include: {
+                clinic: {
+                    select: { facilityId: true }
+                },
+                provider: { select: { name: true } },
+                reason: { select: { name: true } }
+            }
+        });
+        assert(existing, 404, "Incoming row not found");
+        assertClinicInUserScope(request.user, {
+            id: existing.clinicId,
+            facilityId: existing.clinic?.facilityId || null
+        });
+        assert(!existing.checkedInAt, 400, "Checked-in rows cannot be edited");
+        assert(!existing.dispositionAt, 400, "Dispositioned rows cannot be edited");
+        const maps = await getProviderReasonMaps(existing.clinicId);
+        const facilityTimezone = existing.clinic?.facilityId
+            ? (await getFacilityTimezone(existing.clinic.facilityId)) || "America/New_York"
+            : "America/New_York";
+        const validated = validateIncomingRow({
+            patientId: dto.patientId ?? existing.patientId,
+            dateOfService: dto.dateOfService ??
+                (DateTime.fromJSDate(existing.dateOfService, { zone: "utc" }).setZone(facilityTimezone).toISODate() || null),
+            appointmentTime: dto.appointmentTime ?? existing.appointmentTime ?? null,
+            providerLastName: dto.providerLastName ?? existing.providerLastName ?? existing.provider?.name ?? null,
+            reasonForVisit: dto.reasonText ?? existing.reasonText ?? existing.reason?.name ?? null,
+            providerId: existing.providerId,
+            reasonForVisitId: existing.reasonForVisitId
+        }, DateTime.fromJSDate(existing.dateOfService, { zone: "utc" }).setZone(facilityTimezone).toISODate() || undefined, maps, facilityTimezone);
+        assert(validated.isValid, 400, validated.validationErrors.join("; "));
+        return prisma.incomingSchedule.update({
+            where: { id: incomingId },
+            data: {
+                dateOfService: validated.dateOfService || existing.dateOfService,
+                patientId: validated.patientId,
+                appointmentTime: validated.appointmentTime,
+                appointmentAt: validated.appointmentAt,
+                providerLastName: validated.providerLastName,
+                reasonText: validated.reasonText,
+                providerId: validated.providerId,
+                reasonForVisitId: validated.reasonForVisitId,
+                isValid: validated.isValid,
+                validationErrors: validated.validationErrors.length > 0 ? validated.validationErrors : null
+            },
+            include: {
+                clinic: { select: { id: true, name: true, shortCode: true, cardColor: true, status: true } },
+                provider: { select: { id: true, name: true, active: true } },
+                reason: { select: { id: true, name: true, status: true } }
+            }
+        });
+    });
+    app.post("/incoming/:id/disposition", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const incomingId = request.params.id;
+        const dto = dispositionSchema.parse(request.body);
+        const userId = request.user.id;
+        const incoming = await prisma.incomingSchedule.findUnique({
+            where: { id: incomingId },
+            include: {
+                clinic: {
+                    select: { id: true, facilityId: true, timezone: true, status: true }
+                }
+            }
+        });
+        assert(incoming, 404, "Incoming row not found");
+        assertClinicInUserScope(request.user, {
+            id: incoming.clinicId,
+            facilityId: incoming.clinic?.facilityId || null
+        });
+        assert(!incoming.checkedInAt && !incoming.checkedInEncounterId, 400, "Incoming row already checked in");
+        assert(!incoming.dispositionAt && !incoming.dispositionEncounterId, 400, "Incoming row already dispositioned");
+        assert(incoming.clinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
+        const result = await prisma.$transaction(async (tx) => {
+            const existing = await tx.encounter.findFirst({
+                where: {
+                    patientId: incoming.patientId,
+                    clinicId: incoming.clinicId,
+                    dateOfService: incoming.dateOfService
+                }
+            });
+            const now = new Date();
+            let encounterId = existing?.id || null;
+            if (!existing) {
+                const encounter = await tx.encounter.create({
+                    data: {
+                        patientId: incoming.patientId,
+                        clinicId: incoming.clinicId,
+                        providerId: incoming.providerId || undefined,
+                        reasonForVisitId: incoming.reasonForVisitId || undefined,
+                        currentStatus: "Optimized",
+                        dateOfService: incoming.dateOfService,
+                        checkoutCompleteAt: now,
+                        closedAt: now,
+                        closureType: dto.reason,
+                        closureNotes: (dto.note || "").trim() || null,
+                        walkIn: false,
+                        intakeData: incoming.intakeData,
+                        statusEvents: {
+                            create: {
+                                fromStatus: null,
+                                toStatus: "Optimized",
+                                changedByUserId: userId,
+                                reasonCode: dto.reason
+                            }
+                        },
+                        alertState: {
+                            create: {
+                                enteredStatusAt: now,
+                                currentAlertLevel: "Green"
+                            }
+                        }
+                    }
+                });
+                encounterId = encounter.id;
+            }
+            else if (existing.currentStatus !== "Optimized") {
+                throw new ApiError(400, "Patient already has an active encounter for this clinic day.");
+            }
+            await tx.incomingSchedule.update({
+                where: { id: incomingId },
+                data: {
+                    dispositionType: dto.reason,
+                    dispositionNote: (dto.note || "").trim() || null,
+                    dispositionAt: now,
+                    dispositionByUserId: userId,
+                    dispositionEncounterId: encounterId
+                }
+            });
+            return { encounterId: encounterId };
+        });
+        return {
+            encounterId: result.encounterId,
+            status: "Optimized",
+            closureType: dto.reason,
+            resolvedIncomingId: incomingId
+        };
+    });
+    app.get("/incoming", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+        const query = request.query;
+        const user = request.user;
+        const requestedClinicId = query.clinicId?.trim() || undefined;
+        if (user.clinicId && requestedClinicId && requestedClinicId !== user.clinicId) {
+            throw new ApiError(403, "Clinic is outside your assigned scope");
+        }
+        const scopedClinicId = user.clinicId || requestedClinicId;
+        if (scopedClinicId) {
+            await resolveScopedClinic(user, scopedClinicId);
+        }
+        const includeCheckedIn = query.includeCheckedIn === "true";
+        const includeInvalid = query.includeInvalid === "true";
+        let dateOfService;
+        let dateRange;
+        if (query.date) {
+            if (scopedClinicId) {
+                const timezone = await getClinicTimezone(scopedClinicId);
+                dateOfService = normalizeDate(query.date, timezone);
+            }
+            else {
+                const timezone = await getFacilityTimezone(user.facilityId);
+                dateRange = dateRangeForDay(query.date, timezone);
+            }
+        }
+        const rows = await prisma.incomingSchedule.findMany({
+            where: {
+                clinicId: scopedClinicId || undefined,
+                clinic: user.facilityId ? { facilityId: user.facilityId } : undefined,
+                ...(scopedClinicId
+                    ? { dateOfService }
+                    : dateRange
+                        ? {
+                            dateOfService: {
+                                gte: dateRange.start,
+                                lt: dateRange.end
+                            }
+                        }
+                        : {}),
+                checkedInAt: includeCheckedIn ? undefined : null,
+                dispositionAt: includeCheckedIn ? undefined : null,
+                isValid: includeInvalid ? undefined : true,
+                ...(includeInvalid
+                    ? {}
+                    : {
+                        providerLastName: { not: null },
+                        reasonText: { not: null },
+                        reasonForVisitId: { not: null },
+                        appointmentAt: { not: null }
+                    })
+            },
+            include: {
+                clinic: { select: { id: true, name: true, shortCode: true, cardColor: true, status: true } },
+                provider: { select: { id: true, name: true, active: true } },
+                reason: { select: { id: true, name: true, status: true } },
+                importBatch: { select: { createdAt: true } }
+            },
+            orderBy: [{ appointmentAt: "asc" }, { patientId: "asc" }]
+        });
+        if (includeCheckedIn || includeInvalid) {
+            return projectIncomingRows(rows);
+        }
+        const deduped = new Map();
+        for (const row of rows) {
+            const key = dedupeKey(row);
+            const existing = deduped.get(key);
+            if (!existing || scoreIncomingRow(row) >= scoreIncomingRow(existing)) {
+                deduped.set(key, row);
+            }
+        }
+        return projectIncomingRows(Array.from(deduped.values()));
+    });
+    app.get("/incoming/batches", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
+        const query = request.query;
+        const user = request.user;
+        const requestedClinicId = query.clinicId?.trim() || undefined;
+        if (user.clinicId && requestedClinicId && requestedClinicId !== user.clinicId) {
+            throw new ApiError(403, "Clinic is outside your assigned scope");
+        }
+        const scopedClinicId = user.clinicId || requestedClinicId;
+        if (scopedClinicId) {
+            await resolveScopedClinic(user, scopedClinicId);
+        }
+        if (!query.date) {
+            return prisma.incomingImportBatch.findMany({
+                where: scopedClinicId
+                    ? { clinicId: scopedClinicId }
+                    : user.facilityId
+                        ? { facilityId: user.facilityId }
+                        : undefined,
+                orderBy: { createdAt: "desc" }
+            });
+        }
+        if (scopedClinicId) {
+            const timezone = await getClinicTimezone(scopedClinicId);
+            const normalizedDate = normalizeDate(query.date, timezone);
+            return prisma.incomingImportBatch.findMany({
+                where: {
+                    clinicId: scopedClinicId,
+                    date: normalizedDate
+                },
+                orderBy: { createdAt: "desc" }
+            });
+        }
+        const timezone = await getFacilityTimezone(user.facilityId);
+        const range = dateRangeForDay(query.date, timezone);
+        return prisma.incomingImportBatch.findMany({
+            where: {
+                facilityId: user.facilityId || undefined,
+                date: { gte: range.start, lt: range.end }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+    });
+}
+//# sourceMappingURL=incoming.js.map

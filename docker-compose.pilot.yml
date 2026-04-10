@@ -1,0 +1,41 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: flow-backend:pilot
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      AUTH_MODE: jwt
+      AUTH_ALLOW_DEV_HEADERS: "false"
+      AUTH_ALLOW_IMPLICIT_ADMIN: "false"
+      POSTGRES_DATABASE_URL: ${POSTGRES_DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-file:./prisma/dev.db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flow
+      POSTGRES_USER: flow
+      POSTGRES_PASSWORD: flow
+    ports:
+      - "5432:5432"
+    volumes:
+      - flow-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flow -d flow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  flow-postgres-data:

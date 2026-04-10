@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+
+      - name: Install backend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install frontend dependencies
+        run: pnpm -C "docs/Flow Frontend" install --frozen-lockfile
+
+      - name: Prepare database and seed
+        run: |
+          pnpm db:push
+          pnpm db:seed
+
+      - name: Resolve frontend live-check auth vars
+        run: |
+          DEV_USER_ID=$(node --input-type=module <<'NODE'
+          import Database from "better-sqlite3";
+
+          const db = new Database("prisma/dev.db");
+          const row = db
+            .prepare("select id from User where email = ? limit 1")
+            .get("admin@flow.local");
+
+          if (!row?.id) {
+            console.error("Seeded admin user was not found.");
+            process.exit(1);
+          }
+
+          console.log(row.id);
+          NODE
+          )
+
+          echo "FRONTEND_API_BASE_URL=http://127.0.0.1:4100" >> "$GITHUB_ENV"
+          echo "VITE_DEV_USER_ID=$DEV_USER_ID" >> "$GITHUB_ENV"
+          echo "FRONTEND_DEV_USER_ID=$DEV_USER_ID" >> "$GITHUB_ENV"
+          echo "VITE_DEV_ROLE=Admin" >> "$GITHUB_ENV"
+          echo "FRONTEND_DEV_ROLE=Admin" >> "$GITHUB_ENV"
+          echo "FRONTEND_E2E_PORT=4173" >> "$GITHUB_ENV"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Backend tests
+        run: pnpm test
+
+      - name: Backend build
+        run: pnpm build
+
+      - name: Start backend for frontend live verification
+        run: |
+          PORT=4100 \
+          CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173 \
+          pnpm start > /tmp/flow-backend.log 2>&1 &
+          echo $! > /tmp/flow-backend.pid
+
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:4100/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Backend failed to start for frontend verification."
+          cat /tmp/flow-backend.log || true
+          exit 1
+
+      - name: Frontend live verification
+        run: pnpm frontend:verify-live
+
+      - name: Frontend bundle budgets
+        run: pnpm -C "docs/Flow Frontend" run test:bundle-budget
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [[ -f /tmp/flow-backend.pid ]]; then
+            kill "$(cat /tmp/flow-backend.pid)" || true
+          fi
