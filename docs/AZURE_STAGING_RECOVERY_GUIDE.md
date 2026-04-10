@@ -134,6 +134,33 @@ node dist/server.js
 
 Do not use `pnpm start` in Azure staging for this repo.
 
+## Step 5b: Match The Node Runtime Version
+
+If Azure `Log stream` shows an error like:
+
+```text
+The module '/node_modules/better-sqlite3/build/Release/better_sqlite3.node'
+was compiled against a different Node.js version
+```
+
+then the backend package was built against a different Node major version than the App Service runtime.
+
+For this repo, staging must keep these aligned:
+
+1. Azure App Service `Runtime stack`
+2. GitHub Actions backend deploy workflow Node version
+
+Current guidance:
+
+- If Azure App Service is running Node `24`, the backend workflow must also build on Node `24`
+- If you prefer Azure App Service on Node `22`, then change the Web App runtime to Node `22` and keep the workflow aligned to that
+
+If you are already on Azure Node `24`, the fastest path is:
+
+1. keep the Web App runtime on Node `24`
+2. push the latest repo workflow
+3. rerun `Azure App Service Staging Deploy`
+
 ## Step 6: Verify The App-Level Health Endpoint
 
 This repo already exposes:
