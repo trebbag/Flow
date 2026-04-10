@@ -50,7 +50,7 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-          cache-dependency-path: docs/Flow Frontend/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install frontend dependencies
         run: pnpm -C "docs/Flow Frontend" install --frozen-lockfile
