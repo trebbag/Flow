@@ -21,12 +21,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate deployment inputs
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          AZURE_WEBAPP_NAME: ${{ env.AZURE_WEBAPP_NAME }}
         run: |
-          if [[ -z "${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}" ]]; then
+          if [[ -z "${AZURE_WEBAPP_PUBLISH_PROFILE}" ]]; then
             echo "Missing GitHub secret: AZURE_WEBAPP_PUBLISH_PROFILE"
             exit 1
           fi
-
+      
           if [[ -z "${AZURE_WEBAPP_NAME}" ]]; then
             echo "Missing GitHub variable: AZURE_WEBAPP_NAME"
             exit 1
