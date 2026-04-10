@@ -170,6 +170,24 @@ That usually means one of:
 2. `/health` is not reachable
 3. backend `CORS_ORIGINS` does not include the exact Static Web App host
 
+## Step 9: If Backend Logs Say `Cannot find package 'fastify'`
+
+If `Log stream` shows an error like:
+
+```text
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'fastify' imported from /home/site/wwwroot/dist/app.js
+```
+
+then the deployed package contains a pnpm-style dependency tree that Azure App Service did not resolve correctly at runtime.
+
+Fix:
+
+1. push the latest repo-managed backend workflow changes
+2. rerun `Azure App Service Staging Deploy`
+3. verify `/health` again after deploy
+
+The current backend workflow now builds a portable production dependency tree for Azure and then copies the generated Prisma client artifacts into the package.
+
 ## Current Repo Limitation
 
 Azure infrastructure can be repaired with this guide, but one code-level staging blocker still remains:

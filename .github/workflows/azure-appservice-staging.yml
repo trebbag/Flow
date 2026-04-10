@@ -55,19 +55,23 @@ jobs:
       - name: Build backend
         run: pnpm build
 
-      - name: Prune to production dependencies
-        run: pnpm prune --prod
-
       - name: Prepare deployment package
         run: |
           rm -rf "${PACKAGE_PATH}"
           mkdir -p "${PACKAGE_PATH}"
 
           cp package.json "${PACKAGE_PATH}/"
-          cp pnpm-lock.yaml "${PACKAGE_PATH}/"
           cp -R dist "${PACKAGE_PATH}/dist"
-          cp -R node_modules "${PACKAGE_PATH}/node_modules"
           cp -R prisma "${PACKAGE_PATH}/prisma"
+
+          cd "${PACKAGE_PATH}"
+          npm install --omit=dev --no-package-lock
+          cd -
+
+          rm -rf "${PACKAGE_PATH}/node_modules/@prisma/client" "${PACKAGE_PATH}/node_modules/.prisma"
+          mkdir -p "${PACKAGE_PATH}/node_modules/@prisma"
+          cp -RL node_modules/@prisma/client "${PACKAGE_PATH}/node_modules/@prisma/client"
+          cp -RL node_modules/.prisma "${PACKAGE_PATH}/node_modules/.prisma"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
