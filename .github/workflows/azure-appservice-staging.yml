@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 40
     environment: staging
     env:
-      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'flow-staging-api' }}
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
       PACKAGE_PATH: ./.azure/backend-package
 
     steps:

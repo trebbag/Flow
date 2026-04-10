@@ -18,7 +18,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
      - staging backend hostname
    - For the repo-managed Azure App Service backend deploy workflow, also provide in GitHub:
      - `AZURE_WEBAPP_PUBLISH_PROFILE` secret
-     - `AZURE_WEBAPP_NAME` variable (or confirm `flow-staging-api`)
+     - `AZURE_WEBAPP_NAME` variable using the Azure Web App resource `Name` field, not the hostname
 2. Final auth issuer details:
    - `JWT_ISSUER`
    - `JWT_AUDIENCE`
@@ -30,7 +30,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 3. Frontend live verification credentials for non-local environments:
    - For the repo-managed Azure Static Web Apps staging deploy, also provide in GitHub:
      - `AZURE_STATIC_WEB_APPS_API_TOKEN` secret
-     - `STAGING_FRONTEND_API_BASE_URL` variable
+     - `STAGING_FRONTEND_API_BASE_URL` variable using the backend Web App `Default domain` with `https://`
    - `vars.STAGING_FRONTEND_API_BASE_URL`
    - Preferred: `secrets.STAGING_FRONTEND_BEARER_TOKEN` (valid Admin JWT)
    - For role-by-role staging evidence in JWT mode, also provide:

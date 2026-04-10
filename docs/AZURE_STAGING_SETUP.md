@@ -37,7 +37,7 @@ Suggested values:
 | Resource group | `flow-staging-rg` |
 | Static Web App | `flow-staging-web` |
 | App Service Plan | `flow-staging-plan` |
-| Backend Web App | `flow-staging-api` |
+| Backend Web App | `flow-staging-api` or your globally unique variant |
 | PostgreSQL server | `flow-staging-pg` |
 | PostgreSQL database | `flow` |
 
@@ -249,6 +249,31 @@ After the Web App is created:
 
 Azure will create a GitHub Actions workflow for the Web App deployment.
 
+### Important: Backend App Name vs Default Domain
+
+Azure usually gives the backend two different identifiers:
+
+1. `Name`
+   - used by deployment tooling
+   - this is what `AZURE_WEBAPP_NAME` should be
+2. `Default domain`
+   - used by the browser/frontend
+   - this is what `STAGING_FRONTEND_API_BASE_URL` should target
+
+Example:
+
+- `Name`: `flow-staging-api`
+- `Default domain`: `flow-staging-api-esgxesfjhnenabg7.centralus-01.azurewebsites.net`
+
+Correct values:
+
+```text
+AZURE_WEBAPP_NAME=flow-staging-api
+STAGING_FRONTEND_API_BASE_URL=https://flow-staging-api-esgxesfjhnenabg7.centralus-01.azurewebsites.net
+```
+
+Use the exact values from the Azure portal `Overview` page.
+
 ### Configure backend environment variables
 
 1. Open the Web App.
@@ -323,7 +348,7 @@ AZURE_WEBAPP_PUBLISH_PROFILE
 2. Repository or environment variable:
 
 ```text
-AZURE_WEBAPP_NAME=flow-staging-api
+AZURE_WEBAPP_NAME=<Azure Web App Name from the Web App Overview page>
 ```
 
 How to get the publish profile:
@@ -336,6 +361,11 @@ How to get the publish profile:
 6. In GitHub, go to `Settings` -> `Secrets and variables` -> `Actions`.
 7. Add a new secret named `AZURE_WEBAPP_PUBLISH_PROFILE`.
 8. Paste the full XML contents.
+
+If Azure refuses publish profile download because basic authentication is disabled, either:
+
+1. temporarily enable App Service publishing basic auth long enough to download the publish profile, or
+2. switch the backend deploy workflow to Azure OIDC instead of publish-profile auth
 
 How to run the workflow:
 
@@ -418,11 +448,15 @@ Required GitHub configuration before you run it:
 AZURE_STATIC_WEB_APPS_API_TOKEN
 ```
 
+If Azure created a generated secret with a random suffix, copy its token value into the plain secret above. The repo-managed workflow uses the plain secret name.
+
 2. Variable:
 
 ```text
 STAGING_FRONTEND_API_BASE_URL=https://<your-backend-app>.azurewebsites.net
 ```
+
+Use the backend Web App `Default domain` here, not the short Azure Web App resource name.
 
 The workflow already injects these known Entra values at build time:
 
@@ -448,15 +482,16 @@ After the Static Web App resource exists:
 
 1. Open the Static Web App resource in Azure.
 2. Look for the deployment token action in the portal.
-3. Copy the deployment token.
-4. In GitHub, open `Settings` -> `Secrets and variables` -> `Actions`.
-5. Add a new repository or environment secret named:
+3. If Azure already generated a GitHub secret with a random suffix, you can reuse that token value by copying it into a plain secret named `AZURE_STATIC_WEB_APPS_API_TOKEN`.
+4. Otherwise, copy the deployment token directly.
+5. In GitHub, open `Settings` -> `Secrets and variables` -> `Actions`.
+6. Add a new repository or environment secret named:
 
 ```text
 AZURE_STATIC_WEB_APPS_API_TOKEN
 ```
 
-6. Add the backend base URL as a GitHub variable:
+7. Add the backend base URL as a GitHub variable:
 
 ```text
 STAGING_FRONTEND_API_BASE_URL=https://<your-backend-app>.azurewebsites.net
@@ -558,6 +593,7 @@ If the app fails to start:
    - the deployment built `dist/server.js`
    - the startup command is `node dist/server.js`
    - the required env vars are present
+5. Confirm the backend is the actual parent Web App resource and not a stale slot path.
 
 ## Part 9: Verify the Frontend from Azure
 
@@ -641,3 +677,9 @@ After you have a working staging environment:
 5. [Configure an App Service app](https://learn.microsoft.com/en-us/azure/app-service/configure-common)
 6. [Create an Azure Database for PostgreSQL flexible server](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/quickstart-create-server)
 7. [How to add a redirect URI to your application](https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-redirect-uri)
+
+## Current Recovery Guide
+
+If the current staging setup is partially created but failing, use:
+
+- [AZURE_STAGING_RECOVERY_GUIDE.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/AZURE_STAGING_RECOVERY_GUIDE.md)

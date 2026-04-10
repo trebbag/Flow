@@ -30,8 +30,8 @@ jobs:
 
       - name: Validate deployment inputs
         run: |
-          if [[ -z "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ORANGE_BEACH_0851CDC0F }}" ]]; then
-            echo "Missing GitHub secret: AZURE_STATIC_WEB_APPS_API_TOKEN_ORANGE_BEACH_0851CDC0F"
+          if [[ -z "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]]; then
+            echo "Missing GitHub secret: AZURE_STATIC_WEB_APPS_API_TOKEN"
             exit 1
           fi
 
@@ -59,7 +59,7 @@ jobs:
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_ORANGE_BEACH_0851CDC0F }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: docs/Flow Frontend/dist
