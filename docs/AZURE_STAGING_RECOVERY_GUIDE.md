@@ -265,10 +265,61 @@ The current backend workflow now builds a portable production dependency tree fo
 
 If this error is replaced by a different startup error after redeploy, that is progress: the package-resolution problem is gone and the next issue is in runtime config or app startup.
 
+## Step 10: If Admin Clinics Fails After Postgres Cutover
+
+If the UI loads but the Admin `Clinics` tab returns `Internal server error`, the most likely cause is that PostgreSQL was populated from an older snapshot/export path that did not include clinic assignment tables.
+
+Symptoms:
+
+1. the rest of the app signs in correctly
+2. Admin loads but the Clinics tab shows `Clinics: Internal server error`
+3. PostgreSQL import logs do not mention `ClinicAssignment` or `ClinicRoomAssignment`
+
+Fix sequence:
+
+1. Pull the latest repo code
+2. Regenerate the PostgreSQL Prisma client:
+
+```bash
+pnpm db:generate:postgres
+```
+
+3. Push the latest Prisma schema to PostgreSQL:
+
+```bash
+POSTGRES_DATABASE_URL='postgresql://flowadmin:<REDACTED>@flow-staging-pg.postgres.database.azure.com:5432/flow?sslmode=verify-full' pnpm db:push:postgres
+```
+
+4. Re-export the SQLite snapshot so it includes:
+   - `ClinicAssignment`
+   - `ClinicRoomAssignment`
+
+```bash
+pnpm db:export:snapshot artifacts/sqlite-snapshot.json
+```
+
+5. Re-import the snapshot into PostgreSQL:
+
+```bash
+POSTGRES_DATABASE_URL='postgresql://flowadmin:<REDACTED>@flow-staging-pg.postgres.database.azure.com:5432/flow?sslmode=verify-full' pnpm db:import:postgres artifacts/sqlite-snapshot.json
+```
+
+6. Redeploy the backend
+7. Restart the Web App
+
+Expected import lines now include:
+
+```text
+Imported <n> rows into ClinicAssignment
+Imported <n> rows into ClinicRoomAssignment
+```
+
 ## Current Repo Limitation
 
-Azure infrastructure can be repaired with this guide, but one code-level staging blocker still remains:
+The biggest remaining code-level pilot item is no longer runtime PostgreSQL connectivity. That switch is now implemented in [src/lib/prisma.ts](/Users/gregorygabbert/Documents/GitHub/Flow/src/lib/prisma.ts).
 
-- the backend runtime is still SQLite-based in [src/lib/prisma.ts](/Users/gregorygabbert/Documents/GitHub/Flow/src/lib/prisma.ts)
+The remaining pilot work is operational validation:
 
-That means Azure PostgreSQL can be prepared now, but the backend cannot yet use it at runtime until the Prisma adapter selection is updated in code.
+1. verify staging is actually running on PostgreSQL after redeploy
+2. run role-by-role staging proof with real Entra users
+3. capture threshold, alerts, tasks, and encounter-lifecycle evidence in staging

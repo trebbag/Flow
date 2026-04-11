@@ -19,6 +19,7 @@ async function main() {
       Provider: await prisma.provider.findMany(),
       MaProviderMap: await prisma.maProviderMap.findMany(),
       MaClinicMap: await prisma.maClinicMap.findMany(),
+      ClinicAssignment: await prisma.clinicAssignment.findMany(),
       ClinicRoom: await prisma.clinicRoom.findMany(),
       ClinicRoomAssignment: await prisma.clinicRoomAssignment.findMany(),
       ReasonForVisit: await prisma.reasonForVisit.findMany(),

@@ -79,6 +79,8 @@ model User {
   createdAt         DateTime   @default(now())
   activeFacility    Facility?  @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
   roles             UserRole[]
+  providerAssignments ClinicAssignment[] @relation("ClinicAssignmentProviderUser")
+  maAssignments     ClinicAssignment[] @relation("ClinicAssignmentMaUser")
   tasksCreated      Task[]     @relation("TaskCreatedBy")
   tasksCompleted    Task[]     @relation("TaskCompletedBy")
   tasksAcknowledged Task[]     @relation("TaskAcknowledgedBy")
@@ -130,6 +132,7 @@ model Clinic {
   reasonAssignments ReasonClinicAssignment[]
   templates        Template[]
   roomAssignments  ClinicRoomAssignment[]
+  staffAssignment  ClinicAssignment?
   maProviderMaps   MaProviderMap[]
   maClinicMaps     MaClinicMap[]
   incomingSchedules IncomingSchedule[]
@@ -150,6 +153,7 @@ model Provider {
 
   clinic    Clinic   @relation(fields: [clinicId], references: [id])
   mappings  MaProviderMap[]
+  clinicAssignments ClinicAssignment[]
   incomingSchedules IncomingSchedule[]
   encounters Encounter[]
 
@@ -194,6 +198,26 @@ model MaClinicMap {
 
   @@unique([clinicId, maUserId])
   @@index([clinicId])
+}
+
+model ClinicAssignment {
+  id             String    @id @default(uuid())
+  clinicId       String    @unique
+  providerUserId String?
+  providerId     String?
+  maUserId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  clinic         Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  providerUser   User?     @relation("ClinicAssignmentProviderUser", fields: [providerUserId], references: [id])
+  provider       Provider? @relation(fields: [providerId], references: [id])
+  maUser         User?     @relation("ClinicAssignmentMaUser", fields: [maUserId], references: [id])
+
+  @@index([clinicId])
+  @@index([providerUserId])
+  @@index([providerId])
+  @@index([maUserId])
 }
 
 model ClinicRoom {

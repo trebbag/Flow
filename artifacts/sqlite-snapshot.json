@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "exportedAt": "2026-04-10T15:36:24.368Z",
+    "exportedAt": "2026-04-11T14:49:54.326Z",
     "sourceDatabaseUrl": "file:./prisma/dev.db"
   },
   "tables": {
@@ -262,6 +262,26 @@
         "maUserId": "c0d2e146-3e50-4386-95d5-87dd45ae145d"
       }
     ],
+    "ClinicAssignment": [
+      {
+        "id": "bb94b754-336a-4b80-9119-d2578a95d1ee",
+        "clinicId": "3d741827-688b-4a70-be09-37c69c267a0b",
+        "providerUserId": "8806ca86-7256-4899-8627-c6e96629a759",
+        "providerId": "9842329e-ebe4-49d2-9e3c-30929961588c",
+        "maUserId": "e20ad469-07e1-41ec-bc23-4159ddd51b78",
+        "createdAt": "2026-04-08T17:17:31.578Z",
+        "updatedAt": "2026-04-08T17:17:31.578Z"
+      },
+      {
+        "id": "df95bafb-f012-46fa-96db-0bef3d7df2c7",
+        "clinicId": "f9a4f1b6-1a78-45ef-bae2-46198b1f2858",
+        "providerUserId": null,
+        "providerId": null,
+        "maUserId": "c0d2e146-3e50-4386-95d5-87dd45ae145d",
+        "createdAt": "2026-04-08T17:17:31.579Z",
+        "updatedAt": "2026-04-08T17:17:31.579Z"
+      }
+    ],
     "ClinicRoom": [
       {
         "id": "c9c14132-a8ba-46e1-87c7-e95b20d3c9d4",
@@ -494,9 +514,9 @@
       {
         "encounterId": "96bceeb3-151b-4528-aee3-025d1ef95f9b",
         "enteredStatusAt": "2026-04-09T16:22:01.872Z",
-        "currentAlertLevel": "Yellow",
+        "currentAlertLevel": "Red",
         "yellowTriggeredAt": "2026-04-09T16:23:01.981Z",
-        "redTriggeredAt": null,
+        "redTriggeredAt": "2026-04-10T16:17:33.119Z",
         "escalationTriggeredAt": null,
         "lastAckAt": null
       }
@@ -596,7 +616,671 @@
         "quietHoursJson": null
       }
     ],
-    "OfficeManagerDailyRollup": [],
+    "OfficeManagerDailyRollup": [
+      {
+        "id": "4e9772c4-ea13-4f0b-a3ab-8d4bea5c4d45",
+        "clinicId": "3d741827-688b-4a70-be09-37c69c267a0b",
+        "dateKey": "2026-04-06",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "bf7c6c60-412c-4981-8de0-ae8cc782eb8a",
+        "clinicId": "f9a4f1b6-1a78-45ef-bae2-46198b1f2858",
+        "dateKey": "2026-04-06",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "ec3e9845-1a32-4f22-894b-1b38a1ecc1b4",
+        "clinicId": "3d741827-688b-4a70-be09-37c69c267a0b",
+        "dateKey": "2026-04-07",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "3f544663-c6ca-408c-9897-ea4abbf3039e",
+        "clinicId": "f9a4f1b6-1a78-45ef-bae2-46198b1f2858",
+        "dateKey": "2026-04-07",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "9270f1d5-8551-4b3e-aba3-b7dfe7b1aa89",
+        "clinicId": "3d741827-688b-4a70-be09-37c69c267a0b",
+        "dateKey": "2026-04-08",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "777628a7-6fbf-4f67-9235-0bb92dc79ffe",
+        "clinicId": "f9a4f1b6-1a78-45ef-bae2-46198b1f2858",
+        "dateKey": "2026-04-08",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "519d4968-db38-4e1b-8986-71301ed5686a",
+        "clinicId": "3d741827-688b-4a70-be09-37c69c267a0b",
+        "dateKey": "2026-04-09",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 1,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 1
+        },
+        "encounterCount": 1,
+        "lobbyWaitTotalMins": 458,
+        "lobbyWaitSamples": 1,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 1,
+            "totalMinutes": 458
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [
+          {
+            "providerName": "Dr. A",
+            "encounterCount": 1,
+            "activeCount": 1,
+            "completedCount": 0,
+            "stageTotals": {
+              "Lobby": {
+                "count": 1,
+                "totalMinutes": 458
+              }
+            }
+          }
+        ],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "8c4eff13-97cb-4246-86e2-32baeb3726ae",
+        "clinicId": "f9a4f1b6-1a78-45ef-bae2-46198b1f2858",
+        "dateKey": "2026-04-09",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "3c5137a9-25fc-43b2-a64d-45bcb350cbc5",
+        "clinicId": "3d741827-688b-4a70-be09-37c69c267a0b",
+        "dateKey": "2026-04-10",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      },
+      {
+        "id": "0e75762f-8347-43ff-b4d5-09cdc6e27fb7",
+        "clinicId": "f9a4f1b6-1a78-45ef-bae2-46198b1f2858",
+        "dateKey": "2026-04-10",
+        "queueByStatus": {
+          "Incoming": 0,
+          "Lobby": 0,
+          "Rooming": 0,
+          "ReadyForProvider": 0,
+          "Optimizing": 0,
+          "CheckOut": 0,
+          "Optimized": 0
+        },
+        "alertsByLevel": {
+          "Green": 0,
+          "Yellow": 0,
+          "Red": 0
+        },
+        "encounterCount": 0,
+        "lobbyWaitTotalMins": 0,
+        "lobbyWaitSamples": 0,
+        "roomingWaitTotalMins": 0,
+        "roomingWaitSamples": 0,
+        "providerVisitTotalMins": 0,
+        "providerVisitSamples": 0,
+        "stageRollupsJson": [
+          {
+            "status": "Incoming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Lobby",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Rooming",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "ReadyForProvider",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimizing",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "CheckOut",
+            "count": 0,
+            "totalMinutes": 0
+          },
+          {
+            "status": "Optimized",
+            "count": 0,
+            "totalMinutes": 0
+          }
+        ],
+        "providerRollupsJson": [],
+        "computedAt": "2026-04-10T16:22:05.907Z"
+      }
+    ],
     "AuditLog": [
       {
         "id": "81229e87-3703-41f7-a391-3b4d9bfd4af2",
