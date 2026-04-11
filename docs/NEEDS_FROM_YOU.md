@@ -16,9 +16,11 @@ The backend implementation is now pilot-oriented, but these final inputs are req
      - Azure resource group naming
      - staging frontend hostname
      - staging backend hostname
-   - For the repo-managed Azure App Service backend deploy workflow, also provide in GitHub:
-     - `AZURE_WEBAPP_PUBLISH_PROFILE` secret
+   - For the repo-managed Azure App Service backend deploy workflow, provide in GitHub:
      - `AZURE_WEBAPP_NAME` variable using the Azure Web App resource `Name` field, not the hostname
+     - `AZURE_CLIENT_ID` variable for the staging Azure identity used by GitHub OIDC
+     - `AZURE_TENANT_ID` variable
+     - `AZURE_SUBSCRIPTION_ID` variable
 2. Final auth issuer details:
    - `JWT_ISSUER`
    - `JWT_AUDIENCE`
@@ -70,9 +72,9 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 
 - Local Entra pilot mapping, local bearer verification, browser redirect proof, and local threshold-alert evidence were re-run on **April 9, 2026**.
 - Azure PostgreSQL staging target is now known as of **April 10, 2026**, and both schema push and preflight have succeeded.
-- The remaining Azure database blocker is no longer connectivity, schema creation, or runtime code support; it is:
-  - importing the staging snapshot
+- The remaining Azure database blocker is no longer connectivity, schema creation, runtime code support, or snapshot import; it is:
   - redeploying the backend against the PostgreSQL runtime environment
+  - confirming staging traffic is reading the PostgreSQL-backed dataset cleanly
 - New local evidence files:
   - [entra-local-auth-20260409.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/entra-local-auth-20260409.md)
   - [entra-browser-redirect-20260409.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/entra-browser-redirect-20260409.md)

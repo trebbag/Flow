@@ -348,33 +348,39 @@ What it does:
 
 What you need to configure in GitHub before running it:
 
-1. Repository or environment secret:
+1. Repository or environment variables:
 
 ```text
-AZURE_WEBAPP_PUBLISH_PROFILE
+AZURE_CLIENT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+AZURE_WEBAPP_NAME
 ```
 
-2. Repository or environment variable:
+This workflow now authenticates with Azure using GitHub OIDC, not a publish profile.
+
+Recommended OIDC setup:
+
+1. Create or reuse a user-assigned managed identity in Azure.
+2. Grant it `Website Contributor` on the backend Web App scope.
+3. Add a federated credential with:
+   - issuer: `https://token.actions.githubusercontent.com`
+   - subject: `repo:<owner>/<repo>:environment:staging`
+   - audience: `api://AzureADTokenExchange`
+4. In GitHub `Settings` -> `Secrets and variables` -> `Actions`, set:
+   - `AZURE_CLIENT_ID`
+   - `AZURE_TENANT_ID`
+   - `AZURE_SUBSCRIPTION_ID`
+   - `AZURE_WEBAPP_NAME`
+
+Current staging values for this repo:
 
 ```text
-AZURE_WEBAPP_NAME=<Azure Web App Name from the Web App Overview page>
+AZURE_CLIENT_ID=00dbb061-add8-4663-a951-4d56906b58c5
+AZURE_TENANT_ID=b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
+AZURE_SUBSCRIPTION_ID=6bbc57d7-e0bb-46d0-ad25-0b3aac026c45
+AZURE_WEBAPP_NAME=flow-staging-api
 ```
-
-How to get the publish profile:
-
-1. Open your Azure Web App.
-2. In the Overview page or top command bar, click `Get publish profile`.
-3. Download the publish profile file.
-4. Open the file locally.
-5. Copy the full XML contents.
-6. In GitHub, go to `Settings` -> `Secrets and variables` -> `Actions`.
-7. Add a new secret named `AZURE_WEBAPP_PUBLISH_PROFILE`.
-8. Paste the full XML contents.
-
-If Azure refuses publish profile download because basic authentication is disabled, either:
-
-1. temporarily enable App Service publishing basic auth long enough to download the publish profile, or
-2. switch the backend deploy workflow to Azure OIDC instead of publish-profile auth
 
 How to run the workflow:
 
@@ -441,7 +447,7 @@ Why:
 2. It is a Vite build, so `VITE_*` values must exist during GitHub Actions build time
 3. This repo is cleaner if backend and frontend staging deploys are both controlled from checked-in workflows
 
-If Azure creates a generated `azure-static-web-apps-*.yml` file or PR, do not keep it as the active deploy path. Use the repo-managed workflow above.
+If Azure creates a generated `azure-static-web-apps-*.yml` file or PR, delete or disable it so the repo-managed workflow above remains the only active frontend staging deploy path.
 
 The repo-managed frontend workflow does this:
 

@@ -3,6 +3,10 @@ name: Azure App Service Staging Deploy
 on:
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 concurrency:
   group: azure-appservice-staging
   cancel-in-progress: true
@@ -14,6 +18,9 @@ jobs:
     environment: staging
     env:
       AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       PACKAGE_PATH: ./.azure/backend-package
 
     steps:
@@ -21,15 +28,22 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate deployment inputs
-        env:
-          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          AZURE_WEBAPP_NAME: ${{ env.AZURE_WEBAPP_NAME }}
         run: |
-          if [[ -z "${AZURE_WEBAPP_PUBLISH_PROFILE}" ]]; then
-            echo "Missing GitHub secret: AZURE_WEBAPP_PUBLISH_PROFILE"
+          if [[ -z "${AZURE_CLIENT_ID}" ]]; then
+            echo "Missing GitHub variable: AZURE_CLIENT_ID"
             exit 1
           fi
-      
+
+          if [[ -z "${AZURE_TENANT_ID}" ]]; then
+            echo "Missing GitHub variable: AZURE_TENANT_ID"
+            exit 1
+          fi
+
+          if [[ -z "${AZURE_SUBSCRIPTION_ID}" ]]; then
+            echo "Missing GitHub variable: AZURE_SUBSCRIPTION_ID"
+            exit 1
+          fi
+
           if [[ -z "${AZURE_WEBAPP_NAME}" ]]; then
             echo "Missing GitHub variable: AZURE_WEBAPP_NAME"
             exit 1
@@ -44,6 +58,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -92,5 +113,4 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: ${{ env.PACKAGE_PATH }}
