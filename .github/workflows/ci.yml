@@ -87,7 +87,7 @@ jobs:
           AUTH_ALLOW_DEV_HEADERS=true \
           ENTRA_STRICT_MODE=false \
           CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173 \
-          pnpm start > /tmp/flow-backend.log 2>&1 &
+          node dist/server.js > /tmp/flow-backend.log 2>&1 &
           echo $! > /tmp/flow-backend.pid
 
           for i in {1..40}; do
