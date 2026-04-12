@@ -132,6 +132,58 @@ describe("Entra-only identity and provisioning", () => {
     }
   });
 
+  it("recovers a stale suspended Entra mapping when the token matches by email", async () => {
+    const app = await buildStrictApp();
+    const ctx = await bootstrapCore();
+
+    try {
+      await prisma.user.update({
+        where: { id: ctx.admin.id },
+        data: {
+          email: ctx.admin.email,
+          cognitoSub: "stale-entra-oid",
+          entraObjectId: "stale-entra-oid",
+          entraTenantId: "test-entra-tenant",
+          entraUserPrincipalName: ctx.admin.email,
+          identityProvider: "entra",
+          directoryStatus: "deleted",
+          directoryUserType: "Member",
+          directoryAccountEnabled: false,
+          status: "suspended",
+          lastDirectorySyncAt: new Date(),
+        },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/auth/context",
+        headers: await strictJwtHeaders({
+          oid: "fresh-entra-oid",
+          role: RoleName.Admin,
+          facilityId: ctx.facility.id,
+          email: ctx.admin.email,
+          userType: "Member",
+        }),
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const repaired = await prisma.user.findUnique({
+        where: { id: ctx.admin.id },
+      });
+
+      expect(repaired).toMatchObject({
+        status: "active",
+        directoryStatus: "active",
+        directoryAccountEnabled: true,
+        entraObjectId: "fresh-entra-oid",
+        cognitoSub: "fresh-entra-oid",
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("provisions Entra directory users through the admin API and blocks legacy local user creation", async () => {
     const app = await buildStrictApp();
     const ctx = await bootstrapCore();

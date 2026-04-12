@@ -233,7 +233,15 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       }
     }
 
-    const user = await prisma.user.findFirst({
+    const userInclude = {
+      roles: {
+        include: {
+          clinic: { select: { facilityId: true } }
+        }
+      }
+    } as const;
+
+    let user = await prisma.user.findFirst({
       where: {
         OR: [
           { id: subject },
@@ -242,17 +250,41 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
           ...(emailClaim ? [{ email: emailClaim }] : [])
         ]
       },
-      include: {
-        roles: {
-          include: {
-            clinic: { select: { facilityId: true } }
-          }
-        }
-      }
+      include: userInclude
     });
 
     if (!user) {
       throw new ApiError(403, "This Microsoft account is not provisioned for Flow.");
+    }
+
+    const matchedBySubject = user.id === subject || user.entraObjectId === subject || user.cognitoSub === subject;
+    const matchedByEmailOnly = Boolean(emailClaim) && !matchedBySubject && user.email === emailClaim;
+    const staleDirectorySuspension =
+      env.ENTRA_STRICT_MODE &&
+      matchedByEmailOnly &&
+      user.identityProvider === "entra" &&
+      user.status === "suspended" &&
+      user.roles.length > 0 &&
+      (user.directoryAccountEnabled === false ||
+        ["deleted", "disabled", "guest"].includes(String(user.directoryStatus || "").toLowerCase()));
+
+    if (staleDirectorySuspension) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          status: "active",
+          entraObjectId: subject,
+          entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
+          entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
+          identityProvider: "entra",
+          cognitoSub: subject,
+          directoryStatus: "active",
+          directoryUserType: tokenUserType || user.directoryUserType || "Member",
+          directoryAccountEnabled: true,
+          lastDirectorySyncAt: new Date()
+        },
+        include: userInclude
+      });
     }
 
     if (user.status === "archived") {
