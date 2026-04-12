@@ -98,6 +98,10 @@ async function getClient() {
   return clientPromise;
 }
 
+export async function preloadMicrosoftClient() {
+  await getClient();
+}
+
 async function ensureActiveAccount() {
   const client = await getClient();
   const account = client.getActiveAccount() || client.getAllAccounts()[0] || null;

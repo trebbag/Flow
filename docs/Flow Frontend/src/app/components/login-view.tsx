@@ -8,6 +8,7 @@ import {
   handleMicrosoftRedirect,
   isMicrosoftAuthConfigured,
   logoutFromMicrosoft,
+  preloadMicrosoftClient,
   startMicrosoftLogin,
 } from "./microsoft-auth";
 import type { Role } from "./types";
@@ -135,6 +136,11 @@ export function LoginView() {
   }, [mode]);
 
   useEffect(() => {
+    if (!microsoftConfigured) return;
+    void preloadMicrosoftClient();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function hydrateMicrosoftSession() {
@@ -194,6 +200,32 @@ export function LoginView() {
       if (mode === "microsoft") {
         if (!microsoftConfigured) {
           throw new Error("Microsoft Entra login is not configured for this environment.");
+        }
+
+        if (!microsoftAccountLabel) {
+          const loginResult = await startMicrosoftLogin(nextPath);
+          if (!loginResult?.account) {
+            return;
+          }
+
+          setMicrosoftAccountLabel(
+            loginResult.account.name || loginResult.account.username || "Microsoft account connected",
+          );
+
+          const popupSession: AuthSession = {
+            mode,
+            role,
+            facilityId: facilityId || undefined,
+            accountHomeId: loginResult.account.homeAccountId,
+            username: loginResult.account.username,
+            name: loginResult.account.name || undefined,
+          };
+
+          const popupCompleted = await finalizeSession(popupSession);
+          if (!popupCompleted) {
+            applySession(popupSession);
+          }
+          return;
         }
 
         const account = await getMicrosoftAccount();
