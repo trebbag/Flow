@@ -184,6 +184,58 @@ describe("Entra-only identity and provisioning", () => {
     }
   });
 
+  it("recovers a stale suspended Entra mapping when the stored cognito subject matches oid but entraObjectId is wrong", async () => {
+    const app = await buildStrictApp();
+    const ctx = await bootstrapCore();
+
+    try {
+      await prisma.user.update({
+        where: { id: ctx.admin.id },
+        data: {
+          email: ctx.admin.email,
+          cognitoSub: "stable-entra-oid",
+          entraObjectId: "legacy-subject-value",
+          entraTenantId: "test-entra-tenant",
+          entraUserPrincipalName: ctx.admin.email,
+          identityProvider: "entra",
+          directoryStatus: "deleted",
+          directoryUserType: "Member",
+          directoryAccountEnabled: false,
+          status: "suspended",
+          lastDirectorySyncAt: new Date(),
+        },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/auth/context",
+        headers: await strictJwtHeaders({
+          oid: "stable-entra-oid",
+          role: RoleName.Admin,
+          facilityId: ctx.facility.id,
+          email: ctx.admin.email,
+          userType: "Member",
+        }),
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const repaired = await prisma.user.findUnique({
+        where: { id: ctx.admin.id },
+      });
+
+      expect(repaired).toMatchObject({
+        status: "active",
+        directoryStatus: "active",
+        directoryAccountEnabled: true,
+        entraObjectId: "stable-entra-oid",
+        cognitoSub: "stable-entra-oid",
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("provisions Entra directory users through the admin API and blocks legacy local user creation", async () => {
     const app = await buildStrictApp();
     const ctx = await bootstrapCore();
@@ -273,6 +325,57 @@ describe("Entra-only identity and provisioning", () => {
         id: ctx.ma.id,
         status: "suspended",
         directoryStatus: "deleted",
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("resync updates the stored object id when lookup falls back by email/upn", async () => {
+    const app = await buildStrictApp();
+    const ctx = await bootstrapCore();
+
+    try {
+      await linkUserToStrictEntra(ctx.admin.id, "admin-entra-oid", ctx.admin.email);
+      await prisma.user.update({
+        where: { id: ctx.admin.id },
+        data: {
+          entraObjectId: "legacy-subject-value",
+          cognitoSub: "stable-entra-oid",
+          directoryStatus: "deleted",
+          directoryAccountEnabled: false,
+          status: "suspended",
+        },
+      });
+
+      entraDirectoryMock.getEntraDirectoryUserByObjectId.mockResolvedValueOnce({
+        objectId: "stable-entra-oid",
+        displayName: "ClinicOS Admin",
+        email: ctx.admin.email,
+        userPrincipalName: ctx.admin.email,
+        accountEnabled: true,
+        userType: "Member",
+        tenantId: "test-entra-tenant",
+        identityProvider: "entra",
+        directoryStatus: "active",
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/admin/users/${ctx.admin.id}/resync`,
+        headers: await strictJwtHeaders({
+          oid: "admin-entra-oid",
+          role: RoleName.Admin,
+          facilityId: ctx.facility.id,
+          email: ctx.admin.email,
+        }),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        entraObjectId: "stable-entra-oid",
+        directoryStatus: "active",
+        status: "active",
       });
     } finally {
       await app.close();

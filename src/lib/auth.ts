@@ -200,7 +200,11 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       ? await jwtVerify(token, jwtSecret, verifyOptions)
       : await jwtVerify(token, remoteJwks!, verifyOptions);
 
-    const subject = firstClaim(payload, jwtSubjectClaims);
+    const entraObjectIdClaim =
+      claimToString(payload.oid) ||
+      claimToString(payload.objectidentifier) ||
+      null;
+    const subject = entraObjectIdClaim || firstClaim(payload, jwtSubjectClaims);
     if (!subject) {
       request.log.warn(
         {
@@ -258,10 +262,10 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
     }
 
     const matchedBySubject = user.id === subject || user.entraObjectId === subject || user.cognitoSub === subject;
-    const matchedByEmailOnly = Boolean(emailClaim) && !matchedBySubject && user.email === emailClaim;
+    const matchedByEmail = Boolean(emailClaim) && user.email === emailClaim;
     const staleDirectorySuspension =
       env.ENTRA_STRICT_MODE &&
-      matchedByEmailOnly &&
+      matchedByEmail &&
       user.identityProvider === "entra" &&
       user.status === "suspended" &&
       user.roles.length > 0 &&
@@ -277,7 +281,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
           entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
           entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
           identityProvider: "entra",
-          cognitoSub: subject,
+          cognitoSub: entraObjectIdClaim || user.cognitoSub || subject,
           directoryStatus: "active",
           directoryUserType: tokenUserType || user.directoryUserType || "Member",
           directoryAccountEnabled: true,
@@ -326,7 +330,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
           entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
           entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
           identityProvider: "entra",
-          cognitoSub: user.cognitoSub || subject,
+          cognitoSub: entraObjectIdClaim || user.cognitoSub || subject,
           lastDirectorySyncAt: new Date()
         }
       });

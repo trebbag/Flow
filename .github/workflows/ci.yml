@@ -83,6 +83,9 @@ jobs:
       - name: Start backend for frontend live verification
         run: |
           PORT=4100 \
+          AUTH_MODE=dev_header \
+          AUTH_ALLOW_DEV_HEADERS=true \
+          ENTRA_STRICT_MODE=false \
           CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173 \
           pnpm start > /tmp/flow-backend.log 2>&1 &
           echo $! > /tmp/flow-backend.pid

@@ -29,6 +29,13 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - Remaining Entra-specific pilot inputs:
      - live browser sign-in with the actual Entra accounts for local and staging proof
      - final Conditional Access / MFA expectation for pilot users, because Flow now assumes Microsoft Entra is the front-door control for those protections
+     - Recommended pilot baseline policy:
+       - target a dedicated Flow pilot Entra group
+       - include the Flow SPA app registration and Flow API app registration
+       - require MFA for all pilot users
+       - block legacy authentication
+       - keep access tenant-member-only; do not allow guest/B2B access for pilot
+       - if PHI is introduced before full production hardening, also require either compliant device or trusted network conditions
    - Completed on April 12, 2026:
      - staging redirect URI pattern updated to dedicated `/auth/callback`
      - backend App Service system-assigned managed identity enabled
@@ -113,5 +120,4 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 ## Current Live Follow-Ups (2026-04-12)
 - Complete the role-by-role staging proof with the real Entra pilot accounts after the latest auth and provisioning fixes are deployed.
 - Review the first scheduled `Entra Directory Sync` workflow run in GitHub Actions and confirm it completes without suspending any active pilot user unexpectedly.
-- Review GitHub secret-scanning alert `#1` for `mongodb_atlas_db_uri_with_credentials` and rotate/revoke it if the credential is still valid.
-- Confirm final Conditional Access and MFA policy expectations for pilot users before PHI rollout.
+- Confirm and enforce the pilot Conditional Access policy above before any PHI-facing rollout.

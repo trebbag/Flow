@@ -41,7 +41,7 @@ async function main() {
       data: {
         email: directoryUser ? (directoryUser.email || directoryUser.userPrincipalName).toLowerCase() : user.email,
         name: directoryUser?.displayName || user.name,
-        entraObjectId: objectId,
+        entraObjectId: directoryUser?.objectId || objectId,
         entraTenantId: directoryUser?.tenantId || user.entraTenantId || null,
         entraUserPrincipalName: directoryUser?.userPrincipalName || user.entraUserPrincipalName || null,
         identityProvider: "entra",
