@@ -182,7 +182,7 @@ export async function handleMicrosoftRedirect(): Promise<{
   try {
     result = await client.handleRedirectPromise();
   } catch (error) {
-    if (!isNoTokenRequestCacheError(error) || !hasMicrosoftLoginPending()) {
+    if (!isNoTokenRequestCacheError(error)) {
       throw error;
     }
   }

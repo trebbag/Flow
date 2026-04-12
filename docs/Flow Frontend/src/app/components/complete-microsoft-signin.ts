@@ -13,10 +13,13 @@ export async function completeMicrosoftSignIn(fallbackPath = "/") {
   }
 
   if (!account) {
-    resetMicrosoftLoginState();
-    throw new Error(
-      "Microsoft sign-in did not finish cleanly. We reset the stale sign-in state. Please try again.",
-    );
+    if (hasMicrosoftLoginPending()) {
+      resetMicrosoftLoginState();
+      throw new Error(
+        "Microsoft sign-in did not finish cleanly. We reset the stale sign-in state. Please try again.",
+      );
+    }
+    return null;
   }
 
   const existing = loadSession();

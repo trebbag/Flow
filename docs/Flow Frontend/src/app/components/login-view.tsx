@@ -126,16 +126,19 @@ export function LoginView() {
   };
 
   useEffect(() => {
-    if (!loginRedirectReturnDetected || !microsoftConfigured) return;
+    if (!microsoftConfigured) return;
 
     let cancelled = false;
-    setCompletingMicrosoft(true);
-    setLoading(true);
-    setError(null);
+    if (loginRedirectReturnDetected) {
+      setCompletingMicrosoft(true);
+      setLoading(true);
+      setError(null);
+    }
 
     void completeMicrosoftSignIn(nextPath)
       .then((target) => {
         if (cancelled) return;
+        if (!target) return;
         navigate(target, { replace: true });
       })
       .catch((err) => {

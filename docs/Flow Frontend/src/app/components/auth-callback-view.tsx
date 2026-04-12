@@ -16,6 +16,9 @@ export function AuthCallbackView() {
       try {
         const target = await completeMicrosoftSignIn();
         if (cancelled) return;
+        if (!target) {
+          throw new Error("Microsoft redirect did not contain a sign-in result. Please try again.");
+        }
         navigate(target, { replace: true });
       } catch (err) {
         if (cancelled) return;
