@@ -109,6 +109,20 @@ Check these in order:
 
 Those warnings now include the configured issuer/audience and the token issuer/audience so you can tell whether the failure is claim mismatch or user mapping.
 
+## If Login Says "timed_out"
+
+That MSAL error means the browser never fully completed the redirect handoff to Microsoft. In Flow, the frontend now tries popup-based sign-in first and only falls back to redirect if the popup path cannot start, so a fresh deploy should usually clear this.
+
+If you still see it after deploying the latest frontend:
+
+1. Confirm you are signing in from the registered SPA host:
+   - staging: `https://orange-beach-0851cdc0f.6.azurestaticapps.net/login`
+   - local: `http://localhost:5173/login`
+2. In the Entra SPA app registration, verify the exact redirect URI exists for the host you are using.
+3. Disable popup blockers or allow popups for the Flow site, because the fallback path uses `loginPopup`.
+4. Clear the browser site data for the Flow staging host and retry in a fresh tab.
+5. If the error only happens in one browser profile, retry in an incognito/private window to rule out an extension blocking the redirect.
+
 ## Local Commands
 
 After the env values are present, run:

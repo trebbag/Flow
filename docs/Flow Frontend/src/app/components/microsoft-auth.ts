@@ -41,6 +41,26 @@ function loginScopes() {
   return Array.from(new Set(["openid", "profile", "email", ...apiScopes()]));
 }
 
+function clearPostLoginPath() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(POST_LOGIN_PATH_KEY);
+}
+
+function isTimedOutBrowserError(error: unknown) {
+  if (!error) return false;
+  const errorCode =
+    typeof error === "object" && "errorCode" in error ? String((error as { errorCode?: unknown }).errorCode || "") : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return errorCode === "timed_out" || /\btimed_out\b/i.test(message);
+}
+
+function isPopupStartupError(error: unknown) {
+  if (!error) return false;
+  const errorCode =
+    typeof error === "object" && "errorCode" in error ? String((error as { errorCode?: unknown }).errorCode || "") : "";
+  return ["popup_window_error", "empty_window_error", "block_nested_popups"].includes(errorCode);
+}
+
 let clientPromise: Promise<PublicClientApplication> | null = null;
 
 export function isMicrosoftAuthConfigured() {
@@ -98,9 +118,7 @@ export async function handleMicrosoftRedirect(): Promise<{
 
   const postLoginPath =
     typeof window !== "undefined" ? window.sessionStorage.getItem(POST_LOGIN_PATH_KEY) : null;
-  if (typeof window !== "undefined") {
-    window.sessionStorage.removeItem(POST_LOGIN_PATH_KEY);
-  }
+  clearPostLoginPath();
 
   return {
     account,
@@ -115,16 +133,39 @@ export async function getMicrosoftAccount() {
   return account;
 }
 
-export async function startMicrosoftLogin(nextPath?: string) {
+export async function startMicrosoftLogin(nextPath?: string): Promise<AuthenticationResult | null> {
   const client = await getClient();
   if (typeof window !== "undefined") {
     window.sessionStorage.setItem(POST_LOGIN_PATH_KEY, nextPath || "/");
   }
 
-  await client.loginRedirect({
+  const loginRequest = {
     scopes: loginScopes(),
     prompt: "select_account",
-  });
+  } as const;
+
+  try {
+    const result = await client.loginPopup(loginRequest);
+    if (result.account) {
+      client.setActiveAccount(result.account);
+    }
+    clearPostLoginPath();
+    return result;
+  } catch (error) {
+    if (!isPopupStartupError(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    await client.loginRedirect(loginRequest);
+    return null;
+  } catch (error) {
+    if (isTimedOutBrowserError(error)) {
+      throw new Error("Microsoft redirect timed out before the browser left Flow. Allow popups for this site or retry in a fresh tab.");
+    }
+    throw error;
+  }
 }
 
 export async function acquireMicrosoftAccessToken(forceRefresh = false) {

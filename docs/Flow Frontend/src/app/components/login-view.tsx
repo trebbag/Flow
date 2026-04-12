@@ -198,7 +198,28 @@ export function LoginView() {
 
         const account = await getMicrosoftAccount();
         if (!account) {
-          await startMicrosoftLogin(nextPath);
+          const loginResult = await startMicrosoftLogin(nextPath);
+          if (!loginResult?.account) {
+            return;
+          }
+
+          setMicrosoftAccountLabel(
+            loginResult.account.name || loginResult.account.username || "Microsoft account connected",
+          );
+
+          const popupSession: AuthSession = {
+            mode,
+            role,
+            facilityId: facilityId || undefined,
+            accountHomeId: loginResult.account.homeAccountId,
+            username: loginResult.account.username,
+            name: loginResult.account.name || undefined,
+          };
+
+          const popupCompleted = await finalizeSession(popupSession);
+          if (!popupCompleted) {
+            applySession(popupSession);
+          }
           return;
         }
 
