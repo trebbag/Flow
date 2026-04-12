@@ -15,7 +15,9 @@ const configuredPostLogoutPath =
   String(env.VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH || "/login").trim() || "/login";
 
 const POST_LOGIN_PATH_KEY = "flow_entra_post_login_path";
+const LOGIN_PENDING_KEY = "flow_entra_login_pending";
 const REDIRECT_NAVIGATION_TIMEOUT_MS = 5 * 60 * 1000;
+const LOGIN_PENDING_TTL_MS = 10 * 60 * 1000;
 
 function normalizePath(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
@@ -47,6 +49,53 @@ function clearPostLoginPath() {
   window.sessionStorage.removeItem(POST_LOGIN_PATH_KEY);
 }
 
+function readPendingStartedAt() {
+  if (typeof window === "undefined") return null;
+  const raw = window.sessionStorage.getItem(LOGIN_PENDING_KEY);
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    window.sessionStorage.removeItem(LOGIN_PENDING_KEY);
+    return null;
+  }
+  if (Date.now() - parsed > LOGIN_PENDING_TTL_MS) {
+    window.sessionStorage.removeItem(LOGIN_PENDING_KEY);
+    return null;
+  }
+  return parsed;
+}
+
+function markLoginPending() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(LOGIN_PENDING_KEY, String(Date.now()));
+}
+
+function clearLoginPending() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(LOGIN_PENDING_KEY);
+}
+
+function clearMsalInteractionArtifacts() {
+  if (typeof window === "undefined") return;
+
+  const clearMatchingKeys = (storage: Storage) => {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key) continue;
+      if (key.startsWith("msal.") || key.includes(".interaction.status")) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      storage.removeItem(key);
+    }
+  };
+
+  clearMatchingKeys(window.sessionStorage);
+  clearMatchingKeys(window.localStorage);
+}
+
 function isTimedOutBrowserError(error: unknown) {
   if (!error) return false;
   const errorCode =
@@ -61,6 +110,14 @@ function isNoTokenRequestCacheError(error: unknown) {
     typeof error === "object" && "errorCode" in error ? String((error as { errorCode?: unknown }).errorCode || "") : "";
   const message = error instanceof Error ? error.message : String(error);
   return errorCode === "no_token_request_cache_error" || /\bno_token_request_cache_error\b/i.test(message);
+}
+
+function isInteractionInProgressError(error: unknown) {
+  if (!error) return false;
+  const errorCode =
+    typeof error === "object" && "errorCode" in error ? String((error as { errorCode?: unknown }).errorCode || "") : "";
+  const message = error instanceof Error ? error.message : String(error);
+  return errorCode === "interaction_in_progress" || /\binteraction_in_progress\b/i.test(message);
 }
 
 let clientPromise: Promise<PublicClientApplication> | null = null;
@@ -125,7 +182,7 @@ export async function handleMicrosoftRedirect(): Promise<{
   try {
     result = await client.handleRedirectPromise();
   } catch (error) {
-    if (!isNoTokenRequestCacheError(error)) {
+    if (!isNoTokenRequestCacheError(error) || !hasMicrosoftLoginPending()) {
       throw error;
     }
   }
@@ -134,7 +191,11 @@ export async function handleMicrosoftRedirect(): Promise<{
 
   const postLoginPath =
     typeof window !== "undefined" ? window.sessionStorage.getItem(POST_LOGIN_PATH_KEY) : null;
-  clearPostLoginPath();
+
+  if (result || account) {
+    clearPostLoginPath();
+    clearLoginPending();
+  }
 
   return {
     account,
@@ -154,6 +215,7 @@ export async function startMicrosoftLogin(nextPath?: string): Promise<Authentica
   if (typeof window !== "undefined") {
     window.sessionStorage.setItem(POST_LOGIN_PATH_KEY, nextPath || "/");
   }
+  markLoginPending();
 
   const loginRequest = {
     scopes: loginScopes(),
@@ -164,6 +226,12 @@ export async function startMicrosoftLogin(nextPath?: string): Promise<Authentica
     await client.loginRedirect(loginRequest);
     return null;
   } catch (error) {
+    if (isInteractionInProgressError(error)) {
+      if (typeof window !== "undefined") {
+        window.location.replace(absoluteUrl(configuredRedirectPath));
+      }
+      return null;
+    }
     if (isTimedOutBrowserError(error)) {
       throw new Error("Microsoft redirect timed out before the browser left Flow. Retry in a fresh tab and complete sign-in promptly.");
     }
@@ -207,4 +275,14 @@ export function getMicrosoftConfigSummary() {
     redirectUri: absoluteUrl(configuredRedirectPath),
     postLogoutRedirectUri: absoluteUrl(configuredPostLogoutPath),
   };
+}
+
+export function hasMicrosoftLoginPending() {
+  return Boolean(readPendingStartedAt());
+}
+
+export function resetMicrosoftLoginState() {
+  clearPostLoginPath();
+  clearLoginPending();
+  clearMsalInteractionArtifacts();
 }

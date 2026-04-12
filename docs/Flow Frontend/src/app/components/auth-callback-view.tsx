@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { auth } from "./api-client";
 import { applySession, loadSession, saveSession, type AuthSession } from "./auth-session";
-import { getMicrosoftAccount, handleMicrosoftRedirect } from "./microsoft-auth";
+import { getMicrosoftAccount, handleMicrosoftRedirect, hasMicrosoftLoginPending, resetMicrosoftLoginState } from "./microsoft-auth";
 import type { Role } from "./types";
 
 export function AuthCallbackView() {
@@ -15,13 +15,22 @@ export function AuthCallbackView() {
 
     async function completeRedirect() {
       try {
-        const redirect = await handleMicrosoftRedirect();
-        const account = redirect.account || (await getMicrosoftAccount());
+        let redirect = await handleMicrosoftRedirect();
+        let account = redirect.account || (await getMicrosoftAccount());
+
+        for (let attempt = 0; !account && attempt < 3 && hasMicrosoftLoginPending(); attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 250 * (attempt + 1)));
+          redirect = await handleMicrosoftRedirect();
+          account = redirect.account || (await getMicrosoftAccount());
+        }
+
         if (cancelled) return;
 
         if (!account) {
-          navigate("/login", { replace: true });
-          return;
+          resetMicrosoftLoginState();
+          throw new Error(
+            "Microsoft sign-in did not finish cleanly. We reset the stale sign-in state. Please try again.",
+          );
         }
 
         const existing = loadSession();
@@ -95,7 +104,10 @@ export function AuthCallbackView() {
             </div>
             <button
               type="button"
-              onClick={() => navigate("/login", { replace: true })}
+              onClick={() => {
+                resetMicrosoftLoginState();
+                navigate("/login", { replace: true });
+              }}
               className="h-10 px-4 rounded-lg bg-indigo-600 text-white text-[13px] hover:bg-indigo-700 transition-colors"
               style={{ fontWeight: 600 }}
             >
