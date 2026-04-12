@@ -45,6 +45,23 @@ The backend implementation is now pilot-oriented, but these final inputs are req
        - `/admin/users/:id/resync`
        - `pnpm auth:sync:directory`
      - Microsoft Graph application permission `User.Read.All` granted to the GitHub OIDC staging identity used by the scheduled directory sync workflow
+     - dedicated Entra pilot security group created:
+       - `Flow Pilot Users`
+       - group id: `ce55a692-ea89-4edc-b5a0-902650452ace`
+   - Blocker discovered on April 12, 2026:
+     - creating tenant-wide Conditional Access policies through Microsoft Graph failed with `AccessDenied` because the current tenant is not licensed for Conditional Access.
+   - Required next steps from tenant administration:
+     - add all pilot users to the `Flow Pilot Users` Entra group
+     - choose one of these enforcement paths before any PHI-facing pilot:
+       - preferred: upgrade tenant licensing so Conditional Access is available, then create:
+         - `Flow Pilot - Require MFA`
+         - `Flow Pilot - Block Legacy Auth`
+       - fallback if licensing cannot be upgraded yet: enable Microsoft Security Defaults or per-user MFA for every Flow pilot user and document that exception as temporary
+     - once licensing is available, target:
+       - users: `Flow Pilot Users`
+       - cloud apps: `Flow Web` and `Flow API`
+       - grant control: require multifactor authentication
+       - client apps condition: block legacy authentication
 3. Frontend live verification credentials for non-local environments:
    - For the repo-managed Azure Static Web Apps staging deploy, also provide in GitHub:
      - `AZURE_STATIC_WEB_APPS_API_TOKEN` secret
@@ -121,3 +138,5 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 - Complete the role-by-role staging proof with the real Entra pilot accounts after the latest auth and provisioning fixes are deployed.
 - Review the first scheduled `Entra Directory Sync` workflow run in GitHub Actions and confirm it completes without suspending any active pilot user unexpectedly.
 - Confirm and enforce the pilot Conditional Access policy above before any PHI-facing rollout.
+- Add all pilot users to the `Flow Pilot Users` Entra group.
+- Decide whether to upgrade tenant licensing for Conditional Access or to use Microsoft Security Defaults / per-user MFA as the temporary pilot fallback.

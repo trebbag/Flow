@@ -722,7 +722,7 @@ export const admin = {
       if (params.includeArchived) qs.set("includeArchived", "true");
     }
     const q = qs.toString();
-    return apiFetch<Reason[]>(`/admin/reasons${q ? `?${q}` : ""}`);
+    return apiFetch<Reason[]>(`/admin/reasons${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
   createReason(dto: {
     name: string;
@@ -817,7 +817,7 @@ export const admin = {
     if (params?.includeArchived) qs.set("includeArchived", "true");
     if (params?.definitionsOnly) qs.set("definitionsOnly", "true");
     const q = qs.toString();
-    return apiFetch<Template[]>(`/admin/templates${q ? `?${q}` : ""}`);
+    return apiFetch<Template[]>(`/admin/templates${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
   createTemplate(dto: {
     facilityId?: string;
@@ -867,7 +867,7 @@ export const admin = {
     const qs = new URLSearchParams();
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
-    return apiFetch<AlertThreshold[]>(`/admin/thresholds${q ? `?${q}` : ""}`);
+    return apiFetch<AlertThreshold[]>(`/admin/thresholds${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
   createThreshold(dto: Omit<AlertThreshold, "id">) {
     return apiFetch<AlertThreshold>("/admin/thresholds", {
@@ -907,7 +907,7 @@ export const admin = {
     const qs = new URLSearchParams();
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
-    return apiFetch<NotificationPolicy[]>(`/admin/notifications${q ? `?${q}` : ""}`);
+    return apiFetch<NotificationPolicy[]>(`/admin/notifications${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
   createNotificationPolicy(dto: Omit<NotificationPolicy, "id">) {
     return apiFetch<NotificationPolicy>("/admin/notifications", {
@@ -1144,7 +1144,7 @@ export const events = {
         entityType: string | null;
         entityId: string | null;
       }>
-    >(`/events/audit${q ? `?${q}` : ""}`);
+    >(`/events/audit${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
 };
 
@@ -1300,7 +1300,7 @@ export const dashboards = {
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.date) qs.set("date", params.date);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/office-manager${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
+    return apiFetch<unknown>(`/dashboard/office-manager${q ? `?${q}` : ""}`, { cacheTtlMs: 25_000 });
   },
   officeManagerHistory(params?: { clinicId?: string; from?: string; to?: string }) {
     const qs = new URLSearchParams();
@@ -1308,14 +1308,14 @@ export const dashboards = {
     if (params?.from) qs.set("from", params.from);
     if (params?.to) qs.set("to", params.to);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/office-manager/history${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
+    return apiFetch<unknown>(`/dashboard/office-manager/history${q ? `?${q}` : ""}`, { cacheTtlMs: 30_000 });
   },
   revenueCycle(params?: { clinicId?: string; date?: string }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.date) qs.set("date", params.date);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
+    return apiFetch<unknown>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, { cacheTtlMs: 25_000 });
   },
 };
 
@@ -1337,7 +1337,7 @@ export const auth = {
         timezone?: string;
         status?: string;
       }>;
-    }>("/auth/context", { cacheTtlMs: 10_000 });
+    }>("/auth/context", { cacheTtlMs: 30_000 });
   },
   setActiveFacility(facilityId: string) {
     return apiFetch<{
@@ -1360,3 +1360,81 @@ export const auth = {
     });
   },
 };
+
+function isoDateDaysAgo(daysAgo: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
+function swallowPrefetchError<T>(request: Promise<T>) {
+  return request.catch(() => undefined);
+}
+
+export async function primeRouteData(path: string) {
+  const session = getCurrentSession();
+  if (!session) return;
+
+  const facilityId = session.facilityId;
+  const role = session.role;
+  const normalizedPath = path.split("?")[0] || "/";
+
+  let requests: Array<Promise<unknown>> = [];
+
+  switch (normalizedPath) {
+    case "/":
+      requests = [
+        auth.getContext(),
+        admin.listRooms({ facilityId, includeInactive: true }),
+        admin.listUsers(facilityId),
+        admin.listAssignments(facilityId),
+        alerts.list({ tab: "active", limit: 50 }),
+        role === "Admin"
+          ? tasks.list({ includeCompleted: false })
+          : tasks.list({ mine: true, includeCompleted: false }),
+      ];
+      break;
+    case "/office-manager":
+      requests = [
+        admin.listClinics({ facilityId }),
+        admin.listAssignments(facilityId),
+        admin.listRooms({ facilityId }),
+        admin.listThresholds(facilityId),
+        dashboards.officeManager(),
+      ];
+      break;
+    case "/revenue-cycle":
+      requests = [
+        tasks.list({ assignedToRole: "RevenueCycle" }),
+        admin.listClinics({ facilityId, includeInactive: true, includeArchived: true }),
+        dashboards.revenueCycle(),
+      ];
+      break;
+    case "/analytics":
+      requests = [
+        dashboards.officeManagerHistory({
+          from: isoDateDaysAgo(4),
+          to: isoDateDaysAgo(0),
+        }),
+      ];
+      break;
+    case "/settings":
+      requests = [
+        auth.getContext(),
+        admin.listClinics({ facilityId, includeInactive: true, includeArchived: true }),
+        admin.listRooms({ facilityId, includeInactive: true, includeArchived: true }),
+        admin.listUsers(facilityId),
+        admin.listAssignments(facilityId),
+        admin.listReasons({ facilityId, includeInactive: true, includeArchived: true }),
+        admin.listTemplates({ facilityId, includeInactive: true, includeArchived: true }),
+        admin.listThresholds(facilityId),
+        admin.listNotificationPolicies(facilityId),
+        events.listAudit({ facilityId, limit: 200 }),
+      ];
+      break;
+    default:
+      return;
+  }
+
+  await Promise.all(requests.map(swallowPrefetchError));
+}

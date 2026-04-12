@@ -509,8 +509,8 @@ function getMockIncomingData(e: Encounter) {
     patientId: e.patientId,
     scheduledTime: e.checkinTime,
     visitType: e.visitType,
-    provider: e.provider,
-    clinic: e.clinicName,
+    provider: labelProviderName(e.provider, true),
+    clinic: labelClinicName(e.clinicName),
     insuranceOnFile: e.insuranceVerified ?? false,
     walkIn: e.walkIn ?? false,
     preVisitFormsCompleted: !e.walkIn,
@@ -543,7 +543,7 @@ function getMockRoomingData(e: Encounter) {
   const seed = e.patientId.charCodeAt(3) || 65;
   return {
     roomAssigned: e.roomNumber || "—",
-    assignedMA: e.assignedMA || "—",
+    assignedMA: labelUserName(e.assignedMA) || "—",
     bloodPressure: `${118 + (seed % 20)}/${72 + (seed % 15)}`,
     heartRate: `${68 + (seed % 18)} bpm`,
     temperature: `${(97.2 + (seed % 20) / 10).toFixed(1)}°F`,
@@ -703,7 +703,7 @@ function EncounterRow({ encounter: e, isSelected, onSelect }: {
           )}
         </div>
         <div className="text-[11px] text-muted-foreground truncate">
-          {e.provider} &middot; {e.visitType} &middot; {e.clinicShortCode}
+          {labelProviderName(e.provider, true)} &middot; {e.visitType} &middot; {e.clinicShortCode || labelClinicName(e.clinicName)}
         </div>
       </div>
       <Badge
@@ -1385,8 +1385,8 @@ export function OfficeManagerDashboard() {
         encounterId: encounter.id,
         patientId: encounter.patientId,
         status: encounter.status,
-        providerName: encounter.provider,
-        assignedMaName: encounter.assignedMA,
+        providerName: labelProviderName(encounter.provider, true),
+        assignedMaName: labelUserName(encounter.assignedMA),
         alertLevel: encounter.alertLevel,
         safetyActive: Boolean(encounter.safetyActive),
       }));
@@ -1412,8 +1412,8 @@ export function OfficeManagerDashboard() {
           encounterId: encounter?.id,
           patientId: encounter?.patientId,
           status: encounter?.status,
-          providerName: encounter?.provider,
-          assignedMaName: encounter?.assignedMA,
+          providerName: labelProviderName(encounter?.provider, true),
+          assignedMaName: labelUserName(encounter?.assignedMA),
           alertLevel: encounter?.alertLevel,
           safetyActive: Boolean(encounter?.safetyActive),
         };

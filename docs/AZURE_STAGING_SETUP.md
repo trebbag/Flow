@@ -79,6 +79,34 @@ Do not commit the real password into the repo. Keep the full connection string o
 - local secure `.env` files that stay uncommitted
 - password manager / secret manager storage
 
+## Entra Pilot Security Baseline
+
+Flow is now designed around Microsoft Entra as the production and pilot front door for authentication. Before any PHI-facing pilot activity, enforce MFA at the tenant edge for the Flow pilot cohort.
+
+Completed on April 12, 2026:
+
+- dedicated pilot security group created in Entra:
+  - `Flow Pilot Users`
+  - group id: `ce55a692-ea89-4edc-b5a0-902650452ace`
+
+Current tenant limitation discovered on April 12, 2026:
+
+- Conditional Access policy creation is blocked by tenant licensing in the current Entra subscription.
+
+Recommended enforcement path:
+
+1. Preferred: upgrade licensing to a tier that supports Conditional Access, then create policies that:
+   - target `Flow Pilot Users`
+   - include the `Flow Web` and `Flow API` app registrations
+   - require multifactor authentication
+   - block legacy authentication
+2. Temporary fallback if licensing cannot be upgraded yet:
+   - add every pilot user to `Flow Pilot Users`
+   - enable Microsoft Security Defaults or per-user MFA for every pilot user
+   - document that this is temporary until Conditional Access licensing is available
+
+Even with the fallback, do not permit guest/B2B access for the pilot. Keep Flow limited to tenant-member accounts only.
+
 ## Part 1: Create the Resource Group
 
 1. Sign in to the [Azure portal](https://portal.azure.com/).

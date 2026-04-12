@@ -16,7 +16,7 @@ import {
   LogIn,
 } from "lucide-react";
 import { cn } from "./ui/utils";
-import { alerts as alertsApi, tasks as tasksApi } from "./api-client";
+import { alerts as alertsApi, tasks as tasksApi, primeRouteData } from "./api-client";
 import { useSidebar } from "./sidebar-context";
 import { loadSession } from "./auth-session";
 import { auth } from "./api-client";
@@ -175,6 +175,46 @@ export function SidebarNav() {
     hideTimeout.current = setTimeout(() => setTooltip(null), 80);
   }, []);
 
+  const warmRoute = useCallback((to: string) => {
+    void primeRouteData(to);
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+
+    const likelyRoutesByRole: Record<string, string[]> = {
+      Admin: ["/", "/office-manager", "/revenue-cycle", "/analytics", "/settings"],
+      FrontDeskCheckIn: ["/", "/checkin"],
+      MA: ["/", "/ma-board"],
+      Clinician: ["/", "/clinician"],
+      FrontDeskCheckOut: ["/", "/checkout"],
+      RevenueCycle: ["/", "/revenue-cycle"],
+    };
+
+    const routeTargets = likelyRoutesByRole[activeRole] || ["/"];
+    const uniqueTargets = Array.from(new Set([location.pathname, ...routeTargets]));
+
+    const runWarmup = () => {
+      uniqueTargets.forEach((target) => warmRoute(target));
+    };
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(runWarmup, { timeout: 1500 });
+    } else {
+      timeoutId = setTimeout(runWarmup, 350);
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (idleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, [activeRole, location.pathname, session, warmRoute]);
+
   const renderNavItem = (item: { to: string; icon: React.ElementType; label: string }, showBadge?: boolean) => {
     const isActive = item.to === "/"
       ? location.pathname === "/"
@@ -192,8 +232,12 @@ export function SidebarNav() {
             : "text-white/50 hover:text-white/80 hover:bg-white/5"
         )}
         style={isActive ? { fontWeight: 500 } : {}}
-        onMouseEnter={collapsed ? (e) => showTooltip(e, item.label) : undefined}
+        onMouseEnter={(e) => {
+          warmRoute(item.to);
+          if (collapsed) showTooltip(e, item.label);
+        }}
         onMouseLeave={collapsed ? hideTooltip : undefined}
+        onFocus={() => warmRoute(item.to)}
       >
         <item.icon className="w-[18px] h-[18px] shrink-0" />
         {!collapsed && <span className="flex-1">{item.label}</span>}
