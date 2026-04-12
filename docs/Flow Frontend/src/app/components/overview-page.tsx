@@ -47,6 +47,14 @@ function safeLower(value: string | undefined | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+function summarizeClinicOwner(assignment: any) {
+  if (!assignment) return "Unassigned";
+  if (assignment.maRun) {
+    return labelUserName(assignment.maUserName, assignment.maUserStatus) || "Unassigned MA";
+  }
+  return labelUserName(assignment?.providerUserName, assignment?.providerUserStatus) || "Unassigned Provider";
+}
+
 export function OverviewPage() {
   const navigate = useNavigate();
   const { encounters, isLiveMode, syncError } = useEncounters();
@@ -197,9 +205,6 @@ export function OverviewPage() {
     encounters.forEach((encounter) => {
       if (!map.has(encounter.clinicId)) {
         const assignment = assignments.find((entry) => entry.clinicId === encounter.clinicId);
-        const owner = assignment?.maRun
-          ? labelUserName(assignment.maUserName, assignment.maUserStatus) || "Unassigned MA"
-          : labelUserName(assignment.providerUserName, assignment.providerUserStatus) || "Unassigned Provider";
         map.set(encounter.clinicId, {
           clinicId: encounter.clinicId,
           clinicName: encounter.clinicName,
@@ -208,7 +213,7 @@ export function OverviewPage() {
           active: 0,
           incoming: 0,
           checkout: 0,
-          owner,
+          owner: summarizeClinicOwner(assignment),
         });
       }
       const target = map.get(encounter.clinicId)!;

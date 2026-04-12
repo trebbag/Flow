@@ -1,15 +1,18 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { RootLayout } from "./components/layout";
+import { RouteErrorBoundary } from "./components/route-error-boundary";
 
 const router = createBrowserRouter([
   {
     path: "/login",
+    errorElement: <RouteErrorBoundary />,
     lazy: async () => ({
       Component: (await import("./components/login-view")).LoginView,
     }),
   },
   {
     path: "/auth/callback",
+    errorElement: <RouteErrorBoundary />,
     lazy: async () => ({
       Component: (await import("./components/auth-callback-view")).AuthCallbackView,
     }),
@@ -17,6 +20,7 @@ const router = createBrowserRouter([
   {
     path: "/",
     Component: RootLayout,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,
