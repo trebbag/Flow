@@ -114,6 +114,7 @@ async function main() {
   const [{ chromium }] = await Promise.all([import("playwright")]);
 
   const authContext = await request("/auth/context", { auth: true });
+  const resolvedRole = authContext?.role || devRole;
   const facilityId =
     authContext?.activeFacilityId ||
     authContext?.facilityId ||
@@ -254,24 +255,26 @@ async function main() {
 
     browser = await chromium.launch({ headless: true });
     context = await browser.newContext();
+    const seededSession = hasBearerToken
+      ? {
+          mode: "bearer",
+          role: resolvedRole,
+          userId: authContext?.userId || undefined,
+          token: bearerToken.trim(),
+          facilityId: originalFacilityId,
+        }
+      : {
+          mode: "dev_header",
+          role: resolvedRole,
+          userId: authContext?.userId || devUserId,
+          facilityId: originalFacilityId,
+        };
+    await context.addInitScript((session) => {
+      window.localStorage.setItem("flow_auth_session", JSON.stringify(session));
+    }, seededSession);
     page = await context.newPage();
 
-    await page.goto(`${frontendBaseUrl}/login`, { waitUntil: "networkidle" });
-    await page.getByLabel("Role").selectOption(devRole);
-    if (hasBearerToken) {
-      const bearerButton = page.getByRole("button", { name: "Bearer JWT" });
-      if ((await bearerButton.count()) > 0) {
-        await bearerButton.first().click();
-      }
-      await page.getByLabel("JWT Token").fill(bearerToken.trim());
-    } else {
-      const devHeaderButton = page.getByRole("button", { name: "Dev Header" });
-      if ((await devHeaderButton.count()) > 0) {
-        await devHeaderButton.first().click();
-      }
-      await page.getByLabel("User ID").fill(devUserId);
-    }
-    await page.getByRole("button", { name: "Sign In" }).click();
+    await page.goto(`${frontendBaseUrl}/`, { waitUntil: "networkidle" });
     await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/checkin`, { waitUntil: "networkidle" });
