@@ -43,6 +43,11 @@ import type {
 } from "./types";
 import { buildHeaders, getCurrentSession } from "./auth-session";
 import { acquireMicrosoftAccessToken } from "./microsoft-auth";
+import {
+  ADMIN_REFRESH_EVENT,
+  FACILITY_CONTEXT_CHANGED_EVENT,
+  SESSION_CHANGED_EVENT,
+} from "./app-events";
 
 // ── Base fetch ───────────────────────────────────────────────────────
 
@@ -70,6 +75,50 @@ if (enableDevHeaders) {
   if (devRole) defaultDevHeaders["x-dev-role"] = devRole;
 }
 
+type CachedGetEntry = {
+  expiresAt: number;
+  value: unknown;
+};
+
+type ApiFetchOptions = RequestInit & {
+  cacheTtlMs?: number;
+  cacheKey?: string;
+};
+
+const getCache = new Map<string, CachedGetEntry>();
+const inflightGets = new Map<string, Promise<unknown>>();
+
+function currentSessionFingerprint() {
+  const session = getCurrentSession();
+  if (!session) return "anon";
+  return [
+    session.mode,
+    session.userId || "",
+    session.role || "",
+    session.facilityId || "",
+    session.accountHomeId || "",
+    session.username || "",
+  ].join("|");
+}
+
+function getCacheKey(path: string, options: ApiFetchOptions, headers: Record<string, string>) {
+  const method = String(options.method || "GET").toUpperCase();
+  const facilityHeader = headers["x-facility-id"] || "";
+  return options.cacheKey || `${currentSessionFingerprint()}::${method}::${path}::${facilityHeader}`;
+}
+
+function clearGetCache() {
+  getCache.clear();
+  inflightGets.clear();
+}
+
+if (typeof window !== "undefined") {
+  const resetOnEvent = () => clearGetCache();
+  window.addEventListener(ADMIN_REFRESH_EVENT, resetOnEvent);
+  window.addEventListener(FACILITY_CONTEXT_CHANGED_EVENT, resetOnEvent);
+  window.addEventListener(SESSION_CHANGED_EVENT, resetOnEvent);
+}
+
 async function resolveAuthHeaders(extraHeaders?: Record<string, string>) {
   const session = getCurrentSession();
   const headers: Record<string, string> = {
@@ -88,44 +137,82 @@ async function resolveAuthHeaders(extraHeaders?: Record<string, string>) {
   return headers;
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const headers = await resolveAuthHeaders((options.headers as Record<string, string>) || {});
   const hasJsonBody = options.body !== undefined && options.body !== null && !(options.body instanceof FormData);
   if (hasJsonBody && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
+  const method = String(options.method || "GET").toUpperCase();
+  const cacheTtlMs = Number(options.cacheTtlMs || 0);
+  const shouldCache = method === "GET" && cacheTtlMs > 0;
+  const cacheKey = shouldCache ? getCacheKey(path, options, headers) : null;
 
-  let res: Response;
-  try {
-    res = await fetch(`${BASE_URL}${path}`, {
-      ...options,
-      headers,
-      cache: "no-store",
-    });
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error("Network/CORS request failed. Verify API server and CORS settings.");
+  if (cacheKey) {
+    const cached = getCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value as T;
     }
-    throw error;
+    const inflight = inflightGets.get(cacheKey);
+    if (inflight) {
+      return (await inflight) as T;
+    }
+  } else if (method !== "GET") {
+    clearGetCache();
   }
 
-  if (!res.ok) {
-    const text = await res.text();
-    let message = text || "Request failed";
+  const performFetch = async () => {
+    let res: Response;
     try {
-      const parsed = JSON.parse(text);
-      if (parsed?.message) {
-        message = Array.isArray(parsed.message)
-          ? parsed.message.join(", ")
-          : parsed.message;
+      res = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers,
+        cache: "no-store",
+      });
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error("Network/CORS request failed. Verify API server and CORS settings.");
       }
-    } catch {
-      // keep raw text
+      throw error;
     }
-    throw new Error(message);
+
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text || "Request failed";
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed?.message) {
+          message = Array.isArray(parsed.message)
+            ? parsed.message.join(", ")
+            : parsed.message;
+        }
+      } catch {
+        // keep raw text
+      }
+      throw new Error(message);
+    }
+
+    return (await res.json()) as T;
+  };
+
+  if (!cacheKey) {
+    return performFetch();
   }
 
-  return (await res.json()) as T;
+  const request = performFetch()
+    .then((value) => {
+      getCache.set(cacheKey, {
+        expiresAt: Date.now() + cacheTtlMs,
+        value,
+      });
+      return value;
+    })
+    .finally(() => {
+      inflightGets.delete(cacheKey);
+    });
+
+  inflightGets.set(cacheKey, request as Promise<unknown>);
+  return request;
 }
 
 // ── Encounters Controller (/encounters) ──────────────────────────────
@@ -473,7 +560,7 @@ export const tasks = {
     if (params?.mine) qs.set("mine", "true");
     if (params?.includeCompleted !== undefined) qs.set("includeCompleted", params.includeCompleted ? "true" : "false");
     const q = qs.toString();
-    return apiFetch<BackendTask[]>(`/tasks${q ? `?${q}` : ""}`);
+    return apiFetch<BackendTask[]>(`/tasks${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
   create(dto: {
     encounterId: string;
@@ -515,7 +602,7 @@ export const alerts = {
     if (params?.tab) qs.set("tab", params.tab);
     if (params?.limit) qs.set("limit", String(params.limit));
     const q = qs.toString();
-    return apiFetch<{ tab: "active" | "archived"; total: number; items: AlertInboxItem[] }>(`/alerts${q ? `?${q}` : ""}`);
+    return apiFetch<{ tab: "active" | "archived"; total: number; items: AlertInboxItem[] }>(`/alerts${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
   acknowledge(id: string) {
     return apiFetch<{ status: "archived"; id: string }>(`/alerts/${id}/acknowledge`, {
@@ -558,7 +645,7 @@ export const safety = {
 export const admin = {
   // Facilities
   listFacilities() {
-    return apiFetch<Facility[]>("/admin/facilities");
+    return apiFetch<Facility[]>("/admin/facilities", { cacheTtlMs: 30_000 });
   },
   createFacility(dto: { name: string; shortCode?: string; address?: string; phone?: string; timezone?: string }) {
     return apiFetch<Facility>("/admin/facilities", {
@@ -576,7 +663,7 @@ export const admin = {
     const qs = new URLSearchParams();
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
-    return apiFetch<Facility>(`/admin/facility-profile${q ? `?${q}` : ""}`);
+    return apiFetch<Facility>(`/admin/facility-profile${q ? `?${q}` : ""}`, { cacheTtlMs: 30_000 });
   },
 
   // Clinics
@@ -590,7 +677,7 @@ export const admin = {
       if (params.includeArchived) qs.set("includeArchived", "true");
     }
     const q = qs.toString();
-    return apiFetch<Clinic[]>(`/admin/clinics${q ? `?${q}` : ""}`);
+    return apiFetch<Clinic[]>(`/admin/clinics${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
   createClinic(dto: Partial<Clinic> & { name: string }) {
     return apiFetch<Clinic>("/admin/clinics", {
@@ -679,7 +766,7 @@ export const admin = {
       if (params.includeArchived) qs.set("includeArchived", "true");
     }
     const q = qs.toString();
-    return apiFetch<Room[]>(`/admin/rooms${q ? `?${q}` : ""}`);
+    return apiFetch<Room[]>(`/admin/rooms${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
   },
   createRoom(dto: { facilityId?: string; name: string; roomType: string; status?: "active" | "inactive" | "archived" }) {
     return apiFetch<Room>("/admin/rooms", {
@@ -858,11 +945,11 @@ export const admin = {
     const qs = new URLSearchParams();
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
-    return apiFetch<StaffUser[]>(`/admin/users${q ? `?${q}` : ""}`);
+    return apiFetch<StaffUser[]>(`/admin/users${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
   },
   searchDirectoryUsers(query: string) {
     const qs = new URLSearchParams({ query });
-    return apiFetch<DirectoryUser[]>(`/admin/directory-users?${qs.toString()}`);
+    return apiFetch<DirectoryUser[]>(`/admin/directory-users?${qs.toString()}`, { cacheTtlMs: 10_000 });
   },
   provisionUser(dto: {
     objectId: string;
@@ -950,7 +1037,7 @@ export const admin = {
     const qs = new URLSearchParams();
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
-    return apiFetch<ClinicAssignment[]>(`/admin/assignments${q ? `?${q}` : ""}`);
+    return apiFetch<ClinicAssignment[]>(`/admin/assignments${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
   },
   updateAssignment(clinicId: string, dto: { providerUserId?: string | null; maUserId?: string | null }) {
     return apiFetch<ClinicAssignment>(`/admin/assignments/${clinicId}`, {
@@ -1082,7 +1169,7 @@ export const officeManager = {
     if (params?.overdueOnly) qs.set("overdueOnly", "true");
     if (params?.safetyOnly) qs.set("safetyOnly", "true");
     const q = qs.toString();
-    return apiFetch<unknown>(`/office-manager/live${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/office-manager/live${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
 
   getWorkbench(params?: { date?: string; clinicIds?: string }) {
@@ -1090,7 +1177,7 @@ export const officeManager = {
     if (params?.date) qs.set("date", params.date);
     if (params?.clinicIds) qs.set("clinicIds", params.clinicIds);
     const q = qs.toString();
-    return apiFetch<unknown>(`/office-manager/workbench${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/office-manager/workbench${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
 
   getCloseout(params?: { date?: string; clinicIds?: string }) {
@@ -1098,7 +1185,7 @@ export const officeManager = {
     if (params?.date) qs.set("date", params.date);
     if (params?.clinicIds) qs.set("clinicIds", params.clinicIds);
     const q = qs.toString();
-    return apiFetch<unknown>(`/office-manager/closeout${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/office-manager/closeout${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
 
   getReports(params?: { from?: string; to?: string; clinicIds?: string }) {
@@ -1107,7 +1194,7 @@ export const officeManager = {
     if (params?.to) qs.set("to", params.to);
     if (params?.clinicIds) qs.set("clinicIds", params.clinicIds);
     const q = qs.toString();
-    return apiFetch<unknown>(`/office-manager/reports${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/office-manager/reports${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
   },
 
   acknowledge(dto: { encounterId: string; version: number }) {
@@ -1213,7 +1300,7 @@ export const dashboards = {
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.date) qs.set("date", params.date);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/office-manager${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/dashboard/office-manager${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
   },
   officeManagerHistory(params?: { clinicId?: string; from?: string; to?: string }) {
     const qs = new URLSearchParams();
@@ -1221,14 +1308,14 @@ export const dashboards = {
     if (params?.from) qs.set("from", params.from);
     if (params?.to) qs.set("to", params.to);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/office-manager/history${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/dashboard/office-manager/history${q ? `?${q}` : ""}`, { cacheTtlMs: 20_000 });
   },
   revenueCycle(params?: { clinicId?: string; date?: string }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.date) qs.set("date", params.date);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`);
+    return apiFetch<unknown>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
   },
 };
 
@@ -1250,7 +1337,7 @@ export const auth = {
         timezone?: string;
         status?: string;
       }>;
-    }>("/auth/context");
+    }>("/auth/context", { cacheTtlMs: 10_000 });
   },
   setActiveFacility(facilityId: string) {
     return apiFetch<{

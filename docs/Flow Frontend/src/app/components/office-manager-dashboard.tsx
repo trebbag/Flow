@@ -58,7 +58,7 @@ import {
 import { useEncounters } from "./encounter-context";
 import { admin } from "./api-client";
 import { loadSession } from "./auth-session";
-import { labelClinicName, labelRoomName, labelUserName } from "./display-names";
+import { labelClinicName, labelProviderName, labelRoomName, labelUserName } from "./display-names";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT } from "./app-events";
 
 // ── Pipeline summary ──
@@ -383,7 +383,7 @@ function RoomCensus({ rooms }: { rooms: RoomCensusRow[] }) {
                 </div>
                 {room.occupied ? (
                   <div className="text-[10px] text-muted-foreground truncate">
-                    {room.patientId} &middot; {room.providerName || "Unassigned"}
+                    {room.patientId} &middot; {labelProviderName(room.providerName || "Unassigned", true)}
                   </div>
                 ) : (
                   <div className="text-[10px] text-gray-400">Available</div>
@@ -780,9 +780,9 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
           <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
             <span>{e.visitType}</span>
             <span className="text-gray-300">|</span>
-            <span>{e.provider}</span>
+            <span>{labelProviderName(e.provider, true)}</span>
             <span className="text-gray-300">|</span>
-            <span>{e.clinicName}</span>
+            <span>{labelClinicName(e.clinicName)}</span>
             {e.roomNumber && (
               <span className="contents">
                 <span className="text-gray-300">|</span>
@@ -1240,7 +1240,7 @@ export function OfficeManagerDashboard() {
       if (!seen.has(encounter.clinicId)) {
         seen.set(encounter.clinicId, {
           id: encounter.clinicId,
-          name: encounter.clinicName,
+          name: labelClinicName(encounter.clinicName),
           shortCode: encounter.clinicShortCode,
           color: encounter.clinicColor,
         });
@@ -1378,7 +1378,7 @@ export function OfficeManagerDashboard() {
       return Array.from(encounterByRoom.entries()).map(([roomName, encounter], index) => ({
         id: `derived-room-${index + 1}`,
         clinicId: encounter.clinicId,
-        clinicName: encounter.clinicName,
+        clinicName: labelClinicName(encounter.clinicName),
         name: roomName,
         active: true,
         occupied: true,
@@ -1405,7 +1405,7 @@ export function OfficeManagerDashboard() {
         return {
           id: room.id,
           clinicId,
-          clinicName: encounter?.clinicName || clinicById.get(clinicId)?.name || "Clinic",
+          clinicName: labelClinicName(encounter?.clinicName || clinicById.get(clinicId)?.name || "Clinic"),
           name: room.name,
           active: room.active,
           occupied: Boolean(encounter),

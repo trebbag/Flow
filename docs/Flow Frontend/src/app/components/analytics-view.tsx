@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { defaultThresholds } from "./mock-data";
 import { useEncounters } from "./encounter-context";
 import { dashboards } from "./api-client";
+import { labelProviderName } from "./display-names";
 
 type WeeklyTrendPoint = {
   day: string;
@@ -232,7 +233,7 @@ export function AnalyticsView() {
 
       historicalDaily.forEach((day) => {
         (day.providerRollups || []).forEach((provider) => {
-          const providerName = String(provider.providerName || "").trim() || "Unassigned";
+          const providerName = labelProviderName(String(provider.providerName || "").trim(), true);
           if (!aggregate.has(providerName)) {
             aggregate.set(providerName, {
               encounterCount: 0,
@@ -286,7 +287,7 @@ export function AnalyticsView() {
     >();
 
     activeEncounters.forEach((encounter) => {
-      const key = encounter.provider || "Unassigned";
+      const key = labelProviderName(encounter.provider || "Unassigned", true);
       if (!grouped.has(key)) {
         grouped.set(key, {
           name: key,

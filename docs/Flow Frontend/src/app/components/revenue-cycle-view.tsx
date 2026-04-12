@@ -56,7 +56,7 @@ import {
 import { useEncounters } from "./encounter-context";
 import { admin, dashboards, tasks as tasksApi, type BackendTask } from "./api-client";
 import { loadSession } from "./auth-session";
-import { compactClinicBadgeLabel, labelClinicName } from "./display-names";
+import { compactClinicBadgeLabel, labelClinicName, labelProviderName } from "./display-names";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT } from "./app-events";
 
 type RevenueDashboardSnapshot = {
@@ -255,9 +255,9 @@ export function RevenueCycleView() {
           return {
             encounterId: encounter.id,
             patientId: encounter.patientId,
-            clinicName: encounter.clinicName || clinic?.name || "Clinic",
+            clinicName: labelClinicName(encounter.clinicName || clinic?.name || "Clinic"),
             clinicColor: clinic?.color || encounter.clinicColor,
-            providerName: encounter.provider,
+            providerName: labelProviderName(encounter.provider, true),
             status,
             assigneeName: activeTask?.assignedToUserId ? "Revenue Staff" : activeTask?.assignedToRole || null,
             dueAt: dueAtFromCheckin(encounter.checkinTime, priority <= 2 ? 6 : 10),

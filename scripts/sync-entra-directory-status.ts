@@ -24,7 +24,10 @@ async function main() {
       continue;
     }
 
-    const directoryUser = await getEntraDirectoryUserByObjectId(objectId);
+    const directoryUser = await getEntraDirectoryUserByObjectId(objectId, {
+      email: user.email,
+      userPrincipalName: user.entraUserPrincipalName
+    });
     const nextStatus = !directoryUser
       ? "deleted"
       : !directoryUser.accountEnabled

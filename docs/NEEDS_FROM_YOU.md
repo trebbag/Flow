@@ -37,6 +37,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
        - `/admin/users/provision`
        - `/admin/users/:id/resync`
        - `pnpm auth:sync:directory`
+     - Microsoft Graph application permission `User.Read.All` granted to the GitHub OIDC staging identity used by the scheduled directory sync workflow
 3. Frontend live verification credentials for non-local environments:
    - For the repo-managed Azure Static Web Apps staging deploy, also provide in GitHub:
      - `AZURE_STATIC_WEB_APPS_API_TOKEN` secret
@@ -53,8 +54,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - Optional fallback role: `vars.STAGING_VITE_DEV_ROLE` (defaults to `Admin`)
    - Optional `vars.STAGING_FRONTEND_E2E_PORT` if staging runners require a non-default preview port.
    - Run `pnpm pilot:validate:staging` and share the generated evidence file from `docs/verification/`.
-   - Before the role-by-role staging pass, sync the Entra pilot users so their `UserRole` rows match the active Optimum Health facility in staging.
-     - Current verified mismatch: `admin@clinicos1.onmicrosoft.com` is active in Optimum Health (`58a9224a-6a85-4f41-8b59-f827316991cf`) but does not yet have an `Admin` role row scoped to that facility in the imported staging dataset.
+   - Before the role-by-role staging pass, confirm the pilot Entra users still have the intended `UserRole` rows and facility scope in staging after any admin provisioning updates.
 4. AthenaOne staging connector inputs for live onboarding:
    - `baseUrl`
    - `practiceId`
@@ -111,7 +111,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 - Microsoft Entra local configuration is now in place; the remaining auth proof gap is interactive browser sign-in against the real tenant and the future staging redirect URL once staging exists.
 
 ## Current Live Follow-Ups (2026-04-12)
-- Verify Microsoft Entra login on staging after frontend deploy run `24315874989` from a fresh private/incognito window.
-- If login still returns to `/login`, capture the exact URL in the address bar immediately after Microsoft sends the browser back, before clicking anything else.
+- Complete the role-by-role staging proof with the real Entra pilot accounts after the latest auth and provisioning fixes are deployed.
+- Review the first scheduled `Entra Directory Sync` workflow run in GitHub Actions and confirm it completes without suspending any active pilot user unexpectedly.
 - Review GitHub secret-scanning alert `#1` for `mongodb_atlas_db_uri_with_credentials` and rotate/revoke it if the credential is still valid.
 - Confirm final Conditional Access and MFA policy expectations for pilot users before PHI rollout.

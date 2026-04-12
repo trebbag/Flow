@@ -1,0 +1,85 @@
+name: Entra Directory Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */4 * * *"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: entra-directory-sync
+  cancel-in-progress: true
+
+jobs:
+  sync-directory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      AZURE_RESOURCE_GROUP: flow-staging-rg
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate sync inputs
+        run: |
+          for key in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_WEBAPP_NAME; do
+            if [[ -z "${!key}" ]]; then
+              echo "Missing GitHub variable: ${key}"
+              exit 1
+            fi
+          done
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Load staging app settings
+        run: |
+          POSTGRES_DATABASE_URL="$(az webapp config appsettings list \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query "[?name=='POSTGRES_DATABASE_URL'].value | [0]" \
+            -o tsv)"
+
+          if [[ -z "${POSTGRES_DATABASE_URL}" ]]; then
+            echo "POSTGRES_DATABASE_URL is not configured on ${AZURE_WEBAPP_NAME}"
+            exit 1
+          fi
+
+          {
+            echo "POSTGRES_DATABASE_URL=${POSTGRES_DATABASE_URL}"
+            echo "ENTRA_TENANT_ID=${AZURE_TENANT_ID}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma clients
+        run: |
+          pnpm db:generate
+          pnpm db:generate:postgres
+
+      - name: Sync Entra directory status
+        run: pnpm auth:sync:directory

@@ -2802,14 +2802,23 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const userId = (request.params as { id: string }).id;
     const existing = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, entraObjectId: true, cognitoSub: true }
+      select: {
+        id: true,
+        email: true,
+        entraObjectId: true,
+        entraUserPrincipalName: true,
+        cognitoSub: true
+      }
     });
     assert(existing, 404, "User not found");
 
     const objectId = existing.entraObjectId || existing.cognitoSub;
     assert(objectId, 400, "User is not linked to Microsoft Entra");
 
-    const directoryUser = await getEntraDirectoryUserByObjectId(objectId);
+    const directoryUser = await getEntraDirectoryUserByObjectId(objectId, {
+      email: existing.email,
+      userPrincipalName: existing.entraUserPrincipalName
+    });
     return syncUserFromDirectory({
       userId,
       directoryUser

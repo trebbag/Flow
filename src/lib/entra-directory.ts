@@ -15,6 +15,8 @@ type GraphCollectionResponse<T> = {
   value?: T[];
 };
 
+const GRAPH_USER_SELECT = "id,displayName,mail,userPrincipalName,accountEnabled,userType";
+
 export type EntraDirectoryUser = {
   objectId: string;
   displayName: string;
@@ -94,6 +96,59 @@ async function graphRequest<T>(pathname: string, init?: RequestInit): Promise<T>
   return (await response.json()) as T;
 }
 
+async function graphRequestMaybe<T>(pathname: string, init?: RequestInit): Promise<T | null> {
+  try {
+    return await graphRequest<T>(pathname, init);
+  } catch (error) {
+    if (error instanceof ApiError && error.statusCode === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function getEntraDirectoryUserByPrincipal(params: {
+  email?: string | null;
+  userPrincipalName?: string | null;
+}) {
+  const exactMatches = Array.from(
+    new Set(
+      [params.userPrincipalName, params.email]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  if (exactMatches.length === 0) {
+    return null;
+  }
+
+  const filter = exactMatches
+    .flatMap((value) => {
+      const escaped = escapeODataLiteral(value);
+      return [`userPrincipalName eq '${escaped}'`, `mail eq '${escaped}'`];
+    })
+    .join(" or ");
+
+  const search = new URLSearchParams({
+    $select: GRAPH_USER_SELECT,
+    $top: "5",
+    $filter: filter
+  });
+
+  const payload = await graphRequest<GraphCollectionResponse<GraphUserRow>>(`/users?${search.toString()}`);
+  const rows = Array.isArray(payload.value) ? payload.value : [];
+
+  for (const row of rows) {
+    const normalized = normalizeDirectoryUser(row);
+    if (exactMatches.includes(normalized.userPrincipalName) || exactMatches.includes(normalized.email)) {
+      return normalized;
+    }
+  }
+
+  return rows.length > 0 ? normalizeDirectoryUser(rows[0]!) : null;
+}
+
 export async function searchEntraDirectoryUsers(query: string) {
   const normalizedQuery = query.trim();
   if (normalizedQuery.length < 2) {
@@ -102,7 +157,7 @@ export async function searchEntraDirectoryUsers(query: string) {
 
   const escaped = escapeODataLiteral(normalizedQuery);
   const search = new URLSearchParams({
-    $select: "id,displayName,mail,userPrincipalName,accountEnabled,userType",
+    $select: GRAPH_USER_SELECT,
     $top: "15",
     $filter:
       `accountEnabled eq true and userType eq 'Member' and (` +
@@ -113,22 +168,25 @@ export async function searchEntraDirectoryUsers(query: string) {
   return (payload.value || []).map(normalizeDirectoryUser);
 }
 
-export async function getEntraDirectoryUserByObjectId(objectId: string) {
+export async function getEntraDirectoryUserByObjectId(
+  objectId: string,
+  fallbackIdentifiers?: {
+    email?: string | null;
+    userPrincipalName?: string | null;
+  }
+) {
   const trimmed = objectId.trim();
   if (!trimmed) {
     throw new ApiError(400, "Microsoft Entra object ID is required.");
   }
 
-  try {
-    const search = new URLSearchParams({
-      $select: "id,displayName,mail,userPrincipalName,accountEnabled,userType"
-    });
-    const payload = await graphRequest<GraphUserRow>(`/users/${encodeURIComponent(trimmed)}?${search.toString()}`);
+  const search = new URLSearchParams({
+    $select: GRAPH_USER_SELECT
+  });
+  const payload = await graphRequestMaybe<GraphUserRow>(`/users/${encodeURIComponent(trimmed)}?${search.toString()}`);
+  if (payload) {
     return normalizeDirectoryUser(payload);
-  } catch (error) {
-    if (error instanceof ApiError && error.statusCode === 404) {
-      return null;
-    }
-    throw error;
   }
+
+  return getEntraDirectoryUserByPrincipal(fallbackIdentifiers || {});
 }
