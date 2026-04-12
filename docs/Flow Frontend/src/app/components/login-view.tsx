@@ -5,12 +5,14 @@ import { auth } from "./api-client";
 import { applySession, clearSession, loadSession, saveSession, type AuthMode, type AuthSession } from "./auth-session";
 import {
   getMicrosoftAccount,
+  hasMicrosoftLoginPending,
   isMicrosoftAuthConfigured,
   logoutFromMicrosoft,
   preloadMicrosoftClient,
   resetMicrosoftLoginState,
   startMicrosoftLogin,
 } from "./microsoft-auth";
+import { completeMicrosoftSignIn } from "./complete-microsoft-signin";
 import type { Role } from "./types";
 
 const roles: Role[] = [
@@ -70,6 +72,7 @@ export function LoginView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [microsoftAccountLabel, setMicrosoftAccountLabel] = useState("");
+  const [completingMicrosoft, setCompletingMicrosoft] = useState(false);
 
   const nextPath = useMemo(() => parseNext(location.search), [location.search]);
 
@@ -77,6 +80,12 @@ export function LoginView() {
     const combined = `${location.search}&${location.hash.startsWith("#") ? location.hash.slice(1) : location.hash}`;
     return /(?:^|[?&#]|&)(code|error|state|session_state)=/i.test(combined);
   }, [location.search, location.hash]);
+
+  const loginRedirectReturnDetected = useMemo(() => {
+    if (loginRedirectPayloadDetected) return true;
+    if (typeof document === "undefined") return false;
+    return hasMicrosoftLoginPending() && /login\.microsoftonline\.com/i.test(document.referrer || "");
+  }, [loginRedirectPayloadDetected]);
 
   const finalizeSession = async (session: AuthSession, redirectTarget = nextPath) => {
     applySession(session);
@@ -117,9 +126,33 @@ export function LoginView() {
   };
 
   useEffect(() => {
-    if (!loginRedirectPayloadDetected) return;
-    navigate(`/auth/callback${location.search}${location.hash}`, { replace: true });
-  }, [loginRedirectPayloadDetected, location.search, location.hash, navigate]);
+    if (!loginRedirectReturnDetected || !microsoftConfigured) return;
+
+    let cancelled = false;
+    setCompletingMicrosoft(true);
+    setLoading(true);
+    setError(null);
+
+    void completeMicrosoftSignIn(nextPath)
+      .then((target) => {
+        if (cancelled) return;
+        navigate(target, { replace: true });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        applySession(null);
+        setError(err instanceof Error ? err.message : "Microsoft sign-in failed");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCompletingMicrosoft(false);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loginRedirectReturnDetected, microsoftConfigured, navigate, nextPath]);
 
   useEffect(() => {
     const existing = loadSession();
@@ -227,6 +260,31 @@ export function LoginView() {
 
   const showModeSwitcher = !productionStyleAuthOnly;
   const modeColumns = enableDevHeaderLogin ? "grid-cols-3" : microsoftConfigured ? "grid-cols-2" : "grid-cols-1";
+
+  if (completingMicrosoft) {
+    return (
+      <div className="min-h-screen bg-[#f7f8fb] flex items-center justify-center p-4">
+        <div className="w-full max-w-[480px] rounded-2xl border border-gray-200 bg-white shadow-sm px-6 py-8">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+            <div>
+              <h1 className="text-[18px] tracking-tight" style={{ fontWeight: 700 }}>
+                Completing Microsoft sign-in
+              </h1>
+              <p className="text-[12px] text-muted-foreground">
+                We’re finishing the secure redirect and loading your Flow access.
+              </p>
+            </div>
+          </div>
+          {error && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f8fb] flex items-center justify-center p-4">
