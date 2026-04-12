@@ -3,6 +3,8 @@ export declare const env: {
     CORS_ALLOWED_ORIGINS: string[];
     AUTH_MODE: "dev_header" | "jwt" | "hybrid";
     AUTH_ALLOW_DEV_HEADERS: boolean;
+    ENTRA_STRICT_MODE: boolean;
+    ENTRA_TENANT_ID: string;
     NODE_ENV: "development" | "test" | "production";
     HOST: string;
     PORT: number;
@@ -12,6 +14,8 @@ export declare const env: {
     RATE_LIMIT_WINDOW: string;
     TRUST_PROXY: boolean;
     AUTH_ALLOW_IMPLICIT_ADMIN: boolean;
+    ENTRA_GRAPH_API_BASE_URL: string;
+    ENTRA_GRAPH_SCOPE: string;
     JWT_SUBJECT_CLAIMS: string;
     JWT_ROLE_CLAIMS: string;
     JWT_EMAIL_CLAIMS: string;
@@ -21,6 +25,7 @@ export declare const env: {
     ATHENA_RETRY_COUNT: number;
     ATHENA_RETRY_BACKOFF_MS: number;
     CORS_ORIGINS?: string;
+    ENTRA_GRAPH_MANAGED_IDENTITY_CLIENT_ID?: string;
     JWT_ISSUER?: string;
     JWT_AUDIENCE?: string;
     JWT_JWKS_URI?: string;

@@ -1,9 +1,11 @@
 import { AlertLevel, AlertThresholdMetric, EncounterStatus, Prisma, RoleName, TemplateType } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { env } from "../lib/env.js";
 import { ApiError, assert } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { formatUserDisplayName } from "../lib/display-names.js";
+import { getEntraDirectoryUserByObjectId, searchEntraDirectoryUsers } from "../lib/entra-directory.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import { mergeAthenaConnectorConfig, normalizeAthenaConnectorConfig, previewAthenaSchedule, redactAthenaConnectorConfig, testAthenaConnectorConfig } from "../lib/athena-one.js";
 const facilitySchema = z.object({
@@ -195,6 +197,16 @@ const createUserSchema = z.object({
     phone: z.string().optional(),
     cognitoSub: z.string().optional()
 });
+const directorySearchSchema = z.object({
+    query: z.string().trim().min(2),
+});
+const provisionUserSchema = z.object({
+    objectId: z.string().trim().min(1),
+    role: z.nativeEnum(RoleName),
+    facilityIds: z.array(z.string().uuid()).optional(),
+    facilityId: z.string().uuid().optional(),
+    clinicId: z.string().uuid().optional()
+});
 const updateUserSchema = z.object({
     email: z.string().email().optional(),
     name: z.string().min(1).optional(),
@@ -217,6 +229,63 @@ function composeUserDisplayName(input) {
     if (fullName)
         return fullName;
     throw new ApiError(400, "First name and last name are required");
+}
+function isStrictEntraProvisioningMode() {
+    return env.ENTRA_STRICT_MODE;
+}
+function resolveDirectoryEmail(user) {
+    const email = user.email || user.userPrincipalName;
+    if (!email) {
+        throw new ApiError(400, "Microsoft Entra user is missing an email or user principal name.");
+    }
+    return email.toLowerCase();
+}
+async function syncUserFromDirectory(params) {
+    const existing = await prisma.user.findUnique({
+        where: { id: params.userId },
+        include: { roles: true }
+    });
+    assert(existing, 404, "User not found");
+    const syncTimestamp = new Date();
+    if (!params.directoryUser) {
+        const updated = await prisma.user.update({
+            where: { id: params.userId },
+            data: {
+                directoryStatus: "deleted",
+                directoryAccountEnabled: false,
+                lastDirectorySyncAt: syncTimestamp,
+                status: existing.status === "archived" ? "archived" : "suspended"
+            },
+            include: { roles: true }
+        });
+        return updated;
+    }
+    const directoryUser = params.directoryUser;
+    const memberUser = directoryUser.userType.toLowerCase() === "member";
+    const accountEnabled = directoryUser.accountEnabled;
+    const shouldSuspend = !memberUser || !accountEnabled || directoryUser.directoryStatus !== "active";
+    return prisma.user.update({
+        where: { id: params.userId },
+        data: {
+            email: resolveDirectoryEmail(directoryUser),
+            name: directoryUser.displayName,
+            entraObjectId: directoryUser.objectId,
+            entraTenantId: directoryUser.tenantId || env.ENTRA_TENANT_ID || null,
+            entraUserPrincipalName: directoryUser.userPrincipalName || null,
+            identityProvider: directoryUser.identityProvider,
+            directoryStatus: directoryUser.directoryStatus,
+            directoryUserType: directoryUser.userType,
+            directoryAccountEnabled: directoryUser.accountEnabled,
+            lastDirectorySyncAt: syncTimestamp,
+            cognitoSub: existing.cognitoSub || directoryUser.objectId,
+            status: existing.status === "archived"
+                ? "archived"
+                : shouldSuspend
+                    ? "suspended"
+                    : existing.status
+        },
+        include: { roles: true }
+    });
 }
 const roleSchema = z.object({
     role: z.nativeEnum(RoleName),
@@ -2175,7 +2244,157 @@ export async function registerAdminRoutes(app) {
         });
         return users;
     });
+    app.get("/admin/directory-users", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+        const query = directorySearchSchema.parse(request.query);
+        return searchEntraDirectoryUsers(query.query);
+    });
+    app.post("/admin/users/provision", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+        const dto = provisionUserSchema.parse(request.body);
+        const directoryUser = await getEntraDirectoryUserByObjectId(dto.objectId);
+        assert(directoryUser, 404, "Microsoft Entra user was not found");
+        assert(directoryUser.accountEnabled, 400, "Microsoft Entra user is disabled");
+        assert(directoryUser.userType.toLowerCase() === "member", 400, "Guest and B2B Microsoft accounts are not allowed");
+        const normalizedFacilityIds = Array.from(new Set([
+            ...(Array.isArray(dto.facilityIds) ? dto.facilityIds : []),
+            ...(dto.facilityId ? [dto.facilityId] : [])
+        ]
+            .map((entry) => entry.trim())
+            .filter(Boolean)));
+        let clinicFacilityId = null;
+        if (dto.clinicId) {
+            const clinic = await prisma.clinic.findUnique({
+                where: { id: dto.clinicId },
+                select: { facilityId: true }
+            });
+            assert(clinic, 404, "Clinic not found");
+            clinicFacilityId = clinic.facilityId ?? null;
+            await resolveFacilityForRequest(request, clinicFacilityId || undefined);
+        }
+        const resolvedFacilityIds = [];
+        for (const facilityId of normalizedFacilityIds) {
+            const facility = await resolveFacilityForRequest(request, facilityId);
+            if (!resolvedFacilityIds.includes(facility.id)) {
+                resolvedFacilityIds.push(facility.id);
+            }
+        }
+        if (clinicFacilityId && !resolvedFacilityIds.includes(clinicFacilityId)) {
+            resolvedFacilityIds.push(clinicFacilityId);
+        }
+        const fallbackFacility = resolvedFacilityIds[0] ||
+            (await resolveFacilityForRequest(request, dto.facilityId)).id;
+        const email = resolveDirectoryEmail(directoryUser);
+        const existing = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { entraObjectId: directoryUser.objectId },
+                    { cognitoSub: directoryUser.objectId },
+                    { email }
+                ]
+            },
+            include: { roles: true }
+        });
+        const user = existing
+            ? await prisma.user.update({
+                where: { id: existing.id },
+                data: {
+                    email,
+                    name: directoryUser.displayName,
+                    status: existing.status === "archived" ? "active" : existing.status,
+                    entraObjectId: directoryUser.objectId,
+                    entraTenantId: directoryUser.tenantId || env.ENTRA_TENANT_ID || null,
+                    entraUserPrincipalName: directoryUser.userPrincipalName || null,
+                    identityProvider: directoryUser.identityProvider,
+                    directoryStatus: directoryUser.directoryStatus,
+                    directoryUserType: directoryUser.userType,
+                    directoryAccountEnabled: directoryUser.accountEnabled,
+                    lastDirectorySyncAt: new Date(),
+                    cognitoSub: existing.cognitoSub || directoryUser.objectId,
+                    activeFacilityId: existing.activeFacilityId || fallbackFacility
+                }
+            })
+            : await prisma.user.create({
+                data: {
+                    email,
+                    name: directoryUser.displayName,
+                    status: "active",
+                    entraObjectId: directoryUser.objectId,
+                    entraTenantId: directoryUser.tenantId || env.ENTRA_TENANT_ID || null,
+                    entraUserPrincipalName: directoryUser.userPrincipalName || null,
+                    identityProvider: directoryUser.identityProvider,
+                    directoryStatus: directoryUser.directoryStatus,
+                    directoryUserType: directoryUser.userType,
+                    directoryAccountEnabled: directoryUser.accountEnabled,
+                    lastDirectorySyncAt: new Date(),
+                    cognitoSub: directoryUser.objectId,
+                    activeFacilityId: fallbackFacility
+                }
+            });
+        if (dto.clinicId) {
+            const existingRole = await prisma.userRole.findFirst({
+                where: {
+                    userId: user.id,
+                    role: dto.role,
+                    clinicId: dto.clinicId,
+                    facilityId: clinicFacilityId
+                }
+            });
+            if (!existingRole) {
+                await prisma.userRole.create({
+                    data: {
+                        userId: user.id,
+                        role: dto.role,
+                        clinicId: dto.clinicId,
+                        facilityId: clinicFacilityId
+                    }
+                });
+            }
+        }
+        else {
+            const roleFacilityIds = resolvedFacilityIds.length > 0 ? resolvedFacilityIds : [fallbackFacility];
+            for (const facilityId of roleFacilityIds) {
+                const existingRole = await prisma.userRole.findFirst({
+                    where: {
+                        userId: user.id,
+                        role: dto.role,
+                        facilityId,
+                        clinicId: null
+                    }
+                });
+                if (!existingRole) {
+                    await prisma.userRole.create({
+                        data: {
+                            userId: user.id,
+                            role: dto.role,
+                            facilityId
+                        }
+                    });
+                }
+            }
+        }
+        return prisma.user.findUnique({
+            where: { id: user.id },
+            include: { roles: true }
+        });
+    });
+    app.post("/admin/users/:id/resync", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+        const userId = request.params.id;
+        const existing = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, entraObjectId: true, cognitoSub: true }
+        });
+        assert(existing, 404, "User not found");
+        const objectId = existing.entraObjectId || existing.cognitoSub;
+        assert(objectId, 400, "User is not linked to Microsoft Entra");
+        const directoryUser = await getEntraDirectoryUserByObjectId(objectId);
+        return syncUserFromDirectory({
+            userId,
+            directoryUser
+        });
+    });
     app.post("/admin/users", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+        if (isStrictEntraProvisioningMode()) {
+            throw new ApiError(405, "Local user creation is disabled in Entra-only environments. Search Microsoft Entra and provision the user instead.");
+        }
         const dto = createUserSchema.parse(request.body);
         const email = dto.email.trim().toLowerCase();
         const displayName = composeUserDisplayName({
@@ -2262,6 +2481,12 @@ export async function registerAdminRoutes(app) {
         const dto = updateUserSchema.parse(request.body);
         const existing = await prisma.user.findUnique({ where: { id: userId } });
         assert(existing, 404, "User not found");
+        if (isStrictEntraProvisioningMode()) {
+            const attemptedIdentityEdit = Boolean(dto.email || dto.name || dto.firstName || dto.lastName || dto.credential);
+            if (attemptedIdentityEdit) {
+                throw new ApiError(400, "Identity details are managed in Microsoft Entra. Use resync to refresh them.");
+            }
+        }
         const nextName = dto.name || dto.firstName || dto.lastName || dto.credential
             ? composeUserDisplayName({
                 name: dto.name || existing.name,
@@ -2302,6 +2527,9 @@ export async function registerAdminRoutes(app) {
         };
     });
     app.post("/admin/users/:id/reset-password", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+        if (isStrictEntraProvisioningMode()) {
+            throw new ApiError(405, "Password resets are managed in Microsoft Entra for this environment.");
+        }
         const userId = request.params.id;
         const user = await prisma.user.findUnique({
             where: { id: userId },
@@ -2383,7 +2611,6 @@ export async function registerAdminRoutes(app) {
                     email: `archived+${user.id}@flow.local`,
                     status: "archived",
                     phone: null,
-                    cognitoSub: null,
                     activeFacilityId: null
                 }
             });

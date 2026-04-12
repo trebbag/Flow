@@ -9,6 +9,9 @@ export type RequestUser = {
     activeFacilityId: string | null;
     availableFacilityIds: string[];
     authSource: "jwt" | "dev_header";
+    identityProvider?: string | null;
+    entraObjectId?: string | null;
+    entraTenantId?: string | null;
 };
 declare module "fastify" {
     interface FastifyRequest {

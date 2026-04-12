@@ -127,6 +127,14 @@ exports.Prisma.UserScalarFieldEnum = {
   status: 'status',
   phone: 'phone',
   cognitoSub: 'cognitoSub',
+  entraObjectId: 'entraObjectId',
+  entraTenantId: 'entraTenantId',
+  entraUserPrincipalName: 'entraUserPrincipalName',
+  identityProvider: 'identityProvider',
+  directoryStatus: 'directoryStatus',
+  directoryUserType: 'directoryUserType',
+  directoryAccountEnabled: 'directoryAccountEnabled',
+  lastDirectorySyncAt: 'lastDirectorySyncAt',
   activeFacilityId: 'activeFacilityId',
   createdAt: 'createdAt'
 };

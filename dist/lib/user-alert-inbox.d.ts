@@ -1,10 +1,11 @@
-import { AlertInboxStatus, Prisma } from "@prisma/client";
-import type { AlertInboxKind, RoleName } from "@prisma/client";
+import { AlertInboxStatus, Prisma, RoleName } from "@prisma/client";
+import type { AlertInboxKind, PrismaClient } from "@prisma/client";
+type AlertRecipientDb = Pick<PrismaClient, "user">;
 export declare function resolveAlertRecipientUserIds(params: {
     facilityId: string;
     clinicId?: string | null;
     roles?: RoleName[];
-}): Promise<string[]>;
+}, db?: AlertRecipientDb): Promise<string[]>;
 export declare function createInboxAlert(params: {
     facilityId: string;
     clinicId?: string | null;
@@ -27,15 +28,15 @@ export declare function listUserInboxAlerts(params: {
         status: import("@prisma/client").$Enums.AlertInboxStatus;
         id: string;
         createdAt: Date;
-        facilityId: string;
         userId: string;
         clinicId: string | null;
+        facilityId: string;
+        acknowledgedAt: Date | null;
         kind: import("@prisma/client").$Enums.AlertInboxKind;
         sourceId: string;
         sourceVersionKey: string;
         title: string;
         payloadJson: Prisma.JsonValue | null;
-        acknowledgedAt: Date | null;
         archivedAt: Date | null;
     }[];
     total: number;
@@ -45,3 +46,4 @@ export declare function updateUserInboxAlertStatus(params: {
     userId: string;
     status: AlertInboxStatus;
 }): Promise<Prisma.BatchPayload>;
+export {};

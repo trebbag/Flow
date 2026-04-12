@@ -15,6 +15,11 @@ const envSchema = z.object({
     AUTH_MODE: z.enum(["dev_header", "jwt", "hybrid"]).optional(),
     AUTH_ALLOW_DEV_HEADERS: z.coerce.boolean().optional(),
     AUTH_ALLOW_IMPLICIT_ADMIN: z.coerce.boolean().default(false),
+    ENTRA_STRICT_MODE: z.coerce.boolean().optional(),
+    ENTRA_TENANT_ID: z.string().trim().optional(),
+    ENTRA_GRAPH_API_BASE_URL: z.string().trim().default("https://graph.microsoft.com/v1.0"),
+    ENTRA_GRAPH_SCOPE: z.string().trim().default("https://graph.microsoft.com/.default"),
+    ENTRA_GRAPH_MANAGED_IDENTITY_CLIENT_ID: z.string().trim().optional(),
     JWT_ISSUER: z.string().trim().optional(),
     JWT_AUDIENCE: z.string().trim().optional(),
     JWT_JWKS_URI: z.string().trim().optional(),
@@ -31,14 +36,29 @@ const envSchema = z.object({
 const parsed = envSchema.parse(process.env);
 const defaultAuthMode = parsed.NODE_ENV === "production" ? "jwt" : "hybrid";
 const defaultAllowDevHeaders = parsed.NODE_ENV !== "production";
+const defaultEntraStrictMode = parsed.NODE_ENV === "production";
 const allowedCorsOrigins = (parsed.CORS_ORIGINS || parsed.CORS_ORIGIN)
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+function deriveTenantId(jwtIssuer) {
+    const issuer = jwtIssuer?.trim();
+    if (!issuer)
+        return "";
+    const v2Match = /^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0\/?$/i.exec(issuer);
+    if (v2Match?.[1]) {
+        return v2Match[1];
+    }
+    const legacyMatch = /^https:\/\/sts\.windows\.net\/([^/]+)\/?$/i.exec(issuer);
+    return legacyMatch?.[1] || "";
+}
+const resolvedTenantId = parsed.ENTRA_TENANT_ID || deriveTenantId(parsed.JWT_ISSUER);
 export const env = {
     ...parsed,
     CORS_ALLOWED_ORIGINS: allowedCorsOrigins,
     AUTH_MODE: parsed.AUTH_MODE ?? defaultAuthMode,
-    AUTH_ALLOW_DEV_HEADERS: parsed.AUTH_ALLOW_DEV_HEADERS ?? defaultAllowDevHeaders
+    AUTH_ALLOW_DEV_HEADERS: parsed.AUTH_ALLOW_DEV_HEADERS ?? defaultAllowDevHeaders,
+    ENTRA_STRICT_MODE: parsed.ENTRA_STRICT_MODE ?? defaultEntraStrictMode,
+    ENTRA_TENANT_ID: resolvedTenantId
 };
 //# sourceMappingURL=env.js.map

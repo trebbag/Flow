@@ -4229,6 +4229,14 @@ export namespace Prisma {
     status: string | null
     phone: string | null
     cognitoSub: string | null
+    entraObjectId: string | null
+    entraTenantId: string | null
+    entraUserPrincipalName: string | null
+    identityProvider: string | null
+    directoryStatus: string | null
+    directoryUserType: string | null
+    directoryAccountEnabled: boolean | null
+    lastDirectorySyncAt: Date | null
     activeFacilityId: string | null
     createdAt: Date | null
   }
@@ -4240,6 +4248,14 @@ export namespace Prisma {
     status: string | null
     phone: string | null
     cognitoSub: string | null
+    entraObjectId: string | null
+    entraTenantId: string | null
+    entraUserPrincipalName: string | null
+    identityProvider: string | null
+    directoryStatus: string | null
+    directoryUserType: string | null
+    directoryAccountEnabled: boolean | null
+    lastDirectorySyncAt: Date | null
     activeFacilityId: string | null
     createdAt: Date | null
   }
@@ -4251,6 +4267,14 @@ export namespace Prisma {
     status: number
     phone: number
     cognitoSub: number
+    entraObjectId: number
+    entraTenantId: number
+    entraUserPrincipalName: number
+    identityProvider: number
+    directoryStatus: number
+    directoryUserType: number
+    directoryAccountEnabled: number
+    lastDirectorySyncAt: number
     activeFacilityId: number
     createdAt: number
     _all: number
@@ -4264,6 +4288,14 @@ export namespace Prisma {
     status?: true
     phone?: true
     cognitoSub?: true
+    entraObjectId?: true
+    entraTenantId?: true
+    entraUserPrincipalName?: true
+    identityProvider?: true
+    directoryStatus?: true
+    directoryUserType?: true
+    directoryAccountEnabled?: true
+    lastDirectorySyncAt?: true
     activeFacilityId?: true
     createdAt?: true
   }
@@ -4275,6 +4307,14 @@ export namespace Prisma {
     status?: true
     phone?: true
     cognitoSub?: true
+    entraObjectId?: true
+    entraTenantId?: true
+    entraUserPrincipalName?: true
+    identityProvider?: true
+    directoryStatus?: true
+    directoryUserType?: true
+    directoryAccountEnabled?: true
+    lastDirectorySyncAt?: true
     activeFacilityId?: true
     createdAt?: true
   }
@@ -4286,6 +4326,14 @@ export namespace Prisma {
     status?: true
     phone?: true
     cognitoSub?: true
+    entraObjectId?: true
+    entraTenantId?: true
+    entraUserPrincipalName?: true
+    identityProvider?: true
+    directoryStatus?: true
+    directoryUserType?: true
+    directoryAccountEnabled?: true
+    lastDirectorySyncAt?: true
     activeFacilityId?: true
     createdAt?: true
     _all?: true
@@ -4370,6 +4418,14 @@ export namespace Prisma {
     status: string
     phone: string | null
     cognitoSub: string | null
+    entraObjectId: string | null
+    entraTenantId: string | null
+    entraUserPrincipalName: string | null
+    identityProvider: string | null
+    directoryStatus: string | null
+    directoryUserType: string | null
+    directoryAccountEnabled: boolean | null
+    lastDirectorySyncAt: Date | null
     activeFacilityId: string | null
     createdAt: Date
     _count: UserCountAggregateOutputType | null
@@ -4398,6 +4454,14 @@ export namespace Prisma {
     status?: boolean
     phone?: boolean
     cognitoSub?: boolean
+    entraObjectId?: boolean
+    entraTenantId?: boolean
+    entraUserPrincipalName?: boolean
+    identityProvider?: boolean
+    directoryStatus?: boolean
+    directoryUserType?: boolean
+    directoryAccountEnabled?: boolean
+    lastDirectorySyncAt?: boolean
     activeFacilityId?: boolean
     createdAt?: boolean
     activeFacility?: boolean | User$activeFacilityArgs<ExtArgs>
@@ -4418,6 +4482,14 @@ export namespace Prisma {
     status?: boolean
     phone?: boolean
     cognitoSub?: boolean
+    entraObjectId?: boolean
+    entraTenantId?: boolean
+    entraUserPrincipalName?: boolean
+    identityProvider?: boolean
+    directoryStatus?: boolean
+    directoryUserType?: boolean
+    directoryAccountEnabled?: boolean
+    lastDirectorySyncAt?: boolean
     activeFacilityId?: boolean
     createdAt?: boolean
     activeFacility?: boolean | User$activeFacilityArgs<ExtArgs>
@@ -4430,6 +4502,14 @@ export namespace Prisma {
     status?: boolean
     phone?: boolean
     cognitoSub?: boolean
+    entraObjectId?: boolean
+    entraTenantId?: boolean
+    entraUserPrincipalName?: boolean
+    identityProvider?: boolean
+    directoryStatus?: boolean
+    directoryUserType?: boolean
+    directoryAccountEnabled?: boolean
+    lastDirectorySyncAt?: boolean
     activeFacilityId?: boolean
     createdAt?: boolean
     activeFacility?: boolean | User$activeFacilityArgs<ExtArgs>
@@ -4442,11 +4522,19 @@ export namespace Prisma {
     status?: boolean
     phone?: boolean
     cognitoSub?: boolean
+    entraObjectId?: boolean
+    entraTenantId?: boolean
+    entraUserPrincipalName?: boolean
+    identityProvider?: boolean
+    directoryStatus?: boolean
+    directoryUserType?: boolean
+    directoryAccountEnabled?: boolean
+    lastDirectorySyncAt?: boolean
     activeFacilityId?: boolean
     createdAt?: boolean
   }
 
-  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "email" | "name" | "status" | "phone" | "cognitoSub" | "activeFacilityId" | "createdAt", ExtArgs["result"]["user"]>
+  export type UserOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "email" | "name" | "status" | "phone" | "cognitoSub" | "entraObjectId" | "entraTenantId" | "entraUserPrincipalName" | "identityProvider" | "directoryStatus" | "directoryUserType" | "directoryAccountEnabled" | "lastDirectorySyncAt" | "activeFacilityId" | "createdAt", ExtArgs["result"]["user"]>
   export type UserInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     activeFacility?: boolean | User$activeFacilityArgs<ExtArgs>
     roles?: boolean | User$rolesArgs<ExtArgs>
@@ -4484,6 +4572,14 @@ export namespace Prisma {
       status: string
       phone: string | null
       cognitoSub: string | null
+      entraObjectId: string | null
+      entraTenantId: string | null
+      entraUserPrincipalName: string | null
+      identityProvider: string | null
+      directoryStatus: string | null
+      directoryUserType: string | null
+      directoryAccountEnabled: boolean | null
+      lastDirectorySyncAt: Date | null
       activeFacilityId: string | null
       createdAt: Date
     }, ExtArgs["result"]["user"]>
@@ -4923,6 +5019,14 @@ export namespace Prisma {
     readonly status: FieldRef<"User", 'String'>
     readonly phone: FieldRef<"User", 'String'>
     readonly cognitoSub: FieldRef<"User", 'String'>
+    readonly entraObjectId: FieldRef<"User", 'String'>
+    readonly entraTenantId: FieldRef<"User", 'String'>
+    readonly entraUserPrincipalName: FieldRef<"User", 'String'>
+    readonly identityProvider: FieldRef<"User", 'String'>
+    readonly directoryStatus: FieldRef<"User", 'String'>
+    readonly directoryUserType: FieldRef<"User", 'String'>
+    readonly directoryAccountEnabled: FieldRef<"User", 'Boolean'>
+    readonly lastDirectorySyncAt: FieldRef<"User", 'DateTime'>
     readonly activeFacilityId: FieldRef<"User", 'String'>
     readonly createdAt: FieldRef<"User", 'DateTime'>
   }
@@ -39074,6 +39178,14 @@ export namespace Prisma {
     status: 'status',
     phone: 'phone',
     cognitoSub: 'cognitoSub',
+    entraObjectId: 'entraObjectId',
+    entraTenantId: 'entraTenantId',
+    entraUserPrincipalName: 'entraUserPrincipalName',
+    identityProvider: 'identityProvider',
+    directoryStatus: 'directoryStatus',
+    directoryUserType: 'directoryUserType',
+    directoryAccountEnabled: 'directoryAccountEnabled',
+    lastDirectorySyncAt: 'lastDirectorySyncAt',
     activeFacilityId: 'activeFacilityId',
     createdAt: 'createdAt'
   };
@@ -39603,6 +39715,13 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Boolean'
+   */
+  export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+  /**
    * Reference to a field of type 'DateTime'
    */
   export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
@@ -39613,13 +39732,6 @@ export namespace Prisma {
    * Reference to a field of type 'DateTime[]'
    */
   export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
-    
-
-
-  /**
-   * Reference to a field of type 'Boolean'
-   */
-  export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
     
 
 
@@ -39804,6 +39916,14 @@ export namespace Prisma {
     status?: StringFilter<"User"> | string
     phone?: StringNullableFilter<"User"> | string | null
     cognitoSub?: StringNullableFilter<"User"> | string | null
+    entraObjectId?: StringNullableFilter<"User"> | string | null
+    entraTenantId?: StringNullableFilter<"User"> | string | null
+    entraUserPrincipalName?: StringNullableFilter<"User"> | string | null
+    identityProvider?: StringNullableFilter<"User"> | string | null
+    directoryStatus?: StringNullableFilter<"User"> | string | null
+    directoryUserType?: StringNullableFilter<"User"> | string | null
+    directoryAccountEnabled?: BoolNullableFilter<"User"> | boolean | null
+    lastDirectorySyncAt?: DateTimeNullableFilter<"User"> | Date | string | null
     activeFacilityId?: StringNullableFilter<"User"> | string | null
     createdAt?: DateTimeFilter<"User"> | Date | string
     activeFacility?: XOR<FacilityNullableScalarRelationFilter, FacilityWhereInput> | null
@@ -39823,6 +39943,14 @@ export namespace Prisma {
     status?: SortOrder
     phone?: SortOrderInput | SortOrder
     cognitoSub?: SortOrderInput | SortOrder
+    entraObjectId?: SortOrderInput | SortOrder
+    entraTenantId?: SortOrderInput | SortOrder
+    entraUserPrincipalName?: SortOrderInput | SortOrder
+    identityProvider?: SortOrderInput | SortOrder
+    directoryStatus?: SortOrderInput | SortOrder
+    directoryUserType?: SortOrderInput | SortOrder
+    directoryAccountEnabled?: SortOrderInput | SortOrder
+    lastDirectorySyncAt?: SortOrderInput | SortOrder
     activeFacilityId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     activeFacility?: FacilityOrderByWithRelationInput
@@ -39839,12 +39967,20 @@ export namespace Prisma {
     id?: string
     email?: string
     cognitoSub?: string
+    entraObjectId?: string
     AND?: UserWhereInput | UserWhereInput[]
     OR?: UserWhereInput[]
     NOT?: UserWhereInput | UserWhereInput[]
     name?: StringFilter<"User"> | string
     status?: StringFilter<"User"> | string
     phone?: StringNullableFilter<"User"> | string | null
+    entraTenantId?: StringNullableFilter<"User"> | string | null
+    entraUserPrincipalName?: StringNullableFilter<"User"> | string | null
+    identityProvider?: StringNullableFilter<"User"> | string | null
+    directoryStatus?: StringNullableFilter<"User"> | string | null
+    directoryUserType?: StringNullableFilter<"User"> | string | null
+    directoryAccountEnabled?: BoolNullableFilter<"User"> | boolean | null
+    lastDirectorySyncAt?: DateTimeNullableFilter<"User"> | Date | string | null
     activeFacilityId?: StringNullableFilter<"User"> | string | null
     createdAt?: DateTimeFilter<"User"> | Date | string
     activeFacility?: XOR<FacilityNullableScalarRelationFilter, FacilityWhereInput> | null
@@ -39855,7 +39991,7 @@ export namespace Prisma {
     tasksCompleted?: TaskListRelationFilter
     tasksAcknowledged?: TaskListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
-  }, "id" | "email" | "cognitoSub">
+  }, "id" | "email" | "cognitoSub" | "entraObjectId">
 
   export type UserOrderByWithAggregationInput = {
     id?: SortOrder
@@ -39864,6 +40000,14 @@ export namespace Prisma {
     status?: SortOrder
     phone?: SortOrderInput | SortOrder
     cognitoSub?: SortOrderInput | SortOrder
+    entraObjectId?: SortOrderInput | SortOrder
+    entraTenantId?: SortOrderInput | SortOrder
+    entraUserPrincipalName?: SortOrderInput | SortOrder
+    identityProvider?: SortOrderInput | SortOrder
+    directoryStatus?: SortOrderInput | SortOrder
+    directoryUserType?: SortOrderInput | SortOrder
+    directoryAccountEnabled?: SortOrderInput | SortOrder
+    lastDirectorySyncAt?: SortOrderInput | SortOrder
     activeFacilityId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     _count?: UserCountOrderByAggregateInput
@@ -39881,6 +40025,14 @@ export namespace Prisma {
     status?: StringWithAggregatesFilter<"User"> | string
     phone?: StringNullableWithAggregatesFilter<"User"> | string | null
     cognitoSub?: StringNullableWithAggregatesFilter<"User"> | string | null
+    entraObjectId?: StringNullableWithAggregatesFilter<"User"> | string | null
+    entraTenantId?: StringNullableWithAggregatesFilter<"User"> | string | null
+    entraUserPrincipalName?: StringNullableWithAggregatesFilter<"User"> | string | null
+    identityProvider?: StringNullableWithAggregatesFilter<"User"> | string | null
+    directoryStatus?: StringNullableWithAggregatesFilter<"User"> | string | null
+    directoryUserType?: StringNullableWithAggregatesFilter<"User"> | string | null
+    directoryAccountEnabled?: BoolNullableWithAggregatesFilter<"User"> | boolean | null
+    lastDirectorySyncAt?: DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
     activeFacilityId?: StringNullableWithAggregatesFilter<"User"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"User"> | Date | string
   }
@@ -42399,6 +42551,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -42417,6 +42577,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -42435,6 +42603,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -42453,6 +42629,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -42471,6 +42655,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
   }
@@ -42482,6 +42674,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -42492,6 +42692,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -45245,6 +45453,22 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
+  export type BoolNullableFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableFilter<$PrismaModel> | boolean | null
+  }
+
+  export type DateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -45313,6 +45537,14 @@ export namespace Prisma {
     status?: SortOrder
     phone?: SortOrder
     cognitoSub?: SortOrder
+    entraObjectId?: SortOrder
+    entraTenantId?: SortOrder
+    entraUserPrincipalName?: SortOrder
+    identityProvider?: SortOrder
+    directoryStatus?: SortOrder
+    directoryUserType?: SortOrder
+    directoryAccountEnabled?: SortOrder
+    lastDirectorySyncAt?: SortOrder
     activeFacilityId?: SortOrder
     createdAt?: SortOrder
   }
@@ -45324,6 +45556,14 @@ export namespace Prisma {
     status?: SortOrder
     phone?: SortOrder
     cognitoSub?: SortOrder
+    entraObjectId?: SortOrder
+    entraTenantId?: SortOrder
+    entraUserPrincipalName?: SortOrder
+    identityProvider?: SortOrder
+    directoryStatus?: SortOrder
+    directoryUserType?: SortOrder
+    directoryAccountEnabled?: SortOrder
+    lastDirectorySyncAt?: SortOrder
     activeFacilityId?: SortOrder
     createdAt?: SortOrder
   }
@@ -45335,6 +45575,14 @@ export namespace Prisma {
     status?: SortOrder
     phone?: SortOrder
     cognitoSub?: SortOrder
+    entraObjectId?: SortOrder
+    entraTenantId?: SortOrder
+    entraUserPrincipalName?: SortOrder
+    identityProvider?: SortOrder
+    directoryStatus?: SortOrder
+    directoryUserType?: SortOrder
+    directoryAccountEnabled?: SortOrder
+    lastDirectorySyncAt?: SortOrder
     activeFacilityId?: SortOrder
     createdAt?: SortOrder
   }
@@ -45373,6 +45621,28 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedStringNullableFilter<$PrismaModel>
     _max?: NestedStringNullableFilter<$PrismaModel>
+  }
+
+  export type BoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedBoolNullableFilter<$PrismaModel>
+    _max?: NestedBoolNullableFilter<$PrismaModel>
+  }
+
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -46279,17 +46549,6 @@ export namespace Prisma {
     _max?: NestedEnumScheduleSourceFilter<$PrismaModel>
   }
 
-  export type DateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
-  }
-
   export type IncomingImportBatchNullableScalarRelationFilter = {
     is?: IncomingImportBatchWhereInput | null
     isNot?: IncomingImportBatchWhereInput | null
@@ -46368,20 +46627,6 @@ export namespace Prisma {
     dispositionByUserId?: SortOrder
     dispositionEncounterId?: SortOrder
     importBatchId?: SortOrder
-  }
-
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type IncomingImportBatchScalarRelationFilter = {
@@ -47394,6 +47639,14 @@ export namespace Prisma {
 
   export type NullableStringFieldUpdateOperationsInput = {
     set?: string | null
+  }
+
+  export type NullableBoolFieldUpdateOperationsInput = {
+    set?: boolean | null
+  }
+
+  export type NullableDateTimeFieldUpdateOperationsInput = {
+    set?: Date | string | null
   }
 
   export type DateTimeFieldUpdateOperationsInput = {
@@ -49724,10 +49977,6 @@ export namespace Prisma {
     connect?: IncomingImportIssueWhereUniqueInput | IncomingImportIssueWhereUniqueInput[]
   }
 
-  export type NullableDateTimeFieldUpdateOperationsInput = {
-    set?: Date | string | null
-  }
-
   export type ClinicUpdateOneRequiredWithoutIncomingSchedulesNestedInput = {
     create?: XOR<ClinicCreateWithoutIncomingSchedulesInput, ClinicUncheckedCreateWithoutIncomingSchedulesInput>
     connectOrCreate?: ClinicCreateOrConnectWithoutIncomingSchedulesInput
@@ -50330,6 +50579,22 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
+  export type NestedBoolNullableFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableFilter<$PrismaModel> | boolean | null
+  }
+
+  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
   export type NestedDateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -50395,6 +50660,28 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntNullableFilter<$PrismaModel> | number | null
+  }
+
+  export type NestedBoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedBoolNullableFilter<$PrismaModel>
+    _max?: NestedBoolNullableFilter<$PrismaModel>
+  }
+
+  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -50546,31 +50833,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumScheduleSourceFilter<$PrismaModel>
     _max?: NestedEnumScheduleSourceFilter<$PrismaModel>
-  }
-
-  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
-  }
-
-  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type NestedEnumEncounterStatusFilter<$PrismaModel = never> = {
@@ -51492,6 +51754,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     roles?: UserRoleCreateNestedManyWithoutUserInput
     providerAssignments?: ClinicAssignmentCreateNestedManyWithoutProviderUserInput
@@ -51509,6 +51779,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
     providerAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutProviderUserInput
@@ -51896,6 +52174,14 @@ export namespace Prisma {
     status?: StringFilter<"User"> | string
     phone?: StringNullableFilter<"User"> | string | null
     cognitoSub?: StringNullableFilter<"User"> | string | null
+    entraObjectId?: StringNullableFilter<"User"> | string | null
+    entraTenantId?: StringNullableFilter<"User"> | string | null
+    entraUserPrincipalName?: StringNullableFilter<"User"> | string | null
+    identityProvider?: StringNullableFilter<"User"> | string | null
+    directoryStatus?: StringNullableFilter<"User"> | string | null
+    directoryUserType?: StringNullableFilter<"User"> | string | null
+    directoryAccountEnabled?: BoolNullableFilter<"User"> | boolean | null
+    lastDirectorySyncAt?: DateTimeNullableFilter<"User"> | Date | string | null
     activeFacilityId?: StringNullableFilter<"User"> | string | null
     createdAt?: DateTimeFilter<"User"> | Date | string
   }
@@ -53476,6 +53762,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     providerAssignments?: ClinicAssignmentCreateNestedManyWithoutProviderUserInput
@@ -53493,6 +53787,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     providerAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutProviderUserInput
@@ -53634,6 +53936,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     providerAssignments?: ClinicAssignmentUpdateManyWithoutProviderUserNestedInput
@@ -53651,6 +53961,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     providerAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutProviderUserNestedInput
@@ -54161,6 +54479,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -54178,6 +54504,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -54225,6 +54559,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -54242,6 +54584,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -54342,6 +54692,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -54359,6 +54717,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -54418,6 +54784,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -54435,6 +54809,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -58194,6 +58576,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -58211,6 +58601,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -58233,6 +58631,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -58250,6 +58656,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -58272,6 +58686,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -58289,6 +58711,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -58397,6 +58827,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -58414,6 +58852,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -58442,6 +58888,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -58459,6 +58913,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -58487,6 +58949,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -58504,6 +58974,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -58521,6 +58999,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
     activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
     roles?: UserRoleCreateNestedManyWithoutUserInput
@@ -58538,6 +59024,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     activeFacilityId?: string | null
     createdAt?: Date | string
     roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
@@ -58679,6 +59173,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
     roles?: UserRoleUpdateManyWithoutUserNestedInput
@@ -58696,6 +59198,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
@@ -59751,6 +60261,14 @@ export namespace Prisma {
     status?: string
     phone?: string | null
     cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
     createdAt?: Date | string
   }
 
@@ -60041,6 +60559,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUpdateManyWithoutUserNestedInput
     providerAssignments?: ClinicAssignmentUpdateManyWithoutProviderUserNestedInput
@@ -60058,6 +60584,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
     providerAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutProviderUserNestedInput
@@ -60075,6 +60609,14 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     phone?: NullableStringFieldUpdateOperationsInput | string | null
     cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
