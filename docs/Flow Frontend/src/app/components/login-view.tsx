@@ -73,6 +73,11 @@ export function LoginView() {
 
   const nextPath = useMemo(() => parseNext(location.search), [location.search]);
 
+  const loginRedirectPayloadDetected = useMemo(() => {
+    const combined = `${location.search}&${location.hash.startsWith("#") ? location.hash.slice(1) : location.hash}`;
+    return /(?:^|[?&#]|&)(code|error|state|session_state)=/i.test(combined);
+  }, [location.search, location.hash]);
+
   const finalizeSession = async (session: AuthSession, redirectTarget = nextPath) => {
     applySession(session);
     const context = await auth.getContext();
@@ -110,6 +115,11 @@ export function LoginView() {
     navigate(redirectTarget, { replace: true });
     return persisted;
   };
+
+  useEffect(() => {
+    if (!loginRedirectPayloadDetected) return;
+    navigate(`/auth/callback${location.search}${location.hash}`, { replace: true });
+  }, [loginRedirectPayloadDetected, location.search, location.hash, navigate]);
 
   useEffect(() => {
     const existing = loadSession();
