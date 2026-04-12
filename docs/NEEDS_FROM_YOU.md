@@ -109,3 +109,9 @@ The backend implementation is now pilot-oriented, but these final inputs are req
     - `STAGING_ROLE_TOKEN_REVENUECYCLE`
   - AthenaOne staging connector credentials and scope inputs listed above
 - Microsoft Entra local configuration is now in place; the remaining auth proof gap is interactive browser sign-in against the real tenant and the future staging redirect URL once staging exists.
+
+## Current Live Follow-Ups (2026-04-12)
+- Verify Microsoft Entra login on staging after frontend deploy run `24315874989` from a fresh private/incognito window.
+- If login still returns to `/login`, capture the exact URL in the address bar immediately after Microsoft sends the browser back, before clicking anything else.
+- Review GitHub secret-scanning alert `#1` for `mongodb_atlas_db_uri_with_credentials` and rotate/revoke it if the credential is still valid.
+- Confirm final Conditional Access and MFA policy expectations for pilot users before PHI rollout.
