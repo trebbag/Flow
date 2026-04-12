@@ -15,13 +15,12 @@ export function AuthCallbackView() {
 
     async function completeRedirect() {
       try {
-        let redirect = await handleMicrosoftRedirect();
+        const redirect = await handleMicrosoftRedirect();
         let account = redirect.account || (await getMicrosoftAccount());
 
         for (let attempt = 0; !account && attempt < 3 && hasMicrosoftLoginPending(); attempt += 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 250 * (attempt + 1)));
-          redirect = await handleMicrosoftRedirect();
-          account = redirect.account || (await getMicrosoftAccount());
+          account = await getMicrosoftAccount();
         }
 
         if (cancelled) return;

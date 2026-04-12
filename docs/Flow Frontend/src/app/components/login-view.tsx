@@ -5,7 +5,6 @@ import { auth } from "./api-client";
 import { applySession, clearSession, loadSession, saveSession, type AuthMode, type AuthSession } from "./auth-session";
 import {
   getMicrosoftAccount,
-  hasMicrosoftLoginPending,
   isMicrosoftAuthConfigured,
   logoutFromMicrosoft,
   preloadMicrosoftClient,
@@ -149,12 +148,6 @@ export function LoginView() {
       .catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    if (!microsoftConfigured) return;
-    if (!hasMicrosoftLoginPending()) return;
-    navigate("/auth/callback", { replace: true });
-  }, [navigate]);
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -165,6 +158,7 @@ export function LoginView() {
         if (!microsoftConfigured) {
           throw new Error("Microsoft Entra login is not configured for this environment.");
         }
+        resetMicrosoftLoginState();
         await startMicrosoftLogin(nextPath);
         return;
       }
