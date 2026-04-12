@@ -1,4 +1,5 @@
 import { AlertInboxKind, AlertInboxStatus, AlertLevel, AlertThresholdMetric, EncounterStatus, type Prisma, type PrismaClient } from "@prisma/client";
+import { resolveAlertRecipientUserIds } from "./user-alert-inbox.js";
 
 const monitoredStatuses: EncounterStatus[] = [
   EncounterStatus.Lobby,
@@ -218,18 +219,13 @@ export async function refreshEncounterAlertStates(
       const key = `${facilityId}:${clinicId}`;
       const cached = recipientCache.get(key);
       if (cached) return cached;
-      const users = await tx.user.findMany({
-        where: {
-          status: "active",
-          roles: {
-            some: {
-              OR: [{ facilityId }, { clinicId }, { clinic: { facilityId } }, { facilityId: null, clinicId: null }]
-            }
-          }
+      const ids = await resolveAlertRecipientUserIds(
+        {
+          facilityId,
+          clinicId
         },
-        select: { id: true }
-      });
-      const ids = Array.from(new Set(users.map((row) => row.id)));
+        tx
+      );
       recipientCache.set(key, ids);
       return ids;
     };

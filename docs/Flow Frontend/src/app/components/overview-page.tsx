@@ -24,6 +24,7 @@ import { useEncounters } from "./encounter-context";
 import { admin, alerts as alertsApi, auth, tasks as tasksApi } from "./api-client";
 import { loadSession } from "./auth-session";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT, SESSION_CHANGED_EVENT } from "./app-events";
+import { labelUserName } from "./display-names";
 
 const pipelineStages: EncounterStatus[] = [
   "Incoming",
@@ -196,7 +197,9 @@ export function OverviewPage() {
     encounters.forEach((encounter) => {
       if (!map.has(encounter.clinicId)) {
         const assignment = assignments.find((entry) => entry.clinicId === encounter.clinicId);
-        const owner = assignment?.maRun ? assignment.maUserName || "Unassigned MA" : assignment?.providerUserName || "Unassigned Provider";
+        const owner = assignment?.maRun
+          ? labelUserName(assignment.maUserName, assignment.maUserStatus) || "Unassigned MA"
+          : labelUserName(assignment.providerUserName, assignment.providerUserStatus) || "Unassigned Provider";
         map.set(encounter.clinicId, {
           clinicId: encounter.clinicId,
           clinicName: encounter.clinicName,

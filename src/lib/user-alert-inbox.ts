@@ -1,24 +1,63 @@
-import { AlertInboxStatus, Prisma } from "@prisma/client";
-import type { AlertInboxKind, RoleName } from "@prisma/client";
+import { AlertInboxStatus, Prisma, RoleName } from "@prisma/client";
+import type { AlertInboxKind, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
-export async function resolveAlertRecipientUserIds(params: {
+type AlertRecipientDb = Pick<PrismaClient, "user">;
+
+function buildScopedRoleClauses(params: {
   facilityId: string;
   clinicId?: string | null;
   roles?: RoleName[];
 }) {
   const { facilityId, clinicId, roles } = params;
-  const users = await prisma.user.findMany({
+  const roleFilter =
+    roles && roles.length > 0 ? { role: { in: roles } } : {};
+
+  return {
+    roleFilter,
+    scopeOr: clinicId
+      ? [{ facilityId }, { clinicId }, { clinic: { facilityId } }, { facilityId: null, clinicId: null }]
+      : [{ facilityId }, { clinic: { facilityId } }, { facilityId: null, clinicId: null }]
+  };
+}
+
+export async function resolveAlertRecipientUserIds(
+  params: {
+    facilityId: string;
+    clinicId?: string | null;
+    roles?: RoleName[];
+  },
+  db: AlertRecipientDb = prisma
+) {
+  const { facilityId, roles } = params;
+  const { roleFilter, scopeOr } = buildScopedRoleClauses(params);
+  const includeActiveAdminFallback = !roles || roles.length === 0 || roles.includes(RoleName.Admin);
+
+  const users = await db.user.findMany({
     where: {
       status: "active",
-      roles: {
-        some: {
-          ...(roles && roles.length > 0 ? { role: { in: roles } } : {}),
-          OR: clinicId
-            ? [{ facilityId }, { clinicId }, { clinic: { facilityId } }, { facilityId: null, clinicId: null }]
-            : [{ facilityId }, { clinic: { facilityId } }, { facilityId: null, clinicId: null }]
-        }
-      }
+      OR: [
+        {
+          roles: {
+            some: {
+              ...roleFilter,
+              OR: scopeOr
+            }
+          }
+        },
+        ...(includeActiveAdminFallback
+          ? [
+              {
+                activeFacilityId: facilityId,
+                roles: {
+                  some: {
+                    role: RoleName.Admin
+                  }
+                }
+              } satisfies Prisma.UserWhereInput
+            ]
+          : [])
+      ]
     },
     select: { id: true }
   });

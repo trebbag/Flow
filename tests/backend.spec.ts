@@ -2475,6 +2475,102 @@ describe("Flow backend core relationships", () => {
     expect(archivedItems.some((item) => item.id === thresholdAlert!.id)).toBe(true);
   });
 
+  it("stores threshold alerts for admins whose active facility matches even when their admin role is scoped elsewhere", async () => {
+    const ctx = await bootstrapCore();
+
+    const otherFacility = await prisma.facility.create({
+      data: {
+        name: "Other Admin Scope",
+        shortCode: "OAS",
+        timezone: "America/New_York"
+      }
+    });
+
+    await prisma.userRole.deleteMany({
+      where: {
+        userId: ctx.admin.id,
+        role: RoleName.Admin,
+        facilityId: ctx.facility.id
+      }
+    });
+    await prisma.userRole.create({
+      data: {
+        userId: ctx.admin.id,
+        role: RoleName.Admin,
+        facilityId: otherFacility.id
+      }
+    });
+    await prisma.user.update({
+      where: { id: ctx.admin.id },
+      data: { activeFacilityId: ctx.facility.id }
+    });
+
+    await prisma.alertThreshold.create({
+      data: {
+        facilityId: ctx.facility.id,
+        clinicId: ctx.clinic.id,
+        metric: "stage",
+        status: "Lobby",
+        yellowAtMin: 1,
+        redAtMin: 2
+      }
+    });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-INBOX-THRESHOLD-ADMIN-FACILITY",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const encounterId = created.json().id as string;
+
+    const older = new Date(Date.now() - 3 * 60 * 1000);
+    await prisma.encounter.update({
+      where: { id: encounterId },
+      data: {
+        checkInAt: older
+      }
+    });
+    await prisma.alertState.update({
+      where: { encounterId },
+      data: {
+        enteredStatusAt: older,
+        currentAlertLevel: "Green",
+        yellowTriggeredAt: null,
+        redTriggeredAt: null,
+        escalationTriggeredAt: null
+      }
+    });
+
+    const scopedHeaders = {
+      ...authHeaders(ctx.admin.id, RoleName.Admin),
+      "x-facility-id": ctx.facility.id
+    };
+
+    const trigger = await app.inject({
+      method: "GET",
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      headers: scopedHeaders
+    });
+    expect(trigger.statusCode).toBe(200);
+
+    const activeAlerts = await app.inject({
+      method: "GET",
+      url: "/alerts?tab=active",
+      headers: scopedHeaders
+    });
+    expect(activeAlerts.statusCode).toBe(200);
+    const activeItems = activeAlerts.json().items as Array<{ id: string; kind: string; payload?: { encounterId?: string } }>;
+    const thresholdAlert = activeItems.find((item) => item.kind === "threshold" && item.payload?.encounterId === encounterId);
+    expect(thresholdAlert).toBeTruthy();
+  });
+
   it("creates safety and task inbox alerts for scoped users", async () => {
     const ctx = await bootstrapCore();
 
@@ -2761,5 +2857,85 @@ describe("Flow backend core relationships", () => {
     });
     expect(alerts.statusCode).toBe(200);
     expect(alerts.json().items.some((item: any) => item.title === "Notification policy test")).toBe(true);
+  });
+
+  it("dispatches in-app notification test alerts to admins using the active facility even when their admin role is scoped elsewhere", async () => {
+    const ctx = await bootstrapCore();
+
+    const otherFacility = await prisma.facility.create({
+      data: {
+        name: "Notification Admin Scope",
+        shortCode: "NAS",
+        timezone: "America/New_York"
+      }
+    });
+
+    await prisma.userRole.deleteMany({
+      where: {
+        userId: ctx.admin.id,
+        role: RoleName.Admin,
+        facilityId: ctx.facility.id
+      }
+    });
+    await prisma.userRole.create({
+      data: {
+        userId: ctx.admin.id,
+        role: RoleName.Admin,
+        facilityId: otherFacility.id
+      }
+    });
+    await prisma.user.update({
+      where: { id: ctx.admin.id },
+      data: { activeFacilityId: ctx.facility.id }
+    });
+
+    const notification = await app.inject({
+      method: "POST",
+      url: "/admin/notifications",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        clinicId: ctx.clinic.id,
+        status: "Lobby",
+        severity: "Yellow",
+        recipients: ["Admin"],
+        channels: ["in_app"],
+        cooldownMinutes: 5,
+        ackRequired: false
+      }
+    });
+    expect(notification.statusCode).toBe(200);
+
+    const scopedHeaders = {
+      ...authHeaders(ctx.admin.id, RoleName.Admin),
+      "x-facility-id": ctx.facility.id
+    };
+
+    const tested = await app.inject({
+      method: "POST",
+      url: `/admin/notifications/${notification.json().id}/test`,
+      headers: scopedHeaders
+    });
+    expect(tested.statusCode).toBe(200);
+    expect(tested.json().results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: "in_app",
+          status: "sent",
+          recipientCount: 1
+        })
+      ])
+    );
+
+    const alerts = await app.inject({
+      method: "GET",
+      url: "/alerts?tab=active&limit=50",
+      headers: scopedHeaders
+    });
+    expect(alerts.statusCode).toBe(200);
+    expect(
+      alerts.json().items.some(
+        (item: any) => item.title === "Notification policy test" && item.payload?.policyId === notification.json().id
+      )
+    ).toBe(true);
   });
 });

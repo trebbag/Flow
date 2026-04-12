@@ -45,6 +45,8 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - Optional fallback role: `vars.STAGING_VITE_DEV_ROLE` (defaults to `Admin`)
    - Optional `vars.STAGING_FRONTEND_E2E_PORT` if staging runners require a non-default preview port.
    - Run `pnpm pilot:validate:staging` and share the generated evidence file from `docs/verification/`.
+   - Before the role-by-role staging pass, sync the Entra pilot users so their `UserRole` rows match the active Optimum Health facility in staging.
+     - Current verified mismatch: `admin@clinicos1.onmicrosoft.com` is active in Optimum Health (`58a9224a-6a85-4f41-8b59-f827316991cf`) but does not yet have an `Admin` role row scoped to that facility in the imported staging dataset.
 4. AthenaOne staging connector inputs for live onboarding:
    - `baseUrl`
    - `practiceId`
