@@ -42,6 +42,23 @@ jobs:
           pnpm db:push
           pnpm db:seed
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Backend tests
+        run: pnpm test
+
+      - name: Backend build
+        run: pnpm build
+
+      - name: Reset database for frontend live verification
+        run: |
+          pnpm db:push
+          pnpm db:seed
+
       - name: Resolve frontend live-check auth vars
         run: |
           DEV_USER_ID=$(node --input-type=module <<'NODE'
@@ -67,18 +84,6 @@ jobs:
           echo "VITE_DEV_ROLE=Admin" >> "$GITHUB_ENV"
           echo "FRONTEND_DEV_ROLE=Admin" >> "$GITHUB_ENV"
           echo "FRONTEND_E2E_PORT=4173" >> "$GITHUB_ENV"
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Backend tests
-        run: pnpm test
-
-      - name: Backend build
-        run: pnpm build
 
       - name: Start backend for frontend live verification
         run: |
