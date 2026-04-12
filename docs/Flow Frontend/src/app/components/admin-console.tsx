@@ -65,7 +65,7 @@ import {
 import {
   AddFacilityModal,
   AddClinicModal,
-  AddUserModal,
+  ProvisionUserModal,
   AddRoomModal,
   AddReasonModal,
   AddTemplateModal,
@@ -111,6 +111,14 @@ type AdminUser = {
   email: string;
   status: string;
   phone?: string;
+  entraObjectId?: string | null;
+  entraTenantId?: string | null;
+  entraUserPrincipalName?: string | null;
+  identityProvider?: string | null;
+  directoryStatus?: string | null;
+  directoryUserType?: string | null;
+  directoryAccountEnabled?: boolean | null;
+  lastDirectorySyncAt?: string | null;
   lastLogin: string;
   createdAt: string;
   activeFacilityId?: string | null;
@@ -1291,7 +1299,7 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
       <Card className="border-0 shadow-sm overflow-hidden">
         <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-400" />
         <CardContent className="p-5">
-          <SectionHeader icon={Users} title="Users" count={filtered.length} actionLabel="Add User" onAction={onAddUser} iconColor="text-blue-500" />
+          <SectionHeader icon={Users} title="Users" count={filtered.length} actionLabel="Provision User" onAction={onAddUser} iconColor="text-blue-500" />
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="w-64">
@@ -1330,9 +1338,12 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                       <div className="flex items-center gap-2">
                         <span className="text-[13px]" style={{ fontWeight: 500 }}>{u.name}</span>
                         {u.status === "suspended" && <Badge className="bg-red-100 text-red-600 border-0 text-[9px] h-4">SUSPENDED</Badge>}
+                        {u.identityProvider === "entra" && <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[9px] h-4">ENTRA LINKED</Badge>}
                       </div>
                       <div className="text-[11px] text-muted-foreground flex items-center gap-2">
                         <span>{u.email}</span>
+                        <span className="text-gray-300">|</span>
+                        <span>{u.directoryStatus ? `Directory: ${u.directoryStatus}` : "Directory: pending"}</span>
                         <span className="text-gray-300">|</span>
                         <span>Last login: {timeAgo(u.lastLogin)}</span>
                       </div>
@@ -1351,6 +1362,43 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                           <span>Created: {u.createdAt}</span>
                           <span>ID: <code className="bg-gray-200 px-1 rounded text-[10px]">{u.id}</code></span>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-white border border-gray-100 p-3">
+                        <div className="text-[12px] text-muted-foreground mb-2" style={{ fontWeight: 500 }}>Microsoft Entra Identity</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-gray-600">
+                          <div>
+                            <span className="text-muted-foreground">Provider:</span>{" "}
+                            <span style={{ fontWeight: 500 }}>{u.identityProvider || "Not linked"}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Directory status:</span>{" "}
+                            <span style={{ fontWeight: 500 }}>{u.directoryStatus || "Unknown"}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">User type:</span>{" "}
+                            <span style={{ fontWeight: 500 }}>{u.directoryUserType || "Unknown"}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Account enabled:</span>{" "}
+                            <span style={{ fontWeight: 500 }}>
+                              {typeof u.directoryAccountEnabled === "boolean" ? (u.directoryAccountEnabled ? "Yes" : "No") : "Unknown"}
+                            </span>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-muted-foreground">Object ID:</span>{" "}
+                            <code className="bg-gray-100 px-1 rounded text-[10px]">{u.entraObjectId || "Not linked"}</code>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-muted-foreground">UPN:</span>{" "}
+                            <span style={{ fontWeight: 500 }}>{u.entraUserPrincipalName || u.email}</span>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-muted-foreground">Last sync:</span>{" "}
+                            <span style={{ fontWeight: 500 }}>
+                              {u.lastDirectorySyncAt ? new Date(u.lastDirectorySyncAt).toLocaleString() : "Not synced yet"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       <div className="space-y-1.5">
@@ -1414,6 +1462,17 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                         </button>
                       </div>
                       <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                        <button
+                          onClick={() =>
+                            runAdminMutation(`Microsoft Entra sync refreshed for ${u.name}`, async () => {
+                              await admin.resyncUser(u.id);
+                            }).catch(() => undefined)
+                          }
+                          className="h-7 px-3 rounded-lg border border-blue-200 text-[11px] text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5"
+                          style={{ fontWeight: 500 }}
+                        >
+                          <RefreshCw className="w-3 h-3" /> Resync Entra
+                        </button>
                         {u.status === "active" ? (
                           <button
                             onClick={() =>
@@ -1471,17 +1530,6 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                             <RefreshCw className="w-3 h-3" /> Reactivate User
                           </button>
                         )}
-                        <button
-                          onClick={() =>
-                            runAdminMutation(`Password reset initiated for ${u.email}`, async () => {
-                              await admin.resetUserPassword(u.id);
-                            }).catch(() => undefined)
-                          }
-                          className="h-7 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
-                          style={{ fontWeight: 500 }}
-                        >
-                          <Mail className="w-3 h-3" /> Reset Password
-                        </button>
                         {u.status === "suspended" && (
                           <button
                             onClick={() => {
@@ -3986,31 +4034,23 @@ export function AdminConsole() {
   };
 
   const createUser = async (payload: {
-    firstName: string;
-    lastName: string;
-    credential?: string;
+    objectId: string;
     email: string;
-    phone?: string;
-    role?: string;
+    displayName: string;
+    role: string;
     facilityIds: string[];
   }) => {
-    const composedName = composeUserDisplayName({
-      firstName: payload.firstName,
-      lastName: payload.lastName,
-      credential: payload.credential
-    });
-    const created = await admin.createUser({
-      name: composedName,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
-      credential: payload.credential,
-      email: payload.email,
-      phone: payload.phone,
+    await admin.provisionUser({
+      objectId: payload.objectId,
       role: payload.role as any,
       facilityIds: payload.facilityIds,
     });
     await reloadAdminData();
     requestAdminRefresh();
+  };
+
+  const searchDirectoryUsers = async (query: string) => {
+    return admin.searchDirectoryUsers(query);
   };
 
   const createRoom = async (payload: { name: string; roomType: string }) => {
@@ -4298,6 +4338,15 @@ export function AdminConsole() {
                 email: user.email,
                 status: user.status || "active",
                 phone: user.phone || undefined,
+                entraObjectId: user.entraObjectId || null,
+                entraTenantId: user.entraTenantId || null,
+                entraUserPrincipalName: user.entraUserPrincipalName || null,
+                identityProvider: user.identityProvider || null,
+                directoryStatus: user.directoryStatus || null,
+                directoryUserType: user.directoryUserType || null,
+                directoryAccountEnabled:
+                  typeof user.directoryAccountEnabled === "boolean" ? user.directoryAccountEnabled : null,
+                lastDirectorySyncAt: user.lastDirectorySyncAt || null,
                 lastLogin: user.updatedAt || user.createdAt || new Date().toISOString(),
                 createdAt: String(user.createdAt || new Date().toISOString()).slice(0, 10),
                 activeFacilityId: user.activeFacilityId || null,
@@ -4695,10 +4744,11 @@ export function AdminConsole() {
           description={editingClinic ? "Update clinic details and assigned rooms." : "Create a new clinic under this facility."}
           onSubmit={editingClinic ? updateClinicDetails : createClinic}
         />
-        <AddUserModal
+        <ProvisionUserModal
           open={openModal === "user"}
           onClose={close}
           facilities={facilityOptions}
+          onSearch={searchDirectoryUsers}
           onSubmit={createUser}
         />
         <AddRoomModal

@@ -235,9 +235,29 @@ export interface StaffUser {
   name: string;
   status?: string;
   phone?: string;
+  entraObjectId?: string | null;
+  entraTenantId?: string | null;
+  entraUserPrincipalName?: string | null;
+  identityProvider?: string | null;
+  directoryStatus?: string | null;
+  directoryUserType?: string | null;
+  directoryAccountEnabled?: boolean | null;
+  lastDirectorySyncAt?: string | null;
   activeFacilityId?: string | null;
   assignedFacilityIds?: string[];
   roles: UserRole[];
+}
+
+export interface DirectoryUser {
+  objectId: string;
+  displayName: string;
+  email: string;
+  userPrincipalName: string;
+  accountEnabled: boolean;
+  userType: string;
+  tenantId: string;
+  identityProvider: "entra";
+  directoryStatus: "active" | "disabled" | "guest" | "deleted";
 }
 
 export interface UserRole {

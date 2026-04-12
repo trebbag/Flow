@@ -21,7 +21,7 @@ jobs:
       VITE_ENTRA_AUTHORITY: https://login.microsoftonline.com/b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
       VITE_ENTRA_CLIENT_ID: 020f7909-e66e-4ec8-810b-cfdf58e70014
       VITE_ENTRA_API_SCOPE: api://89658fe4-9844-439a-97b0-ee31ace455da/access_as_user
-      VITE_ENTRA_REDIRECT_PATH: /login
+      VITE_ENTRA_REDIRECT_PATH: /auth/callback
       VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH: /login
 
     steps:

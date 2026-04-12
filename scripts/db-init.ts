@@ -45,6 +45,10 @@ function hasTable(table: string) {
 const requiresRebuild =
   hasTable("ClinicRoom") && (!hasColumn("ClinicRoom", "facilityId") || !hasColumn("ClinicRoom", "status")) ||
   hasTable("User") && !hasColumn("User", "activeFacilityId") ||
+  hasTable("User") && !hasColumn("User", "entraObjectId") ||
+  hasTable("User") && !hasColumn("User", "entraTenantId") ||
+  hasTable("User") && !hasColumn("User", "identityProvider") ||
+  hasTable("User") && !hasColumn("User", "directoryStatus") ||
   hasTable("Facility") && (!hasColumn("Facility", "address") || !hasColumn("Facility", "phone")) ||
   hasTable("Task") && (!hasColumn("Task", "acknowledgedAt") || !hasColumn("Task", "notes")) ||
   !hasTable("ClinicRoomAssignment") ||
@@ -109,6 +113,14 @@ CREATE TABLE IF NOT EXISTS User (
   status TEXT NOT NULL DEFAULT 'active',
   phone TEXT,
   cognitoSub TEXT UNIQUE,
+  entraObjectId TEXT UNIQUE,
+  entraTenantId TEXT,
+  entraUserPrincipalName TEXT,
+  identityProvider TEXT,
+  directoryStatus TEXT,
+  directoryUserType TEXT,
+  directoryAccountEnabled INTEGER,
+  lastDirectorySyncAt TEXT,
   activeFacilityId TEXT,
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (activeFacilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE SET NULL
@@ -552,6 +564,8 @@ CREATE INDEX IF NOT EXISTS Provider_clinicId_active_idx ON Provider(clinicId, ac
 CREATE INDEX IF NOT EXISTS UserRole_clinicId_idx ON UserRole(clinicId);
 CREATE INDEX IF NOT EXISTS UserRole_facilityId_idx ON UserRole(facilityId);
 CREATE INDEX IF NOT EXISTS User_activeFacilityId_idx ON User(activeFacilityId);
+CREATE INDEX IF NOT EXISTS User_entraTenantId_idx ON User(entraTenantId);
+CREATE INDEX IF NOT EXISTS User_identityProvider_idx ON User(identityProvider);
 CREATE INDEX IF NOT EXISTS MaProviderMap_clinicId_idx ON MaProviderMap(clinicId);
 CREATE INDEX IF NOT EXISTS MaClinicMap_clinicId_idx ON MaClinicMap(clinicId);
 CREATE INDEX IF NOT EXISTS ClinicAssignment_clinicId_idx ON ClinicAssignment(clinicId);

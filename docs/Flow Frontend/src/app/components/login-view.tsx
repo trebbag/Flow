@@ -5,7 +5,6 @@ import { auth } from "./api-client";
 import { applySession, clearSession, loadSession, saveSession, type AuthMode, type AuthSession } from "./auth-session";
 import {
   getMicrosoftAccount,
-  handleMicrosoftRedirect,
   isMicrosoftAuthConfigured,
   logoutFromMicrosoft,
   preloadMicrosoftClient,
@@ -23,18 +22,21 @@ const roles: Role[] = [
 ];
 
 const loginEnv = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
+const productionStyleAuthOnly = Boolean(loginEnv.PROD);
 const configuredDevUserId = String(loginEnv.VITE_DEV_USER_ID || "").trim();
 const enableDevHeaderLogin =
+  !productionStyleAuthOnly &&
   String(
     loginEnv.VITE_ENABLE_DEV_HEADER_LOGIN ??
       (!loginEnv.PROD || configuredDevUserId ? "true" : "false"),
   ).toLowerCase() === "true";
+const enableBearerLogin = !productionStyleAuthOnly;
 const microsoftConfigured = isMicrosoftAuthConfigured();
 const requestedDefaultMode = String(loginEnv.VITE_DEFAULT_AUTH_MODE || "").toLowerCase();
 const defaultMode: AuthMode =
   requestedDefaultMode === "microsoft" && microsoftConfigured
     ? "microsoft"
-    : requestedDefaultMode === "bearer"
+    : requestedDefaultMode === "bearer" && enableBearerLogin
       ? "bearer"
       : enableDevHeaderLogin
         ? "dev_header"
@@ -115,13 +117,18 @@ export function LoginView() {
       return;
     }
 
-    const resolvedMode =
-      !enableDevHeaderLogin && existing.mode === "dev_header"
-        ? "bearer"
-        : !microsoftConfigured && existing.mode === "microsoft"
-          ? "bearer"
-          : existing.mode;
-    setMode(resolvedMode);
+    const nextMode =
+      productionStyleAuthOnly && existing.mode !== "microsoft"
+        ? "microsoft"
+        : !enableDevHeaderLogin && existing.mode === "dev_header"
+          ? microsoftConfigured
+            ? "microsoft"
+            : "bearer"
+          : !enableBearerLogin && existing.mode === "bearer"
+            ? "microsoft"
+            : existing.mode;
+
+    setMode(nextMode);
     setRole(existing.role);
     setUserId(existing.userId || "");
     setToken(existing.token || "");
@@ -130,66 +137,15 @@ export function LoginView() {
   }, []);
 
   useEffect(() => {
-    if (!enableDevHeaderLogin && mode === "dev_header") {
-      setMode(microsoftConfigured ? "microsoft" : "bearer");
-    }
-  }, [mode]);
-
-  useEffect(() => {
     if (!microsoftConfigured) return;
     void preloadMicrosoftClient();
+    void getMicrosoftAccount()
+      .then((account) => {
+        if (!account) return;
+        setMicrosoftAccountLabel(account.name || account.username || "Microsoft account connected");
+      })
+      .catch(() => undefined);
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function hydrateMicrosoftSession() {
-      if (!microsoftConfigured) return;
-
-      try {
-        const redirect = await handleMicrosoftRedirect();
-        const account = redirect.account || (await getMicrosoftAccount());
-        if (cancelled || !account) return;
-
-        const label = account.name || account.username || "Microsoft account connected";
-        setMicrosoftAccountLabel(label);
-
-        if (!redirect.result) return;
-
-        setLoading(true);
-        setError(null);
-        setMode("microsoft");
-
-        const provisional: AuthSession = {
-          mode: "microsoft",
-          role: "Admin",
-          facilityId: facilityId || undefined,
-          accountHomeId: account.homeAccountId,
-          username: account.username,
-          name: account.name || undefined,
-        };
-
-        const completed = await finalizeSession(provisional, redirect.postLoginPath || nextPath);
-        if (!completed && !cancelled) {
-          applySession(provisional);
-        }
-      } catch (err) {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : "Microsoft sign-in failed";
-        setError(message);
-        applySession(null);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    hydrateMicrosoftSession();
-    return () => {
-      cancelled = true;
-    };
-  }, [nextPath, facilityId]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -201,75 +157,7 @@ export function LoginView() {
         if (!microsoftConfigured) {
           throw new Error("Microsoft Entra login is not configured for this environment.");
         }
-
-        if (!microsoftAccountLabel) {
-          const loginResult = await startMicrosoftLogin(nextPath);
-          if (!loginResult?.account) {
-            return;
-          }
-
-          setMicrosoftAccountLabel(
-            loginResult.account.name || loginResult.account.username || "Microsoft account connected",
-          );
-
-          const popupSession: AuthSession = {
-            mode,
-            role,
-            facilityId: facilityId || undefined,
-            accountHomeId: loginResult.account.homeAccountId,
-            username: loginResult.account.username,
-            name: loginResult.account.name || undefined,
-          };
-
-          const popupCompleted = await finalizeSession(popupSession);
-          if (!popupCompleted) {
-            applySession(popupSession);
-          }
-          return;
-        }
-
-        const account = await getMicrosoftAccount();
-        if (!account) {
-          const loginResult = await startMicrosoftLogin(nextPath);
-          if (!loginResult?.account) {
-            return;
-          }
-
-          setMicrosoftAccountLabel(
-            loginResult.account.name || loginResult.account.username || "Microsoft account connected",
-          );
-
-          const popupSession: AuthSession = {
-            mode,
-            role,
-            facilityId: facilityId || undefined,
-            accountHomeId: loginResult.account.homeAccountId,
-            username: loginResult.account.username,
-            name: loginResult.account.name || undefined,
-          };
-
-          const popupCompleted = await finalizeSession(popupSession);
-          if (!popupCompleted) {
-            applySession(popupSession);
-          }
-          return;
-        }
-
-        setMicrosoftAccountLabel(account.name || account.username || "Microsoft account connected");
-
-        const session: AuthSession = {
-          mode,
-          role,
-          facilityId: facilityId || undefined,
-          accountHomeId: account.homeAccountId,
-          username: account.username,
-          name: account.name || undefined,
-        };
-
-        const completed = await finalizeSession(session);
-        if (!completed) {
-          applySession(session);
-        }
+        await startMicrosoftLogin(nextPath);
         return;
       }
 
@@ -323,6 +211,9 @@ export function LoginView() {
     }
   };
 
+  const showModeSwitcher = !productionStyleAuthOnly;
+  const modeColumns = enableDevHeaderLogin ? "grid-cols-3" : microsoftConfigured ? "grid-cols-2" : "grid-cols-1";
+
   return (
     <div className="min-h-screen bg-[#f7f8fb] flex items-center justify-center p-4">
       <div className="w-full max-w-[480px] rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -336,55 +227,61 @@ export function LoginView() {
                 ClinOps Login
               </h1>
               <p className="text-[12px] text-muted-foreground">
-                Sign in with Microsoft for production-style access, or use local auth modes for development.
+                {productionStyleAuthOnly
+                  ? "Sign in with Microsoft Entra. Flow applies your role and facility scope after Microsoft identity is verified."
+                  : "Sign in with Microsoft for production-style access, or use local auth modes for development."}
               </p>
             </div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className={`grid gap-2 ${enableDevHeaderLogin ? "grid-cols-3" : microsoftConfigured ? "grid-cols-2" : "grid-cols-1"}`}>
-            {enableDevHeaderLogin && (
-              <button
-                type="button"
-                onClick={() => setMode("dev_header")}
-                className={`h-9 rounded-lg border text-[12px] transition-colors ${
-                  mode === "dev_header"
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-                style={{ fontWeight: 500 }}
-              >
-                Dev Header
-              </button>
-            )}
-            {microsoftConfigured && (
-              <button
-                type="button"
-                onClick={() => setMode("microsoft")}
-                className={`h-9 rounded-lg border text-[12px] transition-colors ${
-                  mode === "microsoft"
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                    : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                }`}
-                style={{ fontWeight: 500 }}
-              >
-                Microsoft Entra
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setMode("bearer")}
-              className={`h-9 rounded-lg border text-[12px] transition-colors ${
-                mode === "bearer"
-                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-              style={{ fontWeight: 500 }}
-            >
-              Bearer JWT
-            </button>
-          </div>
+          {showModeSwitcher && (
+            <div className={`grid gap-2 ${modeColumns}`}>
+              {enableDevHeaderLogin && (
+                <button
+                  type="button"
+                  onClick={() => setMode("dev_header")}
+                  className={`h-9 rounded-lg border text-[12px] transition-colors ${
+                    mode === "dev_header"
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  style={{ fontWeight: 500 }}
+                >
+                  Dev Header
+                </button>
+              )}
+              {microsoftConfigured && (
+                <button
+                  type="button"
+                  onClick={() => setMode("microsoft")}
+                  className={`h-9 rounded-lg border text-[12px] transition-colors ${
+                    mode === "microsoft"
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  style={{ fontWeight: 500 }}
+                >
+                  Microsoft Entra
+                </button>
+              )}
+              {enableBearerLogin && (
+                <button
+                  type="button"
+                  onClick={() => setMode("bearer")}
+                  className={`h-9 rounded-lg border text-[12px] transition-colors ${
+                    mode === "bearer"
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  style={{ fontWeight: 500 }}
+                >
+                  Bearer JWT
+                </button>
+              )}
+            </div>
+          )}
 
           {mode !== "microsoft" && (
             <div>
@@ -459,15 +356,15 @@ export function LoginView() {
                 Microsoft Entra
               </div>
               <div className="text-[13px] text-gray-900 mt-1" style={{ fontWeight: 600 }}>
-                {microsoftAccountLabel || "No Microsoft account connected yet."}
+                {microsoftAccountLabel || "You’ll be redirected to Microsoft to complete sign-in."}
               </div>
               <p className="text-[11px] text-muted-foreground mt-1.5 leading-5">
-                Use your Microsoft 365 / Entra account. Flow will still apply role and facility access from its own database.
+                Flow uses Microsoft Entra as the identity source of truth in staging and production. Account access still depends on Flow role and facility provisioning.
               </p>
             </div>
           )}
 
-          {(role !== "Admin" || facilityOptions.length > 0 || facilityId || mode === "microsoft") && (
+          {mode !== "microsoft" && (role !== "Admin" || facilityOptions.length > 0 || facilityId) && (
             <div>
               <label
                 htmlFor="login-facility"
@@ -490,9 +387,6 @@ export function LoginView() {
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-muted-foreground mt-1.5">
-                Non-admin roles must select a facility context at login.
-              </p>
             </div>
           )}
 
@@ -513,9 +407,7 @@ export function LoginView() {
               {loading
                 ? "Signing In..."
                 : mode === "microsoft"
-                  ? microsoftAccountLabel
-                    ? "Continue"
-                    : "Continue with Microsoft"
+                  ? "Continue with Microsoft"
                   : "Sign In"}
             </button>
             <button

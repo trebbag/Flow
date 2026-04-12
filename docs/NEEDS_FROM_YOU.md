@@ -27,8 +27,16 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - `JWT_JWKS_URI` or secret management path for `JWT_SECRET`.
    - Microsoft Entra local pilot values were provided on April 9, 2026 and wired into local env.
    - Remaining Entra-specific pilot inputs:
-     - staging hostname / redirect URI once staging is available
      - live browser sign-in with the actual Entra accounts for local and staging proof
+     - final Conditional Access / MFA expectation for pilot users, because Flow now assumes Microsoft Entra is the front-door control for those protections
+   - Completed on April 12, 2026:
+     - staging redirect URI pattern updated to dedicated `/auth/callback`
+     - backend App Service system-assigned managed identity enabled
+     - Microsoft Graph application permission `User.Read.All` granted to the backend managed identity for:
+       - `/admin/directory-users`
+       - `/admin/users/provision`
+       - `/admin/users/:id/resync`
+       - `pnpm auth:sync:directory`
 3. Frontend live verification credentials for non-local environments:
    - For the repo-managed Azure Static Web Apps staging deploy, also provide in GitHub:
      - `AZURE_STATIC_WEB_APPS_API_TOKEN` secret
@@ -60,9 +68,13 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - department scope: `departmentIds` list
    - use [ATHENAONE_STAGING_RUNBOOK.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/ATHENAONE_STAGING_RUNBOOK.md) for the exact setup/test/preview sequence and evidence expected during staging
 5. Governance approvals:
-   - retention policy sign-off (audit/outbox retention windows)
-   - weekly role access reviewer assignment
-   - incident escalation contacts.
+  - retention policy sign-off (audit/outbox retention windows)
+  - weekly role access reviewer assignment
+  - incident escalation contacts.
+  - HIPAA / BAA readiness guardrails for PHI go-live:
+    - Azure data residency confirmation
+    - production secret-management plan for PostgreSQL and Graph access
+    - final Entra Conditional Access / MFA enforcement plan
 6. Pilot master data payload (real facilities/clinics/providers/reasons/templates) for cutover seeding.
 7. Local verification prerequisites when running frontend contract/live scripts:
    - Start backend API on `http://localhost:4000` before frontend checks in `docs/Flow Frontend`.

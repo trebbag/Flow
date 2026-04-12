@@ -21,6 +21,7 @@ async function mintToken(oid: string, role: RoleName, facilityId?: string | null
   const secret = envValue('JWT_SECRET');
   const issuer = envValue('JWT_ISSUER');
   const audience = envValue('JWT_AUDIENCE');
+  const tenantId = envValue('ENTRA_TENANT_ID');
 
   if (!secret || !issuer || !audience) {
     throw new Error('JWT_SECRET, JWT_ISSUER, and JWT_AUDIENCE must be configured.');
@@ -29,7 +30,9 @@ async function mintToken(oid: string, role: RoleName, facilityId?: string | null
   const claims: Record<string, unknown> = {
     oid,
     roles: [role],
+    userType: 'Member',
   };
+  if (tenantId) claims.tid = tenantId;
   if (facilityId) claims.facility_id = facilityId;
 
   return new SignJWT(claims)
@@ -51,7 +54,13 @@ async function main() {
       if (!oid) throw new Error(`Missing ${spec.oidEnv}`);
 
       const userRole = await prisma.userRole.findFirst({
-        where: { role: spec.role, user: { cognitoSub: oid, status: 'active' } },
+        where: {
+          role: spec.role,
+          user: {
+            status: 'active',
+            OR: [{ entraObjectId: oid }, { cognitoSub: oid }],
+          },
+        },
         include: { user: true, clinic: true },
         orderBy: { user: { createdAt: 'asc' } },
       });

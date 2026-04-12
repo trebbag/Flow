@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Plus,
   Sparkles,
+  Search,
   ClipboardCheck,
   ClipboardList,
   Stethoscope,
@@ -26,6 +27,7 @@ import {
   FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { DirectoryUser } from "./types";
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -515,83 +517,148 @@ export function AddFacilityModal({
   );
 }
 
-export function AddUserModal({
+export function ProvisionUserModal({
   open,
   onClose,
   facilities,
+  onSearch,
   onSubmit,
 }: {
   open: boolean;
   onClose: () => void;
   facilities: { id: string; name: string; shortCode?: string }[];
+  onSearch: (query: string) => Promise<DirectoryUser[]>;
   onSubmit: (payload: {
-    firstName: string;
-    lastName: string;
-    credential?: string;
+    objectId: string;
     email: string;
-    phone?: string;
-    role?: string;
+    displayName: string;
+    role: string;
     facilityIds: string[];
   }) => Promise<void>;
 }) {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [credential, setCredential] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<DirectoryUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<DirectoryUser | null>(null);
   const [role, setRole] = useState("");
   const [facilityIds, setFacilityIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setFirstName("");
-    setLastName("");
-    setCredential("");
-    setEmail("");
-    setPhone("");
+    setQuery("");
+    setResults([]);
+    setSelectedUser(null);
     setRole("");
     setFacilityIds([]);
   }, [open]);
 
+  const handleSearch = async () => {
+    if (query.trim().length < 2) return;
+    setSearching(true);
+    try {
+      const nextResults = await onSearch(query.trim());
+      setResults(nextResults);
+      if (selectedUser && !nextResults.some((row) => row.objectId === selectedUser.objectId)) {
+        setSelectedUser(null);
+      }
+    } finally {
+      setSearching(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle className="text-[16px]">Add User</DialogTitle>
-          <DialogDescription className="text-[12px]">Create a new user account.</DialogDescription>
+          <DialogTitle className="text-[16px]">Provision Entra User</DialogTitle>
+          <DialogDescription className="text-[12px]">
+            Search Microsoft Entra, select an existing tenant member, then assign their Flow role and facilities.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="First Name *"><input value={firstName} onChange={(event) => setFirstName(event.target.value)} type="text" placeholder="e.g. Jane" className={inputClass} /></FormField>
-            <FormField label="Last Name *"><input value={lastName} onChange={(event) => setLastName(event.target.value)} type="text" placeholder="e.g. Smith" className={inputClass} /></FormField>
-          </div>
-          <FormField label="Credential">
-            <input value={credential} onChange={(event) => setCredential(event.target.value)} type="text" placeholder="e.g. MD, DO, PA-C, RN" className={inputClass} />
-          </FormField>
-          <FormField label="Email *"><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="jane.smith@clinic.local" className={inputClass} /></FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Phone Number">
+          <FormField label="Search Microsoft Entra *">
+            <div className="flex items-center gap-2">
               <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                type="tel"
-                placeholder="e.g. (503) 555-0100"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                type="text"
+                placeholder="Name, email, or user principal name"
                 className={inputClass}
               />
+              <button
+                type="button"
+                onClick={() => {
+                  void handleSearch();
+                }}
+                disabled={query.trim().length < 2 || searching}
+                className="h-10 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors flex items-center gap-1.5"
+                style={{ fontWeight: 500 }}
+              >
+                <Search className="w-3.5 h-3.5" />
+                {searching ? "Searching..." : "Search"}
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              Only active tenant members are eligible for Flow provisioning.
+            </p>
+          </FormField>
+
+          <div className="max-h-52 overflow-auto rounded-lg border border-gray-100 p-2 space-y-2">
+            {results.length === 0 ? (
+              <div className="px-2 py-3 text-[12px] text-muted-foreground">
+                Search results will appear here.
+              </div>
+            ) : (
+              results.map((user) => {
+                const selected = selectedUser?.objectId === user.objectId;
+                return (
+                  <button
+                    key={user.objectId}
+                    type="button"
+                    onClick={() => setSelectedUser(user)}
+                    className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
+                      selected ? "border-indigo-300 bg-indigo-50" : "border-gray-100 hover:border-gray-200"
+                    }`}
+                  >
+                    <div className="text-[13px]" style={{ fontWeight: 600 }}>{user.displayName}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {user.email || user.userPrincipalName}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {user.userType} · {user.accountEnabled ? "Enabled" : "Disabled"}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Selected User">
+              <div className="min-h-10 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-[13px] text-gray-700">
+                {selectedUser ? selectedUser.displayName : "Choose a directory user"}
+              </div>
             </FormField>
-            <FormField label="Role">
-              <select value={role} onChange={(event) => setRole(event.target.value)} className={selectClass}>
-                <option value="">Select role...</option>
-                <option>FrontDeskCheckIn</option>
-                <option>MA</option>
-                <option>Clinician</option>
-                <option>FrontDeskCheckOut</option>
-                <option>Admin</option>
-                <option>RevenueCycle</option>
-              </select>
+            <FormField label="Email / UPN">
+              <div className="min-h-10 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-[13px] text-gray-700">
+                {selectedUser ? selectedUser.email || selectedUser.userPrincipalName : "Will be sourced from Entra"}
+              </div>
             </FormField>
           </div>
+
+          <FormField label="Flow Role *">
+            <select value={role} onChange={(event) => setRole(event.target.value)} className={selectClass}>
+              <option value="">Select role...</option>
+              <option>FrontDeskCheckIn</option>
+              <option>MA</option>
+              <option>Clinician</option>
+              <option>FrontDeskCheckOut</option>
+              <option>Admin</option>
+              <option>RevenueCycle</option>
+            </select>
+          </FormField>
+
           <FormField label="Facility Assignment *">
             <div className="space-y-2 max-h-44 overflow-auto rounded-lg border border-gray-100 p-2">
               {facilities.map((facility) => (
@@ -619,21 +686,19 @@ export function AddUserModal({
         </div>
         <ModalActions
           onClose={onClose}
-          label="Create User"
-          disabled={!firstName.trim() || !lastName.trim() || !email.trim() || facilityIds.length === 0 || submitting}
+          label="Provision User"
+          disabled={!selectedUser || !role || facilityIds.length === 0 || submitting}
           onSubmit={() => {
-            if (!firstName.trim() || !lastName.trim() || !email.trim() || facilityIds.length === 0) return;
+            if (!selectedUser || !role || facilityIds.length === 0) return;
             setSubmitting(true);
             submitWithToast(
-              "Create User",
+              "Provision User",
               () =>
                 onSubmit({
-                  firstName: firstName.trim(),
-                  lastName: lastName.trim(),
-                  credential: credential.trim() || undefined,
-                  email: email.trim(),
-                  phone: phone.trim() || undefined,
-                  role: role || undefined,
+                  objectId: selectedUser.objectId,
+                  email: selectedUser.email || selectedUser.userPrincipalName,
+                  displayName: selectedUser.displayName,
+                  role,
                   facilityIds,
                 }),
               onClose,

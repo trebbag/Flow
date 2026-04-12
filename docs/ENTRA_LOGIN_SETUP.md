@@ -1,6 +1,6 @@
 # Microsoft Entra Login Setup
 
-This app now supports a proper browser-based Microsoft Entra login in the frontend and JWT validation against Entra on the backend.
+Flow now supports an Entra-only browser login for staging/production, explicit Entra-linked user provisioning, and JWT validation against Entra on the backend.
 
 ## What You Need To Provide
 
@@ -9,16 +9,24 @@ This app now supports a proper browser-based Microsoft Entra login in the fronte
 3. Backend/API app registration Application ID URI or audience
 4. Exposed API scope name for the SPA to request
 5. Redirect URI approval for the SPA app registration:
-   - local: `http://localhost:5173/login`
-   - preview/test if used: `http://localhost:4173/login`
-   - staging URL login callback once that hostname is known
+   - local: `http://localhost:5173/auth/callback`
+   - preview/test if used: `http://localhost:4173/auth/callback`
+   - staging: `https://<static-web-app-host>/auth/callback`
 6. Post-logout redirect URI approval:
    - local: `http://localhost:5173/login`
    - preview/test if used: `http://localhost:4173/login`
+   - staging: `https://<static-web-app-host>/login`
 7. Decide how Flow users will map to Entra identities:
-   - preferred: existing Flow user email matches Entra `email` or `upn`
-   - alternate: provide each user's Entra Object ID and store it in `User.cognitoSub`
-8. Optional, if you want token-based role hints from Entra:
+   - Flow now stores explicit Entra identity metadata on `User`:
+     - `entraObjectId`
+     - `entraTenantId`
+     - `entraUserPrincipalName`
+     - `identityProvider`
+   - transitional compatibility with `User.cognitoSub` remains in place during the backfill period
+8. Microsoft Graph access for secure admin provisioning:
+   - preferred: App Service managed identity with Graph application permissions
+   - required Graph capability: read active tenant member users for search/provision/resync
+9. Optional, if you want token-based role hints from Entra:
    - Entra app roles or group claims that match Flow role names
    - otherwise Flow will continue using DB-managed role assignments only
 
@@ -30,6 +38,11 @@ Set in the root `.env` for Entra-backed JWT validation:
 AUTH_MODE=jwt
 AUTH_ALLOW_DEV_HEADERS=false
 AUTH_ALLOW_IMPLICIT_ADMIN=false
+ENTRA_STRICT_MODE=true
+ENTRA_TENANT_ID=<tenant-id>
+ENTRA_GRAPH_API_BASE_URL=https://graph.microsoft.com/v1.0
+ENTRA_GRAPH_SCOPE=https://graph.microsoft.com/.default
+ENTRA_GRAPH_MANAGED_IDENTITY_CLIENT_ID=<optional-user-assigned-managed-identity-client-id>
 JWT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
 JWT_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
 JWT_AUDIENCE=api://<backend-api-app-id>
@@ -53,7 +66,7 @@ VITE_DEFAULT_AUTH_MODE=microsoft
 VITE_ENTRA_TENANT_ID=<tenant-id>
 VITE_ENTRA_CLIENT_ID=<spa-client-id>
 VITE_ENTRA_API_SCOPE=api://<backend-api-app-id>/<scope-name>
-VITE_ENTRA_REDIRECT_PATH=/login
+VITE_ENTRA_REDIRECT_PATH=/auth/callback
 VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH=/login
 ```
 
@@ -68,22 +81,29 @@ If you prefer, you can use `VITE_ENTRA_AUTHORITY` instead of `VITE_ENTRA_TENANT_
 
 ## Current App Behavior
 
-- Microsoft login appears automatically when the `VITE_ENTRA_*` values are configured.
-- The frontend acquires and refreshes API access tokens silently.
+- Microsoft login is redirect-based and uses a dedicated `/auth/callback` route.
+- The frontend acquires and refreshes API access tokens silently after Entra sign-in.
 - The backend accepts Entra JWTs and can resolve users by:
   - `User.id`
-  - `User.cognitoSub` (good target for Entra Object ID)
+  - `User.entraObjectId`
+  - `User.cognitoSub` (transitional compatibility only)
   - `email` / `upn` / `preferred_username`
 - Flow still enforces clinic/facility/role access from its own database.
+- In strict Entra environments, Flow rejects:
+  - guest/B2B users
+  - disabled/deleted directory identities
+  - unprovisioned Microsoft accounts
+  - local password-reset / local user-creation actions
 
 ## Pilot Checklist
 
 1. Configure SPA redirect URIs in Entra.
 2. Configure the backend API audience/scope in Entra.
-3. Add the Entra values to local/staging env files.
-4. Make sure pilot users exist in Flow and map by email or `cognitoSub`.
-5. Run local auth verification.
-6. Run staging role-proof verification with real Entra accounts.
+3. Configure Microsoft Graph access for the backend managed identity.
+4. Add the Entra values to local/staging env files.
+5. Provision pilot users into Flow using Entra-linked provisioning.
+6. Run local auth verification.
+7. Run staging role-proof verification with real Entra accounts.
 
 ## If Staging Says "Unauthorized. Provide a valid Bearer token"
 
@@ -100,8 +120,8 @@ Check these in order:
    - `requestedAccessTokenVersion` is `2`
    - in some portal manifests this appears as `api.requestedAccessTokenVersion`
 3. In the Flow database, confirm the signed-in user exists and is active, and that either:
-   - their Flow email matches Entra `email` / `upn` / `preferred_username`, or
-   - their Entra Object ID is stored in `User.cognitoSub`
+   - their `User.entraObjectId` matches the Entra Object ID in the access token, or
+   - transitional fallback: their Entra Object ID is still stored in `User.cognitoSub`
 4. In Azure `Log stream`, look for Flow auth warnings:
    - `jwt_verify_failed`
    - `jwt_subject_missing`
@@ -109,9 +129,9 @@ Check these in order:
 
 Those warnings now include the configured issuer/audience and the token issuer/audience so you can tell whether the failure is claim mismatch or user mapping.
 
-## If Login Says "timed_out"
+## If Login Says "timed_out" or "no_token_request_cache_error"
 
-That MSAL error means the browser never fully completed the redirect handoff to Microsoft. In Flow, the frontend now tries popup-based sign-in first and only falls back to redirect if the popup path cannot start, so a fresh deploy should usually clear this.
+Those MSAL errors usually mean the browser redirect state and the page handling the callback are out of sync. Flow now uses a dedicated `/auth/callback` route specifically to avoid that mixed-state problem.
 
 If you still see it after deploying the latest frontend:
 
@@ -119,11 +139,9 @@ If you still see it after deploying the latest frontend:
    - staging: `https://orange-beach-0851cdc0f.6.azurestaticapps.net/login`
    - local: `http://localhost:5173/login`
 2. In the Entra SPA app registration, verify the exact redirect URI exists for the host you are using.
-3. Disable popup blockers or allow popups for the Flow site, because the fallback path uses `loginPopup`.
+3. Confirm the redirect URI is `/auth/callback`, not `/login`.
 4. Clear the browser site data for the Flow staging host and retry in a fresh tab.
-5. If the error only happens in one browser profile, retry in an incognito/private window to rule out an extension blocking the redirect.
-
-Flow now uses an extended Microsoft auth timeout window in the frontend so account picker + password + MFA can finish without MSAL aborting too early. If the app is still showing `timed_out`, make sure you are testing a freshly deployed frontend bundle in a new tab rather than a stale tab that still has the older JavaScript loaded.
+5. If the error only happens in one browser profile, retry in an incognito/private window to rule out an extension interfering with the redirect.
 
 ## Local Commands
 
@@ -131,9 +149,11 @@ After the env values are present, run:
 
 ```bash
 pnpm auth:sync:entra
+pnpm auth:sync:directory
 pnpm auth:verify:entra-local
 ```
 
-- `auth:sync:entra` maps the local Flow users to the Entra Object IDs and creates a missing `FrontDeskCheckOut` user if needed.
+- `auth:sync:entra` maps the local Flow users to the Entra identity fields and creates a missing `FrontDeskCheckOut` user if needed.
 - `auth:sync:entra` also assigns the first two local facilities to each pilot role when two facilities exist, so role-by-role facility switching can be verified locally.
+- `auth:sync:directory` refreshes all Entra-linked Flow users from Microsoft Graph and suspends access for deleted, disabled, or guest directory identities.
 - `auth:verify:entra-local` mints local verification JWTs with `oid` claims and confirms all six pilot roles authenticate through `/auth/context`.

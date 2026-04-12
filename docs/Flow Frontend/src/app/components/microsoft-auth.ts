@@ -10,13 +10,12 @@ const configuredTenantId = String(env.VITE_ENTRA_TENANT_ID || "").trim();
 const configuredAuthority = String(env.VITE_ENTRA_AUTHORITY || "").trim();
 const configuredClientId = String(env.VITE_ENTRA_CLIENT_ID || "").trim();
 const configuredApiScope = String(env.VITE_ENTRA_API_SCOPE || "").trim();
-const configuredRedirectPath = String(env.VITE_ENTRA_REDIRECT_PATH || "/login").trim() || "/login";
+const configuredRedirectPath = String(env.VITE_ENTRA_REDIRECT_PATH || "/auth/callback").trim() || "/auth/callback";
 const configuredPostLogoutPath =
-  String(env.VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH || configuredRedirectPath).trim() || configuredRedirectPath;
+  String(env.VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH || "/login").trim() || "/login";
 
 const POST_LOGIN_PATH_KEY = "flow_entra_post_login_path";
-const POPUP_BRIDGE_TIMEOUT_MS = 5 * 60 * 1000;
-const REDIRECT_NAVIGATION_TIMEOUT_MS = 2 * 60 * 1000;
+const REDIRECT_NAVIGATION_TIMEOUT_MS = 5 * 60 * 1000;
 
 function normalizePath(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
@@ -56,11 +55,12 @@ function isTimedOutBrowserError(error: unknown) {
   return errorCode === "timed_out" || /\btimed_out\b/i.test(message);
 }
 
-function isPopupStartupError(error: unknown) {
+function isNoTokenRequestCacheError(error: unknown) {
   if (!error) return false;
   const errorCode =
     typeof error === "object" && "errorCode" in error ? String((error as { errorCode?: unknown }).errorCode || "") : "";
-  return ["popup_window_error", "empty_window_error", "block_nested_popups"].includes(errorCode);
+  const message = error instanceof Error ? error.message : String(error);
+  return errorCode === "no_token_request_cache_error" || /\bno_token_request_cache_error\b/i.test(message);
 }
 
 let clientPromise: Promise<PublicClientApplication> | null = null;
@@ -90,9 +90,7 @@ async function getClient() {
           cacheLocation: "localStorage",
         },
         system: {
-          popupBridgeTimeout: POPUP_BRIDGE_TIMEOUT_MS,
           redirectNavigationTimeout: REDIRECT_NAVIGATION_TIMEOUT_MS,
-          navigatePopups: true,
         },
       });
       await client.initialize();
@@ -123,7 +121,14 @@ export async function handleMicrosoftRedirect(): Promise<{
   result: AuthenticationResult | null;
 }> {
   const client = await getClient();
-  const result = await client.handleRedirectPromise();
+  let result: AuthenticationResult | null = null;
+  try {
+    result = await client.handleRedirectPromise();
+  } catch (error) {
+    if (!isNoTokenRequestCacheError(error)) {
+      throw error;
+    }
+  }
   const account = result?.account || client.getActiveAccount() || client.getAllAccounts()[0] || null;
   if (account) client.setActiveAccount(account);
 
@@ -156,24 +161,11 @@ export async function startMicrosoftLogin(nextPath?: string): Promise<Authentica
   } as const;
 
   try {
-    const result = await client.loginPopup(loginRequest);
-    if (result.account) {
-      client.setActiveAccount(result.account);
-    }
-    clearPostLoginPath();
-    return result;
-  } catch (error) {
-    if (!isPopupStartupError(error)) {
-      throw error;
-    }
-  }
-
-  try {
     await client.loginRedirect(loginRequest);
     return null;
   } catch (error) {
     if (isTimedOutBrowserError(error)) {
-      throw new Error("Microsoft redirect timed out before the browser left Flow. Allow popups for this site or retry in a fresh tab.");
+      throw new Error("Microsoft redirect timed out before the browser left Flow. Retry in a fresh tab and complete sign-in promptly.");
     }
     throw error;
   }

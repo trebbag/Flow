@@ -69,16 +69,24 @@ enum AlertInboxStatus {
 }
 
 model User {
-  id                String     @id @default(uuid())
-  email             String     @unique
-  name              String
-  status            String     @default("active")
-  phone             String?
-  cognitoSub        String?    @unique
-  activeFacilityId  String?
-  createdAt         DateTime   @default(now())
-  activeFacility    Facility?  @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
-  roles             UserRole[]
+  id                    String     @id @default(uuid())
+  email                 String     @unique
+  name                  String
+  status                String     @default("active")
+  phone                 String?
+  cognitoSub            String?    @unique
+  entraObjectId         String?    @unique
+  entraTenantId         String?
+  entraUserPrincipalName String?
+  identityProvider      String?
+  directoryStatus       String?
+  directoryUserType     String?
+  directoryAccountEnabled Boolean?
+  lastDirectorySyncAt   DateTime?
+  activeFacilityId      String?
+  createdAt             DateTime   @default(now())
+  activeFacility        Facility?  @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
+  roles                 UserRole[]
   providerAssignments ClinicAssignment[] @relation("ClinicAssignmentProviderUser")
   maAssignments     ClinicAssignment[] @relation("ClinicAssignmentMaUser")
   tasksCreated      Task[]     @relation("TaskCreatedBy")
@@ -87,6 +95,8 @@ model User {
   alertInbox        UserAlertInbox[]
 
   @@index([activeFacilityId])
+  @@index([entraTenantId])
+  @@index([identityProvider])
 }
 
 model Facility {

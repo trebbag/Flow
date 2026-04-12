@@ -240,10 +240,11 @@ That makes it easy to distinguish an issuer/audience mismatch from a missing use
 
 4. Confirm the signed-in user exists in Flow and is active. Flow resolves Entra users by:
    - `User.id`
-   - `User.cognitoSub`
+   - `User.entraObjectId`
+   - transitional `User.cognitoSub`
    - `email`
 
-For the pilot role accounts, the safest mapping is storing the Entra Object ID in `User.cognitoSub`.
+For the pilot role accounts, the preferred mapping is storing the Entra Object ID in `User.entraObjectId`. Transitional fallback to `User.cognitoSub` remains in place only while older records are being backfilled.
 
 ## Step 9: If Backend Logs Say `Cannot find package 'fastify'`
 

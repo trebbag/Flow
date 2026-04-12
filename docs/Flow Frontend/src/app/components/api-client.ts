@@ -20,6 +20,7 @@ import type {
   Reason,
   Room,
   StaffUser,
+  DirectoryUser,
   Template,
   AlertThreshold,
   NotificationPolicy,
@@ -859,6 +860,22 @@ export const admin = {
     const q = qs.toString();
     return apiFetch<StaffUser[]>(`/admin/users${q ? `?${q}` : ""}`);
   },
+  searchDirectoryUsers(query: string) {
+    const qs = new URLSearchParams({ query });
+    return apiFetch<DirectoryUser[]>(`/admin/directory-users?${qs.toString()}`);
+  },
+  provisionUser(dto: {
+    objectId: string;
+    role: Role;
+    facilityIds?: string[];
+    facilityId?: string;
+    clinicId?: string;
+  }) {
+    return apiFetch<StaffUser>("/admin/users/provision", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
   createUser(dto: {
     email: string;
     name?: string;
@@ -901,6 +918,12 @@ export const admin = {
   },
   resetUserPassword(id: string) {
     return apiFetch<{ status: string; message: string }>(`/admin/users/${id}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+  resyncUser(id: string) {
+    return apiFetch<StaffUser>(`/admin/users/${id}/resync`, {
       method: "POST",
       body: JSON.stringify({}),
     });

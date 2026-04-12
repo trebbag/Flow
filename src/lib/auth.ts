@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { RoleName } from "@prisma/client";
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from "jose";
 import { env } from "./env.js";
+import { ApiError } from "./errors.js";
 import { prisma } from "./prisma.js";
 
 export type RequestUser = {
@@ -13,6 +14,9 @@ export type RequestUser = {
   activeFacilityId: string | null;
   availableFacilityIds: string[];
   authSource: "jwt" | "dev_header";
+  identityProvider?: string | null;
+  entraObjectId?: string | null;
+  entraTenantId?: string | null;
 };
 
 declare module "fastify" {
@@ -133,6 +137,10 @@ function extractBearerToken(request: FastifyRequest): string | null {
   return token.trim() || null;
 }
 
+function hasBearerToken(request: FastifyRequest) {
+  return Boolean(extractBearerToken(request));
+}
+
 function dedupeRoleNames(rows: Array<{ role: RoleName }>) {
   return Array.from(new Set(rows.map((row) => row.role)));
 }
@@ -205,15 +213,31 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
     }
 
     const emailClaim = firstClaim(payload, jwtEmailClaims)?.toLowerCase() || null;
+    const tokenTenantId = claimToString(payload.tid) || null;
+    const tokenIdentityType = claimToString(payload.idtyp)?.toLowerCase() || null;
+    const tokenUserType = claimToString(payload.userType) || null;
     const tokenRoles = roleClaims(payload);
     const clinicScope = firstClaim(payload, jwtClinicClaims);
     const facilityScope = firstClaim(payload, jwtFacilityClaims);
     const headerFacilityId = (request.headers["x-facility-id"] as string | undefined)?.trim() || null;
 
+    if (env.ENTRA_STRICT_MODE) {
+      if (tokenIdentityType === "app") {
+        throw new ApiError(403, "User sign-in is required. Application tokens are not allowed.");
+      }
+      if (env.ENTRA_TENANT_ID && tokenTenantId && tokenTenantId !== env.ENTRA_TENANT_ID) {
+        throw new ApiError(403, "This Microsoft account belongs to the wrong tenant.");
+      }
+      if (tokenUserType && tokenUserType.toLowerCase() !== "member") {
+        throw new ApiError(403, "Guest and B2B Microsoft accounts are not allowed.");
+      }
+    }
+
     const user = await prisma.user.findFirst({
       where: {
         OR: [
           { id: subject },
+          { entraObjectId: subject },
           { cognitoSub: subject },
           ...(emailClaim ? [{ email: emailClaim }] : [])
         ]
@@ -227,6 +251,55 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       }
     });
 
+    if (!user) {
+      throw new ApiError(403, "This Microsoft account is not provisioned for Flow.");
+    }
+
+    if (user.status === "archived") {
+      throw new ApiError(403, "This Flow account has been archived.");
+    }
+
+    if (user.status === "suspended") {
+      throw new ApiError(403, "This Flow account is suspended.");
+    }
+
+    if (user.roles.length === 0) {
+      throw new ApiError(403, "This Flow account is missing role assignments.");
+    }
+
+    if (env.ENTRA_STRICT_MODE) {
+      if (user.identityProvider && user.identityProvider !== "entra") {
+        throw new ApiError(403, "This Flow account is not linked to Microsoft Entra.");
+      }
+      if (user.directoryUserType && user.directoryUserType.toLowerCase() !== "member") {
+        throw new ApiError(403, "Guest and B2B Microsoft accounts are not allowed.");
+      }
+      if (user.directoryAccountEnabled === false || ["disabled", "deleted", "guest"].includes(String(user.directoryStatus || "").toLowerCase())) {
+        throw new ApiError(403, "This Microsoft account is not active in the directory.");
+      }
+    }
+
+    const shouldBackfillIdentity =
+      user.entraObjectId !== subject ||
+      !user.identityProvider ||
+      (tokenTenantId && user.entraTenantId !== tokenTenantId) ||
+      (emailClaim && user.entraUserPrincipalName !== emailClaim) ||
+      !user.cognitoSub;
+
+    if (shouldBackfillIdentity) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          entraObjectId: subject,
+          entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
+          entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
+          identityProvider: "entra",
+          cognitoSub: user.cognitoSub || subject,
+          lastDirectorySyncAt: new Date()
+        }
+      });
+    }
+
     if (!user || user.roles.length === 0 || user.status !== "active") {
       request.log.warn(
         {
@@ -239,7 +312,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
         },
         "JWT verified but no active Flow user mapping was found"
       );
-      return null;
+      throw new ApiError(403, "This Microsoft account is not provisioned for Flow.");
     }
 
     const availableRoleSet = new Set(dedupeRoleNames(user.roles));
@@ -273,9 +346,15 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       facilityId: facilityScopeResult.activeFacilityId,
       activeFacilityId: facilityScopeResult.activeFacilityId,
       availableFacilityIds: facilityScopeResult.availableFacilityIds,
-      authSource: "jwt"
+      authSource: "jwt",
+      identityProvider: user.identityProvider,
+      entraObjectId: user.entraObjectId || user.cognitoSub,
+      entraTenantId: user.entraTenantId || tokenTenantId
     };
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
     let tokenIssuer: string | null = null;
     let tokenAudience: string | string[] | null = null;
     try {
@@ -396,14 +475,23 @@ export async function resolveRequestUser(request: FastifyRequest): Promise<Reque
   // hybrid mode: JWT first, then dev headers when explicitly allowed.
   const jwtUser = await resolveUserFromJwt(request);
   if (jwtUser) return jwtUser;
-  if (env.AUTH_ALLOW_DEV_HEADERS) {
+  if (env.AUTH_ALLOW_DEV_HEADERS && !hasBearerToken(request)) {
     return resolveUserFromDevHeaders(request);
   }
   return null;
 }
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  const user = await resolveRequestUser(request);
+  let user: RequestUser | null = null;
+  try {
+    user = await resolveRequestUser(request);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      reply.code(error.statusCode).send({ message: error.message });
+      return;
+    }
+    throw error;
+  }
   if (!user) {
     const message =
       env.AUTH_MODE === "jwt"

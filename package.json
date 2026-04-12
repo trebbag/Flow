@@ -22,6 +22,7 @@
     "db:preflight:postgres": "tsx scripts/postgres-preflight.ts",
     "db:import:postgres": "tsx scripts/import-snapshot-postgres.ts",
     "auth:sync:entra": "tsx scripts/sync-entra-pilot-users.ts",
+    "auth:sync:directory": "tsx scripts/sync-entra-directory-status.ts",
     "auth:verify:entra-local": "tsx scripts/verify-entra-local.ts",
     "pilot:preflight": "tsx scripts/pilot-preflight.ts",
     "frontend:verify-live": "tsx scripts/frontend-live-verify.ts",
@@ -30,6 +31,7 @@
     "staging:proof:threshold-alerts": "tsx scripts/staging-threshold-evidence.ts"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.0",
     "@fastify/cors": "^11.1.0",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",

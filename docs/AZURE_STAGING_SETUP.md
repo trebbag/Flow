@@ -481,7 +481,7 @@ VITE_ENTRA_TENANT_ID=b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
 VITE_ENTRA_AUTHORITY=https://login.microsoftonline.com/b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
 VITE_ENTRA_CLIENT_ID=020f7909-e66e-4ec8-810b-cfdf58e70014
 VITE_ENTRA_API_SCOPE=api://89658fe4-9844-439a-97b0-ee31ace455da/access_as_user
-VITE_ENTRA_REDIRECT_PATH=/login
+VITE_ENTRA_REDIRECT_PATH=/auth/callback
 VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH=/login
 ```
 
@@ -545,7 +545,7 @@ For your SPA app registration (`020f7909-e66e-4ec8-810b-cfdf58e70014`):
 8. Add:
 
 ```text
-https://<your-static-web-app-host>/login
+https://<your-static-web-app-host>/auth/callback
 ```
 
 9. Save.
@@ -553,8 +553,8 @@ https://<your-static-web-app-host>/login
 You can keep the existing localhost redirect URIs too:
 
 ```text
-http://localhost:5173/login
-http://localhost:4173/login
+http://localhost:5173/auth/callback
+http://localhost:4173/auth/callback
 ```
 
 ## Part 7: Finalize Entra API Permissions
@@ -622,9 +622,8 @@ After the frontend deploy completes:
 https://<your-static-web-app-host>/login
 ```
 
-4. Click `Microsoft Entra`.
-5. Click `Continue with Microsoft`.
-6. Sign in with one of the pilot Entra accounts.
+4. Click `Continue with Microsoft`.
+5. Sign in with one of the pilot Entra accounts.
 
 If you return to the login page with an auth error:
 

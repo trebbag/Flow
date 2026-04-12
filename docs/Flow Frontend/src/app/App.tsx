@@ -9,6 +9,12 @@ const router = createBrowserRouter([
     }),
   },
   {
+    path: "/auth/callback",
+    lazy: async () => ({
+      Component: (await import("./components/auth-callback-view")).AuthCallbackView,
+    }),
+  },
+  {
     path: "/",
     Component: RootLayout,
     children: [

@@ -79,7 +79,7 @@ Set:
 - `JWT_AUDIENCE`
 - `JWT_SUBJECT_CLAIMS` (defaults to `sub,oid,objectidentifier`)
 
-Token subjects map to users by `User.id`, `User.cognitoSub`, or email claim (`email`, `upn`, `preferred_username`). Roles are resolved from DB-scoped `UserRole` assignments.
+Token subjects map to users by `User.id`, `User.entraObjectId`, transitional `User.cognitoSub`, or email claim (`email`, `upn`, `preferred_username`). Roles are resolved from DB-scoped `UserRole` assignments.
 
 ### Microsoft Entra ID
 
@@ -100,7 +100,14 @@ Frontend (`docs/Flow Frontend/.env`):
 - `VITE_ENTRA_API_SCOPE=api://<backend-api-app-id>/<scope-name>`
 - `VITE_DEFAULT_AUTH_MODE=microsoft`
 
-User mapping can be done either by matching Entra `email`/`upn` to the Flow user email, or by storing the Entra object ID in `User.cognitoSub`.
+For Entra-first deployments, Flow should provision users with explicit Entra identity metadata on `User`:
+
+- `entraObjectId`
+- `entraTenantId`
+- `entraUserPrincipalName`
+- `identityProvider=entra`
+
+Transitional compatibility with `User.cognitoSub` remains only for backfill and legacy pilot records.
 
 ## API Security Controls
 
