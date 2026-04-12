@@ -15,6 +15,8 @@ const configuredPostLogoutPath =
   String(env.VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH || configuredRedirectPath).trim() || configuredRedirectPath;
 
 const POST_LOGIN_PATH_KEY = "flow_entra_post_login_path";
+const POPUP_BRIDGE_TIMEOUT_MS = 5 * 60 * 1000;
+const REDIRECT_NAVIGATION_TIMEOUT_MS = 2 * 60 * 1000;
 
 function normalizePath(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
@@ -86,6 +88,11 @@ async function getClient() {
         },
         cache: {
           cacheLocation: "localStorage",
+        },
+        system: {
+          popupBridgeTimeout: POPUP_BRIDGE_TIMEOUT_MS,
+          redirectNavigationTimeout: REDIRECT_NAVIGATION_TIMEOUT_MS,
+          navigatePopups: true,
         },
       });
       await client.initialize();

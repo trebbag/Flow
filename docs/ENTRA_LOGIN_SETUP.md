@@ -123,6 +123,8 @@ If you still see it after deploying the latest frontend:
 4. Clear the browser site data for the Flow staging host and retry in a fresh tab.
 5. If the error only happens in one browser profile, retry in an incognito/private window to rule out an extension blocking the redirect.
 
+Flow now uses an extended Microsoft auth timeout window in the frontend so account picker + password + MFA can finish without MSAL aborting too early. If the app is still showing `timed_out`, make sure you are testing a freshly deployed frontend bundle in a new tab rather than a stale tab that still has the older JavaScript loaded.
+
 ## Local Commands
 
 After the env values are present, run:
