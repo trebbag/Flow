@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Link, NavLink, useLocation } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -18,11 +18,13 @@ import {
 import { cn } from "./ui/utils";
 import { alerts as alertsApi, tasks as tasksApi, primeRouteData } from "./api-client";
 import { useSidebar } from "./sidebar-context";
-import { loadSession } from "./auth-session";
+import { clearSession, loadSession } from "./auth-session";
 import { auth } from "./api-client";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT, SESSION_CHANGED_EVENT } from "./app-events";
+import { logoutFromMicrosoft, resetMicrosoftLoginState } from "./microsoft-auth";
+import { getAllowedPathsForRole, type AppPath } from "./role-access";
 
-const workflowItems = [
+const workflowItems: Array<{ to: AppPath; icon: React.ElementType; label: string }> = [
   { to: "/", icon: Activity, label: "Overview" },
   { to: "/checkin", icon: LogIn, label: "Front Desk Check-In" },
   { to: "/ma-board", icon: Users, label: "MA Board" },
@@ -35,7 +37,7 @@ const workflowItems = [
   { to: "/tasks", icon: ClipboardCheck, label: "Tasks" },
 ];
 
-const adminItems = [
+const adminItems: Array<{ to: AppPath; icon: React.ElementType; label: string }> = [
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/settings", icon: Settings, label: "Admin Console" },
 ];
@@ -45,6 +47,7 @@ type TooltipState = { label: string; top: number; left: number } | null;
 
 export function SidebarNav() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { collapsed, toggle: toggleCollapsed } = useSidebar();
   const [session, setSession] = useState(() => loadSession());
   const [tooltip, setTooltip] = useState<TooltipState>(null);
@@ -56,8 +59,9 @@ export function SidebarNav() {
   const hideTimeout = useRef<ReturnType<typeof setTimeout>>(null);
 
   const activeRole = session?.role || "Unknown";
-  const visibleAdminItems =
-    activeRole === "Admin" ? adminItems : adminItems.filter((item) => item.to !== "/settings");
+  const allowedPaths = session ? getAllowedPathsForRole(session.role) : new Set<AppPath>();
+  const visibleWorkflowItems = workflowItems.filter((item) => allowedPaths.has(item.to));
+  const visibleAdminItems = activeRole === "Admin" ? adminItems.filter((item) => allowedPaths.has(item.to)) : [];
   const userLabel =
     session?.mode === "dev_header"
       ? `User ${session.userId?.slice(0, 8) || "Session"}`
@@ -178,6 +182,28 @@ export function SidebarNav() {
   const warmRoute = useCallback((to: string) => {
     void primeRouteData(to);
   }, []);
+
+  const handleSwitchAccount = useCallback(async () => {
+    const existing = loadSession();
+    clearSession();
+    resetMicrosoftLoginState();
+    setSession(null);
+    setAlertCount(0);
+    setTaskCount(0);
+    setFacilityLabel("Facility");
+    setFacilityTimezone("America/New_York");
+
+    if (existing?.mode === "microsoft") {
+      try {
+        await logoutFromMicrosoft();
+        return;
+      } catch {
+        // Fall back to the local login screen if the remote logout redirect fails.
+      }
+    }
+
+    navigate("/login?fresh=1", { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     if (!session) return;
@@ -309,7 +335,7 @@ export function SidebarNav() {
       {/* Nav items */}
       <nav className={cn("flex-1 py-3 overflow-y-auto", collapsed ? "px-2 space-y-1" : "px-3 space-y-0.5")}>
         {!collapsed && <div className="px-2 py-2 text-[10px] text-white/30 uppercase tracking-widest">Workflow</div>}
-        {workflowItems.map((item) => renderNavItem(item, item.to === "/alerts" || item.to === "/tasks"))}
+        {visibleWorkflowItems.map((item) => renderNavItem(item, item.to === "/alerts" || item.to === "/tasks"))}
 
         {!collapsed && <div className="px-2 py-2 mt-4 text-[10px] text-white/30 uppercase tracking-widest">Admin</div>}
         {collapsed && <div className="my-3 border-t border-white/10" />}
@@ -330,14 +356,17 @@ export function SidebarNav() {
           </div>
         )}
         {!collapsed && (
-          <Link
-            to="/login"
+          <button
+            type="button"
+            onClick={() => {
+              void handleSwitchAccount();
+            }}
             className="h-7 px-2.5 rounded-md border border-white/15 text-white/70 hover:text-white hover:bg-white/5 text-[11px] flex items-center gap-1.5 transition-colors"
             style={{ fontWeight: 500 }}
           >
             <LogIn className="w-3 h-3" />
             Switch
-          </Link>
+          </button>
         )}
       </div>
 

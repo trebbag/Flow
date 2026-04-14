@@ -6,6 +6,7 @@ import { EncounterProvider } from "./encounter-context";
 import { SidebarProvider, useSidebar } from "./sidebar-context";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { applySession, loadSession } from "./auth-session";
+import { canAccessPath } from "./role-access";
 
 function LayoutInner() {
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ export function RootLayout() {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
-  if (location.pathname.startsWith("/settings") && session.role !== "Admin") {
+  if (!canAccessPath(session.role, location.pathname)) {
     return <Navigate to="/" replace />;
   }
 
