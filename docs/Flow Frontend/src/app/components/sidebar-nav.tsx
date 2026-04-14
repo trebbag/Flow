@@ -337,9 +337,13 @@ export function SidebarNav() {
         {!collapsed && <div className="px-2 py-2 text-[10px] text-white/30 uppercase tracking-widest">Workflow</div>}
         {visibleWorkflowItems.map((item) => renderNavItem(item, item.to === "/alerts" || item.to === "/tasks"))}
 
-        {!collapsed && <div className="px-2 py-2 mt-4 text-[10px] text-white/30 uppercase tracking-widest">Admin</div>}
-        {collapsed && <div className="my-3 border-t border-white/10" />}
-        {visibleAdminItems.map((item) => renderNavItem(item, true))}
+        {visibleAdminItems.length > 0 && (
+          <>
+            {!collapsed && <div className="px-2 py-2 mt-4 text-[10px] text-white/30 uppercase tracking-widest">Admin</div>}
+            {collapsed && <div className="my-3 border-t border-white/10" />}
+            {visibleAdminItems.map((item) => renderNavItem(item, true))}
+          </>
+        )}
       </nav>
 
       {/* User */}

@@ -278,6 +278,7 @@ describe("Entra-only identity and provisioning", () => {
         email: "nurse@clinicos1.onmicrosoft.com",
         identityProvider: "entra",
         entraObjectId: "new-user-entra-oid",
+        activeFacilityId: ctx.facility.id,
       });
 
       const legacyCreate = await app.inject({

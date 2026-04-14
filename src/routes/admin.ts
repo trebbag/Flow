@@ -407,6 +407,47 @@ async function assertUserRoleForFacility(params: {
   assert(matchedRole, 400, `Selected user is not assigned to role ${role} in this facility`);
 }
 
+async function syncUserActiveFacilityToScope(params: {
+  userId: string;
+  preferredFacilityId?: string | null;
+}) {
+  const user = await prisma.user.findUnique({
+    where: { id: params.userId },
+    include: {
+      roles: {
+        include: {
+          clinic: { select: { facilityId: true } }
+        }
+      }
+    }
+  });
+  assert(user, 404, "User not found");
+
+  const availableFacilityIds = Array.from(
+    new Set(
+      user.roles
+        .map((entry) => entry.facilityId || entry.clinic?.facilityId || null)
+        .filter((entry): entry is string => Boolean(entry))
+    )
+  );
+
+  const preferredFacilityId = params.preferredFacilityId?.trim() || null;
+  const nextActiveFacilityId =
+    (preferredFacilityId && availableFacilityIds.includes(preferredFacilityId) ? preferredFacilityId : null) ||
+    (user.activeFacilityId && availableFacilityIds.includes(user.activeFacilityId) ? user.activeFacilityId : null) ||
+    availableFacilityIds[0] ||
+    null;
+
+  if (user.activeFacilityId !== nextActiveFacilityId) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { activeFacilityId: nextActiveFacilityId }
+    });
+  }
+
+  return nextActiveFacilityId;
+}
+
 async function ensureProviderRecordForClinic(params: {
   tx: Prisma.TransactionClient;
   clinicId: string;
@@ -2792,6 +2833,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       }
     }
 
+    await syncUserActiveFacilityToScope({
+      userId: user.id,
+      preferredFacilityId: fallbackFacility
+    });
+
     return prisma.user.findUnique({
       where: { id: user.id },
       include: { roles: true }
@@ -2917,6 +2963,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         });
       }
     }
+
+    await syncUserActiveFacilityToScope({
+      userId: user.id,
+      preferredFacilityId: fallbackFacility
+    });
 
     return prisma.user.findUnique({
       where: { id: user.id },
@@ -3117,15 +3168,34 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         facilityId
       }
     });
-    if (existingRole) return existingRole;
+    if (existingRole) {
+      await syncUserActiveFacilityToScope({
+        userId,
+        preferredFacilityId: facilityId
+      });
+      return prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        include: { roles: true }
+      });
+    }
 
-    return prisma.userRole.create({
+    await prisma.userRole.create({
       data: {
         userId,
         role: dto.role,
         clinicId: dto.clinicId,
         facilityId
       }
+    });
+
+    await syncUserActiveFacilityToScope({
+      userId,
+      preferredFacilityId: facilityId
+    });
+
+    return prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { roles: true }
     });
   });
 
@@ -3152,6 +3222,18 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: { in: idsToDelete } }
     });
 
-    return { removed: deleted.count };
+    await syncUserActiveFacilityToScope({ userId });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { roles: true }
+    });
+    if (!user) {
+      return { removed: deleted.count };
+    }
+    return {
+      ...user,
+      removed: deleted.count
+    };
   });
 }

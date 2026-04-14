@@ -1257,7 +1257,7 @@ function ClinicsTab({ onAddClinic, onEditClinic }: { onAddClinic: () => void; on
 
 // ── Tab: Users & Roles ──
 function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void; onOpenAssignments: () => void; }) {
-  const { users: mockUsers, clinics: mockClinics, facility, reloadAdminData } = useAdminConsoleData();
+  const { users: mockUsers, clinics: mockClinics, facility, facilityOptions, reloadAdminData } = useAdminConsoleData();
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -1278,6 +1278,30 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
     mockUsers.forEach(u => u.roles.forEach(r => { counts[r.role] = (counts[r.role] || 0) + 1; }));
     return counts;
   }, [mockUsers]);
+
+  const facilityLabelById = useMemo(
+    () =>
+      new Map(
+        facilityOptions.map((entry) => [
+          entry.id,
+          entry.shortCode ? `${entry.shortCode}` : entry.name,
+        ]),
+      ),
+    [facilityOptions],
+  );
+
+  const roleScopeLabel = useCallback(
+    (role: { clinicId?: string | null; facilityId?: string | null }) => {
+      if (role.clinicId) {
+        return mockClinics.find((clinic) => clinic.id === role.clinicId)?.shortCode || role.clinicId;
+      }
+      if (role.facilityId) {
+        return facilityLabelById.get(role.facilityId) || role.facilityId;
+      }
+      return null;
+    },
+    [facilityLabelById, mockClinics],
+  );
 
   return (
     <TabPanel accentColor="bg-blue-500">
@@ -1350,7 +1374,10 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                     </div>
                     <div className="flex flex-wrap gap-1 max-w-[200px]">
                       {u.roles.map((r, i) => (
-                        <Badge key={i} className="bg-indigo-50 text-indigo-600 border-0 text-[10px] px-1.5 h-5">{r.role}</Badge>
+                        <Badge key={i} className="bg-indigo-50 text-indigo-600 border-0 text-[10px] px-1.5 h-5">
+                          {r.role}
+                          {roleScopeLabel(r) ? ` · ${roleScopeLabel(r)}` : ""}
+                        </Badge>
                       ))}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${expandedUser === u.id ? "rotate-180" : ""}`} />
@@ -1407,8 +1434,7 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                             <div className="flex items-center gap-2">
                               <Shield className="w-3.5 h-3.5 text-indigo-500" />
                               <span className="text-[12px]" style={{ fontWeight: 500 }}>{r.role}</span>
-                              {r.clinicId && <span className="text-[11px] text-muted-foreground">@ {mockClinics.find(c => c.id === r.clinicId)?.shortCode || r.clinicId}</span>}
-                              {r.facilityId && <span className="text-[11px] text-muted-foreground">@ Facility</span>}
+                              {roleScopeLabel(r) && <span className="text-[11px] text-muted-foreground">@ {roleScopeLabel(r)}</span>}
                             </div>
                             <button
                               onClick={(e) => {

@@ -1620,6 +1620,85 @@ describe("Flow backend core relationships", () => {
     expect(roles).toHaveLength(1);
   });
 
+  it("updates active facility when assigning a new facility-scoped role", async () => {
+    const ctx = await bootstrapCore();
+
+    const secondFacility = await prisma.facility.create({
+      data: {
+        name: "North Facility",
+        shortCode: "NF",
+        timezone: "America/New_York",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/admin/users/${ctx.ma.id}/roles`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        role: RoleName.MA,
+        facilityId: secondFacility.id,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const updatedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: ctx.ma.id },
+    });
+    expect(updatedUser.activeFacilityId).toBe(secondFacility.id);
+
+    const updatedRole = await prisma.userRole.findFirst({
+      where: {
+        userId: ctx.ma.id,
+        role: RoleName.MA,
+        facilityId: secondFacility.id,
+      },
+    });
+    expect(updatedRole).not.toBeNull();
+  });
+
+  it("falls back to the remaining facility when a scoped role is removed", async () => {
+    const ctx = await bootstrapCore();
+
+    const secondFacility = await prisma.facility.create({
+      data: {
+        name: "South Facility",
+        shortCode: "SF",
+        timezone: "America/New_York",
+      },
+    });
+
+    await prisma.userRole.create({
+      data: {
+        userId: ctx.ma.id,
+        role: RoleName.MA,
+        facilityId: secondFacility.id,
+      },
+    });
+    await prisma.user.update({
+      where: { id: ctx.ma.id },
+      data: { activeFacilityId: secondFacility.id },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/admin/users/${ctx.ma.id}/roles/remove`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        role: RoleName.MA,
+        facilityId: secondFacility.id,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const updatedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: ctx.ma.id },
+    });
+    expect(updatedUser.activeFacilityId).toBe(ctx.facility.id);
+  });
+
   it("creates users with one role assigned across multiple facilities", async () => {
     const ctx = await bootstrapCore();
 
@@ -1647,6 +1726,7 @@ describe("Flow backend core relationships", () => {
     expect(created.statusCode).toBe(200);
     const body = created.json();
     expect(body.email).toBe("multi.facility@test.local");
+    expect(body.activeFacilityId).toBe(ctx.facility.id);
 
     const createdUserRoles = await prisma.userRole.findMany({
       where: {
