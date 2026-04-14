@@ -36,9 +36,12 @@ export async function completeMicrosoftSignIn(fallbackPath = "/") {
   const context = await auth.getContext();
 
   let activeFacilityId =
-    provisional.facilityId ||
     context.activeFacilityId ||
     context.facilityId ||
+    (provisional.facilityId &&
+    context.availableFacilities.some((facility) => facility.id === provisional.facilityId)
+      ? provisional.facilityId
+      : undefined) ||
     (context.availableFacilities.length === 1 ? context.availableFacilities[0]!.id : undefined);
 
   if (activeFacilityId && activeFacilityId !== context.activeFacilityId) {

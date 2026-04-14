@@ -96,9 +96,12 @@ export function LoginView() {
     setRole(resolvedRole);
 
     let resolvedFacilityId =
-      session.facilityId ||
       context.activeFacilityId ||
       context.facilityId ||
+      (session.facilityId &&
+      context.availableFacilities.some((facility) => facility.id === session.facilityId)
+        ? session.facilityId
+        : "") ||
       (context.availableFacilities.length === 1 ? context.availableFacilities[0]!.id : "");
 
     if (resolvedRole !== "Admin" && !resolvedFacilityId) {
