@@ -1658,6 +1658,59 @@ describe("Flow backend core relationships", () => {
     expect(updatedRole).not.toBeNull();
   });
 
+  it("replaces other facility-scoped roles for the same quick-assigned role", async () => {
+    const ctx = await bootstrapCore();
+
+    await prisma.userRole.create({
+      data: {
+        userId: ctx.ma.id,
+        role: RoleName.MA,
+        facilityId: ctx.facility.id,
+      },
+    });
+
+    const secondFacility = await prisma.facility.create({
+      data: {
+        name: "Replacement Facility",
+        shortCode: "RF",
+        timezone: "America/New_York",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/admin/users/${ctx.ma.id}/roles`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        role: RoleName.MA,
+        facilityId: secondFacility.id,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const facilityScopedRoles = await prisma.userRole.findMany({
+      where: {
+        userId: ctx.ma.id,
+        role: RoleName.MA,
+        clinicId: null,
+      },
+      orderBy: { facilityId: "asc" },
+    });
+
+    expect(facilityScopedRoles).toHaveLength(1);
+    expect(facilityScopedRoles[0]?.facilityId).toBe(secondFacility.id);
+
+    const clinicScopedRole = await prisma.userRole.findFirst({
+      where: {
+        userId: ctx.ma.id,
+        role: RoleName.MA,
+        clinicId: ctx.clinic.id,
+      },
+    });
+    expect(clinicScopedRole).not.toBeNull();
+  });
+
   it("falls back to the remaining facility when a scoped role is removed", async () => {
     const ctx = await bootstrapCore();
 

@@ -3160,6 +3160,18 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     if (dto.clinicId) {
       await resolveFacilityForRequest(request, clinicFacilityId || undefined);
     }
+
+    if (!dto.clinicId) {
+      await prisma.userRole.deleteMany({
+        where: {
+          userId,
+          role: dto.role,
+          clinicId: null,
+          NOT: { facilityId }
+        }
+      });
+    }
+
     const existingRole = await prisma.userRole.findFirst({
       where: {
         userId,
