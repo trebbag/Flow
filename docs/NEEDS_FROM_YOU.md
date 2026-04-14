@@ -140,3 +140,4 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 - Confirm and enforce the pilot Conditional Access policy above before any PHI-facing rollout.
 - Add all pilot users to the `Flow Pilot Users` Entra group.
 - Decide whether to upgrade tenant licensing for Conditional Access or to use Microsoft Security Defaults / per-user MFA as the temporary pilot fallback.
+- If you stay on the Security Defaults / per-user MFA path, verify it directly in the Entra portal. The current Azure CLI session does not have enough Microsoft Graph policy-read scope to confirm tenant-wide Security Defaults state programmatically.
