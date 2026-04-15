@@ -369,7 +369,12 @@ exports.Prisma.AlertStateScalarFieldEnum = {
 
 exports.Prisma.TaskScalarFieldEnum = {
   id: 'id',
+  facilityId: 'facilityId',
+  clinicId: 'clinicId',
   encounterId: 'encounterId',
+  roomId: 'roomId',
+  sourceType: 'sourceType',
+  sourceId: 'sourceId',
   taskType: 'taskType',
   description: 'description',
   assignedToRole: 'assignedToRole',
@@ -385,6 +390,72 @@ exports.Prisma.TaskScalarFieldEnum = {
   completedBy: 'completedBy',
   notes: 'notes',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RoomOperationalStateScalarFieldEnum = {
+  roomId: 'roomId',
+  currentStatus: 'currentStatus',
+  statusSinceAt: 'statusSinceAt',
+  occupiedEncounterId: 'occupiedEncounterId',
+  activeCleanerUserId: 'activeCleanerUserId',
+  holdReason: 'holdReason',
+  holdNote: 'holdNote',
+  lastReadyAt: 'lastReadyAt',
+  lastOccupiedAt: 'lastOccupiedAt',
+  lastTurnoverAt: 'lastTurnoverAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RoomOperationalEventScalarFieldEnum = {
+  id: 'id',
+  roomId: 'roomId',
+  clinicId: 'clinicId',
+  facilityId: 'facilityId',
+  encounterId: 'encounterId',
+  eventType: 'eventType',
+  fromStatus: 'fromStatus',
+  toStatus: 'toStatus',
+  note: 'note',
+  metadataJson: 'metadataJson',
+  createdByUserId: 'createdByUserId',
+  occurredAt: 'occurredAt'
+};
+
+exports.Prisma.RoomIssueScalarFieldEnum = {
+  id: 'id',
+  roomId: 'roomId',
+  clinicId: 'clinicId',
+  facilityId: 'facilityId',
+  encounterId: 'encounterId',
+  issueType: 'issueType',
+  status: 'status',
+  severity: 'severity',
+  title: 'title',
+  description: 'description',
+  placesRoomOnHold: 'placesRoomOnHold',
+  taskId: 'taskId',
+  sourceModule: 'sourceModule',
+  metadataJson: 'metadataJson',
+  createdAt: 'createdAt',
+  createdByUserId: 'createdByUserId',
+  resolvedAt: 'resolvedAt',
+  resolvedByUserId: 'resolvedByUserId',
+  resolutionNote: 'resolutionNote'
+};
+
+exports.Prisma.RoomChecklistRunScalarFieldEnum = {
+  id: 'id',
+  roomId: 'roomId',
+  clinicId: 'clinicId',
+  facilityId: 'facilityId',
+  kind: 'kind',
+  dateKey: 'dateKey',
+  itemsJson: 'itemsJson',
+  completed: 'completed',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  completedByUserId: 'completedByUserId',
+  note: 'note'
 };
 
 exports.Prisma.UserAlertInboxScalarFieldEnum = {
@@ -543,6 +614,7 @@ exports.RoleName = exports.$Enums.RoleName = {
   MA: 'MA',
   Clinician: 'Clinician',
   FrontDeskCheckOut: 'FrontDeskCheckOut',
+  OfficeManager: 'OfficeManager',
   Admin: 'Admin',
   RevenueCycle: 'RevenueCycle'
 };
@@ -575,6 +647,63 @@ exports.AlertLevel = exports.$Enums.AlertLevel = {
   Green: 'Green',
   Yellow: 'Yellow',
   Red: 'Red'
+};
+
+exports.TaskSourceType = exports.$Enums.TaskSourceType = {
+  Encounter: 'Encounter',
+  RoomIssue: 'RoomIssue',
+  RoomSupplyFlag: 'RoomSupplyFlag',
+  RoomAudit: 'RoomAudit'
+};
+
+exports.RoomOperationalStatus = exports.$Enums.RoomOperationalStatus = {
+  Ready: 'Ready',
+  Occupied: 'Occupied',
+  NeedsTurnover: 'NeedsTurnover',
+  Cleaning: 'Cleaning',
+  Hold: 'Hold'
+};
+
+exports.RoomHoldReason = exports.$Enums.RoomHoldReason = {
+  Equipment: 'Equipment',
+  Maintenance: 'Maintenance',
+  Supply: 'Supply',
+  Audit: 'Audit',
+  Manual: 'Manual'
+};
+
+exports.RoomEventType = exports.$Enums.RoomEventType = {
+  AssignedToEncounter: 'AssignedToEncounter',
+  PatientLeftForCheckout: 'PatientLeftForCheckout',
+  CleaningStarted: 'CleaningStarted',
+  MarkedReady: 'MarkedReady',
+  HoldPlaced: 'HoldPlaced',
+  HoldCleared: 'HoldCleared',
+  IssueCreated: 'IssueCreated',
+  IssueResolved: 'IssueResolved',
+  DayStartCompleted: 'DayStartCompleted',
+  DayEndCompleted: 'DayEndCompleted'
+};
+
+exports.RoomIssueType = exports.$Enums.RoomIssueType = {
+  Equipment: 'Equipment',
+  Maintenance: 'Maintenance',
+  General: 'General',
+  SupplyLow: 'SupplyLow',
+  SupplyOut: 'SupplyOut',
+  AuditFailure: 'AuditFailure'
+};
+
+exports.RoomIssueStatus = exports.$Enums.RoomIssueStatus = {
+  Open: 'Open',
+  Acknowledged: 'Acknowledged',
+  Resolved: 'Resolved',
+  Dismissed: 'Dismissed'
+};
+
+exports.RoomChecklistKind = exports.$Enums.RoomChecklistKind = {
+  DayStart: 'DayStart',
+  DayEnd: 'DayEnd'
 };
 
 exports.AlertInboxKind = exports.$Enums.AlertInboxKind = {
@@ -621,6 +750,10 @@ exports.Prisma.ModelName = {
   StatusChangeEvent: 'StatusChangeEvent',
   AlertState: 'AlertState',
   Task: 'Task',
+  RoomOperationalState: 'RoomOperationalState',
+  RoomOperationalEvent: 'RoomOperationalEvent',
+  RoomIssue: 'RoomIssue',
+  RoomChecklistRun: 'RoomChecklistRun',
   UserAlertInbox: 'UserAlertInbox',
   SafetyEvent: 'SafetyEvent',
   AlertThreshold: 'AlertThreshold',

@@ -21,6 +21,7 @@
     "db:export:snapshot": "tsx scripts/export-sqlite-snapshot.ts",
     "db:preflight:postgres": "tsx scripts/postgres-preflight.ts",
     "db:import:postgres": "tsx scripts/import-snapshot-postgres.ts",
+    "rooms:backfill": "tsx scripts/backfill-room-operational-states.ts",
     "auth:sync:entra": "tsx scripts/sync-entra-pilot-users.ts",
     "auth:sync:directory": "tsx scripts/sync-entra-directory-status.ts",
     "auth:verify:entra-local": "tsx scripts/verify-entra-local.ts",

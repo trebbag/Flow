@@ -163,7 +163,7 @@ function mapTaskPriority(raw: number): MATask["priority"] {
 }
 
 function isRole(value?: string): value is Role {
-  return ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "Admin", "RevenueCycle"].includes(value || "");
+  return ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "OfficeManager", "Admin", "RevenueCycle"].includes(value || "");
 }
 
 function todayIsoDate() {

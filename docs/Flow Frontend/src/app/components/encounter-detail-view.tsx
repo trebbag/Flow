@@ -41,7 +41,7 @@ import {
   type EncounterStatus,
 } from "./mock-data";
 import { useEncounters } from "./encounter-context";
-import { admin } from "./api-client";
+import { admin, rooms as roomsApi, type RoomLiveCard } from "./api-client";
 import { loadSession } from "./auth-session";
 import { SafetyAssistModal } from "./safety-assist-modal";
 import { toast } from "sonner";
@@ -139,6 +139,7 @@ const roleOptions = [
   { value: "MA", label: "Medical Assistant" },
   { value: "Clinician", label: "Clinician" },
   { value: "FrontDeskCheckOut", label: "Front Desk (Check-Out)" },
+  { value: "OfficeManager", label: "Office Manager" },
   { value: "RevenueCycle", label: "Revenue Cycle" },
   { value: "Admin", label: "Admin" },
 ];
@@ -403,6 +404,11 @@ export function EncounterDetailView() {
     clinician: {},
     checkout: {},
   });
+  const [operationalRooms, setOperationalRooms] = useState<RoomLiveCard[]>([]);
+  const [roomingLaunch] = useState(() => ({
+    preferredRoomId: searchParams.get("preferredRoomId") || "",
+    lastReadyRoom: searchParams.get("lastReadyRoom") === "true",
+  }));
 
   // Tasks from shared context
   const { maTasks: encMaTasks, createdTasks } = ctx.getTasksForEncounter(id!);
@@ -468,6 +474,24 @@ export function EncounterDetailView() {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    if (!baseEnc?.clinicId) {
+      setOperationalRooms([]);
+      return;
+    }
+    roomsApi.live({ mine: true, clinicId: baseEnc.clinicId })
+      .then((rows) => {
+        if (mounted) setOperationalRooms(rows || []);
+      })
+      .catch(() => {
+        if (mounted) setOperationalRooms([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [baseEnc?.clinicId]);
+
   // Initialize local state from encounter
   useEffect(() => {
     if (baseEnc) {
@@ -477,6 +501,14 @@ export function EncounterDetailView() {
       setShowRequiredFieldErrors(false);
     }
   }, [baseEnc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!roomingLaunch.preferredRoomId || operationalRooms.length === 0) return;
+    const preferred = operationalRooms.find((room) => room.roomId === roomingLaunch.preferredRoomId);
+    if (preferred) {
+      setLocalRoom(preferred.name);
+    }
+  }, [operationalRooms, roomingLaunch.preferredRoomId]);
 
   useEffect(() => {
     setShowRequiredFieldErrors(false);
@@ -653,8 +685,18 @@ export function EncounterDetailView() {
     };
   })();
 
-  // Available rooms for this clinic
-  const availableRooms = ctx.getAvailableRoomsForClinic(baseEnc.clinicId);
+  // Available rooms for this clinic. Operational data wins so non-ready rooms cannot be selected.
+  const fallbackRooms = ctx.getAvailableRoomsForClinic(baseEnc.clinicId).map((room) => ({
+    id: room.id,
+    roomId: room.id,
+    name: room.name,
+    operationalStatus: "Ready" as const,
+  }));
+  const availableRooms = operationalRooms.length > 0 ? operationalRooms : fallbackRooms;
+  const readyRooms = availableRooms.filter((room) => room.operationalStatus === "Ready");
+  const nonReadyRooms = availableRooms.filter((room) => room.operationalStatus !== "Ready");
+  const selectedOperationalRoom = availableRooms.find((room) => room.name === localRoom);
+  const lastReadyRoomSelected = roomingLaunch.lastReadyRoom && selectedOperationalRoom?.roomId === roomingLaunch.preferredRoomId;
 
   function setFieldValue(fieldName: string, value: string | boolean) {
     setTemplateValues((prev) => ({
@@ -1196,6 +1238,17 @@ export function EncounterDetailView() {
 
                     {/* ── Default fields: Assign Room ── */}
                     <div className="mb-4">
+                      {lastReadyRoomSelected && (
+                        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-800">
+                          <div className="flex items-center gap-2" style={{ fontWeight: 700 }}>
+                            <AlertTriangle className="w-4 h-4" />
+                            Last ready room
+                          </div>
+                          <p className="mt-1">
+                            {selectedOperationalRoom?.name || "This room"} is the only ready room in your scope. Once it is occupied, no more rooms will be ready until a room is turned over.
+                          </p>
+                        </div>
+                      )}
                       <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
                         Assign Room <span className="text-red-400">*</span>
                       </label>
@@ -1212,11 +1265,23 @@ export function EncounterDetailView() {
                           {baseEnc.roomNumber && (
                             <option value={baseEnc.roomNumber}>{baseEnc.roomNumber} (current)</option>
                           )}
-                          {availableRooms.map((r) => (
+                          {readyRooms.map((r) => (
                             <option key={r.id} value={r.name}>{r.name}</option>
                           ))}
+                          {nonReadyRooms.length > 0 && (
+                            <optgroup label="Unavailable">
+                              {nonReadyRooms.map((r) => (
+                                <option key={r.id} value={r.name} disabled>{r.name} - {r.operationalStatus}</option>
+                              ))}
+                            </optgroup>
+                          )}
                         </select>
                       </div>
+                      {lastReadyRoomSelected && selectedOperationalRoom && (
+                        <div className="mt-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] text-amber-800" style={{ fontWeight: 700 }}>
+                          {selectedOperationalRoom.name} · Last ready room
+                        </div>
+                      )}
                     </div>
 
                     {/* ── Default fields: Rooming Notes ── */}

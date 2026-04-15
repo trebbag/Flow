@@ -434,6 +434,176 @@ describe("Flow backend core relationships", () => {
     expect(secondRead.json().daily[0].encounterCount).toBe(payload.daily[0].encounterCount);
   });
 
+  it("enforces MA pre-rooming availability and room Ready state before assignment", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-ROOM-GATE-1",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const encounter = created.json();
+
+    await prisma.roomOperationalState.update({
+      where: { roomId: ctx.clinicRoomA.id },
+      data: { currentStatus: "NeedsTurnover", statusSinceAt: new Date() }
+    });
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/rooms/pre-rooming-check",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { encounterId: encounter.id }
+    });
+    expect(blocked.statusCode).toBe(200);
+    expect(blocked.json()).toMatchObject({ blocked: true, readyCount: 0 });
+
+    const rejectedAssignment = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+    });
+    expect(rejectedAssignment.statusCode).toBe(409);
+
+    await prisma.roomOperationalState.update({
+      where: { roomId: ctx.clinicRoomA.id },
+      data: { currentStatus: "Ready", statusSinceAt: new Date(), lastReadyAt: new Date() }
+    });
+
+    const oneReady = await app.inject({
+      method: "POST",
+      url: "/rooms/pre-rooming-check",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { encounterId: encounter.id }
+    });
+    expect(oneReady.statusCode).toBe(200);
+    expect(oneReady.json()).toMatchObject({
+      blocked: false,
+      readyCount: 1,
+      preferredRoomId: ctx.clinicRoomA.id,
+      lastReadyRoom: true
+    });
+
+    const assigned = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+    });
+    expect(assigned.statusCode).toBe(200);
+
+    const roomState = await prisma.roomOperationalState.findUnique({ where: { roomId: ctx.clinicRoomA.id } });
+    expect(roomState?.currentStatus).toBe("Occupied");
+    expect(roomState?.occupiedEncounterId).toBe(encounter.id);
+  });
+
+  it("moves an occupied room to NeedsTurnover when the encounter enters CheckOut", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-ROOM-DIRTY-1",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    let encounter = created.json();
+
+    const roomed = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+    });
+    expect(roomed.statusCode).toBe(200);
+
+    let advanced = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { toStatus: "Rooming", version: encounter.version }
+    });
+    expect(advanced.statusCode).toBe(200);
+    encounter = advanced.json();
+
+    advanced = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { toStatus: "ReadyForProvider", version: encounter.version }
+    });
+    expect(advanced.statusCode).toBe(200);
+    encounter = advanced.json();
+
+    advanced = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/start`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: { version: encounter.version }
+    });
+    expect(advanced.statusCode).toBe(200);
+    encounter = advanced.json();
+
+    advanced = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/end`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: { version: encounter.version, data: { assessment: "stable" } }
+    });
+    expect(advanced.statusCode).toBe(200);
+
+    const roomState = await prisma.roomOperationalState.findUnique({ where: { roomId: ctx.clinicRoomA.id } });
+    expect(roomState?.currentStatus).toBe("NeedsTurnover");
+    expect(roomState?.occupiedEncounterId).toBeNull();
+  });
+
+  it("creates OfficeManager room tasks and inbox alerts from room issues", async () => {
+    const ctx = await bootstrapCore();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/rooms/${ctx.clinicRoomA.id}/issues`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        clinicId: ctx.clinic.id,
+        issueType: "Equipment",
+        severity: 3,
+        title: "Exam light is flickering",
+        description: "Room should be held until the light is repaired.",
+        placesRoomOnHold: true
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json();
+    expect(payload.issue.taskId).toBe(payload.task.id);
+    expect(payload.task.assignedToRole).toBe(RoleName.OfficeManager);
+    expect(payload.task.roomId).toBe(ctx.clinicRoomA.id);
+
+    const state = await prisma.roomOperationalState.findUnique({ where: { roomId: ctx.clinicRoomA.id } });
+    expect(state?.currentStatus).toBe("Hold");
+
+    const alert = await prisma.userAlertInbox.findFirst({
+      where: {
+        userId: ctx.officeManager.id,
+        sourceId: payload.task.id,
+        kind: "task"
+      }
+    });
+    expect(alert).toBeTruthy();
+  });
+
   it("returns revenue-cycle dashboard aggregates", async () => {
     const ctx = await bootstrapCore();
     const date = ctx.day.toISOString().slice(0, 10);

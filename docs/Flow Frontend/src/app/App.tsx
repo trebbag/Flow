@@ -47,6 +47,12 @@ const router = createBrowserRouter([
         }),
       },
       {
+        path: "rooms",
+        lazy: async () => ({
+          Component: (await import("./components/rooms-view")).RoomsView,
+        }),
+      },
+      {
         path: "checkout",
         lazy: async () => ({
           Component: (await import("./components/checkout-view")).CheckOutView,

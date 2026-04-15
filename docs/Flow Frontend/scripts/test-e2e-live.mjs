@@ -288,11 +288,13 @@ async function main() {
   const clinicianData = buildRequiredData(templates, { type: "clinician", clinicId: clinic.id });
   const checkoutData = buildRequiredData(templates, { type: "checkout", clinicId: clinic.id });
 
-  const rooms = await request(`/admin/rooms?facilityId=${originalFacilityId}&clinicId=${clinic.id}`, {
+  const roomCards = await request(`/rooms/live?clinicId=${clinic.id}`, {
     auth: { ...adminAuth, facilityId: originalFacilityId },
   });
-  const room = rooms.find((row) => row.status === "active");
-  assert.ok(room, "expected at least one active room for selected clinic");
+  const room = Array.isArray(roomCards)
+    ? roomCards.find((row) => row.operationalStatus === "Ready")
+    : null;
+  assert.ok(room, "expected at least one operationally Ready room for selected clinic");
 
   const providerLastName = (() => {
     const displayName = String(targetAssignment.providerUserName || targetAssignment.providerName || "").trim();
@@ -374,7 +376,7 @@ async function main() {
     method: "PATCH",
     auth: maAuth,
     body: {
-      roomId: room.id,
+      roomId: room.roomId,
       data: roomingData,
     },
   });

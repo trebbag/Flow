@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "RevenueCycle";
+type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "OfficeManager" | "RevenueCycle";
 
 type AuthActor =
   | {
@@ -318,6 +318,7 @@ async function main() {
         "MA",
         "Clinician",
         "FrontDeskCheckOut",
+        "OfficeManager",
         "RevenueCycle"
       ];
 

@@ -73,6 +73,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
      - `secrets.STAGING_ROLE_TOKEN_MA`
      - `secrets.STAGING_ROLE_TOKEN_CLINICIAN`
      - `secrets.STAGING_ROLE_TOKEN_FRONTDESKCHECKOUT`
+     - `secrets.STAGING_ROLE_TOKEN_OFFICEMANAGER`
      - `secrets.STAGING_ROLE_TOKEN_REVENUECYCLE`
    - Optional fallback for dev-header environments only: `secrets.STAGING_VITE_DEV_USER_ID`
    - Optional fallback role: `vars.STAGING_VITE_DEV_ROLE` (defaults to `Admin`)
@@ -105,6 +106,13 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - Set a dev user header (`VITE_DEV_USER_ID`) or bearer token before `pnpm test:contract` to avoid 401 contract failures.
    - Set `VITE_DEV_USER_ID` or `FRONTEND_DEV_USER_ID` before `pnpm test:e2e-live`.
    - Set a dev user header (`VITE_DEV_USER_ID`) or bearer token before `pnpm test:e2e-browser` to avoid auth-skip mode.
+   - For full local browser verification, start the backend with a high local-only rate limit, for example `RATE_LIMIT_MAX=10000`, so Playwright prefetch/browser flows do not trigger rate limiting while they deliberately exercise many routes quickly.
+8. Rooms MVP staging setup:
+   - Figma design file created for the Rooms MVP: [Flow Rooms MVP](https://www.figma.com/design/0WCFA2eqweqfW5I0ErsqqC).
+   - Assign at least one pilot Entra member the new `OfficeManager` Flow role before role-by-role staging proof.
+   - After deploying the Rooms schema/code to staging, run the staging database migration/push path and confirm `RoomOperationalState` exists for every active room.
+   - Confirm MA clinic-to-room scope in staging through `MaClinicMap`, `ClinicAssignment.maUserId`, and `ClinicRoomAssignment`; the Rooms MVP derives "my rooms" from those links.
+   - Supplies and Audits tabs are intentionally visible as placeholders in Phase 1. Do not use them for operational stock/audit compliance yet.
 
 ## Latest Blocker Snapshot
 
@@ -130,6 +138,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
     - `STAGING_ROLE_TOKEN_MA`
     - `STAGING_ROLE_TOKEN_CLINICIAN`
     - `STAGING_ROLE_TOKEN_FRONTDESKCHECKOUT`
+    - `STAGING_ROLE_TOKEN_OFFICEMANAGER`
     - `STAGING_ROLE_TOKEN_REVENUECYCLE`
   - AthenaOne staging connector credentials and scope inputs listed above
 - Microsoft Entra local configuration is now in place; the remaining auth proof gap is interactive browser sign-in against the real tenant and the future staging redirect URL once staging exists.

@@ -14,6 +14,7 @@ import { registerTaskRoutes } from "./routes/tasks.js";
 import { registerAlertRoutes } from "./routes/alerts.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
+import { registerRoomRoutes } from "./routes/rooms.js";
 import { isMutatingMethod, recordMutationOperationalEvent } from "./lib/operational-events.js";
 
 export function buildApp() {
@@ -104,7 +105,7 @@ export function buildApp() {
 
     const fastifyStatus = Number((error as { statusCode?: unknown })?.statusCode || 0);
     const fastifyCode = String((error as { code?: unknown })?.code || "");
-    if (fastifyStatus >= 400 && fastifyStatus < 500 && fastifyCode.startsWith("FST_")) {
+    if (fastifyStatus >= 400 && fastifyStatus < 500) {
       reply.code(fastifyStatus).send({ message: (error as Error).message || "Invalid request" });
       return;
     }
@@ -182,6 +183,7 @@ export function buildApp() {
   app.register(registerEncounterRoutes);
   app.register(registerSafetyRoutes);
   app.register(registerTaskRoutes);
+  app.register(registerRoomRoutes);
   app.register(registerAlertRoutes);
   app.register(registerEventRoutes);
   app.register(registerDashboardRoutes);

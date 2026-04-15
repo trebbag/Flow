@@ -14,6 +14,7 @@ import {
   Moon,
   DollarSign,
   LogIn,
+  DoorOpen,
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { alerts as alertsApi, tasks as tasksApi, primeRouteData } from "./api-client";
@@ -28,6 +29,7 @@ const workflowItems: Array<{ to: AppPath; icon: React.ElementType; label: string
   { to: "/", icon: Activity, label: "Overview" },
   { to: "/checkin", icon: LogIn, label: "Front Desk Check-In" },
   { to: "/ma-board", icon: Users, label: "MA Board" },
+  { to: "/rooms", icon: DoorOpen, label: "Rooms" },
   { to: "/clinician", icon: Stethoscope, label: "Clinician Board" },
   { to: "/checkout", icon: CreditCard, label: "Front Desk Check-Out" },
   { to: "/office-manager", icon: LayoutDashboard, label: "Office Manager" },
@@ -209,11 +211,12 @@ export function SidebarNav() {
     if (!session) return;
 
     const likelyRoutesByRole: Record<string, string[]> = {
-      Admin: ["/", "/office-manager", "/revenue-cycle", "/analytics", "/settings"],
+      Admin: ["/", "/rooms", "/office-manager", "/revenue-cycle", "/analytics", "/settings"],
       FrontDeskCheckIn: ["/", "/checkin"],
-      MA: ["/", "/ma-board"],
+      MA: ["/", "/ma-board", "/rooms"],
       Clinician: ["/", "/clinician"],
       FrontDeskCheckOut: ["/", "/checkout"],
+      OfficeManager: ["/", "/rooms", "/office-manager"],
       RevenueCycle: ["/", "/revenue-cycle"],
     };
 

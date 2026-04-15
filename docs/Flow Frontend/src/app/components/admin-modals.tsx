@@ -654,6 +654,7 @@ export function ProvisionUserModal({
               <option>MA</option>
               <option>Clinician</option>
               <option>FrontDeskCheckOut</option>
+              <option>OfficeManager</option>
               <option>Admin</option>
               <option>RevenueCycle</option>
             </select>
@@ -1971,7 +1972,7 @@ export function AddNotificationPolicyModal({
           </div>
           <FormField label="Recipients">
             <div className="flex flex-wrap gap-2">
-              {["MA", "Admin", "Clinician", "FrontDeskCheckIn", "FrontDeskCheckOut"].map((role) => (
+              {["MA", "Admin", "Clinician", "FrontDeskCheckIn", "FrontDeskCheckOut", "OfficeManager"].map((role) => (
                 <label key={role} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-100 cursor-pointer hover:border-indigo-200 transition-colors">
                   <input
                     type="checkbox"

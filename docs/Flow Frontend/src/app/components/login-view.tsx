@@ -21,6 +21,7 @@ const roles: Role[] = [
   "MA",
   "Clinician",
   "FrontDeskCheckOut",
+  "OfficeManager",
   "RevenueCycle",
 ];
 

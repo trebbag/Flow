@@ -10,4 +10,7 @@ export type EntraDirectoryUser = {
     directoryStatus: "active" | "disabled" | "guest" | "deleted";
 };
 export declare function searchEntraDirectoryUsers(query: string): Promise<EntraDirectoryUser[]>;
-export declare function getEntraDirectoryUserByObjectId(objectId: string): Promise<EntraDirectoryUser>;
+export declare function getEntraDirectoryUserByObjectId(objectId: string, fallbackIdentifiers?: {
+    email?: string | null;
+    userPrincipalName?: string | null;
+}): Promise<EntraDirectoryUser>;

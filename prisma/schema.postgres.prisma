@@ -12,6 +12,7 @@ enum RoleName {
   MA
   Clinician
   FrontDeskCheckOut
+  OfficeManager
   Admin
   RevenueCycle
 }
@@ -66,6 +67,63 @@ enum AlertInboxKind {
 enum AlertInboxStatus {
   active
   archived
+}
+
+enum TaskSourceType {
+  Encounter
+  RoomIssue
+  RoomSupplyFlag
+  RoomAudit
+}
+
+enum RoomOperationalStatus {
+  Ready
+  Occupied
+  NeedsTurnover
+  Cleaning
+  Hold
+}
+
+enum RoomEventType {
+  AssignedToEncounter
+  PatientLeftForCheckout
+  CleaningStarted
+  MarkedReady
+  HoldPlaced
+  HoldCleared
+  IssueCreated
+  IssueResolved
+  DayStartCompleted
+  DayEndCompleted
+}
+
+enum RoomHoldReason {
+  Equipment
+  Maintenance
+  Supply
+  Audit
+  Manual
+}
+
+enum RoomIssueType {
+  Equipment
+  Maintenance
+  General
+  SupplyLow
+  SupplyOut
+  AuditFailure
+}
+
+enum RoomIssueStatus {
+  Open
+  Acknowledged
+  Resolved
+  Dismissed
+}
+
+enum RoomChecklistKind {
+  DayStart
+  DayEnd
 }
 
 model User {
@@ -242,6 +300,11 @@ model ClinicRoom {
   facility     Facility @relation(fields: [facilityId], references: [id])
   clinicLinks  ClinicRoomAssignment[]
   encounters   Encounter[]
+  operationalState RoomOperationalState?
+  operationalEvents RoomOperationalEvent[]
+  roomIssues RoomIssue[]
+  checklistRuns RoomChecklistRun[]
+  tasks Task[]
 
   // Active/inactive room-number uniqueness is enforced with a partial unique index in scripts/db-init.ts.
   @@index([facilityId, status])
@@ -456,6 +519,9 @@ model Encounter {
   alertState         AlertState?
   tasks              Task[]
   safetyEvents       SafetyEvent[]
+  operationalOccupancies RoomOperationalState[] @relation("RoomOperationalEncounter")
+  roomOperationalEvents RoomOperationalEvent[]
+  roomIssues         RoomIssue[]
 
   @@unique([patientId, clinicId, dateOfService])
   @@index([clinicId, currentStatus])
@@ -490,7 +556,12 @@ model AlertState {
 
 model Task {
   id               String    @id @default(uuid())
-  encounterId      String
+  facilityId       String?
+  clinicId         String?
+  encounterId      String?
+  roomId           String?
+  sourceType       TaskSourceType?
+  sourceId         String?
   taskType         String
   description      String
   assignedToRole   RoleName?
@@ -507,12 +578,109 @@ model Task {
   notes            String?
   updatedAt        DateTime  @updatedAt
 
-  encounter        Encounter @relation(fields: [encounterId], references: [id])
+  encounter        Encounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  room             ClinicRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
   creator          User      @relation("TaskCreatedBy", fields: [createdBy], references: [id])
   acknowledger     User?     @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id])
   completer        User?     @relation("TaskCompletedBy", fields: [completedBy], references: [id])
+  roomIssues       RoomIssue[]
 
+  @@index([clinicId, status, createdAt])
+  @@index([roomId, status, createdAt])
   @@index([encounterId, status])
+  @@index([assignedToRole, status])
+}
+
+model RoomOperationalState {
+  roomId              String                @id
+  currentStatus       RoomOperationalStatus @default(Ready)
+  statusSinceAt       DateTime              @default(now())
+  occupiedEncounterId String?
+  activeCleanerUserId String?
+  holdReason          RoomHoldReason?
+  holdNote            String?
+  lastReadyAt         DateTime?
+  lastOccupiedAt      DateTime?
+  lastTurnoverAt      DateTime?
+  updatedAt           DateTime              @updatedAt
+
+  room                ClinicRoom            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  occupiedEncounter   Encounter?            @relation("RoomOperationalEncounter", fields: [occupiedEncounterId], references: [id], onDelete: SetNull)
+
+  @@index([currentStatus, statusSinceAt])
+  @@index([occupiedEncounterId])
+}
+
+model RoomOperationalEvent {
+  id              String                 @id @default(uuid())
+  roomId          String
+  clinicId        String
+  facilityId      String
+  encounterId     String?
+  eventType       RoomEventType
+  fromStatus      RoomOperationalStatus?
+  toStatus        RoomOperationalStatus?
+  note            String?
+  metadataJson    Json?
+  createdByUserId String?
+  occurredAt      DateTime               @default(now())
+
+  room            ClinicRoom             @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  encounter       Encounter?             @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, occurredAt])
+  @@index([clinicId, occurredAt])
+  @@index([encounterId])
+}
+
+model RoomIssue {
+  id                String          @id @default(uuid())
+  roomId            String
+  clinicId          String
+  facilityId        String
+  encounterId       String?
+  issueType         RoomIssueType
+  status            RoomIssueStatus @default(Open)
+  severity          Int             @default(0)
+  title             String
+  description       String?
+  placesRoomOnHold  Boolean         @default(false)
+  taskId            String?
+  sourceModule      String?
+  metadataJson      Json?
+  createdAt         DateTime        @default(now())
+  createdByUserId   String
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+  resolutionNote    String?
+
+  room              ClinicRoom      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  encounter         Encounter?      @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  task              Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, status, createdAt])
+  @@index([clinicId, status, createdAt])
+  @@index([taskId])
+}
+
+model RoomChecklistRun {
+  id                String            @id @default(uuid())
+  roomId            String
+  clinicId          String
+  facilityId        String
+  kind              RoomChecklistKind
+  dateKey           String
+  itemsJson         Json
+  completed         Boolean           @default(false)
+  startedAt         DateTime          @default(now())
+  completedAt       DateTime?
+  completedByUserId String?
+  note              String?
+
+  room              ClinicRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, kind, dateKey])
+  @@index([clinicId, kind, dateKey])
 }
 
 model UserAlertInbox {

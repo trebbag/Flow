@@ -219,7 +219,7 @@ const fallbackThresholds: Threshold[] = [];
 const fallbackNotificationPolicies: NotificationPolicy[] = [];
 const fallbackAuditLog: AuditEntry[] = [];
 
-const allRoles = ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "Admin", "RevenueCycle"];
+const allRoles = ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "OfficeManager", "Admin", "RevenueCycle"];
 
 type AdminConsoleDataContextValue = {
   facility: Facility;

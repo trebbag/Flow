@@ -31,9 +31,9 @@ export declare function listUserInboxAlerts(params: {
         userId: string;
         clinicId: string | null;
         facilityId: string;
+        sourceId: string;
         acknowledgedAt: Date | null;
         kind: import("@prisma/client").$Enums.AlertInboxKind;
-        sourceId: string;
         sourceVersionKey: string;
         title: string;
         payloadJson: Prisma.JsonValue | null;

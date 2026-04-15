@@ -21,6 +21,7 @@ export type Role =
   | "MA"
   | "Clinician"
   | "FrontDeskCheckOut"
+  | "OfficeManager"
   | "Admin"
   | "RevenueCycle";
 
@@ -565,6 +566,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   MA: "Medical Assistant",
   Clinician: "Clinician",
   FrontDeskCheckOut: "Front Desk (Check-Out)",
+  OfficeManager: "Office Manager",
   Admin: "Admin",
   RevenueCycle: "Revenue Cycle",
 };

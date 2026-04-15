@@ -10,7 +10,7 @@ const alertsQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(200).default(100)
 });
 export async function registerAlertRoutes(app) {
-    const guard = requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle);
+    const guard = requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle);
     app.get("/alerts", { preHandler: guard }, async (request) => {
         const query = alertsQuerySchema.parse(request.query);
         await refreshEncounterAlertStates(prisma, {

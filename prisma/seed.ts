@@ -13,6 +13,10 @@ async function main() {
   await prisma.eventOutbox.deleteMany();
   await prisma.officeManagerDailyRollup.deleteMany();
   await prisma.safetyEvent.deleteMany();
+  await prisma.roomChecklistRun.deleteMany();
+  await prisma.roomIssue.deleteMany();
+  await prisma.roomOperationalEvent.deleteMany();
+  await prisma.roomOperationalState.deleteMany();
   await prisma.task.deleteMany();
   await prisma.alertState.deleteMany();
   await prisma.statusChangeEvent.deleteMany();
@@ -108,13 +112,22 @@ async function main() {
     }
   });
 
+  const officeManager = await prisma.user.create({
+    data: {
+      email: "office@flow.local",
+      name: "Office Manager",
+      activeFacilityId: facility.id
+    }
+  });
+
   await prisma.userRole.createMany({
     data: [
       { userId: admin.id, role: RoleName.Admin, facilityId: facility.id },
       { userId: frontDesk.id, role: RoleName.FrontDeskCheckIn, facilityId: facility.id },
       { userId: maOne.id, role: RoleName.MA, clinicId: downtown.id, facilityId: facility.id },
       { userId: maTwo.id, role: RoleName.MA, clinicId: eastside.id, facilityId: facility.id },
-      { userId: clinicianOne.id, role: RoleName.Clinician, clinicId: downtown.id, facilityId: facility.id }
+      { userId: clinicianOne.id, role: RoleName.Clinician, clinicId: downtown.id, facilityId: facility.id },
+      { userId: officeManager.id, role: RoleName.OfficeManager, facilityId: facility.id }
     ]
   });
 
@@ -337,6 +350,14 @@ async function main() {
     ]
   });
 
+  await prisma.roomOperationalState.createMany({
+    data: [
+      { roomId: downtownRoom1.id, currentStatus: "Ready", lastReadyAt: new Date() },
+      { roomId: downtownRoom2.id, currentStatus: "Ready", lastReadyAt: new Date() },
+      { roomId: eastsideRoom1.id, currentStatus: "Ready", lastReadyAt: new Date() }
+    ]
+  });
+
   const today = normalizeDate(new Date().toISOString().slice(0, 10), "America/New_York");
 
   const batch = await prisma.incomingImportBatch.create({
@@ -405,7 +426,8 @@ async function main() {
     eastsideClinicId: eastside.id,
     adminUserId: admin.id,
     frontDeskUserId: frontDesk.id,
-    maUserId: maOne.id
+    maUserId: maOne.id,
+    officeManagerUserId: officeManager.id
   });
 }
 

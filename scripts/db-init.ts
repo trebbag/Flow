@@ -50,8 +50,12 @@ const requiresRebuild =
   hasTable("User") && !hasColumn("User", "identityProvider") ||
   hasTable("User") && !hasColumn("User", "directoryStatus") ||
   hasTable("Facility") && (!hasColumn("Facility", "address") || !hasColumn("Facility", "phone")) ||
-  hasTable("Task") && (!hasColumn("Task", "acknowledgedAt") || !hasColumn("Task", "notes")) ||
+  hasTable("Task") && (!hasColumn("Task", "acknowledgedAt") || !hasColumn("Task", "notes") || !hasColumn("Task", "roomId") || !hasColumn("Task", "sourceType")) ||
   !hasTable("ClinicRoomAssignment") ||
+  !hasTable("RoomOperationalState") ||
+  !hasTable("RoomOperationalEvent") ||
+  !hasTable("RoomIssue") ||
+  !hasTable("RoomChecklistRun") ||
   !hasTable("ClinicAssignment") ||
   !hasTable("ReasonClinicAssignment") ||
   !hasTable("TemplateReasonAssignment") ||
@@ -80,6 +84,10 @@ DROP TABLE IF EXISTS NotificationPolicy;
 DROP TABLE IF EXISTS AlertThreshold;
 DROP TABLE IF EXISTS UserAlertInbox;
 DROP TABLE IF EXISTS SafetyEvent;
+DROP TABLE IF EXISTS RoomChecklistRun;
+DROP TABLE IF EXISTS RoomIssue;
+DROP TABLE IF EXISTS RoomOperationalEvent;
+DROP TABLE IF EXISTS RoomOperationalState;
 DROP TABLE IF EXISTS Task;
 DROP TABLE IF EXISTS AlertState;
 DROP TABLE IF EXISTS StatusChangeEvent;
@@ -403,7 +411,12 @@ CREATE TABLE IF NOT EXISTS AlertState (
 
 CREATE TABLE IF NOT EXISTS Task (
   id TEXT PRIMARY KEY NOT NULL,
-  encounterId TEXT NOT NULL,
+  facilityId TEXT,
+  clinicId TEXT,
+  encounterId TEXT,
+  roomId TEXT,
+  sourceType TEXT,
+  sourceId TEXT,
   taskType TEXT NOT NULL,
   description TEXT NOT NULL,
   assignedToRole TEXT,
@@ -419,10 +432,86 @@ CREATE TABLE IF NOT EXISTS Task (
   completedBy TEXT,
   notes TEXT,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (createdBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (acknowledgedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (completedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS RoomOperationalState (
+  roomId TEXT PRIMARY KEY NOT NULL,
+  currentStatus TEXT NOT NULL DEFAULT 'Ready',
+  statusSinceAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  occupiedEncounterId TEXT,
+  activeCleanerUserId TEXT,
+  holdReason TEXT,
+  holdNote TEXT,
+  lastReadyAt TEXT,
+  lastOccupiedAt TEXT,
+  lastTurnoverAt TEXT,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (occupiedEncounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS RoomOperationalEvent (
+  id TEXT PRIMARY KEY NOT NULL,
+  roomId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  facilityId TEXT NOT NULL,
+  encounterId TEXT,
+  eventType TEXT NOT NULL,
+  fromStatus TEXT,
+  toStatus TEXT,
+  note TEXT,
+  metadataJson TEXT,
+  createdByUserId TEXT,
+  occurredAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS RoomIssue (
+  id TEXT PRIMARY KEY NOT NULL,
+  roomId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  facilityId TEXT NOT NULL,
+  encounterId TEXT,
+  issueType TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Open',
+  severity INTEGER NOT NULL DEFAULT 0,
+  title TEXT NOT NULL,
+  description TEXT,
+  placesRoomOnHold INTEGER NOT NULL DEFAULT 0,
+  taskId TEXT,
+  sourceModule TEXT,
+  metadataJson TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  createdByUserId TEXT NOT NULL,
+  resolvedAt TEXT,
+  resolvedByUserId TEXT,
+  resolutionNote TEXT,
+  FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  FOREIGN KEY (taskId) REFERENCES Task(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS RoomChecklistRun (
+  id TEXT PRIMARY KEY NOT NULL,
+  roomId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  facilityId TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  dateKey TEXT NOT NULL,
+  itemsJson TEXT NOT NULL,
+  completed INTEGER NOT NULL DEFAULT 0,
+  startedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completedAt TEXT,
+  completedByUserId TEXT,
+  note TEXT,
+  FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  UNIQUE (roomId, kind, dateKey)
 );
 
 CREATE TABLE IF NOT EXISTS UserAlertInbox (
@@ -602,6 +691,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS ClinicRoom_facilityId_roomNumber_live_unique
   WHERE status IN ('active', 'inactive');
 CREATE INDEX IF NOT EXISTS ClinicRoomAssignment_clinicId_active_idx ON ClinicRoomAssignment(clinicId, active);
 CREATE INDEX IF NOT EXISTS ClinicRoomAssignment_roomId_active_idx ON ClinicRoomAssignment(roomId, active);
+INSERT OR IGNORE INTO RoomOperationalState (roomId, currentStatus, statusSinceAt, lastReadyAt)
+SELECT id, 'Ready', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM ClinicRoom
+WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS ReasonForVisit_clinicId_active_idx ON ReasonForVisit(clinicId, active);
 CREATE INDEX IF NOT EXISTS ReasonForVisit_facilityId_active_idx ON ReasonForVisit(facilityId, active);
 CREATE INDEX IF NOT EXISTS Template_clinicId_reasonForVisitId_type_idx ON Template(clinicId, reasonForVisitId, type);
@@ -616,6 +709,18 @@ CREATE INDEX IF NOT EXISTS Encounter_clinicId_currentStatus_idx ON Encounter(cli
 CREATE INDEX IF NOT EXISTS Encounter_clinicId_dateOfService_idx ON Encounter(clinicId, dateOfService);
 CREATE INDEX IF NOT EXISTS StatusChangeEvent_encounterId_changedAt_idx ON StatusChangeEvent(encounterId, changedAt);
 CREATE INDEX IF NOT EXISTS Task_encounterId_status_idx ON Task(encounterId, status);
+CREATE INDEX IF NOT EXISTS Task_clinicId_status_createdAt_idx ON Task(clinicId, status, createdAt);
+CREATE INDEX IF NOT EXISTS Task_roomId_status_createdAt_idx ON Task(roomId, status, createdAt);
+CREATE INDEX IF NOT EXISTS Task_assignedToRole_status_idx ON Task(assignedToRole, status);
+CREATE INDEX IF NOT EXISTS RoomOperationalState_currentStatus_statusSinceAt_idx ON RoomOperationalState(currentStatus, statusSinceAt);
+CREATE INDEX IF NOT EXISTS RoomOperationalState_occupiedEncounterId_idx ON RoomOperationalState(occupiedEncounterId);
+CREATE INDEX IF NOT EXISTS RoomOperationalEvent_roomId_occurredAt_idx ON RoomOperationalEvent(roomId, occurredAt);
+CREATE INDEX IF NOT EXISTS RoomOperationalEvent_clinicId_occurredAt_idx ON RoomOperationalEvent(clinicId, occurredAt);
+CREATE INDEX IF NOT EXISTS RoomOperationalEvent_encounterId_idx ON RoomOperationalEvent(encounterId);
+CREATE INDEX IF NOT EXISTS RoomIssue_roomId_status_createdAt_idx ON RoomIssue(roomId, status, createdAt);
+CREATE INDEX IF NOT EXISTS RoomIssue_clinicId_status_createdAt_idx ON RoomIssue(clinicId, status, createdAt);
+CREATE INDEX IF NOT EXISTS RoomIssue_taskId_idx ON RoomIssue(taskId);
+CREATE INDEX IF NOT EXISTS RoomChecklistRun_clinicId_kind_dateKey_idx ON RoomChecklistRun(clinicId, kind, dateKey);
 CREATE INDEX IF NOT EXISTS UserAlertInbox_userId_status_createdAt_idx ON UserAlertInbox(userId, status, createdAt);
 CREATE INDEX IF NOT EXISTS UserAlertInbox_facility_clinic_kind_status_idx ON UserAlertInbox(facilityId, clinicId, kind, status);
 CREATE INDEX IF NOT EXISTS SafetyEvent_encounterId_resolvedAt_idx ON SafetyEvent(encounterId, resolvedAt);

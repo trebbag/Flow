@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "RevenueCycle";
+type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "OfficeManager" | "RevenueCycle";
 
 type AuthActor =
   | {
@@ -376,7 +376,7 @@ async function main() {
       const roleActors = new Map<RoleName, AuthActor>();
       roleActors.set("Admin", adminActor);
 
-      const roleTargets: RoleName[] = ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "RevenueCycle"];
+      const roleTargets: RoleName[] = ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "OfficeManager", "RevenueCycle"];
 
       if (devUserId) {
         for (const role of roleTargets) {
@@ -433,7 +433,7 @@ async function main() {
         throw new Error("Threshold level did not reach Yellow/Red within timeout window");
       }
 
-      const rolesToVerify: RoleName[] = ["Admin", "FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "RevenueCycle"];
+      const rolesToVerify: RoleName[] = ["Admin", "FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "OfficeManager", "RevenueCycle"];
       for (const role of rolesToVerify) {
         const actor = roleActors.get(role);
         if (!actor) {

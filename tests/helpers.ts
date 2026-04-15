@@ -15,6 +15,10 @@ export async function resetDb() {
   await prisma.eventOutbox.deleteMany();
   await prisma.officeManagerDailyRollup.deleteMany();
   await prisma.safetyEvent.deleteMany();
+  await prisma.roomChecklistRun.deleteMany();
+  await prisma.roomIssue.deleteMany();
+  await prisma.roomOperationalEvent.deleteMany();
+  await prisma.roomOperationalState.deleteMany();
   await prisma.task.deleteMany();
   await prisma.alertState.deleteMany();
   await prisma.statusChangeEvent.deleteMany();
@@ -88,6 +92,9 @@ export async function bootstrapCore() {
   const revenue = await prisma.user.create({
     data: { email: "rev@test.local", name: "Revenue User", cognitoSub: "sub-revenue-test", activeFacilityId: facility.id }
   });
+  const officeManager = await prisma.user.create({
+    data: { email: "office@test.local", name: "Office Manager", cognitoSub: "sub-office-test", activeFacilityId: facility.id }
+  });
 
   await prisma.userRole.createMany({
     data: [
@@ -96,6 +103,7 @@ export async function bootstrapCore() {
       { userId: ma.id, role: RoleName.MA, clinicId: clinic.id, facilityId: facility.id },
       { userId: maTwo.id, role: RoleName.MA, clinicId: maRunClinic.id, facilityId: facility.id },
       { userId: clinician.id, role: RoleName.Clinician, clinicId: clinic.id, facilityId: facility.id },
+      { userId: officeManager.id, role: RoleName.OfficeManager, facilityId: facility.id },
       { userId: revenue.id, role: RoleName.RevenueCycle, facilityId: facility.id }
     ]
   });
@@ -173,6 +181,12 @@ export async function bootstrapCore() {
     data: [
       { clinicId: clinic.id, roomId: clinicRoomA.id, active: true },
       { clinicId: maRunClinic.id, roomId: clinicRoomB.id, active: true }
+    ]
+  });
+  await prisma.roomOperationalState.createMany({
+    data: [
+      { roomId: clinicRoomA.id, currentStatus: "Ready", lastReadyAt: new Date() },
+      { roomId: clinicRoomB.id, currentStatus: "Ready", lastReadyAt: new Date() }
     ]
   });
 
@@ -298,7 +312,10 @@ export async function bootstrapCore() {
     ma,
     maTwo,
     clinician,
+    officeManager,
     revenue,
+    clinicRoomA,
+    clinicRoomB,
     provider,
     maRunProvider,
     reason,

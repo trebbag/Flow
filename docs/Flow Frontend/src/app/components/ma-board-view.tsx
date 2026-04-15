@@ -30,6 +30,9 @@ import {
 import { useEncounters } from "./encounter-context";
 import { SafetyAssistModal } from "./safety-assist-modal";
 import { getEncounterStageSeconds, getEncounterTotalSeconds } from "./encounter-timers";
+import { rooms as roomsApi, type PreRoomingCheckResult } from "./api-client";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { toast } from "sonner";
 
 // ── Full workflow columns ──
 
@@ -107,6 +110,8 @@ export function MABoardView() {
   const [safetyModalEncounter, setSafetyModalEncounter] = useState<string | null>(null);
   const [clinicFilter, setClinicFilter] = useState<string>("all");
   const [wallMode, setWallMode] = useState(false);
+  const [checkingEncounterId, setCheckingEncounterId] = useState<string | null>(null);
+  const [blockedRooming, setBlockedRooming] = useState<PreRoomingCheckResult | null>(null);
   const { encounters } = useEncounters();
 
   // Live tick
@@ -160,9 +165,26 @@ export function MABoardView() {
   const redAlertCount = activeEncounters.filter((e) => e.alertLevel === "Red").length;
   const safetyCount = activeEncounters.filter((e) => e.safetyActive).length;
 
-  function handleSelectCard(encounter: Encounter) {
+  async function handleSelectCard(encounter: Encounter) {
     if (encounter.status === "Lobby") {
-      navigate(`/encounter/${encounter.id}?startRooming=true`);
+      setCheckingEncounterId(encounter.id);
+      try {
+        const result = await roomsApi.preRoomingCheck(encounter.id);
+        if (result.blocked) {
+          setBlockedRooming(result);
+          return;
+        }
+        const qs = new URLSearchParams({ startRooming: "true" });
+        if (result.preferredRoomId) qs.set("preferredRoomId", result.preferredRoomId);
+        if (result.lastReadyRoom) qs.set("lastReadyRoom", "true");
+        navigate(`/encounter/${encounter.id}?${qs.toString()}`);
+      } catch (error) {
+        toast.error("Room availability check failed", {
+          description: (error as Error).message || "Unable to verify ready rooms",
+        });
+      } finally {
+        setCheckingEncounterId(null);
+      }
       return;
     }
     navigate(`/encounter/${encounter.id}`);
@@ -296,7 +318,10 @@ export function MABoardView() {
                           stageSec={t.stageSec}
                           totalSec={t.totalSec}
                           compact={wallMode}
-                          onSelect={() => handleSelectCard(e)}
+                          checking={checkingEncounterId === e.id}
+                          onSelect={() => {
+                            void handleSelectCard(e);
+                          }}
                           onSafetyTrigger={(id) => setSafetyModalEncounter(id)}
                         />
                       );
@@ -324,6 +349,37 @@ export function MABoardView() {
           onActivated={() => setSafetyModalEncounter(null)}
         />
       )}
+
+      <Dialog open={!!blockedRooming} onOpenChange={(open) => !open && setBlockedRooming(null)}>
+        <DialogContent className="max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>No rooms available for rooming</DialogTitle>
+            <DialogDescription>None of your rooms are ready right now.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[280px] overflow-auto">
+            {(blockedRooming?.rooms || []).map((room) => (
+              <div key={room.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[13px]" style={{ fontWeight: 700 }}>{room.name}</div>
+                  <div className="text-[11px] text-muted-foreground">{room.clinicName}</div>
+                </div>
+                <div className="text-right">
+                  <Badge className="border-0 bg-amber-100 text-amber-700 text-[10px] h-5">{room.operationalStatus}</Badge>
+                  <div className="text-[10px] text-muted-foreground mt-1">{room.timerLabel}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button onClick={() => setBlockedRooming(null)} className="h-9 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50">
+              Close
+            </button>
+            <button onClick={() => navigate("/rooms")} className="h-9 px-3 rounded-lg bg-slate-900 text-white text-[12px] hover:bg-slate-800">
+              Open Rooms
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -337,6 +393,7 @@ function EncounterCard({
   stageSec,
   totalSec,
   compact,
+  checking,
   onSelect,
   onSafetyTrigger,
 }: {
@@ -344,6 +401,7 @@ function EncounterCard({
   stageSec: number;
   totalSec: number;
   compact: boolean;
+  checking?: boolean;
   onSelect: () => void;
   onSafetyTrigger: (id: string) => void;
 }) {
@@ -367,7 +425,7 @@ function EncounterCard({
     return (
       <div
         onClick={onSelect}
-        className="rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-lg"
+        className={`rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-lg ${checking ? "opacity-70 pointer-events-none" : ""}`}
         style={{
           animation: "safetyPulse 2s ease-in-out infinite",
           border: "2px solid #dc2626",
@@ -444,7 +502,7 @@ function EncounterCard({
   return (
     <div
       onClick={onSelect}
-      className="rounded-xl overflow-hidden border transition-all hover:shadow-md cursor-pointer"
+      className={`rounded-xl overflow-hidden border transition-all hover:shadow-md cursor-pointer ${checking ? "opacity-70 pointer-events-none" : ""}`}
       style={{
         background: clinicBg,
         borderColor: alertBorderColor,
@@ -463,7 +521,8 @@ function EncounterCard({
         }}
       />
 
-      <div className={`px-3.5 ${compact ? "py-2" : "py-3"}`}>
+        <div className={`px-3.5 ${compact ? "py-2" : "py-3"}`}>
+          {checking && <div className="mb-2 text-[10px] text-purple-700 bg-purple-50 rounded-md px-2 py-1">Checking ready rooms...</div>}
         {/* Top row: identity + stage timer */}
         <div className="flex items-center justify-between mb-1.5">
           <div className="min-w-0">

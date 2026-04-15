@@ -1,0 +1,452 @@
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import {
+  AlertInboxKind,
+  RoleName,
+  RoomChecklistKind,
+  RoomEventType,
+  RoomHoldReason,
+  RoomIssueStatus,
+  RoomIssueType,
+  RoomOperationalStatus,
+  TaskSourceType
+} from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
+import { ApiError, assert } from "../lib/errors.js";
+import { requireRoles } from "../lib/auth.js";
+import { createInboxAlert } from "../lib/user-alert-inbox.js";
+import {
+  getPreRoomingAvailability,
+  getRoomDetail,
+  getRoomScopeClinicIds,
+  listRoomCards,
+  resolveRoomActionContext,
+  transitionRoomOperationalState,
+  transitionRoomOperationalStateInTx
+} from "../lib/room-operations.js";
+
+const roomsLiveQuerySchema = z.object({
+  mine: z.coerce.boolean().optional(),
+  clinicId: z.string().uuid().optional()
+});
+
+const roomDetailQuerySchema = z.object({
+  clinicId: z.string().uuid().optional()
+});
+
+const preRoomingSchema = z.object({
+  encounterId: z.string().uuid()
+});
+
+const holdSchema = z.object({
+  clinicId: z.string().uuid().optional(),
+  reason: z.nativeEnum(RoomHoldReason).default(RoomHoldReason.Manual),
+  note: z.string().max(1000).optional()
+});
+
+const clearHoldSchema = z.object({
+  clinicId: z.string().uuid().optional(),
+  targetStatus: z.enum([RoomOperationalStatus.Ready, RoomOperationalStatus.NeedsTurnover]).default(RoomOperationalStatus.Ready),
+  note: z.string().max(1000).optional()
+});
+
+const actionClinicSchema = z.object({
+  clinicId: z.string().uuid().optional(),
+  note: z.string().max(1000).optional()
+});
+
+const createIssueSchema = z.object({
+  clinicId: z.string().uuid().optional(),
+  encounterId: z.string().uuid().optional(),
+  issueType: z.nativeEnum(RoomIssueType).default(RoomIssueType.General),
+  severity: z.number().int().min(0).max(5).default(0),
+  title: z.string().trim().min(1),
+  description: z.string().trim().max(5000).optional(),
+  placesRoomOnHold: z.boolean().default(false),
+  sourceModule: z.string().trim().max(80).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+});
+
+const updateIssueSchema = z.object({
+  status: z.nativeEnum(RoomIssueStatus).optional(),
+  severity: z.number().int().min(0).max(5).optional(),
+  title: z.string().trim().min(1).optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  resolutionNote: z.string().trim().max(5000).optional()
+});
+
+const issueQuerySchema = z.object({
+  roomId: z.string().uuid().optional(),
+  clinicId: z.string().uuid().optional(),
+  status: z.nativeEnum(RoomIssueStatus).optional(),
+  includeResolved: z.coerce.boolean().optional()
+});
+
+const checklistRunSchema = z.object({
+  roomId: z.string().uuid(),
+  clinicId: z.string().uuid().optional(),
+  dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  items: z.array(z.record(z.string(), z.unknown())).optional(),
+  completed: z.boolean().default(true),
+  note: z.string().trim().max(5000).optional()
+});
+
+const checklistQuerySchema = z.object({
+  roomId: z.string().uuid().optional(),
+  clinicId: z.string().uuid().optional(),
+  dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  kind: z.enum(["DayStart", "DayEnd"]).optional()
+});
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function createOfficeManagerTaskAlert(params: {
+  taskId: string;
+  issueId: string;
+  roomId: string;
+  roomName: string;
+  clinicId: string;
+  facilityId: string;
+  title: string;
+}) {
+  await createInboxAlert({
+    facilityId: params.facilityId,
+    clinicId: params.clinicId,
+    kind: AlertInboxKind.task,
+    sourceId: params.taskId,
+    sourceVersionKey: `task:${params.taskId}:role:${RoleName.OfficeManager}`,
+    title: "Room issue needs follow-up",
+    message: `${params.roomName}: ${params.title}`,
+    payload: {
+      taskId: params.taskId,
+      issueId: params.issueId,
+      roomId: params.roomId,
+      clinicId: params.clinicId
+    },
+    roles: [RoleName.OfficeManager]
+  });
+}
+
+export async function registerRoomRoutes(app: FastifyInstance) {
+  const guard = requireRoles(RoleName.Admin, RoleName.OfficeManager, RoleName.MA);
+
+  app.get("/rooms/live", { preHandler: guard }, async (request) => {
+    const query = roomsLiveQuerySchema.parse(request.query);
+    return listRoomCards({
+      user: request.user!,
+      clinicId: query.clinicId || null
+    });
+  });
+
+  app.post("/rooms/pre-rooming-check", { preHandler: requireRoles(RoleName.Admin, RoleName.MA) }, async (request) => {
+    const dto = preRoomingSchema.parse(request.body);
+    return getPreRoomingAvailability({ user: request.user!, encounterId: dto.encounterId });
+  });
+
+  app.get("/rooms/issues", { preHandler: guard }, async (request) => {
+    const query = issueQuerySchema.parse(request.query);
+    const clinicIds = await getRoomScopeClinicIds(request.user!, query.clinicId || null);
+    if (clinicIds.length === 0) return [];
+    return prisma.roomIssue.findMany({
+      where: {
+        clinicId: { in: clinicIds },
+        roomId: query.roomId,
+        status: query.status || (query.includeResolved ? undefined : { in: [RoomIssueStatus.Open, RoomIssueStatus.Acknowledged] })
+      },
+      include: {
+        room: { select: { id: true, name: true, roomNumber: true } },
+        task: { select: { id: true, status: true, assignedToRole: true, assignedToUserId: true } }
+      },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }]
+    });
+  });
+
+  app.get("/rooms/checklists", { preHandler: guard }, async (request) => {
+    const query = checklistQuerySchema.parse(request.query);
+    const clinicIds = await getRoomScopeClinicIds(request.user!, query.clinicId || null);
+    if (clinicIds.length === 0) return [];
+    return prisma.roomChecklistRun.findMany({
+      where: {
+        clinicId: { in: clinicIds },
+        roomId: query.roomId,
+        dateKey: query.dateKey,
+        kind: query.kind
+      },
+      include: { room: { select: { id: true, name: true, roomNumber: true } } },
+      orderBy: [{ dateKey: "desc" }, { startedAt: "desc" }]
+    });
+  });
+
+  app.get("/rooms/:id", { preHandler: guard }, async (request) => {
+    const roomId = (request.params as { id: string }).id;
+    const query = roomDetailQuerySchema.parse(request.query);
+    return getRoomDetail({ roomId, user: request.user!, clinicId: query.clinicId || null });
+  });
+
+  app.post("/rooms/:id/actions/start-cleaning", { preHandler: guard }, async (request) => {
+    const roomId = (request.params as { id: string }).id;
+    const dto = actionClinicSchema.parse(request.body || {});
+    const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
+    return transitionRoomOperationalState({
+      roomId,
+      clinicId: context.clinic.id,
+      facilityId: context.facilityId,
+      toStatus: RoomOperationalStatus.Cleaning,
+      eventType: RoomEventType.CleaningStarted,
+      createdByUserId: request.user!.id,
+      note: dto.note || null,
+      allowedFrom: [RoomOperationalStatus.NeedsTurnover]
+    });
+  });
+
+  app.post("/rooms/:id/actions/mark-ready", { preHandler: guard }, async (request) => {
+    const roomId = (request.params as { id: string }).id;
+    const dto = actionClinicSchema.parse(request.body || {});
+    const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
+    return transitionRoomOperationalState({
+      roomId,
+      clinicId: context.clinic.id,
+      facilityId: context.facilityId,
+      toStatus: RoomOperationalStatus.Ready,
+      eventType: RoomEventType.MarkedReady,
+      createdByUserId: request.user!.id,
+      note: dto.note || null,
+      allowedFrom: [RoomOperationalStatus.Cleaning, RoomOperationalStatus.NeedsTurnover]
+    });
+  });
+
+  app.post("/rooms/:id/actions/place-hold", { preHandler: guard }, async (request) => {
+    const roomId = (request.params as { id: string }).id;
+    const dto = holdSchema.parse(request.body || {});
+    const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
+    return transitionRoomOperationalState({
+      roomId,
+      clinicId: context.clinic.id,
+      facilityId: context.facilityId,
+      toStatus: RoomOperationalStatus.Hold,
+      eventType: RoomEventType.HoldPlaced,
+      createdByUserId: request.user!.id,
+      note: dto.note || null,
+      holdReason: dto.reason,
+      holdNote: dto.note || null
+    });
+  });
+
+  app.post("/rooms/:id/actions/clear-hold", { preHandler: guard }, async (request) => {
+    const roomId = (request.params as { id: string }).id;
+    const dto = clearHoldSchema.parse(request.body || {});
+    const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
+    return transitionRoomOperationalState({
+      roomId,
+      clinicId: context.clinic.id,
+      facilityId: context.facilityId,
+      toStatus: dto.targetStatus,
+      eventType: RoomEventType.HoldCleared,
+      createdByUserId: request.user!.id,
+      note: dto.note || null,
+      allowedFrom: [RoomOperationalStatus.Hold]
+    });
+  });
+
+  app.post("/rooms/:id/issues", { preHandler: guard }, async (request) => {
+    const roomId = (request.params as { id: string }).id;
+    const dto = createIssueSchema.parse(request.body || {});
+    const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
+
+    if (dto.encounterId) {
+      const encounter = await prisma.encounter.findFirst({
+        where: { id: dto.encounterId, clinicId: context.clinic.id },
+        select: { id: true }
+      });
+      assert(encounter, 400, "Encounter is not in this room clinic scope");
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const issue = await tx.roomIssue.create({
+        data: {
+          roomId,
+          clinicId: context.clinic.id,
+          facilityId: context.facilityId,
+          encounterId: dto.encounterId || null,
+          issueType: dto.issueType,
+          severity: dto.severity,
+          title: dto.title,
+          description: dto.description || null,
+          placesRoomOnHold: dto.placesRoomOnHold,
+          sourceModule: dto.sourceModule || "rooms",
+          metadataJson: dto.metadata ? (dto.metadata as Prisma.InputJsonValue) : undefined,
+          createdByUserId: request.user!.id
+        }
+      });
+
+      const task = await tx.task.create({
+        data: {
+          facilityId: context.facilityId,
+          clinicId: context.clinic.id,
+          roomId,
+          encounterId: dto.encounterId || null,
+          sourceType: TaskSourceType.RoomIssue,
+          sourceId: issue.id,
+          taskType: "RoomIssue",
+          description: `${context.room.name}: ${dto.title}`,
+          assignedToRole: RoleName.OfficeManager,
+          status: "open",
+          priority: dto.severity,
+          blocking: dto.placesRoomOnHold,
+          createdBy: request.user!.id
+        }
+      });
+
+      const linkedIssue = await tx.roomIssue.update({
+        where: { id: issue.id },
+        data: { taskId: task.id }
+      });
+
+      if (dto.placesRoomOnHold) {
+        await transitionRoomOperationalStateInTx(tx, {
+          roomId,
+          clinicId: context.clinic.id,
+          facilityId: context.facilityId,
+          toStatus: RoomOperationalStatus.Hold,
+          eventType: RoomEventType.IssueCreated,
+          encounterId: dto.encounterId || null,
+          createdByUserId: request.user!.id,
+          note: dto.title,
+          holdReason: RoomHoldReason.Equipment,
+          holdNote: dto.title,
+          metadata: { issueId: issue.id, taskId: task.id }
+        });
+      } else {
+        await tx.roomOperationalEvent.create({
+          data: {
+            roomId,
+            clinicId: context.clinic.id,
+            facilityId: context.facilityId,
+            encounterId: dto.encounterId || null,
+            eventType: RoomEventType.IssueCreated,
+            fromStatus: context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready,
+            toStatus: context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready,
+            note: dto.title,
+            metadataJson: { issueId: issue.id, taskId: task.id } as Prisma.InputJsonValue,
+            createdByUserId: request.user!.id
+          }
+        });
+      }
+
+      return { issue: linkedIssue, task };
+    });
+
+    await createOfficeManagerTaskAlert({
+      taskId: result.task.id,
+      issueId: result.issue.id,
+      roomId,
+      roomName: context.room.name,
+      clinicId: context.clinic.id,
+      facilityId: context.facilityId,
+      title: dto.title
+    });
+
+    return result;
+  });
+
+  app.patch("/rooms/issues/:issueId", { preHandler: guard }, async (request) => {
+    const issueId = (request.params as { issueId: string }).issueId;
+    const dto = updateIssueSchema.parse(request.body || {});
+    const issue = await prisma.roomIssue.findUnique({ where: { id: issueId } });
+    assert(issue, 404, "Room issue not found");
+    const clinicIds = await getRoomScopeClinicIds(request.user!, issue.clinicId);
+    if (!clinicIds.includes(issue.clinicId)) {
+      throw new ApiError(403, "Issue is outside your room scope");
+    }
+
+    const resolved = dto.status === RoomIssueStatus.Resolved;
+    const updated = await prisma.roomIssue.update({
+      where: { id: issueId },
+      data: {
+        status: dto.status,
+        severity: dto.severity,
+        title: dto.title,
+        description: dto.description === undefined ? undefined : dto.description,
+        resolutionNote: dto.resolutionNote,
+        resolvedAt: resolved ? new Date() : undefined,
+        resolvedByUserId: resolved ? request.user!.id : undefined
+      }
+    });
+
+    if (resolved) {
+      await prisma.roomOperationalEvent.create({
+        data: {
+          roomId: issue.roomId,
+          clinicId: issue.clinicId,
+          facilityId: issue.facilityId,
+          encounterId: issue.encounterId,
+          eventType: RoomEventType.IssueResolved,
+          note: dto.resolutionNote || null,
+          metadataJson: { issueId } as Prisma.InputJsonValue,
+          createdByUserId: request.user!.id
+        }
+      });
+    }
+
+    return updated;
+  });
+
+  async function upsertChecklist(kind: RoomChecklistKind, request: FastifyRequest) {
+    const dto = checklistRunSchema.parse(request.body || {});
+    const context = await resolveRoomActionContext({ roomId: dto.roomId, user: request.user!, clinicId: dto.clinicId || null });
+    const dateKey = dto.dateKey || todayKey();
+    const eventType = kind === "DayStart" ? RoomEventType.DayStartCompleted : RoomEventType.DayEndCompleted;
+    return prisma.$transaction(async (tx) => {
+      const run = await tx.roomChecklistRun.upsert({
+        where: {
+          roomId_kind_dateKey: {
+            roomId: dto.roomId,
+            kind,
+            dateKey
+          }
+        },
+        create: {
+          roomId: dto.roomId,
+          clinicId: context.clinic.id,
+          facilityId: context.facilityId,
+          kind,
+          dateKey,
+          itemsJson: (dto.items || []) as Prisma.InputJsonValue,
+          completed: dto.completed,
+          completedAt: dto.completed ? new Date() : null,
+          completedByUserId: dto.completed ? request.user!.id : null,
+          note: dto.note || null
+        },
+        update: {
+          itemsJson: (dto.items || []) as Prisma.InputJsonValue,
+          completed: dto.completed,
+          completedAt: dto.completed ? new Date() : null,
+          completedByUserId: dto.completed ? request.user!.id : null,
+          note: dto.note || null
+        }
+      });
+      if (dto.completed) {
+        await tx.roomOperationalEvent.create({
+          data: {
+          roomId: dto.roomId,
+          clinicId: context.clinic.id,
+          facilityId: context.facilityId,
+          eventType,
+          fromStatus: context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready,
+          toStatus: context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready,
+          createdByUserId: request.user!.id,
+          note: dto.note || null,
+          metadataJson: { checklistRunId: run.id, kind, dateKey } as Prisma.InputJsonValue
+          }
+        });
+      }
+      return run;
+    });
+  }
+
+  app.post("/rooms/checklists/day-start", { preHandler: guard }, async (request) => upsertChecklist(RoomChecklistKind.DayStart, request));
+  app.post("/rooms/checklists/day-end", { preHandler: guard }, async (request) => upsertChecklist(RoomChecklistKind.DayEnd, request));
+}

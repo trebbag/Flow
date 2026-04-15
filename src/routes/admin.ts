@@ -879,7 +879,7 @@ async function listUserAssignmentImpact(userId: string) {
 export async function registerAdminRoutes(app: FastifyInstance) {
   app.get(
     "/admin/clinics",
-    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle) },
+    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) },
     async (request) => {
       const query = request.query as {
         facilityId?: string;
@@ -982,7 +982,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.get(
     "/admin/facilities",
-    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle) },
+    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) },
     async (request) => {
       const scopedIds = scopedFacilityIds(request);
       return prisma.facility.findMany({
@@ -994,7 +994,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.get(
     "/admin/facility-profile",
-    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle) },
+    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) },
     async (request) => {
       const query = request.query as { facilityId?: string };
       const facility = await resolveFacilityForRequest(request, query.facilityId);
@@ -1252,7 +1252,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     };
   }
 
-  app.get("/admin/reasons", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+  app.get("/admin/reasons", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
     const query = request.query as {
       clinicId?: string;
       facilityId?: string;
@@ -1422,7 +1422,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return { status: "archived", reason: mapReasonRow(archived) };
   });
 
-  app.get("/admin/rooms", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+  app.get("/admin/rooms", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
     const query = request.query as {
       facilityId?: string;
       clinicId?: string;
@@ -1492,12 +1492,20 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = roomSchema.parse(request.body);
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
     const roomType = normalizeRoomType(dto.roomType);
-    return createRoomWithAllocatedNumber({
+    const room = await createRoomWithAllocatedNumber({
       facilityId: facility.id,
       name: dto.name,
       roomType,
       status: dto.status ?? "active"
     });
+    if (room.status === "active") {
+      await prisma.roomOperationalState.upsert({
+        where: { roomId: room.id },
+        create: { roomId: room.id, currentStatus: "Ready", lastReadyAt: new Date() },
+        update: {}
+      });
+    }
+    return room;
   });
 
   app.post("/admin/rooms/reorder", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
@@ -1575,7 +1583,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       throw new ApiError(400, "Room # is system-managed. Reorder rooms to change numbering.");
     }
 
-    return prisma.clinicRoom.update({
+    const updated = await prisma.clinicRoom.update({
       where: { id: roomId },
       data: {
         name: dto.name,
@@ -1583,6 +1591,14 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         status: dto.status ?? (dto.active === undefined ? undefined : dto.active ? "active" : "inactive")
       }
     });
+    if (updated.status === "active") {
+      await prisma.roomOperationalState.upsert({
+        where: { roomId: updated.id },
+        create: { roomId: updated.id, currentStatus: "Ready", lastReadyAt: new Date() },
+        update: {}
+      });
+    }
+    return updated;
   });
 
   app.delete("/admin/rooms/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
@@ -1616,12 +1632,18 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const room = await prisma.clinicRoom.findUnique({ where: { id: roomId } });
     assert(room, 404, "Room not found");
     await resolveFacilityForRequest(request, room.facilityId);
-    return restoreRoomWithAllocatedNumber(roomId);
+    const restored = await restoreRoomWithAllocatedNumber(roomId);
+    await prisma.roomOperationalState.upsert({
+      where: { roomId: restored.id },
+      create: { roomId: restored.id, currentStatus: "Ready", lastReadyAt: new Date() },
+      update: {}
+    });
+    return restored;
   });
 
   app.get(
     "/admin/assignments",
-    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) },
+    { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) },
     async (request) => {
     const query = request.query as { facilityId?: string };
     const facility = await resolveFacilityForRequest(request, query.facilityId);
@@ -1885,7 +1907,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     });
   }
 
-  app.get("/admin/templates", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+  app.get("/admin/templates", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
     const query = request.query as {
       facilityId?: string;
       clinicId?: string;

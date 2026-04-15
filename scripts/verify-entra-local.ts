@@ -10,6 +10,7 @@ const roleSpecs = [
   { role: RoleName.MA, oidEnv: 'ENTRA_OID_MA' },
   { role: RoleName.Clinician, oidEnv: 'ENTRA_OID_CLINICIAN' },
   { role: RoleName.FrontDeskCheckOut, oidEnv: 'ENTRA_OID_FRONTDESKCHECKOUT' },
+  { role: RoleName.OfficeManager, oidEnv: 'ENTRA_OID_OFFICEMANAGER' },
   { role: RoleName.RevenueCycle, oidEnv: 'ENTRA_OID_REVENUECYCLE' },
 ] as const;
 

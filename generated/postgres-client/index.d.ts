@@ -119,6 +119,26 @@ export type AlertState = $Result.DefaultSelection<Prisma.$AlertStatePayload>
  */
 export type Task = $Result.DefaultSelection<Prisma.$TaskPayload>
 /**
+ * Model RoomOperationalState
+ * 
+ */
+export type RoomOperationalState = $Result.DefaultSelection<Prisma.$RoomOperationalStatePayload>
+/**
+ * Model RoomOperationalEvent
+ * 
+ */
+export type RoomOperationalEvent = $Result.DefaultSelection<Prisma.$RoomOperationalEventPayload>
+/**
+ * Model RoomIssue
+ * 
+ */
+export type RoomIssue = $Result.DefaultSelection<Prisma.$RoomIssuePayload>
+/**
+ * Model RoomChecklistRun
+ * 
+ */
+export type RoomChecklistRun = $Result.DefaultSelection<Prisma.$RoomChecklistRunPayload>
+/**
  * Model UserAlertInbox
  * 
  */
@@ -168,6 +188,7 @@ export namespace $Enums {
   MA: 'MA',
   Clinician: 'Clinician',
   FrontDeskCheckOut: 'FrontDeskCheckOut',
+  OfficeManager: 'OfficeManager',
   Admin: 'Admin',
   RevenueCycle: 'RevenueCycle'
 };
@@ -250,6 +271,84 @@ export const AlertInboxStatus: {
 
 export type AlertInboxStatus = (typeof AlertInboxStatus)[keyof typeof AlertInboxStatus]
 
+
+export const TaskSourceType: {
+  Encounter: 'Encounter',
+  RoomIssue: 'RoomIssue',
+  RoomSupplyFlag: 'RoomSupplyFlag',
+  RoomAudit: 'RoomAudit'
+};
+
+export type TaskSourceType = (typeof TaskSourceType)[keyof typeof TaskSourceType]
+
+
+export const RoomOperationalStatus: {
+  Ready: 'Ready',
+  Occupied: 'Occupied',
+  NeedsTurnover: 'NeedsTurnover',
+  Cleaning: 'Cleaning',
+  Hold: 'Hold'
+};
+
+export type RoomOperationalStatus = (typeof RoomOperationalStatus)[keyof typeof RoomOperationalStatus]
+
+
+export const RoomEventType: {
+  AssignedToEncounter: 'AssignedToEncounter',
+  PatientLeftForCheckout: 'PatientLeftForCheckout',
+  CleaningStarted: 'CleaningStarted',
+  MarkedReady: 'MarkedReady',
+  HoldPlaced: 'HoldPlaced',
+  HoldCleared: 'HoldCleared',
+  IssueCreated: 'IssueCreated',
+  IssueResolved: 'IssueResolved',
+  DayStartCompleted: 'DayStartCompleted',
+  DayEndCompleted: 'DayEndCompleted'
+};
+
+export type RoomEventType = (typeof RoomEventType)[keyof typeof RoomEventType]
+
+
+export const RoomHoldReason: {
+  Equipment: 'Equipment',
+  Maintenance: 'Maintenance',
+  Supply: 'Supply',
+  Audit: 'Audit',
+  Manual: 'Manual'
+};
+
+export type RoomHoldReason = (typeof RoomHoldReason)[keyof typeof RoomHoldReason]
+
+
+export const RoomIssueType: {
+  Equipment: 'Equipment',
+  Maintenance: 'Maintenance',
+  General: 'General',
+  SupplyLow: 'SupplyLow',
+  SupplyOut: 'SupplyOut',
+  AuditFailure: 'AuditFailure'
+};
+
+export type RoomIssueType = (typeof RoomIssueType)[keyof typeof RoomIssueType]
+
+
+export const RoomIssueStatus: {
+  Open: 'Open',
+  Acknowledged: 'Acknowledged',
+  Resolved: 'Resolved',
+  Dismissed: 'Dismissed'
+};
+
+export type RoomIssueStatus = (typeof RoomIssueStatus)[keyof typeof RoomIssueStatus]
+
+
+export const RoomChecklistKind: {
+  DayStart: 'DayStart',
+  DayEnd: 'DayEnd'
+};
+
+export type RoomChecklistKind = (typeof RoomChecklistKind)[keyof typeof RoomChecklistKind]
+
 }
 
 export type RoleName = $Enums.RoleName
@@ -287,6 +386,34 @@ export const AlertInboxKind: typeof $Enums.AlertInboxKind
 export type AlertInboxStatus = $Enums.AlertInboxStatus
 
 export const AlertInboxStatus: typeof $Enums.AlertInboxStatus
+
+export type TaskSourceType = $Enums.TaskSourceType
+
+export const TaskSourceType: typeof $Enums.TaskSourceType
+
+export type RoomOperationalStatus = $Enums.RoomOperationalStatus
+
+export const RoomOperationalStatus: typeof $Enums.RoomOperationalStatus
+
+export type RoomEventType = $Enums.RoomEventType
+
+export const RoomEventType: typeof $Enums.RoomEventType
+
+export type RoomHoldReason = $Enums.RoomHoldReason
+
+export const RoomHoldReason: typeof $Enums.RoomHoldReason
+
+export type RoomIssueType = $Enums.RoomIssueType
+
+export const RoomIssueType: typeof $Enums.RoomIssueType
+
+export type RoomIssueStatus = $Enums.RoomIssueStatus
+
+export const RoomIssueStatus: typeof $Enums.RoomIssueStatus
+
+export type RoomChecklistKind = $Enums.RoomChecklistKind
+
+export const RoomChecklistKind: typeof $Enums.RoomChecklistKind
 
 /**
  * ##  Prisma Client ʲˢ
@@ -618,6 +745,46 @@ export class PrismaClient<
     * ```
     */
   get task(): Prisma.TaskDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.roomOperationalState`: Exposes CRUD operations for the **RoomOperationalState** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RoomOperationalStates
+    * const roomOperationalStates = await prisma.roomOperationalState.findMany()
+    * ```
+    */
+  get roomOperationalState(): Prisma.RoomOperationalStateDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.roomOperationalEvent`: Exposes CRUD operations for the **RoomOperationalEvent** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RoomOperationalEvents
+    * const roomOperationalEvents = await prisma.roomOperationalEvent.findMany()
+    * ```
+    */
+  get roomOperationalEvent(): Prisma.RoomOperationalEventDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.roomIssue`: Exposes CRUD operations for the **RoomIssue** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RoomIssues
+    * const roomIssues = await prisma.roomIssue.findMany()
+    * ```
+    */
+  get roomIssue(): Prisma.RoomIssueDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.roomChecklistRun`: Exposes CRUD operations for the **RoomChecklistRun** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RoomChecklistRuns
+    * const roomChecklistRuns = await prisma.roomChecklistRun.findMany()
+    * ```
+    */
+  get roomChecklistRun(): Prisma.RoomChecklistRunDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.userAlertInbox`: Exposes CRUD operations for the **UserAlertInbox** model.
@@ -1153,6 +1320,10 @@ export namespace Prisma {
     StatusChangeEvent: 'StatusChangeEvent',
     AlertState: 'AlertState',
     Task: 'Task',
+    RoomOperationalState: 'RoomOperationalState',
+    RoomOperationalEvent: 'RoomOperationalEvent',
+    RoomIssue: 'RoomIssue',
+    RoomChecklistRun: 'RoomChecklistRun',
     UserAlertInbox: 'UserAlertInbox',
     SafetyEvent: 'SafetyEvent',
     AlertThreshold: 'AlertThreshold',
@@ -1176,7 +1347,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "facility" | "clinic" | "provider" | "userRole" | "maProviderMap" | "maClinicMap" | "clinicAssignment" | "clinicRoom" | "clinicRoomAssignment" | "reasonForVisit" | "template" | "reasonClinicAssignment" | "templateReasonAssignment" | "incomingImportBatch" | "incomingSchedule" | "incomingImportIssue" | "encounter" | "statusChangeEvent" | "alertState" | "task" | "userAlertInbox" | "safetyEvent" | "alertThreshold" | "notificationPolicy" | "officeManagerDailyRollup" | "auditLog" | "eventOutbox" | "integrationConnector"
+      modelProps: "user" | "facility" | "clinic" | "provider" | "userRole" | "maProviderMap" | "maClinicMap" | "clinicAssignment" | "clinicRoom" | "clinicRoomAssignment" | "reasonForVisit" | "template" | "reasonClinicAssignment" | "templateReasonAssignment" | "incomingImportBatch" | "incomingSchedule" | "incomingImportIssue" | "encounter" | "statusChangeEvent" | "alertState" | "task" | "roomOperationalState" | "roomOperationalEvent" | "roomIssue" | "roomChecklistRun" | "userAlertInbox" | "safetyEvent" | "alertThreshold" | "notificationPolicy" | "officeManagerDailyRollup" | "auditLog" | "eventOutbox" | "integrationConnector"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -2734,6 +2905,302 @@ export namespace Prisma {
           }
         }
       }
+      RoomOperationalState: {
+        payload: Prisma.$RoomOperationalStatePayload<ExtArgs>
+        fields: Prisma.RoomOperationalStateFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RoomOperationalStateFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RoomOperationalStateFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>
+          }
+          findFirst: {
+            args: Prisma.RoomOperationalStateFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RoomOperationalStateFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>
+          }
+          findMany: {
+            args: Prisma.RoomOperationalStateFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>[]
+          }
+          create: {
+            args: Prisma.RoomOperationalStateCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>
+          }
+          createMany: {
+            args: Prisma.RoomOperationalStateCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RoomOperationalStateCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>[]
+          }
+          delete: {
+            args: Prisma.RoomOperationalStateDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>
+          }
+          update: {
+            args: Prisma.RoomOperationalStateUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>
+          }
+          deleteMany: {
+            args: Prisma.RoomOperationalStateDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RoomOperationalStateUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.RoomOperationalStateUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>[]
+          }
+          upsert: {
+            args: Prisma.RoomOperationalStateUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalStatePayload>
+          }
+          aggregate: {
+            args: Prisma.RoomOperationalStateAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRoomOperationalState>
+          }
+          groupBy: {
+            args: Prisma.RoomOperationalStateGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RoomOperationalStateGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RoomOperationalStateCountArgs<ExtArgs>
+            result: $Utils.Optional<RoomOperationalStateCountAggregateOutputType> | number
+          }
+        }
+      }
+      RoomOperationalEvent: {
+        payload: Prisma.$RoomOperationalEventPayload<ExtArgs>
+        fields: Prisma.RoomOperationalEventFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RoomOperationalEventFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RoomOperationalEventFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>
+          }
+          findFirst: {
+            args: Prisma.RoomOperationalEventFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RoomOperationalEventFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>
+          }
+          findMany: {
+            args: Prisma.RoomOperationalEventFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>[]
+          }
+          create: {
+            args: Prisma.RoomOperationalEventCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>
+          }
+          createMany: {
+            args: Prisma.RoomOperationalEventCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RoomOperationalEventCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>[]
+          }
+          delete: {
+            args: Prisma.RoomOperationalEventDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>
+          }
+          update: {
+            args: Prisma.RoomOperationalEventUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>
+          }
+          deleteMany: {
+            args: Prisma.RoomOperationalEventDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RoomOperationalEventUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.RoomOperationalEventUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>[]
+          }
+          upsert: {
+            args: Prisma.RoomOperationalEventUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomOperationalEventPayload>
+          }
+          aggregate: {
+            args: Prisma.RoomOperationalEventAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRoomOperationalEvent>
+          }
+          groupBy: {
+            args: Prisma.RoomOperationalEventGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RoomOperationalEventGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RoomOperationalEventCountArgs<ExtArgs>
+            result: $Utils.Optional<RoomOperationalEventCountAggregateOutputType> | number
+          }
+        }
+      }
+      RoomIssue: {
+        payload: Prisma.$RoomIssuePayload<ExtArgs>
+        fields: Prisma.RoomIssueFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RoomIssueFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RoomIssueFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>
+          }
+          findFirst: {
+            args: Prisma.RoomIssueFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RoomIssueFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>
+          }
+          findMany: {
+            args: Prisma.RoomIssueFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>[]
+          }
+          create: {
+            args: Prisma.RoomIssueCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>
+          }
+          createMany: {
+            args: Prisma.RoomIssueCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RoomIssueCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>[]
+          }
+          delete: {
+            args: Prisma.RoomIssueDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>
+          }
+          update: {
+            args: Prisma.RoomIssueUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>
+          }
+          deleteMany: {
+            args: Prisma.RoomIssueDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RoomIssueUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.RoomIssueUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>[]
+          }
+          upsert: {
+            args: Prisma.RoomIssueUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomIssuePayload>
+          }
+          aggregate: {
+            args: Prisma.RoomIssueAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRoomIssue>
+          }
+          groupBy: {
+            args: Prisma.RoomIssueGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RoomIssueGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RoomIssueCountArgs<ExtArgs>
+            result: $Utils.Optional<RoomIssueCountAggregateOutputType> | number
+          }
+        }
+      }
+      RoomChecklistRun: {
+        payload: Prisma.$RoomChecklistRunPayload<ExtArgs>
+        fields: Prisma.RoomChecklistRunFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RoomChecklistRunFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RoomChecklistRunFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>
+          }
+          findFirst: {
+            args: Prisma.RoomChecklistRunFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RoomChecklistRunFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>
+          }
+          findMany: {
+            args: Prisma.RoomChecklistRunFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>[]
+          }
+          create: {
+            args: Prisma.RoomChecklistRunCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>
+          }
+          createMany: {
+            args: Prisma.RoomChecklistRunCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RoomChecklistRunCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>[]
+          }
+          delete: {
+            args: Prisma.RoomChecklistRunDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>
+          }
+          update: {
+            args: Prisma.RoomChecklistRunUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>
+          }
+          deleteMany: {
+            args: Prisma.RoomChecklistRunDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RoomChecklistRunUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.RoomChecklistRunUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>[]
+          }
+          upsert: {
+            args: Prisma.RoomChecklistRunUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomChecklistRunPayload>
+          }
+          aggregate: {
+            args: Prisma.RoomChecklistRunAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRoomChecklistRun>
+          }
+          groupBy: {
+            args: Prisma.RoomChecklistRunGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RoomChecklistRunGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RoomChecklistRunCountArgs<ExtArgs>
+            result: $Utils.Optional<RoomChecklistRunCountAggregateOutputType> | number
+          }
+        }
+      }
       UserAlertInbox: {
         payload: Prisma.$UserAlertInboxPayload<ExtArgs>
         fields: Prisma.UserAlertInboxFieldRefs
@@ -3455,6 +3922,10 @@ export namespace Prisma {
     statusChangeEvent?: StatusChangeEventOmit
     alertState?: AlertStateOmit
     task?: TaskOmit
+    roomOperationalState?: RoomOperationalStateOmit
+    roomOperationalEvent?: RoomOperationalEventOmit
+    roomIssue?: RoomIssueOmit
+    roomChecklistRun?: RoomChecklistRunOmit
     userAlertInbox?: UserAlertInboxOmit
     safetyEvent?: SafetyEventOmit
     alertThreshold?: AlertThresholdOmit
@@ -3957,11 +4428,19 @@ export namespace Prisma {
   export type ClinicRoomCountOutputType = {
     clinicLinks: number
     encounters: number
+    operationalEvents: number
+    roomIssues: number
+    checklistRuns: number
+    tasks: number
   }
 
   export type ClinicRoomCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     clinicLinks?: boolean | ClinicRoomCountOutputTypeCountClinicLinksArgs
     encounters?: boolean | ClinicRoomCountOutputTypeCountEncountersArgs
+    operationalEvents?: boolean | ClinicRoomCountOutputTypeCountOperationalEventsArgs
+    roomIssues?: boolean | ClinicRoomCountOutputTypeCountRoomIssuesArgs
+    checklistRuns?: boolean | ClinicRoomCountOutputTypeCountChecklistRunsArgs
+    tasks?: boolean | ClinicRoomCountOutputTypeCountTasksArgs
   }
 
   // Custom InputTypes
@@ -3987,6 +4466,34 @@ export namespace Prisma {
    */
   export type ClinicRoomCountOutputTypeCountEncountersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: EncounterWhereInput
+  }
+
+  /**
+   * ClinicRoomCountOutputType without action
+   */
+  export type ClinicRoomCountOutputTypeCountOperationalEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomOperationalEventWhereInput
+  }
+
+  /**
+   * ClinicRoomCountOutputType without action
+   */
+  export type ClinicRoomCountOutputTypeCountRoomIssuesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomIssueWhereInput
+  }
+
+  /**
+   * ClinicRoomCountOutputType without action
+   */
+  export type ClinicRoomCountOutputTypeCountChecklistRunsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomChecklistRunWhereInput
+  }
+
+  /**
+   * ClinicRoomCountOutputType without action
+   */
+  export type ClinicRoomCountOutputTypeCountTasksArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TaskWhereInput
   }
 
 
@@ -4167,12 +4674,18 @@ export namespace Prisma {
     statusEvents: number
     tasks: number
     safetyEvents: number
+    operationalOccupancies: number
+    roomOperationalEvents: number
+    roomIssues: number
   }
 
   export type EncounterCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     statusEvents?: boolean | EncounterCountOutputTypeCountStatusEventsArgs
     tasks?: boolean | EncounterCountOutputTypeCountTasksArgs
     safetyEvents?: boolean | EncounterCountOutputTypeCountSafetyEventsArgs
+    operationalOccupancies?: boolean | EncounterCountOutputTypeCountOperationalOccupanciesArgs
+    roomOperationalEvents?: boolean | EncounterCountOutputTypeCountRoomOperationalEventsArgs
+    roomIssues?: boolean | EncounterCountOutputTypeCountRoomIssuesArgs
   }
 
   // Custom InputTypes
@@ -4205,6 +4718,58 @@ export namespace Prisma {
    */
   export type EncounterCountOutputTypeCountSafetyEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: SafetyEventWhereInput
+  }
+
+  /**
+   * EncounterCountOutputType without action
+   */
+  export type EncounterCountOutputTypeCountOperationalOccupanciesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomOperationalStateWhereInput
+  }
+
+  /**
+   * EncounterCountOutputType without action
+   */
+  export type EncounterCountOutputTypeCountRoomOperationalEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomOperationalEventWhereInput
+  }
+
+  /**
+   * EncounterCountOutputType without action
+   */
+  export type EncounterCountOutputTypeCountRoomIssuesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomIssueWhereInput
+  }
+
+
+  /**
+   * Count Type TaskCountOutputType
+   */
+
+  export type TaskCountOutputType = {
+    roomIssues: number
+  }
+
+  export type TaskCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    roomIssues?: boolean | TaskCountOutputTypeCountRoomIssuesArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * TaskCountOutputType without action
+   */
+  export type TaskCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TaskCountOutputType
+     */
+    select?: TaskCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * TaskCountOutputType without action
+   */
+  export type TaskCountOutputTypeCountRoomIssuesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomIssueWhereInput
   }
 
 
@@ -14329,6 +14894,11 @@ export namespace Prisma {
     facility?: boolean | FacilityDefaultArgs<ExtArgs>
     clinicLinks?: boolean | ClinicRoom$clinicLinksArgs<ExtArgs>
     encounters?: boolean | ClinicRoom$encountersArgs<ExtArgs>
+    operationalState?: boolean | ClinicRoom$operationalStateArgs<ExtArgs>
+    operationalEvents?: boolean | ClinicRoom$operationalEventsArgs<ExtArgs>
+    roomIssues?: boolean | ClinicRoom$roomIssuesArgs<ExtArgs>
+    checklistRuns?: boolean | ClinicRoom$checklistRunsArgs<ExtArgs>
+    tasks?: boolean | ClinicRoom$tasksArgs<ExtArgs>
     _count?: boolean | ClinicRoomCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["clinicRoom"]>
 
@@ -14369,6 +14939,11 @@ export namespace Prisma {
     facility?: boolean | FacilityDefaultArgs<ExtArgs>
     clinicLinks?: boolean | ClinicRoom$clinicLinksArgs<ExtArgs>
     encounters?: boolean | ClinicRoom$encountersArgs<ExtArgs>
+    operationalState?: boolean | ClinicRoom$operationalStateArgs<ExtArgs>
+    operationalEvents?: boolean | ClinicRoom$operationalEventsArgs<ExtArgs>
+    roomIssues?: boolean | ClinicRoom$roomIssuesArgs<ExtArgs>
+    checklistRuns?: boolean | ClinicRoom$checklistRunsArgs<ExtArgs>
+    tasks?: boolean | ClinicRoom$tasksArgs<ExtArgs>
     _count?: boolean | ClinicRoomCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type ClinicRoomIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -14384,6 +14959,11 @@ export namespace Prisma {
       facility: Prisma.$FacilityPayload<ExtArgs>
       clinicLinks: Prisma.$ClinicRoomAssignmentPayload<ExtArgs>[]
       encounters: Prisma.$EncounterPayload<ExtArgs>[]
+      operationalState: Prisma.$RoomOperationalStatePayload<ExtArgs> | null
+      operationalEvents: Prisma.$RoomOperationalEventPayload<ExtArgs>[]
+      roomIssues: Prisma.$RoomIssuePayload<ExtArgs>[]
+      checklistRuns: Prisma.$RoomChecklistRunPayload<ExtArgs>[]
+      tasks: Prisma.$TaskPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -14790,6 +15370,11 @@ export namespace Prisma {
     facility<T extends FacilityDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FacilityDefaultArgs<ExtArgs>>): Prisma__FacilityClient<$Result.GetResult<Prisma.$FacilityPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     clinicLinks<T extends ClinicRoom$clinicLinksArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$clinicLinksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ClinicRoomAssignmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     encounters<T extends ClinicRoom$encountersArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$encountersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    operationalState<T extends ClinicRoom$operationalStateArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$operationalStateArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    operationalEvents<T extends ClinicRoom$operationalEventsArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$operationalEventsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roomIssues<T extends ClinicRoom$roomIssuesArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$roomIssuesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    checklistRuns<T extends ClinicRoom$checklistRunsArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$checklistRunsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    tasks<T extends ClinicRoom$tasksArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoom$tasksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -15267,6 +15852,121 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: EncounterScalarFieldEnum | EncounterScalarFieldEnum[]
+  }
+
+  /**
+   * ClinicRoom.operationalState
+   */
+  export type ClinicRoom$operationalStateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    where?: RoomOperationalStateWhereInput
+  }
+
+  /**
+   * ClinicRoom.operationalEvents
+   */
+  export type ClinicRoom$operationalEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    where?: RoomOperationalEventWhereInput
+    orderBy?: RoomOperationalEventOrderByWithRelationInput | RoomOperationalEventOrderByWithRelationInput[]
+    cursor?: RoomOperationalEventWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomOperationalEventScalarFieldEnum | RoomOperationalEventScalarFieldEnum[]
+  }
+
+  /**
+   * ClinicRoom.roomIssues
+   */
+  export type ClinicRoom$roomIssuesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    where?: RoomIssueWhereInput
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    cursor?: RoomIssueWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomIssueScalarFieldEnum | RoomIssueScalarFieldEnum[]
+  }
+
+  /**
+   * ClinicRoom.checklistRuns
+   */
+  export type ClinicRoom$checklistRunsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    where?: RoomChecklistRunWhereInput
+    orderBy?: RoomChecklistRunOrderByWithRelationInput | RoomChecklistRunOrderByWithRelationInput[]
+    cursor?: RoomChecklistRunWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomChecklistRunScalarFieldEnum | RoomChecklistRunScalarFieldEnum[]
+  }
+
+  /**
+   * ClinicRoom.tasks
+   */
+  export type ClinicRoom$tasksArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Task
+     */
+    select?: TaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Task
+     */
+    omit?: TaskOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TaskInclude<ExtArgs> | null
+    where?: TaskWhereInput
+    orderBy?: TaskOrderByWithRelationInput | TaskOrderByWithRelationInput[]
+    cursor?: TaskWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TaskScalarFieldEnum | TaskScalarFieldEnum[]
   }
 
   /**
@@ -25280,6 +25980,9 @@ export namespace Prisma {
     alertState?: boolean | Encounter$alertStateArgs<ExtArgs>
     tasks?: boolean | Encounter$tasksArgs<ExtArgs>
     safetyEvents?: boolean | Encounter$safetyEventsArgs<ExtArgs>
+    operationalOccupancies?: boolean | Encounter$operationalOccupanciesArgs<ExtArgs>
+    roomOperationalEvents?: boolean | Encounter$roomOperationalEventsArgs<ExtArgs>
+    roomIssues?: boolean | Encounter$roomIssuesArgs<ExtArgs>
     _count?: boolean | EncounterCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["encounter"]>
 
@@ -25388,6 +26091,9 @@ export namespace Prisma {
     alertState?: boolean | Encounter$alertStateArgs<ExtArgs>
     tasks?: boolean | Encounter$tasksArgs<ExtArgs>
     safetyEvents?: boolean | Encounter$safetyEventsArgs<ExtArgs>
+    operationalOccupancies?: boolean | Encounter$operationalOccupanciesArgs<ExtArgs>
+    roomOperationalEvents?: boolean | Encounter$roomOperationalEventsArgs<ExtArgs>
+    roomIssues?: boolean | Encounter$roomIssuesArgs<ExtArgs>
     _count?: boolean | EncounterCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type EncounterIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -25414,6 +26120,9 @@ export namespace Prisma {
       alertState: Prisma.$AlertStatePayload<ExtArgs> | null
       tasks: Prisma.$TaskPayload<ExtArgs>[]
       safetyEvents: Prisma.$SafetyEventPayload<ExtArgs>[]
+      operationalOccupancies: Prisma.$RoomOperationalStatePayload<ExtArgs>[]
+      roomOperationalEvents: Prisma.$RoomOperationalEventPayload<ExtArgs>[]
+      roomIssues: Prisma.$RoomIssuePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -25844,6 +26553,9 @@ export namespace Prisma {
     alertState<T extends Encounter$alertStateArgs<ExtArgs> = {}>(args?: Subset<T, Encounter$alertStateArgs<ExtArgs>>): Prisma__AlertStateClient<$Result.GetResult<Prisma.$AlertStatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     tasks<T extends Encounter$tasksArgs<ExtArgs> = {}>(args?: Subset<T, Encounter$tasksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     safetyEvents<T extends Encounter$safetyEventsArgs<ExtArgs> = {}>(args?: Subset<T, Encounter$safetyEventsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SafetyEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    operationalOccupancies<T extends Encounter$operationalOccupanciesArgs<ExtArgs> = {}>(args?: Subset<T, Encounter$operationalOccupanciesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roomOperationalEvents<T extends Encounter$roomOperationalEventsArgs<ExtArgs> = {}>(args?: Subset<T, Encounter$roomOperationalEventsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roomIssues<T extends Encounter$roomIssuesArgs<ExtArgs> = {}>(args?: Subset<T, Encounter$roomIssuesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -26440,6 +27152,78 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: SafetyEventScalarFieldEnum | SafetyEventScalarFieldEnum[]
+  }
+
+  /**
+   * Encounter.operationalOccupancies
+   */
+  export type Encounter$operationalOccupanciesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    where?: RoomOperationalStateWhereInput
+    orderBy?: RoomOperationalStateOrderByWithRelationInput | RoomOperationalStateOrderByWithRelationInput[]
+    cursor?: RoomOperationalStateWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomOperationalStateScalarFieldEnum | RoomOperationalStateScalarFieldEnum[]
+  }
+
+  /**
+   * Encounter.roomOperationalEvents
+   */
+  export type Encounter$roomOperationalEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    where?: RoomOperationalEventWhereInput
+    orderBy?: RoomOperationalEventOrderByWithRelationInput | RoomOperationalEventOrderByWithRelationInput[]
+    cursor?: RoomOperationalEventWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomOperationalEventScalarFieldEnum | RoomOperationalEventScalarFieldEnum[]
+  }
+
+  /**
+   * Encounter.roomIssues
+   */
+  export type Encounter$roomIssuesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    where?: RoomIssueWhereInput
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    cursor?: RoomIssueWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomIssueScalarFieldEnum | RoomIssueScalarFieldEnum[]
   }
 
   /**
@@ -28651,7 +29435,12 @@ export namespace Prisma {
 
   export type TaskMinAggregateOutputType = {
     id: string | null
+    facilityId: string | null
+    clinicId: string | null
     encounterId: string | null
+    roomId: string | null
+    sourceType: $Enums.TaskSourceType | null
+    sourceId: string | null
     taskType: string | null
     description: string | null
     assignedToRole: $Enums.RoleName | null
@@ -28671,7 +29460,12 @@ export namespace Prisma {
 
   export type TaskMaxAggregateOutputType = {
     id: string | null
+    facilityId: string | null
+    clinicId: string | null
     encounterId: string | null
+    roomId: string | null
+    sourceType: $Enums.TaskSourceType | null
+    sourceId: string | null
     taskType: string | null
     description: string | null
     assignedToRole: $Enums.RoleName | null
@@ -28691,7 +29485,12 @@ export namespace Prisma {
 
   export type TaskCountAggregateOutputType = {
     id: number
+    facilityId: number
+    clinicId: number
     encounterId: number
+    roomId: number
+    sourceType: number
+    sourceId: number
     taskType: number
     description: number
     assignedToRole: number
@@ -28721,7 +29520,12 @@ export namespace Prisma {
 
   export type TaskMinAggregateInputType = {
     id?: true
+    facilityId?: true
+    clinicId?: true
     encounterId?: true
+    roomId?: true
+    sourceType?: true
+    sourceId?: true
     taskType?: true
     description?: true
     assignedToRole?: true
@@ -28741,7 +29545,12 @@ export namespace Prisma {
 
   export type TaskMaxAggregateInputType = {
     id?: true
+    facilityId?: true
+    clinicId?: true
     encounterId?: true
+    roomId?: true
+    sourceType?: true
+    sourceId?: true
     taskType?: true
     description?: true
     assignedToRole?: true
@@ -28761,7 +29570,12 @@ export namespace Prisma {
 
   export type TaskCountAggregateInputType = {
     id?: true
+    facilityId?: true
+    clinicId?: true
     encounterId?: true
+    roomId?: true
+    sourceType?: true
+    sourceId?: true
     taskType?: true
     description?: true
     assignedToRole?: true
@@ -28868,7 +29682,12 @@ export namespace Prisma {
 
   export type TaskGroupByOutputType = {
     id: string
-    encounterId: string
+    facilityId: string | null
+    clinicId: string | null
+    encounterId: string | null
+    roomId: string | null
+    sourceType: $Enums.TaskSourceType | null
+    sourceId: string | null
     taskType: string
     description: string
     assignedToRole: $Enums.RoleName | null
@@ -28907,7 +29726,12 @@ export namespace Prisma {
 
   export type TaskSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
     encounterId?: boolean
+    roomId?: boolean
+    sourceType?: boolean
+    sourceId?: boolean
     taskType?: boolean
     description?: boolean
     assignedToRole?: boolean
@@ -28923,15 +29747,23 @@ export namespace Prisma {
     completedBy?: boolean
     notes?: boolean
     updatedAt?: boolean
-    encounter?: boolean | EncounterDefaultArgs<ExtArgs>
+    encounter?: boolean | Task$encounterArgs<ExtArgs>
+    room?: boolean | Task$roomArgs<ExtArgs>
     creator?: boolean | UserDefaultArgs<ExtArgs>
     acknowledger?: boolean | Task$acknowledgerArgs<ExtArgs>
     completer?: boolean | Task$completerArgs<ExtArgs>
+    roomIssues?: boolean | Task$roomIssuesArgs<ExtArgs>
+    _count?: boolean | TaskCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["task"]>
 
   export type TaskSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
     encounterId?: boolean
+    roomId?: boolean
+    sourceType?: boolean
+    sourceId?: boolean
     taskType?: boolean
     description?: boolean
     assignedToRole?: boolean
@@ -28947,7 +29779,8 @@ export namespace Prisma {
     completedBy?: boolean
     notes?: boolean
     updatedAt?: boolean
-    encounter?: boolean | EncounterDefaultArgs<ExtArgs>
+    encounter?: boolean | Task$encounterArgs<ExtArgs>
+    room?: boolean | Task$roomArgs<ExtArgs>
     creator?: boolean | UserDefaultArgs<ExtArgs>
     acknowledger?: boolean | Task$acknowledgerArgs<ExtArgs>
     completer?: boolean | Task$completerArgs<ExtArgs>
@@ -28955,7 +29788,12 @@ export namespace Prisma {
 
   export type TaskSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
     encounterId?: boolean
+    roomId?: boolean
+    sourceType?: boolean
+    sourceId?: boolean
     taskType?: boolean
     description?: boolean
     assignedToRole?: boolean
@@ -28971,7 +29809,8 @@ export namespace Prisma {
     completedBy?: boolean
     notes?: boolean
     updatedAt?: boolean
-    encounter?: boolean | EncounterDefaultArgs<ExtArgs>
+    encounter?: boolean | Task$encounterArgs<ExtArgs>
+    room?: boolean | Task$roomArgs<ExtArgs>
     creator?: boolean | UserDefaultArgs<ExtArgs>
     acknowledger?: boolean | Task$acknowledgerArgs<ExtArgs>
     completer?: boolean | Task$completerArgs<ExtArgs>
@@ -28979,7 +29818,12 @@ export namespace Prisma {
 
   export type TaskSelectScalar = {
     id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
     encounterId?: boolean
+    roomId?: boolean
+    sourceType?: boolean
+    sourceId?: boolean
     taskType?: boolean
     description?: boolean
     assignedToRole?: boolean
@@ -28997,21 +29841,26 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type TaskOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "encounterId" | "taskType" | "description" | "assignedToRole" | "assignedToUserId" | "status" | "priority" | "blocking" | "createdAt" | "createdBy" | "acknowledgedAt" | "acknowledgedBy" | "completedAt" | "completedBy" | "notes" | "updatedAt", ExtArgs["result"]["task"]>
+  export type TaskOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "facilityId" | "clinicId" | "encounterId" | "roomId" | "sourceType" | "sourceId" | "taskType" | "description" | "assignedToRole" | "assignedToUserId" | "status" | "priority" | "blocking" | "createdAt" | "createdBy" | "acknowledgedAt" | "acknowledgedBy" | "completedAt" | "completedBy" | "notes" | "updatedAt", ExtArgs["result"]["task"]>
   export type TaskInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    encounter?: boolean | EncounterDefaultArgs<ExtArgs>
+    encounter?: boolean | Task$encounterArgs<ExtArgs>
+    room?: boolean | Task$roomArgs<ExtArgs>
     creator?: boolean | UserDefaultArgs<ExtArgs>
     acknowledger?: boolean | Task$acknowledgerArgs<ExtArgs>
     completer?: boolean | Task$completerArgs<ExtArgs>
+    roomIssues?: boolean | Task$roomIssuesArgs<ExtArgs>
+    _count?: boolean | TaskCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type TaskIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    encounter?: boolean | EncounterDefaultArgs<ExtArgs>
+    encounter?: boolean | Task$encounterArgs<ExtArgs>
+    room?: boolean | Task$roomArgs<ExtArgs>
     creator?: boolean | UserDefaultArgs<ExtArgs>
     acknowledger?: boolean | Task$acknowledgerArgs<ExtArgs>
     completer?: boolean | Task$completerArgs<ExtArgs>
   }
   export type TaskIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    encounter?: boolean | EncounterDefaultArgs<ExtArgs>
+    encounter?: boolean | Task$encounterArgs<ExtArgs>
+    room?: boolean | Task$roomArgs<ExtArgs>
     creator?: boolean | UserDefaultArgs<ExtArgs>
     acknowledger?: boolean | Task$acknowledgerArgs<ExtArgs>
     completer?: boolean | Task$completerArgs<ExtArgs>
@@ -29020,14 +29869,21 @@ export namespace Prisma {
   export type $TaskPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "Task"
     objects: {
-      encounter: Prisma.$EncounterPayload<ExtArgs>
+      encounter: Prisma.$EncounterPayload<ExtArgs> | null
+      room: Prisma.$ClinicRoomPayload<ExtArgs> | null
       creator: Prisma.$UserPayload<ExtArgs>
       acknowledger: Prisma.$UserPayload<ExtArgs> | null
       completer: Prisma.$UserPayload<ExtArgs> | null
+      roomIssues: Prisma.$RoomIssuePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
-      encounterId: string
+      facilityId: string | null
+      clinicId: string | null
+      encounterId: string | null
+      roomId: string | null
+      sourceType: $Enums.TaskSourceType | null
+      sourceId: string | null
       taskType: string
       description: string
       assignedToRole: $Enums.RoleName | null
@@ -29437,10 +30293,12 @@ export namespace Prisma {
    */
   export interface Prisma__TaskClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
-    encounter<T extends EncounterDefaultArgs<ExtArgs> = {}>(args?: Subset<T, EncounterDefaultArgs<ExtArgs>>): Prisma__EncounterClient<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    encounter<T extends Task$encounterArgs<ExtArgs> = {}>(args?: Subset<T, Task$encounterArgs<ExtArgs>>): Prisma__EncounterClient<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    room<T extends Task$roomArgs<ExtArgs> = {}>(args?: Subset<T, Task$roomArgs<ExtArgs>>): Prisma__ClinicRoomClient<$Result.GetResult<Prisma.$ClinicRoomPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     creator<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     acknowledger<T extends Task$acknowledgerArgs<ExtArgs> = {}>(args?: Subset<T, Task$acknowledgerArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     completer<T extends Task$completerArgs<ExtArgs> = {}>(args?: Subset<T, Task$completerArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    roomIssues<T extends Task$roomIssuesArgs<ExtArgs> = {}>(args?: Subset<T, Task$roomIssuesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -29471,7 +30329,12 @@ export namespace Prisma {
    */
   interface TaskFieldRefs {
     readonly id: FieldRef<"Task", 'String'>
+    readonly facilityId: FieldRef<"Task", 'String'>
+    readonly clinicId: FieldRef<"Task", 'String'>
     readonly encounterId: FieldRef<"Task", 'String'>
+    readonly roomId: FieldRef<"Task", 'String'>
+    readonly sourceType: FieldRef<"Task", 'TaskSourceType'>
+    readonly sourceId: FieldRef<"Task", 'String'>
     readonly taskType: FieldRef<"Task", 'String'>
     readonly description: FieldRef<"Task", 'String'>
     readonly assignedToRole: FieldRef<"Task", 'RoleName'>
@@ -29883,6 +30746,44 @@ export namespace Prisma {
   }
 
   /**
+   * Task.encounter
+   */
+  export type Task$encounterArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Encounter
+     */
+    select?: EncounterSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Encounter
+     */
+    omit?: EncounterOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EncounterInclude<ExtArgs> | null
+    where?: EncounterWhereInput
+  }
+
+  /**
+   * Task.room
+   */
+  export type Task$roomArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ClinicRoom
+     */
+    select?: ClinicRoomSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ClinicRoom
+     */
+    omit?: ClinicRoomOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ClinicRoomInclude<ExtArgs> | null
+    where?: ClinicRoomWhereInput
+  }
+
+  /**
    * Task.acknowledger
    */
   export type Task$acknowledgerArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -29921,6 +30822,30 @@ export namespace Prisma {
   }
 
   /**
+   * Task.roomIssues
+   */
+  export type Task$roomIssuesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    where?: RoomIssueWhereInput
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    cursor?: RoomIssueWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomIssueScalarFieldEnum | RoomIssueScalarFieldEnum[]
+  }
+
+  /**
    * Task without action
    */
   export type TaskDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -29936,6 +30861,4810 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: TaskInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RoomOperationalState
+   */
+
+  export type AggregateRoomOperationalState = {
+    _count: RoomOperationalStateCountAggregateOutputType | null
+    _min: RoomOperationalStateMinAggregateOutputType | null
+    _max: RoomOperationalStateMaxAggregateOutputType | null
+  }
+
+  export type RoomOperationalStateMinAggregateOutputType = {
+    roomId: string | null
+    currentStatus: $Enums.RoomOperationalStatus | null
+    statusSinceAt: Date | null
+    occupiedEncounterId: string | null
+    activeCleanerUserId: string | null
+    holdReason: $Enums.RoomHoldReason | null
+    holdNote: string | null
+    lastReadyAt: Date | null
+    lastOccupiedAt: Date | null
+    lastTurnoverAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type RoomOperationalStateMaxAggregateOutputType = {
+    roomId: string | null
+    currentStatus: $Enums.RoomOperationalStatus | null
+    statusSinceAt: Date | null
+    occupiedEncounterId: string | null
+    activeCleanerUserId: string | null
+    holdReason: $Enums.RoomHoldReason | null
+    holdNote: string | null
+    lastReadyAt: Date | null
+    lastOccupiedAt: Date | null
+    lastTurnoverAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type RoomOperationalStateCountAggregateOutputType = {
+    roomId: number
+    currentStatus: number
+    statusSinceAt: number
+    occupiedEncounterId: number
+    activeCleanerUserId: number
+    holdReason: number
+    holdNote: number
+    lastReadyAt: number
+    lastOccupiedAt: number
+    lastTurnoverAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type RoomOperationalStateMinAggregateInputType = {
+    roomId?: true
+    currentStatus?: true
+    statusSinceAt?: true
+    occupiedEncounterId?: true
+    activeCleanerUserId?: true
+    holdReason?: true
+    holdNote?: true
+    lastReadyAt?: true
+    lastOccupiedAt?: true
+    lastTurnoverAt?: true
+    updatedAt?: true
+  }
+
+  export type RoomOperationalStateMaxAggregateInputType = {
+    roomId?: true
+    currentStatus?: true
+    statusSinceAt?: true
+    occupiedEncounterId?: true
+    activeCleanerUserId?: true
+    holdReason?: true
+    holdNote?: true
+    lastReadyAt?: true
+    lastOccupiedAt?: true
+    lastTurnoverAt?: true
+    updatedAt?: true
+  }
+
+  export type RoomOperationalStateCountAggregateInputType = {
+    roomId?: true
+    currentStatus?: true
+    statusSinceAt?: true
+    occupiedEncounterId?: true
+    activeCleanerUserId?: true
+    holdReason?: true
+    holdNote?: true
+    lastReadyAt?: true
+    lastOccupiedAt?: true
+    lastTurnoverAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type RoomOperationalStateAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomOperationalState to aggregate.
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalStates to fetch.
+     */
+    orderBy?: RoomOperationalStateOrderByWithRelationInput | RoomOperationalStateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RoomOperationalStateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalStates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalStates.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RoomOperationalStates
+    **/
+    _count?: true | RoomOperationalStateCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RoomOperationalStateMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RoomOperationalStateMaxAggregateInputType
+  }
+
+  export type GetRoomOperationalStateAggregateType<T extends RoomOperationalStateAggregateArgs> = {
+        [P in keyof T & keyof AggregateRoomOperationalState]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRoomOperationalState[P]>
+      : GetScalarType<T[P], AggregateRoomOperationalState[P]>
+  }
+
+
+
+
+  export type RoomOperationalStateGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomOperationalStateWhereInput
+    orderBy?: RoomOperationalStateOrderByWithAggregationInput | RoomOperationalStateOrderByWithAggregationInput[]
+    by: RoomOperationalStateScalarFieldEnum[] | RoomOperationalStateScalarFieldEnum
+    having?: RoomOperationalStateScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RoomOperationalStateCountAggregateInputType | true
+    _min?: RoomOperationalStateMinAggregateInputType
+    _max?: RoomOperationalStateMaxAggregateInputType
+  }
+
+  export type RoomOperationalStateGroupByOutputType = {
+    roomId: string
+    currentStatus: $Enums.RoomOperationalStatus
+    statusSinceAt: Date
+    occupiedEncounterId: string | null
+    activeCleanerUserId: string | null
+    holdReason: $Enums.RoomHoldReason | null
+    holdNote: string | null
+    lastReadyAt: Date | null
+    lastOccupiedAt: Date | null
+    lastTurnoverAt: Date | null
+    updatedAt: Date
+    _count: RoomOperationalStateCountAggregateOutputType | null
+    _min: RoomOperationalStateMinAggregateOutputType | null
+    _max: RoomOperationalStateMaxAggregateOutputType | null
+  }
+
+  type GetRoomOperationalStateGroupByPayload<T extends RoomOperationalStateGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RoomOperationalStateGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RoomOperationalStateGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RoomOperationalStateGroupByOutputType[P]>
+            : GetScalarType<T[P], RoomOperationalStateGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RoomOperationalStateSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    roomId?: boolean
+    currentStatus?: boolean
+    statusSinceAt?: boolean
+    occupiedEncounterId?: boolean
+    activeCleanerUserId?: boolean
+    holdReason?: boolean
+    holdNote?: boolean
+    lastReadyAt?: boolean
+    lastOccupiedAt?: boolean
+    lastTurnoverAt?: boolean
+    updatedAt?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    occupiedEncounter?: boolean | RoomOperationalState$occupiedEncounterArgs<ExtArgs>
+  }, ExtArgs["result"]["roomOperationalState"]>
+
+  export type RoomOperationalStateSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    roomId?: boolean
+    currentStatus?: boolean
+    statusSinceAt?: boolean
+    occupiedEncounterId?: boolean
+    activeCleanerUserId?: boolean
+    holdReason?: boolean
+    holdNote?: boolean
+    lastReadyAt?: boolean
+    lastOccupiedAt?: boolean
+    lastTurnoverAt?: boolean
+    updatedAt?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    occupiedEncounter?: boolean | RoomOperationalState$occupiedEncounterArgs<ExtArgs>
+  }, ExtArgs["result"]["roomOperationalState"]>
+
+  export type RoomOperationalStateSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    roomId?: boolean
+    currentStatus?: boolean
+    statusSinceAt?: boolean
+    occupiedEncounterId?: boolean
+    activeCleanerUserId?: boolean
+    holdReason?: boolean
+    holdNote?: boolean
+    lastReadyAt?: boolean
+    lastOccupiedAt?: boolean
+    lastTurnoverAt?: boolean
+    updatedAt?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    occupiedEncounter?: boolean | RoomOperationalState$occupiedEncounterArgs<ExtArgs>
+  }, ExtArgs["result"]["roomOperationalState"]>
+
+  export type RoomOperationalStateSelectScalar = {
+    roomId?: boolean
+    currentStatus?: boolean
+    statusSinceAt?: boolean
+    occupiedEncounterId?: boolean
+    activeCleanerUserId?: boolean
+    holdReason?: boolean
+    holdNote?: boolean
+    lastReadyAt?: boolean
+    lastOccupiedAt?: boolean
+    lastTurnoverAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type RoomOperationalStateOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"roomId" | "currentStatus" | "statusSinceAt" | "occupiedEncounterId" | "activeCleanerUserId" | "holdReason" | "holdNote" | "lastReadyAt" | "lastOccupiedAt" | "lastTurnoverAt" | "updatedAt", ExtArgs["result"]["roomOperationalState"]>
+  export type RoomOperationalStateInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    occupiedEncounter?: boolean | RoomOperationalState$occupiedEncounterArgs<ExtArgs>
+  }
+  export type RoomOperationalStateIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    occupiedEncounter?: boolean | RoomOperationalState$occupiedEncounterArgs<ExtArgs>
+  }
+  export type RoomOperationalStateIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    occupiedEncounter?: boolean | RoomOperationalState$occupiedEncounterArgs<ExtArgs>
+  }
+
+  export type $RoomOperationalStatePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RoomOperationalState"
+    objects: {
+      room: Prisma.$ClinicRoomPayload<ExtArgs>
+      occupiedEncounter: Prisma.$EncounterPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      roomId: string
+      currentStatus: $Enums.RoomOperationalStatus
+      statusSinceAt: Date
+      occupiedEncounterId: string | null
+      activeCleanerUserId: string | null
+      holdReason: $Enums.RoomHoldReason | null
+      holdNote: string | null
+      lastReadyAt: Date | null
+      lastOccupiedAt: Date | null
+      lastTurnoverAt: Date | null
+      updatedAt: Date
+    }, ExtArgs["result"]["roomOperationalState"]>
+    composites: {}
+  }
+
+  type RoomOperationalStateGetPayload<S extends boolean | null | undefined | RoomOperationalStateDefaultArgs> = $Result.GetResult<Prisma.$RoomOperationalStatePayload, S>
+
+  type RoomOperationalStateCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RoomOperationalStateFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RoomOperationalStateCountAggregateInputType | true
+    }
+
+  export interface RoomOperationalStateDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RoomOperationalState'], meta: { name: 'RoomOperationalState' } }
+    /**
+     * Find zero or one RoomOperationalState that matches the filter.
+     * @param {RoomOperationalStateFindUniqueArgs} args - Arguments to find a RoomOperationalState
+     * @example
+     * // Get one RoomOperationalState
+     * const roomOperationalState = await prisma.roomOperationalState.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RoomOperationalStateFindUniqueArgs>(args: SelectSubset<T, RoomOperationalStateFindUniqueArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RoomOperationalState that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RoomOperationalStateFindUniqueOrThrowArgs} args - Arguments to find a RoomOperationalState
+     * @example
+     * // Get one RoomOperationalState
+     * const roomOperationalState = await prisma.roomOperationalState.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RoomOperationalStateFindUniqueOrThrowArgs>(args: SelectSubset<T, RoomOperationalStateFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomOperationalState that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateFindFirstArgs} args - Arguments to find a RoomOperationalState
+     * @example
+     * // Get one RoomOperationalState
+     * const roomOperationalState = await prisma.roomOperationalState.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RoomOperationalStateFindFirstArgs>(args?: SelectSubset<T, RoomOperationalStateFindFirstArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomOperationalState that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateFindFirstOrThrowArgs} args - Arguments to find a RoomOperationalState
+     * @example
+     * // Get one RoomOperationalState
+     * const roomOperationalState = await prisma.roomOperationalState.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RoomOperationalStateFindFirstOrThrowArgs>(args?: SelectSubset<T, RoomOperationalStateFindFirstOrThrowArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RoomOperationalStates that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RoomOperationalStates
+     * const roomOperationalStates = await prisma.roomOperationalState.findMany()
+     * 
+     * // Get first 10 RoomOperationalStates
+     * const roomOperationalStates = await prisma.roomOperationalState.findMany({ take: 10 })
+     * 
+     * // Only select the `roomId`
+     * const roomOperationalStateWithRoomIdOnly = await prisma.roomOperationalState.findMany({ select: { roomId: true } })
+     * 
+     */
+    findMany<T extends RoomOperationalStateFindManyArgs>(args?: SelectSubset<T, RoomOperationalStateFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RoomOperationalState.
+     * @param {RoomOperationalStateCreateArgs} args - Arguments to create a RoomOperationalState.
+     * @example
+     * // Create one RoomOperationalState
+     * const RoomOperationalState = await prisma.roomOperationalState.create({
+     *   data: {
+     *     // ... data to create a RoomOperationalState
+     *   }
+     * })
+     * 
+     */
+    create<T extends RoomOperationalStateCreateArgs>(args: SelectSubset<T, RoomOperationalStateCreateArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RoomOperationalStates.
+     * @param {RoomOperationalStateCreateManyArgs} args - Arguments to create many RoomOperationalStates.
+     * @example
+     * // Create many RoomOperationalStates
+     * const roomOperationalState = await prisma.roomOperationalState.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RoomOperationalStateCreateManyArgs>(args?: SelectSubset<T, RoomOperationalStateCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RoomOperationalStates and returns the data saved in the database.
+     * @param {RoomOperationalStateCreateManyAndReturnArgs} args - Arguments to create many RoomOperationalStates.
+     * @example
+     * // Create many RoomOperationalStates
+     * const roomOperationalState = await prisma.roomOperationalState.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RoomOperationalStates and only return the `roomId`
+     * const roomOperationalStateWithRoomIdOnly = await prisma.roomOperationalState.createManyAndReturn({
+     *   select: { roomId: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RoomOperationalStateCreateManyAndReturnArgs>(args?: SelectSubset<T, RoomOperationalStateCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a RoomOperationalState.
+     * @param {RoomOperationalStateDeleteArgs} args - Arguments to delete one RoomOperationalState.
+     * @example
+     * // Delete one RoomOperationalState
+     * const RoomOperationalState = await prisma.roomOperationalState.delete({
+     *   where: {
+     *     // ... filter to delete one RoomOperationalState
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RoomOperationalStateDeleteArgs>(args: SelectSubset<T, RoomOperationalStateDeleteArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RoomOperationalState.
+     * @param {RoomOperationalStateUpdateArgs} args - Arguments to update one RoomOperationalState.
+     * @example
+     * // Update one RoomOperationalState
+     * const roomOperationalState = await prisma.roomOperationalState.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RoomOperationalStateUpdateArgs>(args: SelectSubset<T, RoomOperationalStateUpdateArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RoomOperationalStates.
+     * @param {RoomOperationalStateDeleteManyArgs} args - Arguments to filter RoomOperationalStates to delete.
+     * @example
+     * // Delete a few RoomOperationalStates
+     * const { count } = await prisma.roomOperationalState.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RoomOperationalStateDeleteManyArgs>(args?: SelectSubset<T, RoomOperationalStateDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomOperationalStates.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RoomOperationalStates
+     * const roomOperationalState = await prisma.roomOperationalState.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RoomOperationalStateUpdateManyArgs>(args: SelectSubset<T, RoomOperationalStateUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomOperationalStates and returns the data updated in the database.
+     * @param {RoomOperationalStateUpdateManyAndReturnArgs} args - Arguments to update many RoomOperationalStates.
+     * @example
+     * // Update many RoomOperationalStates
+     * const roomOperationalState = await prisma.roomOperationalState.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more RoomOperationalStates and only return the `roomId`
+     * const roomOperationalStateWithRoomIdOnly = await prisma.roomOperationalState.updateManyAndReturn({
+     *   select: { roomId: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends RoomOperationalStateUpdateManyAndReturnArgs>(args: SelectSubset<T, RoomOperationalStateUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one RoomOperationalState.
+     * @param {RoomOperationalStateUpsertArgs} args - Arguments to update or create a RoomOperationalState.
+     * @example
+     * // Update or create a RoomOperationalState
+     * const roomOperationalState = await prisma.roomOperationalState.upsert({
+     *   create: {
+     *     // ... data to create a RoomOperationalState
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RoomOperationalState we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RoomOperationalStateUpsertArgs>(args: SelectSubset<T, RoomOperationalStateUpsertArgs<ExtArgs>>): Prisma__RoomOperationalStateClient<$Result.GetResult<Prisma.$RoomOperationalStatePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RoomOperationalStates.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateCountArgs} args - Arguments to filter RoomOperationalStates to count.
+     * @example
+     * // Count the number of RoomOperationalStates
+     * const count = await prisma.roomOperationalState.count({
+     *   where: {
+     *     // ... the filter for the RoomOperationalStates we want to count
+     *   }
+     * })
+    **/
+    count<T extends RoomOperationalStateCountArgs>(
+      args?: Subset<T, RoomOperationalStateCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RoomOperationalStateCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RoomOperationalState.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RoomOperationalStateAggregateArgs>(args: Subset<T, RoomOperationalStateAggregateArgs>): Prisma.PrismaPromise<GetRoomOperationalStateAggregateType<T>>
+
+    /**
+     * Group by RoomOperationalState.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalStateGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RoomOperationalStateGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RoomOperationalStateGroupByArgs['orderBy'] }
+        : { orderBy?: RoomOperationalStateGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RoomOperationalStateGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRoomOperationalStateGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RoomOperationalState model
+   */
+  readonly fields: RoomOperationalStateFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RoomOperationalState.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RoomOperationalStateClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    room<T extends ClinicRoomDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoomDefaultArgs<ExtArgs>>): Prisma__ClinicRoomClient<$Result.GetResult<Prisma.$ClinicRoomPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    occupiedEncounter<T extends RoomOperationalState$occupiedEncounterArgs<ExtArgs> = {}>(args?: Subset<T, RoomOperationalState$occupiedEncounterArgs<ExtArgs>>): Prisma__EncounterClient<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RoomOperationalState model
+   */
+  interface RoomOperationalStateFieldRefs {
+    readonly roomId: FieldRef<"RoomOperationalState", 'String'>
+    readonly currentStatus: FieldRef<"RoomOperationalState", 'RoomOperationalStatus'>
+    readonly statusSinceAt: FieldRef<"RoomOperationalState", 'DateTime'>
+    readonly occupiedEncounterId: FieldRef<"RoomOperationalState", 'String'>
+    readonly activeCleanerUserId: FieldRef<"RoomOperationalState", 'String'>
+    readonly holdReason: FieldRef<"RoomOperationalState", 'RoomHoldReason'>
+    readonly holdNote: FieldRef<"RoomOperationalState", 'String'>
+    readonly lastReadyAt: FieldRef<"RoomOperationalState", 'DateTime'>
+    readonly lastOccupiedAt: FieldRef<"RoomOperationalState", 'DateTime'>
+    readonly lastTurnoverAt: FieldRef<"RoomOperationalState", 'DateTime'>
+    readonly updatedAt: FieldRef<"RoomOperationalState", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RoomOperationalState findUnique
+   */
+  export type RoomOperationalStateFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalState to fetch.
+     */
+    where: RoomOperationalStateWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalState findUniqueOrThrow
+   */
+  export type RoomOperationalStateFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalState to fetch.
+     */
+    where: RoomOperationalStateWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalState findFirst
+   */
+  export type RoomOperationalStateFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalState to fetch.
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalStates to fetch.
+     */
+    orderBy?: RoomOperationalStateOrderByWithRelationInput | RoomOperationalStateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomOperationalStates.
+     */
+    cursor?: RoomOperationalStateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalStates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalStates.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomOperationalStates.
+     */
+    distinct?: RoomOperationalStateScalarFieldEnum | RoomOperationalStateScalarFieldEnum[]
+  }
+
+  /**
+   * RoomOperationalState findFirstOrThrow
+   */
+  export type RoomOperationalStateFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalState to fetch.
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalStates to fetch.
+     */
+    orderBy?: RoomOperationalStateOrderByWithRelationInput | RoomOperationalStateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomOperationalStates.
+     */
+    cursor?: RoomOperationalStateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalStates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalStates.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomOperationalStates.
+     */
+    distinct?: RoomOperationalStateScalarFieldEnum | RoomOperationalStateScalarFieldEnum[]
+  }
+
+  /**
+   * RoomOperationalState findMany
+   */
+  export type RoomOperationalStateFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalStates to fetch.
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalStates to fetch.
+     */
+    orderBy?: RoomOperationalStateOrderByWithRelationInput | RoomOperationalStateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RoomOperationalStates.
+     */
+    cursor?: RoomOperationalStateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalStates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalStates.
+     */
+    skip?: number
+    distinct?: RoomOperationalStateScalarFieldEnum | RoomOperationalStateScalarFieldEnum[]
+  }
+
+  /**
+   * RoomOperationalState create
+   */
+  export type RoomOperationalStateCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RoomOperationalState.
+     */
+    data: XOR<RoomOperationalStateCreateInput, RoomOperationalStateUncheckedCreateInput>
+  }
+
+  /**
+   * RoomOperationalState createMany
+   */
+  export type RoomOperationalStateCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RoomOperationalStates.
+     */
+    data: RoomOperationalStateCreateManyInput | RoomOperationalStateCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RoomOperationalState createManyAndReturn
+   */
+  export type RoomOperationalStateCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * The data used to create many RoomOperationalStates.
+     */
+    data: RoomOperationalStateCreateManyInput | RoomOperationalStateCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomOperationalState update
+   */
+  export type RoomOperationalStateUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RoomOperationalState.
+     */
+    data: XOR<RoomOperationalStateUpdateInput, RoomOperationalStateUncheckedUpdateInput>
+    /**
+     * Choose, which RoomOperationalState to update.
+     */
+    where: RoomOperationalStateWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalState updateMany
+   */
+  export type RoomOperationalStateUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RoomOperationalStates.
+     */
+    data: XOR<RoomOperationalStateUpdateManyMutationInput, RoomOperationalStateUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomOperationalStates to update
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * Limit how many RoomOperationalStates to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomOperationalState updateManyAndReturn
+   */
+  export type RoomOperationalStateUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * The data used to update RoomOperationalStates.
+     */
+    data: XOR<RoomOperationalStateUpdateManyMutationInput, RoomOperationalStateUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomOperationalStates to update
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * Limit how many RoomOperationalStates to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomOperationalState upsert
+   */
+  export type RoomOperationalStateUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RoomOperationalState to update in case it exists.
+     */
+    where: RoomOperationalStateWhereUniqueInput
+    /**
+     * In case the RoomOperationalState found by the `where` argument doesn't exist, create a new RoomOperationalState with this data.
+     */
+    create: XOR<RoomOperationalStateCreateInput, RoomOperationalStateUncheckedCreateInput>
+    /**
+     * In case the RoomOperationalState was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RoomOperationalStateUpdateInput, RoomOperationalStateUncheckedUpdateInput>
+  }
+
+  /**
+   * RoomOperationalState delete
+   */
+  export type RoomOperationalStateDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+    /**
+     * Filter which RoomOperationalState to delete.
+     */
+    where: RoomOperationalStateWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalState deleteMany
+   */
+  export type RoomOperationalStateDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomOperationalStates to delete
+     */
+    where?: RoomOperationalStateWhereInput
+    /**
+     * Limit how many RoomOperationalStates to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomOperationalState.occupiedEncounter
+   */
+  export type RoomOperationalState$occupiedEncounterArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Encounter
+     */
+    select?: EncounterSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Encounter
+     */
+    omit?: EncounterOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EncounterInclude<ExtArgs> | null
+    where?: EncounterWhereInput
+  }
+
+  /**
+   * RoomOperationalState without action
+   */
+  export type RoomOperationalStateDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalState
+     */
+    select?: RoomOperationalStateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalState
+     */
+    omit?: RoomOperationalStateOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalStateInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RoomOperationalEvent
+   */
+
+  export type AggregateRoomOperationalEvent = {
+    _count: RoomOperationalEventCountAggregateOutputType | null
+    _min: RoomOperationalEventMinAggregateOutputType | null
+    _max: RoomOperationalEventMaxAggregateOutputType | null
+  }
+
+  export type RoomOperationalEventMinAggregateOutputType = {
+    id: string | null
+    roomId: string | null
+    clinicId: string | null
+    facilityId: string | null
+    encounterId: string | null
+    eventType: $Enums.RoomEventType | null
+    fromStatus: $Enums.RoomOperationalStatus | null
+    toStatus: $Enums.RoomOperationalStatus | null
+    note: string | null
+    createdByUserId: string | null
+    occurredAt: Date | null
+  }
+
+  export type RoomOperationalEventMaxAggregateOutputType = {
+    id: string | null
+    roomId: string | null
+    clinicId: string | null
+    facilityId: string | null
+    encounterId: string | null
+    eventType: $Enums.RoomEventType | null
+    fromStatus: $Enums.RoomOperationalStatus | null
+    toStatus: $Enums.RoomOperationalStatus | null
+    note: string | null
+    createdByUserId: string | null
+    occurredAt: Date | null
+  }
+
+  export type RoomOperationalEventCountAggregateOutputType = {
+    id: number
+    roomId: number
+    clinicId: number
+    facilityId: number
+    encounterId: number
+    eventType: number
+    fromStatus: number
+    toStatus: number
+    note: number
+    metadataJson: number
+    createdByUserId: number
+    occurredAt: number
+    _all: number
+  }
+
+
+  export type RoomOperationalEventMinAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    encounterId?: true
+    eventType?: true
+    fromStatus?: true
+    toStatus?: true
+    note?: true
+    createdByUserId?: true
+    occurredAt?: true
+  }
+
+  export type RoomOperationalEventMaxAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    encounterId?: true
+    eventType?: true
+    fromStatus?: true
+    toStatus?: true
+    note?: true
+    createdByUserId?: true
+    occurredAt?: true
+  }
+
+  export type RoomOperationalEventCountAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    encounterId?: true
+    eventType?: true
+    fromStatus?: true
+    toStatus?: true
+    note?: true
+    metadataJson?: true
+    createdByUserId?: true
+    occurredAt?: true
+    _all?: true
+  }
+
+  export type RoomOperationalEventAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomOperationalEvent to aggregate.
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalEvents to fetch.
+     */
+    orderBy?: RoomOperationalEventOrderByWithRelationInput | RoomOperationalEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RoomOperationalEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RoomOperationalEvents
+    **/
+    _count?: true | RoomOperationalEventCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RoomOperationalEventMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RoomOperationalEventMaxAggregateInputType
+  }
+
+  export type GetRoomOperationalEventAggregateType<T extends RoomOperationalEventAggregateArgs> = {
+        [P in keyof T & keyof AggregateRoomOperationalEvent]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRoomOperationalEvent[P]>
+      : GetScalarType<T[P], AggregateRoomOperationalEvent[P]>
+  }
+
+
+
+
+  export type RoomOperationalEventGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomOperationalEventWhereInput
+    orderBy?: RoomOperationalEventOrderByWithAggregationInput | RoomOperationalEventOrderByWithAggregationInput[]
+    by: RoomOperationalEventScalarFieldEnum[] | RoomOperationalEventScalarFieldEnum
+    having?: RoomOperationalEventScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RoomOperationalEventCountAggregateInputType | true
+    _min?: RoomOperationalEventMinAggregateInputType
+    _max?: RoomOperationalEventMaxAggregateInputType
+  }
+
+  export type RoomOperationalEventGroupByOutputType = {
+    id: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId: string | null
+    eventType: $Enums.RoomEventType
+    fromStatus: $Enums.RoomOperationalStatus | null
+    toStatus: $Enums.RoomOperationalStatus | null
+    note: string | null
+    metadataJson: JsonValue | null
+    createdByUserId: string | null
+    occurredAt: Date
+    _count: RoomOperationalEventCountAggregateOutputType | null
+    _min: RoomOperationalEventMinAggregateOutputType | null
+    _max: RoomOperationalEventMaxAggregateOutputType | null
+  }
+
+  type GetRoomOperationalEventGroupByPayload<T extends RoomOperationalEventGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RoomOperationalEventGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RoomOperationalEventGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RoomOperationalEventGroupByOutputType[P]>
+            : GetScalarType<T[P], RoomOperationalEventGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RoomOperationalEventSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    eventType?: boolean
+    fromStatus?: boolean
+    toStatus?: boolean
+    note?: boolean
+    metadataJson?: boolean
+    createdByUserId?: boolean
+    occurredAt?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomOperationalEvent$encounterArgs<ExtArgs>
+  }, ExtArgs["result"]["roomOperationalEvent"]>
+
+  export type RoomOperationalEventSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    eventType?: boolean
+    fromStatus?: boolean
+    toStatus?: boolean
+    note?: boolean
+    metadataJson?: boolean
+    createdByUserId?: boolean
+    occurredAt?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomOperationalEvent$encounterArgs<ExtArgs>
+  }, ExtArgs["result"]["roomOperationalEvent"]>
+
+  export type RoomOperationalEventSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    eventType?: boolean
+    fromStatus?: boolean
+    toStatus?: boolean
+    note?: boolean
+    metadataJson?: boolean
+    createdByUserId?: boolean
+    occurredAt?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomOperationalEvent$encounterArgs<ExtArgs>
+  }, ExtArgs["result"]["roomOperationalEvent"]>
+
+  export type RoomOperationalEventSelectScalar = {
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    eventType?: boolean
+    fromStatus?: boolean
+    toStatus?: boolean
+    note?: boolean
+    metadataJson?: boolean
+    createdByUserId?: boolean
+    occurredAt?: boolean
+  }
+
+  export type RoomOperationalEventOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "roomId" | "clinicId" | "facilityId" | "encounterId" | "eventType" | "fromStatus" | "toStatus" | "note" | "metadataJson" | "createdByUserId" | "occurredAt", ExtArgs["result"]["roomOperationalEvent"]>
+  export type RoomOperationalEventInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomOperationalEvent$encounterArgs<ExtArgs>
+  }
+  export type RoomOperationalEventIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomOperationalEvent$encounterArgs<ExtArgs>
+  }
+  export type RoomOperationalEventIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomOperationalEvent$encounterArgs<ExtArgs>
+  }
+
+  export type $RoomOperationalEventPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RoomOperationalEvent"
+    objects: {
+      room: Prisma.$ClinicRoomPayload<ExtArgs>
+      encounter: Prisma.$EncounterPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      roomId: string
+      clinicId: string
+      facilityId: string
+      encounterId: string | null
+      eventType: $Enums.RoomEventType
+      fromStatus: $Enums.RoomOperationalStatus | null
+      toStatus: $Enums.RoomOperationalStatus | null
+      note: string | null
+      metadataJson: Prisma.JsonValue | null
+      createdByUserId: string | null
+      occurredAt: Date
+    }, ExtArgs["result"]["roomOperationalEvent"]>
+    composites: {}
+  }
+
+  type RoomOperationalEventGetPayload<S extends boolean | null | undefined | RoomOperationalEventDefaultArgs> = $Result.GetResult<Prisma.$RoomOperationalEventPayload, S>
+
+  type RoomOperationalEventCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RoomOperationalEventFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RoomOperationalEventCountAggregateInputType | true
+    }
+
+  export interface RoomOperationalEventDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RoomOperationalEvent'], meta: { name: 'RoomOperationalEvent' } }
+    /**
+     * Find zero or one RoomOperationalEvent that matches the filter.
+     * @param {RoomOperationalEventFindUniqueArgs} args - Arguments to find a RoomOperationalEvent
+     * @example
+     * // Get one RoomOperationalEvent
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RoomOperationalEventFindUniqueArgs>(args: SelectSubset<T, RoomOperationalEventFindUniqueArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RoomOperationalEvent that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RoomOperationalEventFindUniqueOrThrowArgs} args - Arguments to find a RoomOperationalEvent
+     * @example
+     * // Get one RoomOperationalEvent
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RoomOperationalEventFindUniqueOrThrowArgs>(args: SelectSubset<T, RoomOperationalEventFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomOperationalEvent that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventFindFirstArgs} args - Arguments to find a RoomOperationalEvent
+     * @example
+     * // Get one RoomOperationalEvent
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RoomOperationalEventFindFirstArgs>(args?: SelectSubset<T, RoomOperationalEventFindFirstArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomOperationalEvent that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventFindFirstOrThrowArgs} args - Arguments to find a RoomOperationalEvent
+     * @example
+     * // Get one RoomOperationalEvent
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RoomOperationalEventFindFirstOrThrowArgs>(args?: SelectSubset<T, RoomOperationalEventFindFirstOrThrowArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RoomOperationalEvents that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RoomOperationalEvents
+     * const roomOperationalEvents = await prisma.roomOperationalEvent.findMany()
+     * 
+     * // Get first 10 RoomOperationalEvents
+     * const roomOperationalEvents = await prisma.roomOperationalEvent.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const roomOperationalEventWithIdOnly = await prisma.roomOperationalEvent.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends RoomOperationalEventFindManyArgs>(args?: SelectSubset<T, RoomOperationalEventFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RoomOperationalEvent.
+     * @param {RoomOperationalEventCreateArgs} args - Arguments to create a RoomOperationalEvent.
+     * @example
+     * // Create one RoomOperationalEvent
+     * const RoomOperationalEvent = await prisma.roomOperationalEvent.create({
+     *   data: {
+     *     // ... data to create a RoomOperationalEvent
+     *   }
+     * })
+     * 
+     */
+    create<T extends RoomOperationalEventCreateArgs>(args: SelectSubset<T, RoomOperationalEventCreateArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RoomOperationalEvents.
+     * @param {RoomOperationalEventCreateManyArgs} args - Arguments to create many RoomOperationalEvents.
+     * @example
+     * // Create many RoomOperationalEvents
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RoomOperationalEventCreateManyArgs>(args?: SelectSubset<T, RoomOperationalEventCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RoomOperationalEvents and returns the data saved in the database.
+     * @param {RoomOperationalEventCreateManyAndReturnArgs} args - Arguments to create many RoomOperationalEvents.
+     * @example
+     * // Create many RoomOperationalEvents
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RoomOperationalEvents and only return the `id`
+     * const roomOperationalEventWithIdOnly = await prisma.roomOperationalEvent.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RoomOperationalEventCreateManyAndReturnArgs>(args?: SelectSubset<T, RoomOperationalEventCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a RoomOperationalEvent.
+     * @param {RoomOperationalEventDeleteArgs} args - Arguments to delete one RoomOperationalEvent.
+     * @example
+     * // Delete one RoomOperationalEvent
+     * const RoomOperationalEvent = await prisma.roomOperationalEvent.delete({
+     *   where: {
+     *     // ... filter to delete one RoomOperationalEvent
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RoomOperationalEventDeleteArgs>(args: SelectSubset<T, RoomOperationalEventDeleteArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RoomOperationalEvent.
+     * @param {RoomOperationalEventUpdateArgs} args - Arguments to update one RoomOperationalEvent.
+     * @example
+     * // Update one RoomOperationalEvent
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RoomOperationalEventUpdateArgs>(args: SelectSubset<T, RoomOperationalEventUpdateArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RoomOperationalEvents.
+     * @param {RoomOperationalEventDeleteManyArgs} args - Arguments to filter RoomOperationalEvents to delete.
+     * @example
+     * // Delete a few RoomOperationalEvents
+     * const { count } = await prisma.roomOperationalEvent.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RoomOperationalEventDeleteManyArgs>(args?: SelectSubset<T, RoomOperationalEventDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomOperationalEvents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RoomOperationalEvents
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RoomOperationalEventUpdateManyArgs>(args: SelectSubset<T, RoomOperationalEventUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomOperationalEvents and returns the data updated in the database.
+     * @param {RoomOperationalEventUpdateManyAndReturnArgs} args - Arguments to update many RoomOperationalEvents.
+     * @example
+     * // Update many RoomOperationalEvents
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more RoomOperationalEvents and only return the `id`
+     * const roomOperationalEventWithIdOnly = await prisma.roomOperationalEvent.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends RoomOperationalEventUpdateManyAndReturnArgs>(args: SelectSubset<T, RoomOperationalEventUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one RoomOperationalEvent.
+     * @param {RoomOperationalEventUpsertArgs} args - Arguments to update or create a RoomOperationalEvent.
+     * @example
+     * // Update or create a RoomOperationalEvent
+     * const roomOperationalEvent = await prisma.roomOperationalEvent.upsert({
+     *   create: {
+     *     // ... data to create a RoomOperationalEvent
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RoomOperationalEvent we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RoomOperationalEventUpsertArgs>(args: SelectSubset<T, RoomOperationalEventUpsertArgs<ExtArgs>>): Prisma__RoomOperationalEventClient<$Result.GetResult<Prisma.$RoomOperationalEventPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RoomOperationalEvents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventCountArgs} args - Arguments to filter RoomOperationalEvents to count.
+     * @example
+     * // Count the number of RoomOperationalEvents
+     * const count = await prisma.roomOperationalEvent.count({
+     *   where: {
+     *     // ... the filter for the RoomOperationalEvents we want to count
+     *   }
+     * })
+    **/
+    count<T extends RoomOperationalEventCountArgs>(
+      args?: Subset<T, RoomOperationalEventCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RoomOperationalEventCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RoomOperationalEvent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RoomOperationalEventAggregateArgs>(args: Subset<T, RoomOperationalEventAggregateArgs>): Prisma.PrismaPromise<GetRoomOperationalEventAggregateType<T>>
+
+    /**
+     * Group by RoomOperationalEvent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomOperationalEventGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RoomOperationalEventGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RoomOperationalEventGroupByArgs['orderBy'] }
+        : { orderBy?: RoomOperationalEventGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RoomOperationalEventGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRoomOperationalEventGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RoomOperationalEvent model
+   */
+  readonly fields: RoomOperationalEventFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RoomOperationalEvent.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RoomOperationalEventClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    room<T extends ClinicRoomDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoomDefaultArgs<ExtArgs>>): Prisma__ClinicRoomClient<$Result.GetResult<Prisma.$ClinicRoomPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    encounter<T extends RoomOperationalEvent$encounterArgs<ExtArgs> = {}>(args?: Subset<T, RoomOperationalEvent$encounterArgs<ExtArgs>>): Prisma__EncounterClient<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RoomOperationalEvent model
+   */
+  interface RoomOperationalEventFieldRefs {
+    readonly id: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly roomId: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly clinicId: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly facilityId: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly encounterId: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly eventType: FieldRef<"RoomOperationalEvent", 'RoomEventType'>
+    readonly fromStatus: FieldRef<"RoomOperationalEvent", 'RoomOperationalStatus'>
+    readonly toStatus: FieldRef<"RoomOperationalEvent", 'RoomOperationalStatus'>
+    readonly note: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly metadataJson: FieldRef<"RoomOperationalEvent", 'Json'>
+    readonly createdByUserId: FieldRef<"RoomOperationalEvent", 'String'>
+    readonly occurredAt: FieldRef<"RoomOperationalEvent", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RoomOperationalEvent findUnique
+   */
+  export type RoomOperationalEventFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalEvent to fetch.
+     */
+    where: RoomOperationalEventWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalEvent findUniqueOrThrow
+   */
+  export type RoomOperationalEventFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalEvent to fetch.
+     */
+    where: RoomOperationalEventWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalEvent findFirst
+   */
+  export type RoomOperationalEventFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalEvent to fetch.
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalEvents to fetch.
+     */
+    orderBy?: RoomOperationalEventOrderByWithRelationInput | RoomOperationalEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomOperationalEvents.
+     */
+    cursor?: RoomOperationalEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomOperationalEvents.
+     */
+    distinct?: RoomOperationalEventScalarFieldEnum | RoomOperationalEventScalarFieldEnum[]
+  }
+
+  /**
+   * RoomOperationalEvent findFirstOrThrow
+   */
+  export type RoomOperationalEventFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalEvent to fetch.
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalEvents to fetch.
+     */
+    orderBy?: RoomOperationalEventOrderByWithRelationInput | RoomOperationalEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomOperationalEvents.
+     */
+    cursor?: RoomOperationalEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomOperationalEvents.
+     */
+    distinct?: RoomOperationalEventScalarFieldEnum | RoomOperationalEventScalarFieldEnum[]
+  }
+
+  /**
+   * RoomOperationalEvent findMany
+   */
+  export type RoomOperationalEventFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomOperationalEvents to fetch.
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomOperationalEvents to fetch.
+     */
+    orderBy?: RoomOperationalEventOrderByWithRelationInput | RoomOperationalEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RoomOperationalEvents.
+     */
+    cursor?: RoomOperationalEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomOperationalEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomOperationalEvents.
+     */
+    skip?: number
+    distinct?: RoomOperationalEventScalarFieldEnum | RoomOperationalEventScalarFieldEnum[]
+  }
+
+  /**
+   * RoomOperationalEvent create
+   */
+  export type RoomOperationalEventCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RoomOperationalEvent.
+     */
+    data: XOR<RoomOperationalEventCreateInput, RoomOperationalEventUncheckedCreateInput>
+  }
+
+  /**
+   * RoomOperationalEvent createMany
+   */
+  export type RoomOperationalEventCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RoomOperationalEvents.
+     */
+    data: RoomOperationalEventCreateManyInput | RoomOperationalEventCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RoomOperationalEvent createManyAndReturn
+   */
+  export type RoomOperationalEventCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * The data used to create many RoomOperationalEvents.
+     */
+    data: RoomOperationalEventCreateManyInput | RoomOperationalEventCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomOperationalEvent update
+   */
+  export type RoomOperationalEventUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RoomOperationalEvent.
+     */
+    data: XOR<RoomOperationalEventUpdateInput, RoomOperationalEventUncheckedUpdateInput>
+    /**
+     * Choose, which RoomOperationalEvent to update.
+     */
+    where: RoomOperationalEventWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalEvent updateMany
+   */
+  export type RoomOperationalEventUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RoomOperationalEvents.
+     */
+    data: XOR<RoomOperationalEventUpdateManyMutationInput, RoomOperationalEventUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomOperationalEvents to update
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * Limit how many RoomOperationalEvents to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomOperationalEvent updateManyAndReturn
+   */
+  export type RoomOperationalEventUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * The data used to update RoomOperationalEvents.
+     */
+    data: XOR<RoomOperationalEventUpdateManyMutationInput, RoomOperationalEventUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomOperationalEvents to update
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * Limit how many RoomOperationalEvents to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomOperationalEvent upsert
+   */
+  export type RoomOperationalEventUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RoomOperationalEvent to update in case it exists.
+     */
+    where: RoomOperationalEventWhereUniqueInput
+    /**
+     * In case the RoomOperationalEvent found by the `where` argument doesn't exist, create a new RoomOperationalEvent with this data.
+     */
+    create: XOR<RoomOperationalEventCreateInput, RoomOperationalEventUncheckedCreateInput>
+    /**
+     * In case the RoomOperationalEvent was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RoomOperationalEventUpdateInput, RoomOperationalEventUncheckedUpdateInput>
+  }
+
+  /**
+   * RoomOperationalEvent delete
+   */
+  export type RoomOperationalEventDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+    /**
+     * Filter which RoomOperationalEvent to delete.
+     */
+    where: RoomOperationalEventWhereUniqueInput
+  }
+
+  /**
+   * RoomOperationalEvent deleteMany
+   */
+  export type RoomOperationalEventDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomOperationalEvents to delete
+     */
+    where?: RoomOperationalEventWhereInput
+    /**
+     * Limit how many RoomOperationalEvents to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomOperationalEvent.encounter
+   */
+  export type RoomOperationalEvent$encounterArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Encounter
+     */
+    select?: EncounterSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Encounter
+     */
+    omit?: EncounterOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EncounterInclude<ExtArgs> | null
+    where?: EncounterWhereInput
+  }
+
+  /**
+   * RoomOperationalEvent without action
+   */
+  export type RoomOperationalEventDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomOperationalEvent
+     */
+    select?: RoomOperationalEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomOperationalEvent
+     */
+    omit?: RoomOperationalEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomOperationalEventInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RoomIssue
+   */
+
+  export type AggregateRoomIssue = {
+    _count: RoomIssueCountAggregateOutputType | null
+    _avg: RoomIssueAvgAggregateOutputType | null
+    _sum: RoomIssueSumAggregateOutputType | null
+    _min: RoomIssueMinAggregateOutputType | null
+    _max: RoomIssueMaxAggregateOutputType | null
+  }
+
+  export type RoomIssueAvgAggregateOutputType = {
+    severity: number | null
+  }
+
+  export type RoomIssueSumAggregateOutputType = {
+    severity: number | null
+  }
+
+  export type RoomIssueMinAggregateOutputType = {
+    id: string | null
+    roomId: string | null
+    clinicId: string | null
+    facilityId: string | null
+    encounterId: string | null
+    issueType: $Enums.RoomIssueType | null
+    status: $Enums.RoomIssueStatus | null
+    severity: number | null
+    title: string | null
+    description: string | null
+    placesRoomOnHold: boolean | null
+    taskId: string | null
+    sourceModule: string | null
+    createdAt: Date | null
+    createdByUserId: string | null
+    resolvedAt: Date | null
+    resolvedByUserId: string | null
+    resolutionNote: string | null
+  }
+
+  export type RoomIssueMaxAggregateOutputType = {
+    id: string | null
+    roomId: string | null
+    clinicId: string | null
+    facilityId: string | null
+    encounterId: string | null
+    issueType: $Enums.RoomIssueType | null
+    status: $Enums.RoomIssueStatus | null
+    severity: number | null
+    title: string | null
+    description: string | null
+    placesRoomOnHold: boolean | null
+    taskId: string | null
+    sourceModule: string | null
+    createdAt: Date | null
+    createdByUserId: string | null
+    resolvedAt: Date | null
+    resolvedByUserId: string | null
+    resolutionNote: string | null
+  }
+
+  export type RoomIssueCountAggregateOutputType = {
+    id: number
+    roomId: number
+    clinicId: number
+    facilityId: number
+    encounterId: number
+    issueType: number
+    status: number
+    severity: number
+    title: number
+    description: number
+    placesRoomOnHold: number
+    taskId: number
+    sourceModule: number
+    metadataJson: number
+    createdAt: number
+    createdByUserId: number
+    resolvedAt: number
+    resolvedByUserId: number
+    resolutionNote: number
+    _all: number
+  }
+
+
+  export type RoomIssueAvgAggregateInputType = {
+    severity?: true
+  }
+
+  export type RoomIssueSumAggregateInputType = {
+    severity?: true
+  }
+
+  export type RoomIssueMinAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    encounterId?: true
+    issueType?: true
+    status?: true
+    severity?: true
+    title?: true
+    description?: true
+    placesRoomOnHold?: true
+    taskId?: true
+    sourceModule?: true
+    createdAt?: true
+    createdByUserId?: true
+    resolvedAt?: true
+    resolvedByUserId?: true
+    resolutionNote?: true
+  }
+
+  export type RoomIssueMaxAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    encounterId?: true
+    issueType?: true
+    status?: true
+    severity?: true
+    title?: true
+    description?: true
+    placesRoomOnHold?: true
+    taskId?: true
+    sourceModule?: true
+    createdAt?: true
+    createdByUserId?: true
+    resolvedAt?: true
+    resolvedByUserId?: true
+    resolutionNote?: true
+  }
+
+  export type RoomIssueCountAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    encounterId?: true
+    issueType?: true
+    status?: true
+    severity?: true
+    title?: true
+    description?: true
+    placesRoomOnHold?: true
+    taskId?: true
+    sourceModule?: true
+    metadataJson?: true
+    createdAt?: true
+    createdByUserId?: true
+    resolvedAt?: true
+    resolvedByUserId?: true
+    resolutionNote?: true
+    _all?: true
+  }
+
+  export type RoomIssueAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomIssue to aggregate.
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomIssues to fetch.
+     */
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RoomIssueWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomIssues from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomIssues.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RoomIssues
+    **/
+    _count?: true | RoomIssueCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: RoomIssueAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: RoomIssueSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RoomIssueMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RoomIssueMaxAggregateInputType
+  }
+
+  export type GetRoomIssueAggregateType<T extends RoomIssueAggregateArgs> = {
+        [P in keyof T & keyof AggregateRoomIssue]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRoomIssue[P]>
+      : GetScalarType<T[P], AggregateRoomIssue[P]>
+  }
+
+
+
+
+  export type RoomIssueGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomIssueWhereInput
+    orderBy?: RoomIssueOrderByWithAggregationInput | RoomIssueOrderByWithAggregationInput[]
+    by: RoomIssueScalarFieldEnum[] | RoomIssueScalarFieldEnum
+    having?: RoomIssueScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RoomIssueCountAggregateInputType | true
+    _avg?: RoomIssueAvgAggregateInputType
+    _sum?: RoomIssueSumAggregateInputType
+    _min?: RoomIssueMinAggregateInputType
+    _max?: RoomIssueMaxAggregateInputType
+  }
+
+  export type RoomIssueGroupByOutputType = {
+    id: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId: string | null
+    issueType: $Enums.RoomIssueType
+    status: $Enums.RoomIssueStatus
+    severity: number
+    title: string
+    description: string | null
+    placesRoomOnHold: boolean
+    taskId: string | null
+    sourceModule: string | null
+    metadataJson: JsonValue | null
+    createdAt: Date
+    createdByUserId: string
+    resolvedAt: Date | null
+    resolvedByUserId: string | null
+    resolutionNote: string | null
+    _count: RoomIssueCountAggregateOutputType | null
+    _avg: RoomIssueAvgAggregateOutputType | null
+    _sum: RoomIssueSumAggregateOutputType | null
+    _min: RoomIssueMinAggregateOutputType | null
+    _max: RoomIssueMaxAggregateOutputType | null
+  }
+
+  type GetRoomIssueGroupByPayload<T extends RoomIssueGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RoomIssueGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RoomIssueGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RoomIssueGroupByOutputType[P]>
+            : GetScalarType<T[P], RoomIssueGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RoomIssueSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    issueType?: boolean
+    status?: boolean
+    severity?: boolean
+    title?: boolean
+    description?: boolean
+    placesRoomOnHold?: boolean
+    taskId?: boolean
+    sourceModule?: boolean
+    metadataJson?: boolean
+    createdAt?: boolean
+    createdByUserId?: boolean
+    resolvedAt?: boolean
+    resolvedByUserId?: boolean
+    resolutionNote?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomIssue$encounterArgs<ExtArgs>
+    task?: boolean | RoomIssue$taskArgs<ExtArgs>
+  }, ExtArgs["result"]["roomIssue"]>
+
+  export type RoomIssueSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    issueType?: boolean
+    status?: boolean
+    severity?: boolean
+    title?: boolean
+    description?: boolean
+    placesRoomOnHold?: boolean
+    taskId?: boolean
+    sourceModule?: boolean
+    metadataJson?: boolean
+    createdAt?: boolean
+    createdByUserId?: boolean
+    resolvedAt?: boolean
+    resolvedByUserId?: boolean
+    resolutionNote?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomIssue$encounterArgs<ExtArgs>
+    task?: boolean | RoomIssue$taskArgs<ExtArgs>
+  }, ExtArgs["result"]["roomIssue"]>
+
+  export type RoomIssueSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    issueType?: boolean
+    status?: boolean
+    severity?: boolean
+    title?: boolean
+    description?: boolean
+    placesRoomOnHold?: boolean
+    taskId?: boolean
+    sourceModule?: boolean
+    metadataJson?: boolean
+    createdAt?: boolean
+    createdByUserId?: boolean
+    resolvedAt?: boolean
+    resolvedByUserId?: boolean
+    resolutionNote?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomIssue$encounterArgs<ExtArgs>
+    task?: boolean | RoomIssue$taskArgs<ExtArgs>
+  }, ExtArgs["result"]["roomIssue"]>
+
+  export type RoomIssueSelectScalar = {
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    encounterId?: boolean
+    issueType?: boolean
+    status?: boolean
+    severity?: boolean
+    title?: boolean
+    description?: boolean
+    placesRoomOnHold?: boolean
+    taskId?: boolean
+    sourceModule?: boolean
+    metadataJson?: boolean
+    createdAt?: boolean
+    createdByUserId?: boolean
+    resolvedAt?: boolean
+    resolvedByUserId?: boolean
+    resolutionNote?: boolean
+  }
+
+  export type RoomIssueOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "roomId" | "clinicId" | "facilityId" | "encounterId" | "issueType" | "status" | "severity" | "title" | "description" | "placesRoomOnHold" | "taskId" | "sourceModule" | "metadataJson" | "createdAt" | "createdByUserId" | "resolvedAt" | "resolvedByUserId" | "resolutionNote", ExtArgs["result"]["roomIssue"]>
+  export type RoomIssueInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomIssue$encounterArgs<ExtArgs>
+    task?: boolean | RoomIssue$taskArgs<ExtArgs>
+  }
+  export type RoomIssueIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomIssue$encounterArgs<ExtArgs>
+    task?: boolean | RoomIssue$taskArgs<ExtArgs>
+  }
+  export type RoomIssueIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+    encounter?: boolean | RoomIssue$encounterArgs<ExtArgs>
+    task?: boolean | RoomIssue$taskArgs<ExtArgs>
+  }
+
+  export type $RoomIssuePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RoomIssue"
+    objects: {
+      room: Prisma.$ClinicRoomPayload<ExtArgs>
+      encounter: Prisma.$EncounterPayload<ExtArgs> | null
+      task: Prisma.$TaskPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      roomId: string
+      clinicId: string
+      facilityId: string
+      encounterId: string | null
+      issueType: $Enums.RoomIssueType
+      status: $Enums.RoomIssueStatus
+      severity: number
+      title: string
+      description: string | null
+      placesRoomOnHold: boolean
+      taskId: string | null
+      sourceModule: string | null
+      metadataJson: Prisma.JsonValue | null
+      createdAt: Date
+      createdByUserId: string
+      resolvedAt: Date | null
+      resolvedByUserId: string | null
+      resolutionNote: string | null
+    }, ExtArgs["result"]["roomIssue"]>
+    composites: {}
+  }
+
+  type RoomIssueGetPayload<S extends boolean | null | undefined | RoomIssueDefaultArgs> = $Result.GetResult<Prisma.$RoomIssuePayload, S>
+
+  type RoomIssueCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RoomIssueFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RoomIssueCountAggregateInputType | true
+    }
+
+  export interface RoomIssueDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RoomIssue'], meta: { name: 'RoomIssue' } }
+    /**
+     * Find zero or one RoomIssue that matches the filter.
+     * @param {RoomIssueFindUniqueArgs} args - Arguments to find a RoomIssue
+     * @example
+     * // Get one RoomIssue
+     * const roomIssue = await prisma.roomIssue.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RoomIssueFindUniqueArgs>(args: SelectSubset<T, RoomIssueFindUniqueArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RoomIssue that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RoomIssueFindUniqueOrThrowArgs} args - Arguments to find a RoomIssue
+     * @example
+     * // Get one RoomIssue
+     * const roomIssue = await prisma.roomIssue.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RoomIssueFindUniqueOrThrowArgs>(args: SelectSubset<T, RoomIssueFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomIssue that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueFindFirstArgs} args - Arguments to find a RoomIssue
+     * @example
+     * // Get one RoomIssue
+     * const roomIssue = await prisma.roomIssue.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RoomIssueFindFirstArgs>(args?: SelectSubset<T, RoomIssueFindFirstArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomIssue that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueFindFirstOrThrowArgs} args - Arguments to find a RoomIssue
+     * @example
+     * // Get one RoomIssue
+     * const roomIssue = await prisma.roomIssue.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RoomIssueFindFirstOrThrowArgs>(args?: SelectSubset<T, RoomIssueFindFirstOrThrowArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RoomIssues that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RoomIssues
+     * const roomIssues = await prisma.roomIssue.findMany()
+     * 
+     * // Get first 10 RoomIssues
+     * const roomIssues = await prisma.roomIssue.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const roomIssueWithIdOnly = await prisma.roomIssue.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends RoomIssueFindManyArgs>(args?: SelectSubset<T, RoomIssueFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RoomIssue.
+     * @param {RoomIssueCreateArgs} args - Arguments to create a RoomIssue.
+     * @example
+     * // Create one RoomIssue
+     * const RoomIssue = await prisma.roomIssue.create({
+     *   data: {
+     *     // ... data to create a RoomIssue
+     *   }
+     * })
+     * 
+     */
+    create<T extends RoomIssueCreateArgs>(args: SelectSubset<T, RoomIssueCreateArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RoomIssues.
+     * @param {RoomIssueCreateManyArgs} args - Arguments to create many RoomIssues.
+     * @example
+     * // Create many RoomIssues
+     * const roomIssue = await prisma.roomIssue.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RoomIssueCreateManyArgs>(args?: SelectSubset<T, RoomIssueCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RoomIssues and returns the data saved in the database.
+     * @param {RoomIssueCreateManyAndReturnArgs} args - Arguments to create many RoomIssues.
+     * @example
+     * // Create many RoomIssues
+     * const roomIssue = await prisma.roomIssue.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RoomIssues and only return the `id`
+     * const roomIssueWithIdOnly = await prisma.roomIssue.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RoomIssueCreateManyAndReturnArgs>(args?: SelectSubset<T, RoomIssueCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a RoomIssue.
+     * @param {RoomIssueDeleteArgs} args - Arguments to delete one RoomIssue.
+     * @example
+     * // Delete one RoomIssue
+     * const RoomIssue = await prisma.roomIssue.delete({
+     *   where: {
+     *     // ... filter to delete one RoomIssue
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RoomIssueDeleteArgs>(args: SelectSubset<T, RoomIssueDeleteArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RoomIssue.
+     * @param {RoomIssueUpdateArgs} args - Arguments to update one RoomIssue.
+     * @example
+     * // Update one RoomIssue
+     * const roomIssue = await prisma.roomIssue.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RoomIssueUpdateArgs>(args: SelectSubset<T, RoomIssueUpdateArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RoomIssues.
+     * @param {RoomIssueDeleteManyArgs} args - Arguments to filter RoomIssues to delete.
+     * @example
+     * // Delete a few RoomIssues
+     * const { count } = await prisma.roomIssue.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RoomIssueDeleteManyArgs>(args?: SelectSubset<T, RoomIssueDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomIssues.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RoomIssues
+     * const roomIssue = await prisma.roomIssue.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RoomIssueUpdateManyArgs>(args: SelectSubset<T, RoomIssueUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomIssues and returns the data updated in the database.
+     * @param {RoomIssueUpdateManyAndReturnArgs} args - Arguments to update many RoomIssues.
+     * @example
+     * // Update many RoomIssues
+     * const roomIssue = await prisma.roomIssue.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more RoomIssues and only return the `id`
+     * const roomIssueWithIdOnly = await prisma.roomIssue.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends RoomIssueUpdateManyAndReturnArgs>(args: SelectSubset<T, RoomIssueUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one RoomIssue.
+     * @param {RoomIssueUpsertArgs} args - Arguments to update or create a RoomIssue.
+     * @example
+     * // Update or create a RoomIssue
+     * const roomIssue = await prisma.roomIssue.upsert({
+     *   create: {
+     *     // ... data to create a RoomIssue
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RoomIssue we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RoomIssueUpsertArgs>(args: SelectSubset<T, RoomIssueUpsertArgs<ExtArgs>>): Prisma__RoomIssueClient<$Result.GetResult<Prisma.$RoomIssuePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RoomIssues.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueCountArgs} args - Arguments to filter RoomIssues to count.
+     * @example
+     * // Count the number of RoomIssues
+     * const count = await prisma.roomIssue.count({
+     *   where: {
+     *     // ... the filter for the RoomIssues we want to count
+     *   }
+     * })
+    **/
+    count<T extends RoomIssueCountArgs>(
+      args?: Subset<T, RoomIssueCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RoomIssueCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RoomIssue.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RoomIssueAggregateArgs>(args: Subset<T, RoomIssueAggregateArgs>): Prisma.PrismaPromise<GetRoomIssueAggregateType<T>>
+
+    /**
+     * Group by RoomIssue.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomIssueGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RoomIssueGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RoomIssueGroupByArgs['orderBy'] }
+        : { orderBy?: RoomIssueGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RoomIssueGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRoomIssueGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RoomIssue model
+   */
+  readonly fields: RoomIssueFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RoomIssue.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RoomIssueClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    room<T extends ClinicRoomDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoomDefaultArgs<ExtArgs>>): Prisma__ClinicRoomClient<$Result.GetResult<Prisma.$ClinicRoomPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    encounter<T extends RoomIssue$encounterArgs<ExtArgs> = {}>(args?: Subset<T, RoomIssue$encounterArgs<ExtArgs>>): Prisma__EncounterClient<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    task<T extends RoomIssue$taskArgs<ExtArgs> = {}>(args?: Subset<T, RoomIssue$taskArgs<ExtArgs>>): Prisma__TaskClient<$Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RoomIssue model
+   */
+  interface RoomIssueFieldRefs {
+    readonly id: FieldRef<"RoomIssue", 'String'>
+    readonly roomId: FieldRef<"RoomIssue", 'String'>
+    readonly clinicId: FieldRef<"RoomIssue", 'String'>
+    readonly facilityId: FieldRef<"RoomIssue", 'String'>
+    readonly encounterId: FieldRef<"RoomIssue", 'String'>
+    readonly issueType: FieldRef<"RoomIssue", 'RoomIssueType'>
+    readonly status: FieldRef<"RoomIssue", 'RoomIssueStatus'>
+    readonly severity: FieldRef<"RoomIssue", 'Int'>
+    readonly title: FieldRef<"RoomIssue", 'String'>
+    readonly description: FieldRef<"RoomIssue", 'String'>
+    readonly placesRoomOnHold: FieldRef<"RoomIssue", 'Boolean'>
+    readonly taskId: FieldRef<"RoomIssue", 'String'>
+    readonly sourceModule: FieldRef<"RoomIssue", 'String'>
+    readonly metadataJson: FieldRef<"RoomIssue", 'Json'>
+    readonly createdAt: FieldRef<"RoomIssue", 'DateTime'>
+    readonly createdByUserId: FieldRef<"RoomIssue", 'String'>
+    readonly resolvedAt: FieldRef<"RoomIssue", 'DateTime'>
+    readonly resolvedByUserId: FieldRef<"RoomIssue", 'String'>
+    readonly resolutionNote: FieldRef<"RoomIssue", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RoomIssue findUnique
+   */
+  export type RoomIssueFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomIssue to fetch.
+     */
+    where: RoomIssueWhereUniqueInput
+  }
+
+  /**
+   * RoomIssue findUniqueOrThrow
+   */
+  export type RoomIssueFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomIssue to fetch.
+     */
+    where: RoomIssueWhereUniqueInput
+  }
+
+  /**
+   * RoomIssue findFirst
+   */
+  export type RoomIssueFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomIssue to fetch.
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomIssues to fetch.
+     */
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomIssues.
+     */
+    cursor?: RoomIssueWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomIssues from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomIssues.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomIssues.
+     */
+    distinct?: RoomIssueScalarFieldEnum | RoomIssueScalarFieldEnum[]
+  }
+
+  /**
+   * RoomIssue findFirstOrThrow
+   */
+  export type RoomIssueFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomIssue to fetch.
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomIssues to fetch.
+     */
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomIssues.
+     */
+    cursor?: RoomIssueWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomIssues from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomIssues.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomIssues.
+     */
+    distinct?: RoomIssueScalarFieldEnum | RoomIssueScalarFieldEnum[]
+  }
+
+  /**
+   * RoomIssue findMany
+   */
+  export type RoomIssueFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomIssues to fetch.
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomIssues to fetch.
+     */
+    orderBy?: RoomIssueOrderByWithRelationInput | RoomIssueOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RoomIssues.
+     */
+    cursor?: RoomIssueWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomIssues from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomIssues.
+     */
+    skip?: number
+    distinct?: RoomIssueScalarFieldEnum | RoomIssueScalarFieldEnum[]
+  }
+
+  /**
+   * RoomIssue create
+   */
+  export type RoomIssueCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RoomIssue.
+     */
+    data: XOR<RoomIssueCreateInput, RoomIssueUncheckedCreateInput>
+  }
+
+  /**
+   * RoomIssue createMany
+   */
+  export type RoomIssueCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RoomIssues.
+     */
+    data: RoomIssueCreateManyInput | RoomIssueCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RoomIssue createManyAndReturn
+   */
+  export type RoomIssueCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * The data used to create many RoomIssues.
+     */
+    data: RoomIssueCreateManyInput | RoomIssueCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomIssue update
+   */
+  export type RoomIssueUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RoomIssue.
+     */
+    data: XOR<RoomIssueUpdateInput, RoomIssueUncheckedUpdateInput>
+    /**
+     * Choose, which RoomIssue to update.
+     */
+    where: RoomIssueWhereUniqueInput
+  }
+
+  /**
+   * RoomIssue updateMany
+   */
+  export type RoomIssueUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RoomIssues.
+     */
+    data: XOR<RoomIssueUpdateManyMutationInput, RoomIssueUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomIssues to update
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * Limit how many RoomIssues to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomIssue updateManyAndReturn
+   */
+  export type RoomIssueUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * The data used to update RoomIssues.
+     */
+    data: XOR<RoomIssueUpdateManyMutationInput, RoomIssueUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomIssues to update
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * Limit how many RoomIssues to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomIssue upsert
+   */
+  export type RoomIssueUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RoomIssue to update in case it exists.
+     */
+    where: RoomIssueWhereUniqueInput
+    /**
+     * In case the RoomIssue found by the `where` argument doesn't exist, create a new RoomIssue with this data.
+     */
+    create: XOR<RoomIssueCreateInput, RoomIssueUncheckedCreateInput>
+    /**
+     * In case the RoomIssue was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RoomIssueUpdateInput, RoomIssueUncheckedUpdateInput>
+  }
+
+  /**
+   * RoomIssue delete
+   */
+  export type RoomIssueDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+    /**
+     * Filter which RoomIssue to delete.
+     */
+    where: RoomIssueWhereUniqueInput
+  }
+
+  /**
+   * RoomIssue deleteMany
+   */
+  export type RoomIssueDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomIssues to delete
+     */
+    where?: RoomIssueWhereInput
+    /**
+     * Limit how many RoomIssues to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomIssue.encounter
+   */
+  export type RoomIssue$encounterArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Encounter
+     */
+    select?: EncounterSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Encounter
+     */
+    omit?: EncounterOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EncounterInclude<ExtArgs> | null
+    where?: EncounterWhereInput
+  }
+
+  /**
+   * RoomIssue.task
+   */
+  export type RoomIssue$taskArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Task
+     */
+    select?: TaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Task
+     */
+    omit?: TaskOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TaskInclude<ExtArgs> | null
+    where?: TaskWhereInput
+  }
+
+  /**
+   * RoomIssue without action
+   */
+  export type RoomIssueDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomIssue
+     */
+    select?: RoomIssueSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomIssue
+     */
+    omit?: RoomIssueOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomIssueInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RoomChecklistRun
+   */
+
+  export type AggregateRoomChecklistRun = {
+    _count: RoomChecklistRunCountAggregateOutputType | null
+    _min: RoomChecklistRunMinAggregateOutputType | null
+    _max: RoomChecklistRunMaxAggregateOutputType | null
+  }
+
+  export type RoomChecklistRunMinAggregateOutputType = {
+    id: string | null
+    roomId: string | null
+    clinicId: string | null
+    facilityId: string | null
+    kind: $Enums.RoomChecklistKind | null
+    dateKey: string | null
+    completed: boolean | null
+    startedAt: Date | null
+    completedAt: Date | null
+    completedByUserId: string | null
+    note: string | null
+  }
+
+  export type RoomChecklistRunMaxAggregateOutputType = {
+    id: string | null
+    roomId: string | null
+    clinicId: string | null
+    facilityId: string | null
+    kind: $Enums.RoomChecklistKind | null
+    dateKey: string | null
+    completed: boolean | null
+    startedAt: Date | null
+    completedAt: Date | null
+    completedByUserId: string | null
+    note: string | null
+  }
+
+  export type RoomChecklistRunCountAggregateOutputType = {
+    id: number
+    roomId: number
+    clinicId: number
+    facilityId: number
+    kind: number
+    dateKey: number
+    itemsJson: number
+    completed: number
+    startedAt: number
+    completedAt: number
+    completedByUserId: number
+    note: number
+    _all: number
+  }
+
+
+  export type RoomChecklistRunMinAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    kind?: true
+    dateKey?: true
+    completed?: true
+    startedAt?: true
+    completedAt?: true
+    completedByUserId?: true
+    note?: true
+  }
+
+  export type RoomChecklistRunMaxAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    kind?: true
+    dateKey?: true
+    completed?: true
+    startedAt?: true
+    completedAt?: true
+    completedByUserId?: true
+    note?: true
+  }
+
+  export type RoomChecklistRunCountAggregateInputType = {
+    id?: true
+    roomId?: true
+    clinicId?: true
+    facilityId?: true
+    kind?: true
+    dateKey?: true
+    itemsJson?: true
+    completed?: true
+    startedAt?: true
+    completedAt?: true
+    completedByUserId?: true
+    note?: true
+    _all?: true
+  }
+
+  export type RoomChecklistRunAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomChecklistRun to aggregate.
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomChecklistRuns to fetch.
+     */
+    orderBy?: RoomChecklistRunOrderByWithRelationInput | RoomChecklistRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RoomChecklistRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomChecklistRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomChecklistRuns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RoomChecklistRuns
+    **/
+    _count?: true | RoomChecklistRunCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RoomChecklistRunMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RoomChecklistRunMaxAggregateInputType
+  }
+
+  export type GetRoomChecklistRunAggregateType<T extends RoomChecklistRunAggregateArgs> = {
+        [P in keyof T & keyof AggregateRoomChecklistRun]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRoomChecklistRun[P]>
+      : GetScalarType<T[P], AggregateRoomChecklistRun[P]>
+  }
+
+
+
+
+  export type RoomChecklistRunGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomChecklistRunWhereInput
+    orderBy?: RoomChecklistRunOrderByWithAggregationInput | RoomChecklistRunOrderByWithAggregationInput[]
+    by: RoomChecklistRunScalarFieldEnum[] | RoomChecklistRunScalarFieldEnum
+    having?: RoomChecklistRunScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RoomChecklistRunCountAggregateInputType | true
+    _min?: RoomChecklistRunMinAggregateInputType
+    _max?: RoomChecklistRunMaxAggregateInputType
+  }
+
+  export type RoomChecklistRunGroupByOutputType = {
+    id: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonValue
+    completed: boolean
+    startedAt: Date
+    completedAt: Date | null
+    completedByUserId: string | null
+    note: string | null
+    _count: RoomChecklistRunCountAggregateOutputType | null
+    _min: RoomChecklistRunMinAggregateOutputType | null
+    _max: RoomChecklistRunMaxAggregateOutputType | null
+  }
+
+  type GetRoomChecklistRunGroupByPayload<T extends RoomChecklistRunGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RoomChecklistRunGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RoomChecklistRunGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RoomChecklistRunGroupByOutputType[P]>
+            : GetScalarType<T[P], RoomChecklistRunGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RoomChecklistRunSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    kind?: boolean
+    dateKey?: boolean
+    itemsJson?: boolean
+    completed?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
+    completedByUserId?: boolean
+    note?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["roomChecklistRun"]>
+
+  export type RoomChecklistRunSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    kind?: boolean
+    dateKey?: boolean
+    itemsJson?: boolean
+    completed?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
+    completedByUserId?: boolean
+    note?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["roomChecklistRun"]>
+
+  export type RoomChecklistRunSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    kind?: boolean
+    dateKey?: boolean
+    itemsJson?: boolean
+    completed?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
+    completedByUserId?: boolean
+    note?: boolean
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["roomChecklistRun"]>
+
+  export type RoomChecklistRunSelectScalar = {
+    id?: boolean
+    roomId?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    kind?: boolean
+    dateKey?: boolean
+    itemsJson?: boolean
+    completed?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
+    completedByUserId?: boolean
+    note?: boolean
+  }
+
+  export type RoomChecklistRunOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "roomId" | "clinicId" | "facilityId" | "kind" | "dateKey" | "itemsJson" | "completed" | "startedAt" | "completedAt" | "completedByUserId" | "note", ExtArgs["result"]["roomChecklistRun"]>
+  export type RoomChecklistRunInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+  }
+  export type RoomChecklistRunIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+  }
+  export type RoomChecklistRunIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    room?: boolean | ClinicRoomDefaultArgs<ExtArgs>
+  }
+
+  export type $RoomChecklistRunPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RoomChecklistRun"
+    objects: {
+      room: Prisma.$ClinicRoomPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      roomId: string
+      clinicId: string
+      facilityId: string
+      kind: $Enums.RoomChecklistKind
+      dateKey: string
+      itemsJson: Prisma.JsonValue
+      completed: boolean
+      startedAt: Date
+      completedAt: Date | null
+      completedByUserId: string | null
+      note: string | null
+    }, ExtArgs["result"]["roomChecklistRun"]>
+    composites: {}
+  }
+
+  type RoomChecklistRunGetPayload<S extends boolean | null | undefined | RoomChecklistRunDefaultArgs> = $Result.GetResult<Prisma.$RoomChecklistRunPayload, S>
+
+  type RoomChecklistRunCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RoomChecklistRunFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RoomChecklistRunCountAggregateInputType | true
+    }
+
+  export interface RoomChecklistRunDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RoomChecklistRun'], meta: { name: 'RoomChecklistRun' } }
+    /**
+     * Find zero or one RoomChecklistRun that matches the filter.
+     * @param {RoomChecklistRunFindUniqueArgs} args - Arguments to find a RoomChecklistRun
+     * @example
+     * // Get one RoomChecklistRun
+     * const roomChecklistRun = await prisma.roomChecklistRun.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RoomChecklistRunFindUniqueArgs>(args: SelectSubset<T, RoomChecklistRunFindUniqueArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RoomChecklistRun that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RoomChecklistRunFindUniqueOrThrowArgs} args - Arguments to find a RoomChecklistRun
+     * @example
+     * // Get one RoomChecklistRun
+     * const roomChecklistRun = await prisma.roomChecklistRun.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RoomChecklistRunFindUniqueOrThrowArgs>(args: SelectSubset<T, RoomChecklistRunFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomChecklistRun that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunFindFirstArgs} args - Arguments to find a RoomChecklistRun
+     * @example
+     * // Get one RoomChecklistRun
+     * const roomChecklistRun = await prisma.roomChecklistRun.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RoomChecklistRunFindFirstArgs>(args?: SelectSubset<T, RoomChecklistRunFindFirstArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomChecklistRun that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunFindFirstOrThrowArgs} args - Arguments to find a RoomChecklistRun
+     * @example
+     * // Get one RoomChecklistRun
+     * const roomChecklistRun = await prisma.roomChecklistRun.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RoomChecklistRunFindFirstOrThrowArgs>(args?: SelectSubset<T, RoomChecklistRunFindFirstOrThrowArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RoomChecklistRuns that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RoomChecklistRuns
+     * const roomChecklistRuns = await prisma.roomChecklistRun.findMany()
+     * 
+     * // Get first 10 RoomChecklistRuns
+     * const roomChecklistRuns = await prisma.roomChecklistRun.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const roomChecklistRunWithIdOnly = await prisma.roomChecklistRun.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends RoomChecklistRunFindManyArgs>(args?: SelectSubset<T, RoomChecklistRunFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RoomChecklistRun.
+     * @param {RoomChecklistRunCreateArgs} args - Arguments to create a RoomChecklistRun.
+     * @example
+     * // Create one RoomChecklistRun
+     * const RoomChecklistRun = await prisma.roomChecklistRun.create({
+     *   data: {
+     *     // ... data to create a RoomChecklistRun
+     *   }
+     * })
+     * 
+     */
+    create<T extends RoomChecklistRunCreateArgs>(args: SelectSubset<T, RoomChecklistRunCreateArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RoomChecklistRuns.
+     * @param {RoomChecklistRunCreateManyArgs} args - Arguments to create many RoomChecklistRuns.
+     * @example
+     * // Create many RoomChecklistRuns
+     * const roomChecklistRun = await prisma.roomChecklistRun.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RoomChecklistRunCreateManyArgs>(args?: SelectSubset<T, RoomChecklistRunCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RoomChecklistRuns and returns the data saved in the database.
+     * @param {RoomChecklistRunCreateManyAndReturnArgs} args - Arguments to create many RoomChecklistRuns.
+     * @example
+     * // Create many RoomChecklistRuns
+     * const roomChecklistRun = await prisma.roomChecklistRun.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RoomChecklistRuns and only return the `id`
+     * const roomChecklistRunWithIdOnly = await prisma.roomChecklistRun.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RoomChecklistRunCreateManyAndReturnArgs>(args?: SelectSubset<T, RoomChecklistRunCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a RoomChecklistRun.
+     * @param {RoomChecklistRunDeleteArgs} args - Arguments to delete one RoomChecklistRun.
+     * @example
+     * // Delete one RoomChecklistRun
+     * const RoomChecklistRun = await prisma.roomChecklistRun.delete({
+     *   where: {
+     *     // ... filter to delete one RoomChecklistRun
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RoomChecklistRunDeleteArgs>(args: SelectSubset<T, RoomChecklistRunDeleteArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RoomChecklistRun.
+     * @param {RoomChecklistRunUpdateArgs} args - Arguments to update one RoomChecklistRun.
+     * @example
+     * // Update one RoomChecklistRun
+     * const roomChecklistRun = await prisma.roomChecklistRun.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RoomChecklistRunUpdateArgs>(args: SelectSubset<T, RoomChecklistRunUpdateArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RoomChecklistRuns.
+     * @param {RoomChecklistRunDeleteManyArgs} args - Arguments to filter RoomChecklistRuns to delete.
+     * @example
+     * // Delete a few RoomChecklistRuns
+     * const { count } = await prisma.roomChecklistRun.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RoomChecklistRunDeleteManyArgs>(args?: SelectSubset<T, RoomChecklistRunDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomChecklistRuns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RoomChecklistRuns
+     * const roomChecklistRun = await prisma.roomChecklistRun.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RoomChecklistRunUpdateManyArgs>(args: SelectSubset<T, RoomChecklistRunUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomChecklistRuns and returns the data updated in the database.
+     * @param {RoomChecklistRunUpdateManyAndReturnArgs} args - Arguments to update many RoomChecklistRuns.
+     * @example
+     * // Update many RoomChecklistRuns
+     * const roomChecklistRun = await prisma.roomChecklistRun.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more RoomChecklistRuns and only return the `id`
+     * const roomChecklistRunWithIdOnly = await prisma.roomChecklistRun.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends RoomChecklistRunUpdateManyAndReturnArgs>(args: SelectSubset<T, RoomChecklistRunUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one RoomChecklistRun.
+     * @param {RoomChecklistRunUpsertArgs} args - Arguments to update or create a RoomChecklistRun.
+     * @example
+     * // Update or create a RoomChecklistRun
+     * const roomChecklistRun = await prisma.roomChecklistRun.upsert({
+     *   create: {
+     *     // ... data to create a RoomChecklistRun
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RoomChecklistRun we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RoomChecklistRunUpsertArgs>(args: SelectSubset<T, RoomChecklistRunUpsertArgs<ExtArgs>>): Prisma__RoomChecklistRunClient<$Result.GetResult<Prisma.$RoomChecklistRunPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RoomChecklistRuns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunCountArgs} args - Arguments to filter RoomChecklistRuns to count.
+     * @example
+     * // Count the number of RoomChecklistRuns
+     * const count = await prisma.roomChecklistRun.count({
+     *   where: {
+     *     // ... the filter for the RoomChecklistRuns we want to count
+     *   }
+     * })
+    **/
+    count<T extends RoomChecklistRunCountArgs>(
+      args?: Subset<T, RoomChecklistRunCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RoomChecklistRunCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RoomChecklistRun.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RoomChecklistRunAggregateArgs>(args: Subset<T, RoomChecklistRunAggregateArgs>): Prisma.PrismaPromise<GetRoomChecklistRunAggregateType<T>>
+
+    /**
+     * Group by RoomChecklistRun.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomChecklistRunGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RoomChecklistRunGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RoomChecklistRunGroupByArgs['orderBy'] }
+        : { orderBy?: RoomChecklistRunGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RoomChecklistRunGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRoomChecklistRunGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RoomChecklistRun model
+   */
+  readonly fields: RoomChecklistRunFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RoomChecklistRun.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RoomChecklistRunClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    room<T extends ClinicRoomDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClinicRoomDefaultArgs<ExtArgs>>): Prisma__ClinicRoomClient<$Result.GetResult<Prisma.$ClinicRoomPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RoomChecklistRun model
+   */
+  interface RoomChecklistRunFieldRefs {
+    readonly id: FieldRef<"RoomChecklistRun", 'String'>
+    readonly roomId: FieldRef<"RoomChecklistRun", 'String'>
+    readonly clinicId: FieldRef<"RoomChecklistRun", 'String'>
+    readonly facilityId: FieldRef<"RoomChecklistRun", 'String'>
+    readonly kind: FieldRef<"RoomChecklistRun", 'RoomChecklistKind'>
+    readonly dateKey: FieldRef<"RoomChecklistRun", 'String'>
+    readonly itemsJson: FieldRef<"RoomChecklistRun", 'Json'>
+    readonly completed: FieldRef<"RoomChecklistRun", 'Boolean'>
+    readonly startedAt: FieldRef<"RoomChecklistRun", 'DateTime'>
+    readonly completedAt: FieldRef<"RoomChecklistRun", 'DateTime'>
+    readonly completedByUserId: FieldRef<"RoomChecklistRun", 'String'>
+    readonly note: FieldRef<"RoomChecklistRun", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RoomChecklistRun findUnique
+   */
+  export type RoomChecklistRunFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomChecklistRun to fetch.
+     */
+    where: RoomChecklistRunWhereUniqueInput
+  }
+
+  /**
+   * RoomChecklistRun findUniqueOrThrow
+   */
+  export type RoomChecklistRunFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomChecklistRun to fetch.
+     */
+    where: RoomChecklistRunWhereUniqueInput
+  }
+
+  /**
+   * RoomChecklistRun findFirst
+   */
+  export type RoomChecklistRunFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomChecklistRun to fetch.
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomChecklistRuns to fetch.
+     */
+    orderBy?: RoomChecklistRunOrderByWithRelationInput | RoomChecklistRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomChecklistRuns.
+     */
+    cursor?: RoomChecklistRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomChecklistRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomChecklistRuns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomChecklistRuns.
+     */
+    distinct?: RoomChecklistRunScalarFieldEnum | RoomChecklistRunScalarFieldEnum[]
+  }
+
+  /**
+   * RoomChecklistRun findFirstOrThrow
+   */
+  export type RoomChecklistRunFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomChecklistRun to fetch.
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomChecklistRuns to fetch.
+     */
+    orderBy?: RoomChecklistRunOrderByWithRelationInput | RoomChecklistRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomChecklistRuns.
+     */
+    cursor?: RoomChecklistRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomChecklistRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomChecklistRuns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomChecklistRuns.
+     */
+    distinct?: RoomChecklistRunScalarFieldEnum | RoomChecklistRunScalarFieldEnum[]
+  }
+
+  /**
+   * RoomChecklistRun findMany
+   */
+  export type RoomChecklistRunFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomChecklistRuns to fetch.
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomChecklistRuns to fetch.
+     */
+    orderBy?: RoomChecklistRunOrderByWithRelationInput | RoomChecklistRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RoomChecklistRuns.
+     */
+    cursor?: RoomChecklistRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomChecklistRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomChecklistRuns.
+     */
+    skip?: number
+    distinct?: RoomChecklistRunScalarFieldEnum | RoomChecklistRunScalarFieldEnum[]
+  }
+
+  /**
+   * RoomChecklistRun create
+   */
+  export type RoomChecklistRunCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RoomChecklistRun.
+     */
+    data: XOR<RoomChecklistRunCreateInput, RoomChecklistRunUncheckedCreateInput>
+  }
+
+  /**
+   * RoomChecklistRun createMany
+   */
+  export type RoomChecklistRunCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RoomChecklistRuns.
+     */
+    data: RoomChecklistRunCreateManyInput | RoomChecklistRunCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RoomChecklistRun createManyAndReturn
+   */
+  export type RoomChecklistRunCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * The data used to create many RoomChecklistRuns.
+     */
+    data: RoomChecklistRunCreateManyInput | RoomChecklistRunCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomChecklistRun update
+   */
+  export type RoomChecklistRunUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RoomChecklistRun.
+     */
+    data: XOR<RoomChecklistRunUpdateInput, RoomChecklistRunUncheckedUpdateInput>
+    /**
+     * Choose, which RoomChecklistRun to update.
+     */
+    where: RoomChecklistRunWhereUniqueInput
+  }
+
+  /**
+   * RoomChecklistRun updateMany
+   */
+  export type RoomChecklistRunUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RoomChecklistRuns.
+     */
+    data: XOR<RoomChecklistRunUpdateManyMutationInput, RoomChecklistRunUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomChecklistRuns to update
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * Limit how many RoomChecklistRuns to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomChecklistRun updateManyAndReturn
+   */
+  export type RoomChecklistRunUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * The data used to update RoomChecklistRuns.
+     */
+    data: XOR<RoomChecklistRunUpdateManyMutationInput, RoomChecklistRunUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomChecklistRuns to update
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * Limit how many RoomChecklistRuns to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomChecklistRun upsert
+   */
+  export type RoomChecklistRunUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RoomChecklistRun to update in case it exists.
+     */
+    where: RoomChecklistRunWhereUniqueInput
+    /**
+     * In case the RoomChecklistRun found by the `where` argument doesn't exist, create a new RoomChecklistRun with this data.
+     */
+    create: XOR<RoomChecklistRunCreateInput, RoomChecklistRunUncheckedCreateInput>
+    /**
+     * In case the RoomChecklistRun was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RoomChecklistRunUpdateInput, RoomChecklistRunUncheckedUpdateInput>
+  }
+
+  /**
+   * RoomChecklistRun delete
+   */
+  export type RoomChecklistRunDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
+    /**
+     * Filter which RoomChecklistRun to delete.
+     */
+    where: RoomChecklistRunWhereUniqueInput
+  }
+
+  /**
+   * RoomChecklistRun deleteMany
+   */
+  export type RoomChecklistRunDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomChecklistRuns to delete
+     */
+    where?: RoomChecklistRunWhereInput
+    /**
+     * Limit how many RoomChecklistRuns to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomChecklistRun without action
+   */
+  export type RoomChecklistRunDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomChecklistRun
+     */
+    select?: RoomChecklistRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomChecklistRun
+     */
+    omit?: RoomChecklistRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomChecklistRunInclude<ExtArgs> | null
   }
 
 
@@ -39480,7 +45209,12 @@ export namespace Prisma {
 
   export const TaskScalarFieldEnum: {
     id: 'id',
+    facilityId: 'facilityId',
+    clinicId: 'clinicId',
     encounterId: 'encounterId',
+    roomId: 'roomId',
+    sourceType: 'sourceType',
+    sourceId: 'sourceId',
     taskType: 'taskType',
     description: 'description',
     assignedToRole: 'assignedToRole',
@@ -39499,6 +45233,84 @@ export namespace Prisma {
   };
 
   export type TaskScalarFieldEnum = (typeof TaskScalarFieldEnum)[keyof typeof TaskScalarFieldEnum]
+
+
+  export const RoomOperationalStateScalarFieldEnum: {
+    roomId: 'roomId',
+    currentStatus: 'currentStatus',
+    statusSinceAt: 'statusSinceAt',
+    occupiedEncounterId: 'occupiedEncounterId',
+    activeCleanerUserId: 'activeCleanerUserId',
+    holdReason: 'holdReason',
+    holdNote: 'holdNote',
+    lastReadyAt: 'lastReadyAt',
+    lastOccupiedAt: 'lastOccupiedAt',
+    lastTurnoverAt: 'lastTurnoverAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type RoomOperationalStateScalarFieldEnum = (typeof RoomOperationalStateScalarFieldEnum)[keyof typeof RoomOperationalStateScalarFieldEnum]
+
+
+  export const RoomOperationalEventScalarFieldEnum: {
+    id: 'id',
+    roomId: 'roomId',
+    clinicId: 'clinicId',
+    facilityId: 'facilityId',
+    encounterId: 'encounterId',
+    eventType: 'eventType',
+    fromStatus: 'fromStatus',
+    toStatus: 'toStatus',
+    note: 'note',
+    metadataJson: 'metadataJson',
+    createdByUserId: 'createdByUserId',
+    occurredAt: 'occurredAt'
+  };
+
+  export type RoomOperationalEventScalarFieldEnum = (typeof RoomOperationalEventScalarFieldEnum)[keyof typeof RoomOperationalEventScalarFieldEnum]
+
+
+  export const RoomIssueScalarFieldEnum: {
+    id: 'id',
+    roomId: 'roomId',
+    clinicId: 'clinicId',
+    facilityId: 'facilityId',
+    encounterId: 'encounterId',
+    issueType: 'issueType',
+    status: 'status',
+    severity: 'severity',
+    title: 'title',
+    description: 'description',
+    placesRoomOnHold: 'placesRoomOnHold',
+    taskId: 'taskId',
+    sourceModule: 'sourceModule',
+    metadataJson: 'metadataJson',
+    createdAt: 'createdAt',
+    createdByUserId: 'createdByUserId',
+    resolvedAt: 'resolvedAt',
+    resolvedByUserId: 'resolvedByUserId',
+    resolutionNote: 'resolutionNote'
+  };
+
+  export type RoomIssueScalarFieldEnum = (typeof RoomIssueScalarFieldEnum)[keyof typeof RoomIssueScalarFieldEnum]
+
+
+  export const RoomChecklistRunScalarFieldEnum: {
+    id: 'id',
+    roomId: 'roomId',
+    clinicId: 'clinicId',
+    facilityId: 'facilityId',
+    kind: 'kind',
+    dateKey: 'dateKey',
+    itemsJson: 'itemsJson',
+    completed: 'completed',
+    startedAt: 'startedAt',
+    completedAt: 'completedAt',
+    completedByUserId: 'completedByUserId',
+    note: 'note'
+  };
+
+  export type RoomChecklistRunScalarFieldEnum = (typeof RoomChecklistRunScalarFieldEnum)[keyof typeof RoomChecklistRunScalarFieldEnum]
 
 
   export const UserAlertInboxScalarFieldEnum: {
@@ -39830,6 +45642,104 @@ export namespace Prisma {
    * Reference to a field of type 'AlertLevel[]'
    */
   export type ListEnumAlertLevelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AlertLevel[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'TaskSourceType'
+   */
+  export type EnumTaskSourceTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TaskSourceType'>
+    
+
+
+  /**
+   * Reference to a field of type 'TaskSourceType[]'
+   */
+  export type ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'TaskSourceType[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomOperationalStatus'
+   */
+  export type EnumRoomOperationalStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomOperationalStatus'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomOperationalStatus[]'
+   */
+  export type ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomOperationalStatus[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomHoldReason'
+   */
+  export type EnumRoomHoldReasonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomHoldReason'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomHoldReason[]'
+   */
+  export type ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomHoldReason[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomEventType'
+   */
+  export type EnumRoomEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomEventType'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomEventType[]'
+   */
+  export type ListEnumRoomEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomEventType[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomIssueType'
+   */
+  export type EnumRoomIssueTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomIssueType'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomIssueType[]'
+   */
+  export type ListEnumRoomIssueTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomIssueType[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomIssueStatus'
+   */
+  export type EnumRoomIssueStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomIssueStatus'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomIssueStatus[]'
+   */
+  export type ListEnumRoomIssueStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomIssueStatus[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomChecklistKind'
+   */
+  export type EnumRoomChecklistKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomChecklistKind'>
+    
+
+
+  /**
+   * Reference to a field of type 'RoomChecklistKind[]'
+   */
+  export type ListEnumRoomChecklistKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RoomChecklistKind[]'>
     
 
 
@@ -40579,6 +46489,11 @@ export namespace Prisma {
     facility?: XOR<FacilityScalarRelationFilter, FacilityWhereInput>
     clinicLinks?: ClinicRoomAssignmentListRelationFilter
     encounters?: EncounterListRelationFilter
+    operationalState?: XOR<RoomOperationalStateNullableScalarRelationFilter, RoomOperationalStateWhereInput> | null
+    operationalEvents?: RoomOperationalEventListRelationFilter
+    roomIssues?: RoomIssueListRelationFilter
+    checklistRuns?: RoomChecklistRunListRelationFilter
+    tasks?: TaskListRelationFilter
   }
 
   export type ClinicRoomOrderByWithRelationInput = {
@@ -40592,6 +46507,11 @@ export namespace Prisma {
     facility?: FacilityOrderByWithRelationInput
     clinicLinks?: ClinicRoomAssignmentOrderByRelationAggregateInput
     encounters?: EncounterOrderByRelationAggregateInput
+    operationalState?: RoomOperationalStateOrderByWithRelationInput
+    operationalEvents?: RoomOperationalEventOrderByRelationAggregateInput
+    roomIssues?: RoomIssueOrderByRelationAggregateInput
+    checklistRuns?: RoomChecklistRunOrderByRelationAggregateInput
+    tasks?: TaskOrderByRelationAggregateInput
   }
 
   export type ClinicRoomWhereUniqueInput = Prisma.AtLeast<{
@@ -40608,6 +46528,11 @@ export namespace Prisma {
     facility?: XOR<FacilityScalarRelationFilter, FacilityWhereInput>
     clinicLinks?: ClinicRoomAssignmentListRelationFilter
     encounters?: EncounterListRelationFilter
+    operationalState?: XOR<RoomOperationalStateNullableScalarRelationFilter, RoomOperationalStateWhereInput> | null
+    operationalEvents?: RoomOperationalEventListRelationFilter
+    roomIssues?: RoomIssueListRelationFilter
+    checklistRuns?: RoomChecklistRunListRelationFilter
+    tasks?: TaskListRelationFilter
   }, "id">
 
   export type ClinicRoomOrderByWithAggregationInput = {
@@ -41401,6 +47326,9 @@ export namespace Prisma {
     alertState?: XOR<AlertStateNullableScalarRelationFilter, AlertStateWhereInput> | null
     tasks?: TaskListRelationFilter
     safetyEvents?: SafetyEventListRelationFilter
+    operationalOccupancies?: RoomOperationalStateListRelationFilter
+    roomOperationalEvents?: RoomOperationalEventListRelationFilter
+    roomIssues?: RoomIssueListRelationFilter
   }
 
   export type EncounterOrderByWithRelationInput = {
@@ -41438,6 +47366,9 @@ export namespace Prisma {
     alertState?: AlertStateOrderByWithRelationInput
     tasks?: TaskOrderByRelationAggregateInput
     safetyEvents?: SafetyEventOrderByRelationAggregateInput
+    operationalOccupancies?: RoomOperationalStateOrderByRelationAggregateInput
+    roomOperationalEvents?: RoomOperationalEventOrderByRelationAggregateInput
+    roomIssues?: RoomIssueOrderByRelationAggregateInput
   }
 
   export type EncounterWhereUniqueInput = Prisma.AtLeast<{
@@ -41479,6 +47410,9 @@ export namespace Prisma {
     alertState?: XOR<AlertStateNullableScalarRelationFilter, AlertStateWhereInput> | null
     tasks?: TaskListRelationFilter
     safetyEvents?: SafetyEventListRelationFilter
+    operationalOccupancies?: RoomOperationalStateListRelationFilter
+    roomOperationalEvents?: RoomOperationalEventListRelationFilter
+    roomIssues?: RoomIssueListRelationFilter
   }, "id" | "patientId_clinicId_dateOfService">
 
   export type EncounterOrderByWithAggregationInput = {
@@ -41682,7 +47616,12 @@ export namespace Prisma {
     OR?: TaskWhereInput[]
     NOT?: TaskWhereInput | TaskWhereInput[]
     id?: StringFilter<"Task"> | string
-    encounterId?: StringFilter<"Task"> | string
+    facilityId?: StringNullableFilter<"Task"> | string | null
+    clinicId?: StringNullableFilter<"Task"> | string | null
+    encounterId?: StringNullableFilter<"Task"> | string | null
+    roomId?: StringNullableFilter<"Task"> | string | null
+    sourceType?: EnumTaskSourceTypeNullableFilter<"Task"> | $Enums.TaskSourceType | null
+    sourceId?: StringNullableFilter<"Task"> | string | null
     taskType?: StringFilter<"Task"> | string
     description?: StringFilter<"Task"> | string
     assignedToRole?: EnumRoleNameNullableFilter<"Task"> | $Enums.RoleName | null
@@ -41698,15 +47637,22 @@ export namespace Prisma {
     completedBy?: StringNullableFilter<"Task"> | string | null
     notes?: StringNullableFilter<"Task"> | string | null
     updatedAt?: DateTimeFilter<"Task"> | Date | string
-    encounter?: XOR<EncounterScalarRelationFilter, EncounterWhereInput>
+    encounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+    room?: XOR<ClinicRoomNullableScalarRelationFilter, ClinicRoomWhereInput> | null
     creator?: XOR<UserScalarRelationFilter, UserWhereInput>
     acknowledger?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     completer?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+    roomIssues?: RoomIssueListRelationFilter
   }
 
   export type TaskOrderByWithRelationInput = {
     id?: SortOrder
-    encounterId?: SortOrder
+    facilityId?: SortOrderInput | SortOrder
+    clinicId?: SortOrderInput | SortOrder
+    encounterId?: SortOrderInput | SortOrder
+    roomId?: SortOrderInput | SortOrder
+    sourceType?: SortOrderInput | SortOrder
+    sourceId?: SortOrderInput | SortOrder
     taskType?: SortOrder
     description?: SortOrder
     assignedToRole?: SortOrderInput | SortOrder
@@ -41723,9 +47669,11 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     encounter?: EncounterOrderByWithRelationInput
+    room?: ClinicRoomOrderByWithRelationInput
     creator?: UserOrderByWithRelationInput
     acknowledger?: UserOrderByWithRelationInput
     completer?: UserOrderByWithRelationInput
+    roomIssues?: RoomIssueOrderByRelationAggregateInput
   }
 
   export type TaskWhereUniqueInput = Prisma.AtLeast<{
@@ -41733,7 +47681,12 @@ export namespace Prisma {
     AND?: TaskWhereInput | TaskWhereInput[]
     OR?: TaskWhereInput[]
     NOT?: TaskWhereInput | TaskWhereInput[]
-    encounterId?: StringFilter<"Task"> | string
+    facilityId?: StringNullableFilter<"Task"> | string | null
+    clinicId?: StringNullableFilter<"Task"> | string | null
+    encounterId?: StringNullableFilter<"Task"> | string | null
+    roomId?: StringNullableFilter<"Task"> | string | null
+    sourceType?: EnumTaskSourceTypeNullableFilter<"Task"> | $Enums.TaskSourceType | null
+    sourceId?: StringNullableFilter<"Task"> | string | null
     taskType?: StringFilter<"Task"> | string
     description?: StringFilter<"Task"> | string
     assignedToRole?: EnumRoleNameNullableFilter<"Task"> | $Enums.RoleName | null
@@ -41749,15 +47702,22 @@ export namespace Prisma {
     completedBy?: StringNullableFilter<"Task"> | string | null
     notes?: StringNullableFilter<"Task"> | string | null
     updatedAt?: DateTimeFilter<"Task"> | Date | string
-    encounter?: XOR<EncounterScalarRelationFilter, EncounterWhereInput>
+    encounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+    room?: XOR<ClinicRoomNullableScalarRelationFilter, ClinicRoomWhereInput> | null
     creator?: XOR<UserScalarRelationFilter, UserWhereInput>
     acknowledger?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     completer?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+    roomIssues?: RoomIssueListRelationFilter
   }, "id">
 
   export type TaskOrderByWithAggregationInput = {
     id?: SortOrder
-    encounterId?: SortOrder
+    facilityId?: SortOrderInput | SortOrder
+    clinicId?: SortOrderInput | SortOrder
+    encounterId?: SortOrderInput | SortOrder
+    roomId?: SortOrderInput | SortOrder
+    sourceType?: SortOrderInput | SortOrder
+    sourceId?: SortOrderInput | SortOrder
     taskType?: SortOrder
     description?: SortOrder
     assignedToRole?: SortOrderInput | SortOrder
@@ -41785,7 +47745,12 @@ export namespace Prisma {
     OR?: TaskScalarWhereWithAggregatesInput[]
     NOT?: TaskScalarWhereWithAggregatesInput | TaskScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"Task"> | string
-    encounterId?: StringWithAggregatesFilter<"Task"> | string
+    facilityId?: StringNullableWithAggregatesFilter<"Task"> | string | null
+    clinicId?: StringNullableWithAggregatesFilter<"Task"> | string | null
+    encounterId?: StringNullableWithAggregatesFilter<"Task"> | string | null
+    roomId?: StringNullableWithAggregatesFilter<"Task"> | string | null
+    sourceType?: EnumTaskSourceTypeNullableWithAggregatesFilter<"Task"> | $Enums.TaskSourceType | null
+    sourceId?: StringNullableWithAggregatesFilter<"Task"> | string | null
     taskType?: StringWithAggregatesFilter<"Task"> | string
     description?: StringWithAggregatesFilter<"Task"> | string
     assignedToRole?: EnumRoleNameNullableWithAggregatesFilter<"Task"> | $Enums.RoleName | null
@@ -41801,6 +47766,411 @@ export namespace Prisma {
     completedBy?: StringNullableWithAggregatesFilter<"Task"> | string | null
     notes?: StringNullableWithAggregatesFilter<"Task"> | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"Task"> | Date | string
+  }
+
+  export type RoomOperationalStateWhereInput = {
+    AND?: RoomOperationalStateWhereInput | RoomOperationalStateWhereInput[]
+    OR?: RoomOperationalStateWhereInput[]
+    NOT?: RoomOperationalStateWhereInput | RoomOperationalStateWhereInput[]
+    roomId?: StringFilter<"RoomOperationalState"> | string
+    currentStatus?: EnumRoomOperationalStatusFilter<"RoomOperationalState"> | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFilter<"RoomOperationalState"> | Date | string
+    occupiedEncounterId?: StringNullableFilter<"RoomOperationalState"> | string | null
+    activeCleanerUserId?: StringNullableFilter<"RoomOperationalState"> | string | null
+    holdReason?: EnumRoomHoldReasonNullableFilter<"RoomOperationalState"> | $Enums.RoomHoldReason | null
+    holdNote?: StringNullableFilter<"RoomOperationalState"> | string | null
+    lastReadyAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    lastOccupiedAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    lastTurnoverAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    updatedAt?: DateTimeFilter<"RoomOperationalState"> | Date | string
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+    occupiedEncounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+  }
+
+  export type RoomOperationalStateOrderByWithRelationInput = {
+    roomId?: SortOrder
+    currentStatus?: SortOrder
+    statusSinceAt?: SortOrder
+    occupiedEncounterId?: SortOrderInput | SortOrder
+    activeCleanerUserId?: SortOrderInput | SortOrder
+    holdReason?: SortOrderInput | SortOrder
+    holdNote?: SortOrderInput | SortOrder
+    lastReadyAt?: SortOrderInput | SortOrder
+    lastOccupiedAt?: SortOrderInput | SortOrder
+    lastTurnoverAt?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
+    room?: ClinicRoomOrderByWithRelationInput
+    occupiedEncounter?: EncounterOrderByWithRelationInput
+  }
+
+  export type RoomOperationalStateWhereUniqueInput = Prisma.AtLeast<{
+    roomId?: string
+    AND?: RoomOperationalStateWhereInput | RoomOperationalStateWhereInput[]
+    OR?: RoomOperationalStateWhereInput[]
+    NOT?: RoomOperationalStateWhereInput | RoomOperationalStateWhereInput[]
+    currentStatus?: EnumRoomOperationalStatusFilter<"RoomOperationalState"> | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFilter<"RoomOperationalState"> | Date | string
+    occupiedEncounterId?: StringNullableFilter<"RoomOperationalState"> | string | null
+    activeCleanerUserId?: StringNullableFilter<"RoomOperationalState"> | string | null
+    holdReason?: EnumRoomHoldReasonNullableFilter<"RoomOperationalState"> | $Enums.RoomHoldReason | null
+    holdNote?: StringNullableFilter<"RoomOperationalState"> | string | null
+    lastReadyAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    lastOccupiedAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    lastTurnoverAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    updatedAt?: DateTimeFilter<"RoomOperationalState"> | Date | string
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+    occupiedEncounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+  }, "roomId">
+
+  export type RoomOperationalStateOrderByWithAggregationInput = {
+    roomId?: SortOrder
+    currentStatus?: SortOrder
+    statusSinceAt?: SortOrder
+    occupiedEncounterId?: SortOrderInput | SortOrder
+    activeCleanerUserId?: SortOrderInput | SortOrder
+    holdReason?: SortOrderInput | SortOrder
+    holdNote?: SortOrderInput | SortOrder
+    lastReadyAt?: SortOrderInput | SortOrder
+    lastOccupiedAt?: SortOrderInput | SortOrder
+    lastTurnoverAt?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
+    _count?: RoomOperationalStateCountOrderByAggregateInput
+    _max?: RoomOperationalStateMaxOrderByAggregateInput
+    _min?: RoomOperationalStateMinOrderByAggregateInput
+  }
+
+  export type RoomOperationalStateScalarWhereWithAggregatesInput = {
+    AND?: RoomOperationalStateScalarWhereWithAggregatesInput | RoomOperationalStateScalarWhereWithAggregatesInput[]
+    OR?: RoomOperationalStateScalarWhereWithAggregatesInput[]
+    NOT?: RoomOperationalStateScalarWhereWithAggregatesInput | RoomOperationalStateScalarWhereWithAggregatesInput[]
+    roomId?: StringWithAggregatesFilter<"RoomOperationalState"> | string
+    currentStatus?: EnumRoomOperationalStatusWithAggregatesFilter<"RoomOperationalState"> | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeWithAggregatesFilter<"RoomOperationalState"> | Date | string
+    occupiedEncounterId?: StringNullableWithAggregatesFilter<"RoomOperationalState"> | string | null
+    activeCleanerUserId?: StringNullableWithAggregatesFilter<"RoomOperationalState"> | string | null
+    holdReason?: EnumRoomHoldReasonNullableWithAggregatesFilter<"RoomOperationalState"> | $Enums.RoomHoldReason | null
+    holdNote?: StringNullableWithAggregatesFilter<"RoomOperationalState"> | string | null
+    lastReadyAt?: DateTimeNullableWithAggregatesFilter<"RoomOperationalState"> | Date | string | null
+    lastOccupiedAt?: DateTimeNullableWithAggregatesFilter<"RoomOperationalState"> | Date | string | null
+    lastTurnoverAt?: DateTimeNullableWithAggregatesFilter<"RoomOperationalState"> | Date | string | null
+    updatedAt?: DateTimeWithAggregatesFilter<"RoomOperationalState"> | Date | string
+  }
+
+  export type RoomOperationalEventWhereInput = {
+    AND?: RoomOperationalEventWhereInput | RoomOperationalEventWhereInput[]
+    OR?: RoomOperationalEventWhereInput[]
+    NOT?: RoomOperationalEventWhereInput | RoomOperationalEventWhereInput[]
+    id?: StringFilter<"RoomOperationalEvent"> | string
+    roomId?: StringFilter<"RoomOperationalEvent"> | string
+    clinicId?: StringFilter<"RoomOperationalEvent"> | string
+    facilityId?: StringFilter<"RoomOperationalEvent"> | string
+    encounterId?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    eventType?: EnumRoomEventTypeFilter<"RoomOperationalEvent"> | $Enums.RoomEventType
+    fromStatus?: EnumRoomOperationalStatusNullableFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    toStatus?: EnumRoomOperationalStatusNullableFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    note?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    metadataJson?: JsonNullableFilter<"RoomOperationalEvent">
+    createdByUserId?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    occurredAt?: DateTimeFilter<"RoomOperationalEvent"> | Date | string
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+    encounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+  }
+
+  export type RoomOperationalEventOrderByWithRelationInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrderInput | SortOrder
+    eventType?: SortOrder
+    fromStatus?: SortOrderInput | SortOrder
+    toStatus?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    metadataJson?: SortOrderInput | SortOrder
+    createdByUserId?: SortOrderInput | SortOrder
+    occurredAt?: SortOrder
+    room?: ClinicRoomOrderByWithRelationInput
+    encounter?: EncounterOrderByWithRelationInput
+  }
+
+  export type RoomOperationalEventWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: RoomOperationalEventWhereInput | RoomOperationalEventWhereInput[]
+    OR?: RoomOperationalEventWhereInput[]
+    NOT?: RoomOperationalEventWhereInput | RoomOperationalEventWhereInput[]
+    roomId?: StringFilter<"RoomOperationalEvent"> | string
+    clinicId?: StringFilter<"RoomOperationalEvent"> | string
+    facilityId?: StringFilter<"RoomOperationalEvent"> | string
+    encounterId?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    eventType?: EnumRoomEventTypeFilter<"RoomOperationalEvent"> | $Enums.RoomEventType
+    fromStatus?: EnumRoomOperationalStatusNullableFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    toStatus?: EnumRoomOperationalStatusNullableFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    note?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    metadataJson?: JsonNullableFilter<"RoomOperationalEvent">
+    createdByUserId?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    occurredAt?: DateTimeFilter<"RoomOperationalEvent"> | Date | string
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+    encounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+  }, "id">
+
+  export type RoomOperationalEventOrderByWithAggregationInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrderInput | SortOrder
+    eventType?: SortOrder
+    fromStatus?: SortOrderInput | SortOrder
+    toStatus?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    metadataJson?: SortOrderInput | SortOrder
+    createdByUserId?: SortOrderInput | SortOrder
+    occurredAt?: SortOrder
+    _count?: RoomOperationalEventCountOrderByAggregateInput
+    _max?: RoomOperationalEventMaxOrderByAggregateInput
+    _min?: RoomOperationalEventMinOrderByAggregateInput
+  }
+
+  export type RoomOperationalEventScalarWhereWithAggregatesInput = {
+    AND?: RoomOperationalEventScalarWhereWithAggregatesInput | RoomOperationalEventScalarWhereWithAggregatesInput[]
+    OR?: RoomOperationalEventScalarWhereWithAggregatesInput[]
+    NOT?: RoomOperationalEventScalarWhereWithAggregatesInput | RoomOperationalEventScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"RoomOperationalEvent"> | string
+    roomId?: StringWithAggregatesFilter<"RoomOperationalEvent"> | string
+    clinicId?: StringWithAggregatesFilter<"RoomOperationalEvent"> | string
+    facilityId?: StringWithAggregatesFilter<"RoomOperationalEvent"> | string
+    encounterId?: StringNullableWithAggregatesFilter<"RoomOperationalEvent"> | string | null
+    eventType?: EnumRoomEventTypeWithAggregatesFilter<"RoomOperationalEvent"> | $Enums.RoomEventType
+    fromStatus?: EnumRoomOperationalStatusNullableWithAggregatesFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    toStatus?: EnumRoomOperationalStatusNullableWithAggregatesFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    note?: StringNullableWithAggregatesFilter<"RoomOperationalEvent"> | string | null
+    metadataJson?: JsonNullableWithAggregatesFilter<"RoomOperationalEvent">
+    createdByUserId?: StringNullableWithAggregatesFilter<"RoomOperationalEvent"> | string | null
+    occurredAt?: DateTimeWithAggregatesFilter<"RoomOperationalEvent"> | Date | string
+  }
+
+  export type RoomIssueWhereInput = {
+    AND?: RoomIssueWhereInput | RoomIssueWhereInput[]
+    OR?: RoomIssueWhereInput[]
+    NOT?: RoomIssueWhereInput | RoomIssueWhereInput[]
+    id?: StringFilter<"RoomIssue"> | string
+    roomId?: StringFilter<"RoomIssue"> | string
+    clinicId?: StringFilter<"RoomIssue"> | string
+    facilityId?: StringFilter<"RoomIssue"> | string
+    encounterId?: StringNullableFilter<"RoomIssue"> | string | null
+    issueType?: EnumRoomIssueTypeFilter<"RoomIssue"> | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFilter<"RoomIssue"> | $Enums.RoomIssueStatus
+    severity?: IntFilter<"RoomIssue"> | number
+    title?: StringFilter<"RoomIssue"> | string
+    description?: StringNullableFilter<"RoomIssue"> | string | null
+    placesRoomOnHold?: BoolFilter<"RoomIssue"> | boolean
+    taskId?: StringNullableFilter<"RoomIssue"> | string | null
+    sourceModule?: StringNullableFilter<"RoomIssue"> | string | null
+    metadataJson?: JsonNullableFilter<"RoomIssue">
+    createdAt?: DateTimeFilter<"RoomIssue"> | Date | string
+    createdByUserId?: StringFilter<"RoomIssue"> | string
+    resolvedAt?: DateTimeNullableFilter<"RoomIssue"> | Date | string | null
+    resolvedByUserId?: StringNullableFilter<"RoomIssue"> | string | null
+    resolutionNote?: StringNullableFilter<"RoomIssue"> | string | null
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+    encounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+    task?: XOR<TaskNullableScalarRelationFilter, TaskWhereInput> | null
+  }
+
+  export type RoomIssueOrderByWithRelationInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrderInput | SortOrder
+    issueType?: SortOrder
+    status?: SortOrder
+    severity?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    placesRoomOnHold?: SortOrder
+    taskId?: SortOrderInput | SortOrder
+    sourceModule?: SortOrderInput | SortOrder
+    metadataJson?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    createdByUserId?: SortOrder
+    resolvedAt?: SortOrderInput | SortOrder
+    resolvedByUserId?: SortOrderInput | SortOrder
+    resolutionNote?: SortOrderInput | SortOrder
+    room?: ClinicRoomOrderByWithRelationInput
+    encounter?: EncounterOrderByWithRelationInput
+    task?: TaskOrderByWithRelationInput
+  }
+
+  export type RoomIssueWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: RoomIssueWhereInput | RoomIssueWhereInput[]
+    OR?: RoomIssueWhereInput[]
+    NOT?: RoomIssueWhereInput | RoomIssueWhereInput[]
+    roomId?: StringFilter<"RoomIssue"> | string
+    clinicId?: StringFilter<"RoomIssue"> | string
+    facilityId?: StringFilter<"RoomIssue"> | string
+    encounterId?: StringNullableFilter<"RoomIssue"> | string | null
+    issueType?: EnumRoomIssueTypeFilter<"RoomIssue"> | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFilter<"RoomIssue"> | $Enums.RoomIssueStatus
+    severity?: IntFilter<"RoomIssue"> | number
+    title?: StringFilter<"RoomIssue"> | string
+    description?: StringNullableFilter<"RoomIssue"> | string | null
+    placesRoomOnHold?: BoolFilter<"RoomIssue"> | boolean
+    taskId?: StringNullableFilter<"RoomIssue"> | string | null
+    sourceModule?: StringNullableFilter<"RoomIssue"> | string | null
+    metadataJson?: JsonNullableFilter<"RoomIssue">
+    createdAt?: DateTimeFilter<"RoomIssue"> | Date | string
+    createdByUserId?: StringFilter<"RoomIssue"> | string
+    resolvedAt?: DateTimeNullableFilter<"RoomIssue"> | Date | string | null
+    resolvedByUserId?: StringNullableFilter<"RoomIssue"> | string | null
+    resolutionNote?: StringNullableFilter<"RoomIssue"> | string | null
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+    encounter?: XOR<EncounterNullableScalarRelationFilter, EncounterWhereInput> | null
+    task?: XOR<TaskNullableScalarRelationFilter, TaskWhereInput> | null
+  }, "id">
+
+  export type RoomIssueOrderByWithAggregationInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrderInput | SortOrder
+    issueType?: SortOrder
+    status?: SortOrder
+    severity?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    placesRoomOnHold?: SortOrder
+    taskId?: SortOrderInput | SortOrder
+    sourceModule?: SortOrderInput | SortOrder
+    metadataJson?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    createdByUserId?: SortOrder
+    resolvedAt?: SortOrderInput | SortOrder
+    resolvedByUserId?: SortOrderInput | SortOrder
+    resolutionNote?: SortOrderInput | SortOrder
+    _count?: RoomIssueCountOrderByAggregateInput
+    _avg?: RoomIssueAvgOrderByAggregateInput
+    _max?: RoomIssueMaxOrderByAggregateInput
+    _min?: RoomIssueMinOrderByAggregateInput
+    _sum?: RoomIssueSumOrderByAggregateInput
+  }
+
+  export type RoomIssueScalarWhereWithAggregatesInput = {
+    AND?: RoomIssueScalarWhereWithAggregatesInput | RoomIssueScalarWhereWithAggregatesInput[]
+    OR?: RoomIssueScalarWhereWithAggregatesInput[]
+    NOT?: RoomIssueScalarWhereWithAggregatesInput | RoomIssueScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"RoomIssue"> | string
+    roomId?: StringWithAggregatesFilter<"RoomIssue"> | string
+    clinicId?: StringWithAggregatesFilter<"RoomIssue"> | string
+    facilityId?: StringWithAggregatesFilter<"RoomIssue"> | string
+    encounterId?: StringNullableWithAggregatesFilter<"RoomIssue"> | string | null
+    issueType?: EnumRoomIssueTypeWithAggregatesFilter<"RoomIssue"> | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusWithAggregatesFilter<"RoomIssue"> | $Enums.RoomIssueStatus
+    severity?: IntWithAggregatesFilter<"RoomIssue"> | number
+    title?: StringWithAggregatesFilter<"RoomIssue"> | string
+    description?: StringNullableWithAggregatesFilter<"RoomIssue"> | string | null
+    placesRoomOnHold?: BoolWithAggregatesFilter<"RoomIssue"> | boolean
+    taskId?: StringNullableWithAggregatesFilter<"RoomIssue"> | string | null
+    sourceModule?: StringNullableWithAggregatesFilter<"RoomIssue"> | string | null
+    metadataJson?: JsonNullableWithAggregatesFilter<"RoomIssue">
+    createdAt?: DateTimeWithAggregatesFilter<"RoomIssue"> | Date | string
+    createdByUserId?: StringWithAggregatesFilter<"RoomIssue"> | string
+    resolvedAt?: DateTimeNullableWithAggregatesFilter<"RoomIssue"> | Date | string | null
+    resolvedByUserId?: StringNullableWithAggregatesFilter<"RoomIssue"> | string | null
+    resolutionNote?: StringNullableWithAggregatesFilter<"RoomIssue"> | string | null
+  }
+
+  export type RoomChecklistRunWhereInput = {
+    AND?: RoomChecklistRunWhereInput | RoomChecklistRunWhereInput[]
+    OR?: RoomChecklistRunWhereInput[]
+    NOT?: RoomChecklistRunWhereInput | RoomChecklistRunWhereInput[]
+    id?: StringFilter<"RoomChecklistRun"> | string
+    roomId?: StringFilter<"RoomChecklistRun"> | string
+    clinicId?: StringFilter<"RoomChecklistRun"> | string
+    facilityId?: StringFilter<"RoomChecklistRun"> | string
+    kind?: EnumRoomChecklistKindFilter<"RoomChecklistRun"> | $Enums.RoomChecklistKind
+    dateKey?: StringFilter<"RoomChecklistRun"> | string
+    itemsJson?: JsonFilter<"RoomChecklistRun">
+    completed?: BoolFilter<"RoomChecklistRun"> | boolean
+    startedAt?: DateTimeFilter<"RoomChecklistRun"> | Date | string
+    completedAt?: DateTimeNullableFilter<"RoomChecklistRun"> | Date | string | null
+    completedByUserId?: StringNullableFilter<"RoomChecklistRun"> | string | null
+    note?: StringNullableFilter<"RoomChecklistRun"> | string | null
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+  }
+
+  export type RoomChecklistRunOrderByWithRelationInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    kind?: SortOrder
+    dateKey?: SortOrder
+    itemsJson?: SortOrder
+    completed?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    completedByUserId?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    room?: ClinicRoomOrderByWithRelationInput
+  }
+
+  export type RoomChecklistRunWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    roomId_kind_dateKey?: RoomChecklistRunRoomIdKindDateKeyCompoundUniqueInput
+    AND?: RoomChecklistRunWhereInput | RoomChecklistRunWhereInput[]
+    OR?: RoomChecklistRunWhereInput[]
+    NOT?: RoomChecklistRunWhereInput | RoomChecklistRunWhereInput[]
+    roomId?: StringFilter<"RoomChecklistRun"> | string
+    clinicId?: StringFilter<"RoomChecklistRun"> | string
+    facilityId?: StringFilter<"RoomChecklistRun"> | string
+    kind?: EnumRoomChecklistKindFilter<"RoomChecklistRun"> | $Enums.RoomChecklistKind
+    dateKey?: StringFilter<"RoomChecklistRun"> | string
+    itemsJson?: JsonFilter<"RoomChecklistRun">
+    completed?: BoolFilter<"RoomChecklistRun"> | boolean
+    startedAt?: DateTimeFilter<"RoomChecklistRun"> | Date | string
+    completedAt?: DateTimeNullableFilter<"RoomChecklistRun"> | Date | string | null
+    completedByUserId?: StringNullableFilter<"RoomChecklistRun"> | string | null
+    note?: StringNullableFilter<"RoomChecklistRun"> | string | null
+    room?: XOR<ClinicRoomScalarRelationFilter, ClinicRoomWhereInput>
+  }, "id" | "roomId_kind_dateKey">
+
+  export type RoomChecklistRunOrderByWithAggregationInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    kind?: SortOrder
+    dateKey?: SortOrder
+    itemsJson?: SortOrder
+    completed?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    completedByUserId?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    _count?: RoomChecklistRunCountOrderByAggregateInput
+    _max?: RoomChecklistRunMaxOrderByAggregateInput
+    _min?: RoomChecklistRunMinOrderByAggregateInput
+  }
+
+  export type RoomChecklistRunScalarWhereWithAggregatesInput = {
+    AND?: RoomChecklistRunScalarWhereWithAggregatesInput | RoomChecklistRunScalarWhereWithAggregatesInput[]
+    OR?: RoomChecklistRunScalarWhereWithAggregatesInput[]
+    NOT?: RoomChecklistRunScalarWhereWithAggregatesInput | RoomChecklistRunScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"RoomChecklistRun"> | string
+    roomId?: StringWithAggregatesFilter<"RoomChecklistRun"> | string
+    clinicId?: StringWithAggregatesFilter<"RoomChecklistRun"> | string
+    facilityId?: StringWithAggregatesFilter<"RoomChecklistRun"> | string
+    kind?: EnumRoomChecklistKindWithAggregatesFilter<"RoomChecklistRun"> | $Enums.RoomChecklistKind
+    dateKey?: StringWithAggregatesFilter<"RoomChecklistRun"> | string
+    itemsJson?: JsonWithAggregatesFilter<"RoomChecklistRun">
+    completed?: BoolWithAggregatesFilter<"RoomChecklistRun"> | boolean
+    startedAt?: DateTimeWithAggregatesFilter<"RoomChecklistRun"> | Date | string
+    completedAt?: DateTimeNullableWithAggregatesFilter<"RoomChecklistRun"> | Date | string | null
+    completedByUserId?: StringNullableWithAggregatesFilter<"RoomChecklistRun"> | string | null
+    note?: StringNullableWithAggregatesFilter<"RoomChecklistRun"> | string | null
   }
 
   export type UserAlertInboxWhereInput = {
@@ -43263,6 +49633,11 @@ export namespace Prisma {
     facility: FacilityCreateNestedOneWithoutRoomsInput
     clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
     encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomUncheckedCreateInput = {
@@ -43275,6 +49650,11 @@ export namespace Prisma {
     sortOrder?: number
     clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomUpdateInput = {
@@ -43287,6 +49667,11 @@ export namespace Prisma {
     facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
     clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
     encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicRoomUncheckedUpdateInput = {
@@ -43299,6 +49684,11 @@ export namespace Prisma {
     sortOrder?: IntFieldUpdateOperationsInput | number
     clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicRoomCreateManyInput = {
@@ -44118,6 +50508,9 @@ export namespace Prisma {
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateInput = {
@@ -44151,6 +50544,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUpdateInput = {
@@ -44184,6 +50580,9 @@ export namespace Prisma {
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateInput = {
@@ -44217,6 +50616,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterCreateManyInput = {
@@ -44442,6 +50844,10 @@ export namespace Prisma {
 
   export type TaskCreateInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -44454,15 +50860,22 @@ export namespace Prisma {
     completedAt?: Date | string | null
     notes?: string | null
     updatedAt?: Date | string
-    encounter: EncounterCreateNestedOneWithoutTasksInput
+    encounter?: EncounterCreateNestedOneWithoutTasksInput
+    room?: ClinicRoomCreateNestedOneWithoutTasksInput
     creator: UserCreateNestedOneWithoutTasksCreatedInput
     acknowledger?: UserCreateNestedOneWithoutTasksAcknowledgedInput
     completer?: UserCreateNestedOneWithoutTasksCompletedInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutTaskInput
   }
 
   export type TaskUncheckedCreateInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -44478,10 +50891,15 @@ export namespace Prisma {
     completedBy?: string | null
     notes?: string | null
     updatedAt?: Date | string
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutTaskInput
   }
 
   export type TaskUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -44494,15 +50912,22 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    encounter?: EncounterUpdateOneRequiredWithoutTasksNestedInput
+    encounter?: EncounterUpdateOneWithoutTasksNestedInput
+    room?: ClinicRoomUpdateOneWithoutTasksNestedInput
     creator?: UserUpdateOneRequiredWithoutTasksCreatedNestedInput
     acknowledger?: UserUpdateOneWithoutTasksAcknowledgedNestedInput
     completer?: UserUpdateOneWithoutTasksCompletedNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -44518,11 +50943,17 @@ export namespace Prisma {
     completedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskCreateManyInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -44542,6 +50973,10 @@ export namespace Prisma {
 
   export type TaskUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -44558,7 +50993,12 @@ export namespace Prisma {
 
   export type TaskUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -44574,6 +51014,460 @@ export namespace Prisma {
     completedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalStateCreateInput = {
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+    room: ClinicRoomCreateNestedOneWithoutOperationalStateInput
+    occupiedEncounter?: EncounterCreateNestedOneWithoutOperationalOccupanciesInput
+  }
+
+  export type RoomOperationalStateUncheckedCreateInput = {
+    roomId: string
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    occupiedEncounterId?: string | null
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type RoomOperationalStateUpdateInput = {
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    room?: ClinicRoomUpdateOneRequiredWithoutOperationalStateNestedInput
+    occupiedEncounter?: EncounterUpdateOneWithoutOperationalOccupanciesNestedInput
+  }
+
+  export type RoomOperationalStateUncheckedUpdateInput = {
+    roomId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    occupiedEncounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalStateCreateManyInput = {
+    roomId: string
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    occupiedEncounterId?: string | null
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type RoomOperationalStateUpdateManyMutationInput = {
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalStateUncheckedUpdateManyInput = {
+    roomId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    occupiedEncounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventCreateInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+    room: ClinicRoomCreateNestedOneWithoutOperationalEventsInput
+    encounter?: EncounterCreateNestedOneWithoutRoomOperationalEventsInput
+  }
+
+  export type RoomOperationalEventUncheckedCreateInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+  }
+
+  export type RoomOperationalEventUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    room?: ClinicRoomUpdateOneRequiredWithoutOperationalEventsNestedInput
+    encounter?: EncounterUpdateOneWithoutRoomOperationalEventsNestedInput
+  }
+
+  export type RoomOperationalEventUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventCreateManyInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+  }
+
+  export type RoomOperationalEventUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomIssueCreateInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+    room: ClinicRoomCreateNestedOneWithoutRoomIssuesInput
+    encounter?: EncounterCreateNestedOneWithoutRoomIssuesInput
+    task?: TaskCreateNestedOneWithoutRoomIssuesInput
+  }
+
+  export type RoomIssueUncheckedCreateInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    taskId?: string | null
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomIssueUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+    room?: ClinicRoomUpdateOneRequiredWithoutRoomIssuesNestedInput
+    encounter?: EncounterUpdateOneWithoutRoomIssuesNestedInput
+    task?: TaskUpdateOneWithoutRoomIssuesNestedInput
+  }
+
+  export type RoomIssueUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    taskId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomIssueCreateManyInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    taskId?: string | null
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomIssueUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomIssueUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    taskId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomChecklistRunCreateInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonNullValueInput | InputJsonValue
+    completed?: boolean
+    startedAt?: Date | string
+    completedAt?: Date | string | null
+    completedByUserId?: string | null
+    note?: string | null
+    room: ClinicRoomCreateNestedOneWithoutChecklistRunsInput
+  }
+
+  export type RoomChecklistRunUncheckedCreateInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonNullValueInput | InputJsonValue
+    completed?: boolean
+    startedAt?: Date | string
+    completedAt?: Date | string | null
+    completedByUserId?: string | null
+    note?: string | null
+  }
+
+  export type RoomChecklistRunUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    room?: ClinicRoomUpdateOneRequiredWithoutChecklistRunsNestedInput
+  }
+
+  export type RoomChecklistRunUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomChecklistRunCreateManyInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonNullValueInput | InputJsonValue
+    completed?: boolean
+    startedAt?: Date | string
+    completedAt?: Date | string | null
+    completedByUserId?: string | null
+    note?: string | null
+  }
+
+  export type RoomChecklistRunUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomChecklistRunUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type UserAlertInboxCreateInput = {
@@ -46164,6 +53058,41 @@ export namespace Prisma {
     isNot?: FacilityWhereInput
   }
 
+  export type RoomOperationalStateNullableScalarRelationFilter = {
+    is?: RoomOperationalStateWhereInput | null
+    isNot?: RoomOperationalStateWhereInput | null
+  }
+
+  export type RoomOperationalEventListRelationFilter = {
+    every?: RoomOperationalEventWhereInput
+    some?: RoomOperationalEventWhereInput
+    none?: RoomOperationalEventWhereInput
+  }
+
+  export type RoomIssueListRelationFilter = {
+    every?: RoomIssueWhereInput
+    some?: RoomIssueWhereInput
+    none?: RoomIssueWhereInput
+  }
+
+  export type RoomChecklistRunListRelationFilter = {
+    every?: RoomChecklistRunWhereInput
+    some?: RoomChecklistRunWhereInput
+    none?: RoomChecklistRunWhereInput
+  }
+
+  export type RoomOperationalEventOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type RoomIssueOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type RoomChecklistRunOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type ClinicRoomCountOrderByAggregateInput = {
     id?: SortOrder
     facilityId?: SortOrder
@@ -46718,11 +53647,21 @@ export namespace Prisma {
     none?: SafetyEventWhereInput
   }
 
+  export type RoomOperationalStateListRelationFilter = {
+    every?: RoomOperationalStateWhereInput
+    some?: RoomOperationalStateWhereInput
+    none?: RoomOperationalStateWhereInput
+  }
+
   export type StatusChangeEventOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
   export type SafetyEventOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type RoomOperationalStateOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -46928,6 +53867,13 @@ export namespace Prisma {
     _max?: NestedEnumAlertLevelFilter<$PrismaModel>
   }
 
+  export type EnumTaskSourceTypeNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.TaskSourceType | EnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    in?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumTaskSourceTypeNullableFilter<$PrismaModel> | $Enums.TaskSourceType | null
+  }
+
   export type EnumRoleNameNullableFilter<$PrismaModel = never> = {
     equals?: $Enums.RoleName | EnumRoleNameFieldRefInput<$PrismaModel> | null
     in?: $Enums.RoleName[] | ListEnumRoleNameFieldRefInput<$PrismaModel> | null
@@ -46935,9 +53881,19 @@ export namespace Prisma {
     not?: NestedEnumRoleNameNullableFilter<$PrismaModel> | $Enums.RoleName | null
   }
 
+  export type EncounterNullableScalarRelationFilter = {
+    is?: EncounterWhereInput | null
+    isNot?: EncounterWhereInput | null
+  }
+
   export type TaskCountOrderByAggregateInput = {
     id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
     encounterId?: SortOrder
+    roomId?: SortOrder
+    sourceType?: SortOrder
+    sourceId?: SortOrder
     taskType?: SortOrder
     description?: SortOrder
     assignedToRole?: SortOrder
@@ -46961,7 +53917,12 @@ export namespace Prisma {
 
   export type TaskMaxOrderByAggregateInput = {
     id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
     encounterId?: SortOrder
+    roomId?: SortOrder
+    sourceType?: SortOrder
+    sourceId?: SortOrder
     taskType?: SortOrder
     description?: SortOrder
     assignedToRole?: SortOrder
@@ -46981,7 +53942,12 @@ export namespace Prisma {
 
   export type TaskMinOrderByAggregateInput = {
     id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
     encounterId?: SortOrder
+    roomId?: SortOrder
+    sourceType?: SortOrder
+    sourceId?: SortOrder
     taskType?: SortOrder
     description?: SortOrder
     assignedToRole?: SortOrder
@@ -47003,6 +53969,16 @@ export namespace Prisma {
     priority?: SortOrder
   }
 
+  export type EnumTaskSourceTypeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.TaskSourceType | EnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    in?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumTaskSourceTypeNullableWithAggregatesFilter<$PrismaModel> | $Enums.TaskSourceType | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumTaskSourceTypeNullableFilter<$PrismaModel>
+    _max?: NestedEnumTaskSourceTypeNullableFilter<$PrismaModel>
+  }
+
   export type EnumRoleNameNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: $Enums.RoleName | EnumRoleNameFieldRefInput<$PrismaModel> | null
     in?: $Enums.RoleName[] | ListEnumRoleNameFieldRefInput<$PrismaModel> | null
@@ -47011,6 +53987,336 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedEnumRoleNameNullableFilter<$PrismaModel>
     _max?: NestedEnumRoleNameNullableFilter<$PrismaModel>
+  }
+
+  export type EnumRoomOperationalStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomOperationalStatusFilter<$PrismaModel> | $Enums.RoomOperationalStatus
+  }
+
+  export type EnumRoomHoldReasonNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomHoldReason | EnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomHoldReasonNullableFilter<$PrismaModel> | $Enums.RoomHoldReason | null
+  }
+
+  export type RoomOperationalStateCountOrderByAggregateInput = {
+    roomId?: SortOrder
+    currentStatus?: SortOrder
+    statusSinceAt?: SortOrder
+    occupiedEncounterId?: SortOrder
+    activeCleanerUserId?: SortOrder
+    holdReason?: SortOrder
+    holdNote?: SortOrder
+    lastReadyAt?: SortOrder
+    lastOccupiedAt?: SortOrder
+    lastTurnoverAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type RoomOperationalStateMaxOrderByAggregateInput = {
+    roomId?: SortOrder
+    currentStatus?: SortOrder
+    statusSinceAt?: SortOrder
+    occupiedEncounterId?: SortOrder
+    activeCleanerUserId?: SortOrder
+    holdReason?: SortOrder
+    holdNote?: SortOrder
+    lastReadyAt?: SortOrder
+    lastOccupiedAt?: SortOrder
+    lastTurnoverAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type RoomOperationalStateMinOrderByAggregateInput = {
+    roomId?: SortOrder
+    currentStatus?: SortOrder
+    statusSinceAt?: SortOrder
+    occupiedEncounterId?: SortOrder
+    activeCleanerUserId?: SortOrder
+    holdReason?: SortOrder
+    holdNote?: SortOrder
+    lastReadyAt?: SortOrder
+    lastOccupiedAt?: SortOrder
+    lastTurnoverAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EnumRoomOperationalStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomOperationalStatusWithAggregatesFilter<$PrismaModel> | $Enums.RoomOperationalStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomOperationalStatusFilter<$PrismaModel>
+    _max?: NestedEnumRoomOperationalStatusFilter<$PrismaModel>
+  }
+
+  export type EnumRoomHoldReasonNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomHoldReason | EnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomHoldReasonNullableWithAggregatesFilter<$PrismaModel> | $Enums.RoomHoldReason | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumRoomHoldReasonNullableFilter<$PrismaModel>
+    _max?: NestedEnumRoomHoldReasonNullableFilter<$PrismaModel>
+  }
+
+  export type EnumRoomEventTypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomEventType | EnumRoomEventTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomEventTypeFilter<$PrismaModel> | $Enums.RoomEventType
+  }
+
+  export type EnumRoomOperationalStatusNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel> | $Enums.RoomOperationalStatus | null
+  }
+
+  export type RoomOperationalEventCountOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrder
+    eventType?: SortOrder
+    fromStatus?: SortOrder
+    toStatus?: SortOrder
+    note?: SortOrder
+    metadataJson?: SortOrder
+    createdByUserId?: SortOrder
+    occurredAt?: SortOrder
+  }
+
+  export type RoomOperationalEventMaxOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrder
+    eventType?: SortOrder
+    fromStatus?: SortOrder
+    toStatus?: SortOrder
+    note?: SortOrder
+    createdByUserId?: SortOrder
+    occurredAt?: SortOrder
+  }
+
+  export type RoomOperationalEventMinOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrder
+    eventType?: SortOrder
+    fromStatus?: SortOrder
+    toStatus?: SortOrder
+    note?: SortOrder
+    createdByUserId?: SortOrder
+    occurredAt?: SortOrder
+  }
+
+  export type EnumRoomEventTypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomEventType | EnumRoomEventTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomEventTypeWithAggregatesFilter<$PrismaModel> | $Enums.RoomEventType
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomEventTypeFilter<$PrismaModel>
+    _max?: NestedEnumRoomEventTypeFilter<$PrismaModel>
+  }
+
+  export type EnumRoomOperationalStatusNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomOperationalStatusNullableWithAggregatesFilter<$PrismaModel> | $Enums.RoomOperationalStatus | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel>
+    _max?: NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel>
+  }
+
+  export type EnumRoomIssueTypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueType | EnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueTypeFilter<$PrismaModel> | $Enums.RoomIssueType
+  }
+
+  export type EnumRoomIssueStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueStatus | EnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueStatusFilter<$PrismaModel> | $Enums.RoomIssueStatus
+  }
+
+  export type TaskNullableScalarRelationFilter = {
+    is?: TaskWhereInput | null
+    isNot?: TaskWhereInput | null
+  }
+
+  export type RoomIssueCountOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrder
+    issueType?: SortOrder
+    status?: SortOrder
+    severity?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    placesRoomOnHold?: SortOrder
+    taskId?: SortOrder
+    sourceModule?: SortOrder
+    metadataJson?: SortOrder
+    createdAt?: SortOrder
+    createdByUserId?: SortOrder
+    resolvedAt?: SortOrder
+    resolvedByUserId?: SortOrder
+    resolutionNote?: SortOrder
+  }
+
+  export type RoomIssueAvgOrderByAggregateInput = {
+    severity?: SortOrder
+  }
+
+  export type RoomIssueMaxOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrder
+    issueType?: SortOrder
+    status?: SortOrder
+    severity?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    placesRoomOnHold?: SortOrder
+    taskId?: SortOrder
+    sourceModule?: SortOrder
+    createdAt?: SortOrder
+    createdByUserId?: SortOrder
+    resolvedAt?: SortOrder
+    resolvedByUserId?: SortOrder
+    resolutionNote?: SortOrder
+  }
+
+  export type RoomIssueMinOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    encounterId?: SortOrder
+    issueType?: SortOrder
+    status?: SortOrder
+    severity?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    placesRoomOnHold?: SortOrder
+    taskId?: SortOrder
+    sourceModule?: SortOrder
+    createdAt?: SortOrder
+    createdByUserId?: SortOrder
+    resolvedAt?: SortOrder
+    resolvedByUserId?: SortOrder
+    resolutionNote?: SortOrder
+  }
+
+  export type RoomIssueSumOrderByAggregateInput = {
+    severity?: SortOrder
+  }
+
+  export type EnumRoomIssueTypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueType | EnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueTypeWithAggregatesFilter<$PrismaModel> | $Enums.RoomIssueType
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomIssueTypeFilter<$PrismaModel>
+    _max?: NestedEnumRoomIssueTypeFilter<$PrismaModel>
+  }
+
+  export type EnumRoomIssueStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueStatus | EnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueStatusWithAggregatesFilter<$PrismaModel> | $Enums.RoomIssueStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomIssueStatusFilter<$PrismaModel>
+    _max?: NestedEnumRoomIssueStatusFilter<$PrismaModel>
+  }
+
+  export type EnumRoomChecklistKindFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomChecklistKind | EnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomChecklistKindFilter<$PrismaModel> | $Enums.RoomChecklistKind
+  }
+
+  export type RoomChecklistRunRoomIdKindDateKeyCompoundUniqueInput = {
+    roomId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+  }
+
+  export type RoomChecklistRunCountOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    kind?: SortOrder
+    dateKey?: SortOrder
+    itemsJson?: SortOrder
+    completed?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrder
+    completedByUserId?: SortOrder
+    note?: SortOrder
+  }
+
+  export type RoomChecklistRunMaxOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    kind?: SortOrder
+    dateKey?: SortOrder
+    completed?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrder
+    completedByUserId?: SortOrder
+    note?: SortOrder
+  }
+
+  export type RoomChecklistRunMinOrderByAggregateInput = {
+    id?: SortOrder
+    roomId?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    kind?: SortOrder
+    dateKey?: SortOrder
+    completed?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrder
+    completedByUserId?: SortOrder
+    note?: SortOrder
+  }
+
+  export type EnumRoomChecklistKindWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomChecklistKind | EnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomChecklistKindWithAggregatesFilter<$PrismaModel> | $Enums.RoomChecklistKind
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomChecklistKindFilter<$PrismaModel>
+    _max?: NestedEnumRoomChecklistKindFilter<$PrismaModel>
   }
 
   export type EnumAlertInboxKindFilter<$PrismaModel = never> = {
@@ -49317,6 +56623,40 @@ export namespace Prisma {
     connect?: EncounterWhereUniqueInput | EncounterWhereUniqueInput[]
   }
 
+  export type RoomOperationalStateCreateNestedOneWithoutRoomInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutRoomInput, RoomOperationalStateUncheckedCreateWithoutRoomInput>
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutRoomInput
+    connect?: RoomOperationalStateWhereUniqueInput
+  }
+
+  export type RoomOperationalEventCreateNestedManyWithoutRoomInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutRoomInput, RoomOperationalEventUncheckedCreateWithoutRoomInput> | RoomOperationalEventCreateWithoutRoomInput[] | RoomOperationalEventUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutRoomInput | RoomOperationalEventCreateOrConnectWithoutRoomInput[]
+    createMany?: RoomOperationalEventCreateManyRoomInputEnvelope
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+  }
+
+  export type RoomIssueCreateNestedManyWithoutRoomInput = {
+    create?: XOR<RoomIssueCreateWithoutRoomInput, RoomIssueUncheckedCreateWithoutRoomInput> | RoomIssueCreateWithoutRoomInput[] | RoomIssueUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutRoomInput | RoomIssueCreateOrConnectWithoutRoomInput[]
+    createMany?: RoomIssueCreateManyRoomInputEnvelope
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+  }
+
+  export type RoomChecklistRunCreateNestedManyWithoutRoomInput = {
+    create?: XOR<RoomChecklistRunCreateWithoutRoomInput, RoomChecklistRunUncheckedCreateWithoutRoomInput> | RoomChecklistRunCreateWithoutRoomInput[] | RoomChecklistRunUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomChecklistRunCreateOrConnectWithoutRoomInput | RoomChecklistRunCreateOrConnectWithoutRoomInput[]
+    createMany?: RoomChecklistRunCreateManyRoomInputEnvelope
+    connect?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+  }
+
+  export type TaskCreateNestedManyWithoutRoomInput = {
+    create?: XOR<TaskCreateWithoutRoomInput, TaskUncheckedCreateWithoutRoomInput> | TaskCreateWithoutRoomInput[] | TaskUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: TaskCreateOrConnectWithoutRoomInput | TaskCreateOrConnectWithoutRoomInput[]
+    createMany?: TaskCreateManyRoomInputEnvelope
+    connect?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+  }
+
   export type ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput = {
     create?: XOR<ClinicRoomAssignmentCreateWithoutRoomInput, ClinicRoomAssignmentUncheckedCreateWithoutRoomInput> | ClinicRoomAssignmentCreateWithoutRoomInput[] | ClinicRoomAssignmentUncheckedCreateWithoutRoomInput[]
     connectOrCreate?: ClinicRoomAssignmentCreateOrConnectWithoutRoomInput | ClinicRoomAssignmentCreateOrConnectWithoutRoomInput[]
@@ -49329,6 +56669,40 @@ export namespace Prisma {
     connectOrCreate?: EncounterCreateOrConnectWithoutRoomInput | EncounterCreateOrConnectWithoutRoomInput[]
     createMany?: EncounterCreateManyRoomInputEnvelope
     connect?: EncounterWhereUniqueInput | EncounterWhereUniqueInput[]
+  }
+
+  export type RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutRoomInput, RoomOperationalStateUncheckedCreateWithoutRoomInput>
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutRoomInput
+    connect?: RoomOperationalStateWhereUniqueInput
+  }
+
+  export type RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutRoomInput, RoomOperationalEventUncheckedCreateWithoutRoomInput> | RoomOperationalEventCreateWithoutRoomInput[] | RoomOperationalEventUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutRoomInput | RoomOperationalEventCreateOrConnectWithoutRoomInput[]
+    createMany?: RoomOperationalEventCreateManyRoomInputEnvelope
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+  }
+
+  export type RoomIssueUncheckedCreateNestedManyWithoutRoomInput = {
+    create?: XOR<RoomIssueCreateWithoutRoomInput, RoomIssueUncheckedCreateWithoutRoomInput> | RoomIssueCreateWithoutRoomInput[] | RoomIssueUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutRoomInput | RoomIssueCreateOrConnectWithoutRoomInput[]
+    createMany?: RoomIssueCreateManyRoomInputEnvelope
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+  }
+
+  export type RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput = {
+    create?: XOR<RoomChecklistRunCreateWithoutRoomInput, RoomChecklistRunUncheckedCreateWithoutRoomInput> | RoomChecklistRunCreateWithoutRoomInput[] | RoomChecklistRunUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomChecklistRunCreateOrConnectWithoutRoomInput | RoomChecklistRunCreateOrConnectWithoutRoomInput[]
+    createMany?: RoomChecklistRunCreateManyRoomInputEnvelope
+    connect?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+  }
+
+  export type TaskUncheckedCreateNestedManyWithoutRoomInput = {
+    create?: XOR<TaskCreateWithoutRoomInput, TaskUncheckedCreateWithoutRoomInput> | TaskCreateWithoutRoomInput[] | TaskUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: TaskCreateOrConnectWithoutRoomInput | TaskCreateOrConnectWithoutRoomInput[]
+    createMany?: TaskCreateManyRoomInputEnvelope
+    connect?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
   }
 
   export type IntFieldUpdateOperationsInput = {
@@ -49375,6 +56749,72 @@ export namespace Prisma {
     deleteMany?: EncounterScalarWhereInput | EncounterScalarWhereInput[]
   }
 
+  export type RoomOperationalStateUpdateOneWithoutRoomNestedInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutRoomInput, RoomOperationalStateUncheckedCreateWithoutRoomInput>
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutRoomInput
+    upsert?: RoomOperationalStateUpsertWithoutRoomInput
+    disconnect?: RoomOperationalStateWhereInput | boolean
+    delete?: RoomOperationalStateWhereInput | boolean
+    connect?: RoomOperationalStateWhereUniqueInput
+    update?: XOR<XOR<RoomOperationalStateUpdateToOneWithWhereWithoutRoomInput, RoomOperationalStateUpdateWithoutRoomInput>, RoomOperationalStateUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutRoomInput, RoomOperationalEventUncheckedCreateWithoutRoomInput> | RoomOperationalEventCreateWithoutRoomInput[] | RoomOperationalEventUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutRoomInput | RoomOperationalEventCreateOrConnectWithoutRoomInput[]
+    upsert?: RoomOperationalEventUpsertWithWhereUniqueWithoutRoomInput | RoomOperationalEventUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: RoomOperationalEventCreateManyRoomInputEnvelope
+    set?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    disconnect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    delete?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    update?: RoomOperationalEventUpdateWithWhereUniqueWithoutRoomInput | RoomOperationalEventUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: RoomOperationalEventUpdateManyWithWhereWithoutRoomInput | RoomOperationalEventUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: RoomOperationalEventScalarWhereInput | RoomOperationalEventScalarWhereInput[]
+  }
+
+  export type RoomIssueUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<RoomIssueCreateWithoutRoomInput, RoomIssueUncheckedCreateWithoutRoomInput> | RoomIssueCreateWithoutRoomInput[] | RoomIssueUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutRoomInput | RoomIssueCreateOrConnectWithoutRoomInput[]
+    upsert?: RoomIssueUpsertWithWhereUniqueWithoutRoomInput | RoomIssueUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: RoomIssueCreateManyRoomInputEnvelope
+    set?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    disconnect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    delete?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    update?: RoomIssueUpdateWithWhereUniqueWithoutRoomInput | RoomIssueUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: RoomIssueUpdateManyWithWhereWithoutRoomInput | RoomIssueUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+  }
+
+  export type RoomChecklistRunUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<RoomChecklistRunCreateWithoutRoomInput, RoomChecklistRunUncheckedCreateWithoutRoomInput> | RoomChecklistRunCreateWithoutRoomInput[] | RoomChecklistRunUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomChecklistRunCreateOrConnectWithoutRoomInput | RoomChecklistRunCreateOrConnectWithoutRoomInput[]
+    upsert?: RoomChecklistRunUpsertWithWhereUniqueWithoutRoomInput | RoomChecklistRunUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: RoomChecklistRunCreateManyRoomInputEnvelope
+    set?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    disconnect?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    delete?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    connect?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    update?: RoomChecklistRunUpdateWithWhereUniqueWithoutRoomInput | RoomChecklistRunUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: RoomChecklistRunUpdateManyWithWhereWithoutRoomInput | RoomChecklistRunUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: RoomChecklistRunScalarWhereInput | RoomChecklistRunScalarWhereInput[]
+  }
+
+  export type TaskUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<TaskCreateWithoutRoomInput, TaskUncheckedCreateWithoutRoomInput> | TaskCreateWithoutRoomInput[] | TaskUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: TaskCreateOrConnectWithoutRoomInput | TaskCreateOrConnectWithoutRoomInput[]
+    upsert?: TaskUpsertWithWhereUniqueWithoutRoomInput | TaskUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: TaskCreateManyRoomInputEnvelope
+    set?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    disconnect?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    delete?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    connect?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    update?: TaskUpdateWithWhereUniqueWithoutRoomInput | TaskUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: TaskUpdateManyWithWhereWithoutRoomInput | TaskUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: TaskScalarWhereInput | TaskScalarWhereInput[]
+  }
+
   export type ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput = {
     create?: XOR<ClinicRoomAssignmentCreateWithoutRoomInput, ClinicRoomAssignmentUncheckedCreateWithoutRoomInput> | ClinicRoomAssignmentCreateWithoutRoomInput[] | ClinicRoomAssignmentUncheckedCreateWithoutRoomInput[]
     connectOrCreate?: ClinicRoomAssignmentCreateOrConnectWithoutRoomInput | ClinicRoomAssignmentCreateOrConnectWithoutRoomInput[]
@@ -49401,6 +56841,72 @@ export namespace Prisma {
     update?: EncounterUpdateWithWhereUniqueWithoutRoomInput | EncounterUpdateWithWhereUniqueWithoutRoomInput[]
     updateMany?: EncounterUpdateManyWithWhereWithoutRoomInput | EncounterUpdateManyWithWhereWithoutRoomInput[]
     deleteMany?: EncounterScalarWhereInput | EncounterScalarWhereInput[]
+  }
+
+  export type RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutRoomInput, RoomOperationalStateUncheckedCreateWithoutRoomInput>
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutRoomInput
+    upsert?: RoomOperationalStateUpsertWithoutRoomInput
+    disconnect?: RoomOperationalStateWhereInput | boolean
+    delete?: RoomOperationalStateWhereInput | boolean
+    connect?: RoomOperationalStateWhereUniqueInput
+    update?: XOR<XOR<RoomOperationalStateUpdateToOneWithWhereWithoutRoomInput, RoomOperationalStateUpdateWithoutRoomInput>, RoomOperationalStateUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutRoomInput, RoomOperationalEventUncheckedCreateWithoutRoomInput> | RoomOperationalEventCreateWithoutRoomInput[] | RoomOperationalEventUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutRoomInput | RoomOperationalEventCreateOrConnectWithoutRoomInput[]
+    upsert?: RoomOperationalEventUpsertWithWhereUniqueWithoutRoomInput | RoomOperationalEventUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: RoomOperationalEventCreateManyRoomInputEnvelope
+    set?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    disconnect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    delete?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    update?: RoomOperationalEventUpdateWithWhereUniqueWithoutRoomInput | RoomOperationalEventUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: RoomOperationalEventUpdateManyWithWhereWithoutRoomInput | RoomOperationalEventUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: RoomOperationalEventScalarWhereInput | RoomOperationalEventScalarWhereInput[]
+  }
+
+  export type RoomIssueUncheckedUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<RoomIssueCreateWithoutRoomInput, RoomIssueUncheckedCreateWithoutRoomInput> | RoomIssueCreateWithoutRoomInput[] | RoomIssueUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutRoomInput | RoomIssueCreateOrConnectWithoutRoomInput[]
+    upsert?: RoomIssueUpsertWithWhereUniqueWithoutRoomInput | RoomIssueUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: RoomIssueCreateManyRoomInputEnvelope
+    set?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    disconnect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    delete?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    update?: RoomIssueUpdateWithWhereUniqueWithoutRoomInput | RoomIssueUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: RoomIssueUpdateManyWithWhereWithoutRoomInput | RoomIssueUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+  }
+
+  export type RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<RoomChecklistRunCreateWithoutRoomInput, RoomChecklistRunUncheckedCreateWithoutRoomInput> | RoomChecklistRunCreateWithoutRoomInput[] | RoomChecklistRunUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: RoomChecklistRunCreateOrConnectWithoutRoomInput | RoomChecklistRunCreateOrConnectWithoutRoomInput[]
+    upsert?: RoomChecklistRunUpsertWithWhereUniqueWithoutRoomInput | RoomChecklistRunUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: RoomChecklistRunCreateManyRoomInputEnvelope
+    set?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    disconnect?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    delete?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    connect?: RoomChecklistRunWhereUniqueInput | RoomChecklistRunWhereUniqueInput[]
+    update?: RoomChecklistRunUpdateWithWhereUniqueWithoutRoomInput | RoomChecklistRunUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: RoomChecklistRunUpdateManyWithWhereWithoutRoomInput | RoomChecklistRunUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: RoomChecklistRunScalarWhereInput | RoomChecklistRunScalarWhereInput[]
+  }
+
+  export type TaskUncheckedUpdateManyWithoutRoomNestedInput = {
+    create?: XOR<TaskCreateWithoutRoomInput, TaskUncheckedCreateWithoutRoomInput> | TaskCreateWithoutRoomInput[] | TaskUncheckedCreateWithoutRoomInput[]
+    connectOrCreate?: TaskCreateOrConnectWithoutRoomInput | TaskCreateOrConnectWithoutRoomInput[]
+    upsert?: TaskUpsertWithWhereUniqueWithoutRoomInput | TaskUpsertWithWhereUniqueWithoutRoomInput[]
+    createMany?: TaskCreateManyRoomInputEnvelope
+    set?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    disconnect?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    delete?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    connect?: TaskWhereUniqueInput | TaskWhereUniqueInput[]
+    update?: TaskUpdateWithWhereUniqueWithoutRoomInput | TaskUpdateWithWhereUniqueWithoutRoomInput[]
+    updateMany?: TaskUpdateManyWithWhereWithoutRoomInput | TaskUpdateManyWithWhereWithoutRoomInput[]
+    deleteMany?: TaskScalarWhereInput | TaskScalarWhereInput[]
   }
 
   export type ClinicCreateNestedOneWithoutRoomAssignmentsInput = {
@@ -50154,6 +57660,27 @@ export namespace Prisma {
     connect?: SafetyEventWhereUniqueInput | SafetyEventWhereUniqueInput[]
   }
 
+  export type RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput> | RoomOperationalStateCreateWithoutOccupiedEncounterInput[] | RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput[]
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput | RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput[]
+    createMany?: RoomOperationalStateCreateManyOccupiedEncounterInputEnvelope
+    connect?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+  }
+
+  export type RoomOperationalEventCreateNestedManyWithoutEncounterInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutEncounterInput, RoomOperationalEventUncheckedCreateWithoutEncounterInput> | RoomOperationalEventCreateWithoutEncounterInput[] | RoomOperationalEventUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutEncounterInput | RoomOperationalEventCreateOrConnectWithoutEncounterInput[]
+    createMany?: RoomOperationalEventCreateManyEncounterInputEnvelope
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+  }
+
+  export type RoomIssueCreateNestedManyWithoutEncounterInput = {
+    create?: XOR<RoomIssueCreateWithoutEncounterInput, RoomIssueUncheckedCreateWithoutEncounterInput> | RoomIssueCreateWithoutEncounterInput[] | RoomIssueUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutEncounterInput | RoomIssueCreateOrConnectWithoutEncounterInput[]
+    createMany?: RoomIssueCreateManyEncounterInputEnvelope
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+  }
+
   export type StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput = {
     create?: XOR<StatusChangeEventCreateWithoutEncounterInput, StatusChangeEventUncheckedCreateWithoutEncounterInput> | StatusChangeEventCreateWithoutEncounterInput[] | StatusChangeEventUncheckedCreateWithoutEncounterInput[]
     connectOrCreate?: StatusChangeEventCreateOrConnectWithoutEncounterInput | StatusChangeEventCreateOrConnectWithoutEncounterInput[]
@@ -50179,6 +57706,27 @@ export namespace Prisma {
     connectOrCreate?: SafetyEventCreateOrConnectWithoutEncounterInput | SafetyEventCreateOrConnectWithoutEncounterInput[]
     createMany?: SafetyEventCreateManyEncounterInputEnvelope
     connect?: SafetyEventWhereUniqueInput | SafetyEventWhereUniqueInput[]
+  }
+
+  export type RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput> | RoomOperationalStateCreateWithoutOccupiedEncounterInput[] | RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput[]
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput | RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput[]
+    createMany?: RoomOperationalStateCreateManyOccupiedEncounterInputEnvelope
+    connect?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+  }
+
+  export type RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutEncounterInput, RoomOperationalEventUncheckedCreateWithoutEncounterInput> | RoomOperationalEventCreateWithoutEncounterInput[] | RoomOperationalEventUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutEncounterInput | RoomOperationalEventCreateOrConnectWithoutEncounterInput[]
+    createMany?: RoomOperationalEventCreateManyEncounterInputEnvelope
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+  }
+
+  export type RoomIssueUncheckedCreateNestedManyWithoutEncounterInput = {
+    create?: XOR<RoomIssueCreateWithoutEncounterInput, RoomIssueUncheckedCreateWithoutEncounterInput> | RoomIssueCreateWithoutEncounterInput[] | RoomIssueUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutEncounterInput | RoomIssueCreateOrConnectWithoutEncounterInput[]
+    createMany?: RoomIssueCreateManyEncounterInputEnvelope
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
   }
 
   export type EnumEncounterStatusFieldUpdateOperationsInput = {
@@ -50275,6 +57823,48 @@ export namespace Prisma {
     deleteMany?: SafetyEventScalarWhereInput | SafetyEventScalarWhereInput[]
   }
 
+  export type RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput> | RoomOperationalStateCreateWithoutOccupiedEncounterInput[] | RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput[]
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput | RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput[]
+    upsert?: RoomOperationalStateUpsertWithWhereUniqueWithoutOccupiedEncounterInput | RoomOperationalStateUpsertWithWhereUniqueWithoutOccupiedEncounterInput[]
+    createMany?: RoomOperationalStateCreateManyOccupiedEncounterInputEnvelope
+    set?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    disconnect?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    delete?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    connect?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    update?: RoomOperationalStateUpdateWithWhereUniqueWithoutOccupiedEncounterInput | RoomOperationalStateUpdateWithWhereUniqueWithoutOccupiedEncounterInput[]
+    updateMany?: RoomOperationalStateUpdateManyWithWhereWithoutOccupiedEncounterInput | RoomOperationalStateUpdateManyWithWhereWithoutOccupiedEncounterInput[]
+    deleteMany?: RoomOperationalStateScalarWhereInput | RoomOperationalStateScalarWhereInput[]
+  }
+
+  export type RoomOperationalEventUpdateManyWithoutEncounterNestedInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutEncounterInput, RoomOperationalEventUncheckedCreateWithoutEncounterInput> | RoomOperationalEventCreateWithoutEncounterInput[] | RoomOperationalEventUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutEncounterInput | RoomOperationalEventCreateOrConnectWithoutEncounterInput[]
+    upsert?: RoomOperationalEventUpsertWithWhereUniqueWithoutEncounterInput | RoomOperationalEventUpsertWithWhereUniqueWithoutEncounterInput[]
+    createMany?: RoomOperationalEventCreateManyEncounterInputEnvelope
+    set?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    disconnect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    delete?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    update?: RoomOperationalEventUpdateWithWhereUniqueWithoutEncounterInput | RoomOperationalEventUpdateWithWhereUniqueWithoutEncounterInput[]
+    updateMany?: RoomOperationalEventUpdateManyWithWhereWithoutEncounterInput | RoomOperationalEventUpdateManyWithWhereWithoutEncounterInput[]
+    deleteMany?: RoomOperationalEventScalarWhereInput | RoomOperationalEventScalarWhereInput[]
+  }
+
+  export type RoomIssueUpdateManyWithoutEncounterNestedInput = {
+    create?: XOR<RoomIssueCreateWithoutEncounterInput, RoomIssueUncheckedCreateWithoutEncounterInput> | RoomIssueCreateWithoutEncounterInput[] | RoomIssueUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutEncounterInput | RoomIssueCreateOrConnectWithoutEncounterInput[]
+    upsert?: RoomIssueUpsertWithWhereUniqueWithoutEncounterInput | RoomIssueUpsertWithWhereUniqueWithoutEncounterInput[]
+    createMany?: RoomIssueCreateManyEncounterInputEnvelope
+    set?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    disconnect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    delete?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    update?: RoomIssueUpdateWithWhereUniqueWithoutEncounterInput | RoomIssueUpdateWithWhereUniqueWithoutEncounterInput[]
+    updateMany?: RoomIssueUpdateManyWithWhereWithoutEncounterInput | RoomIssueUpdateManyWithWhereWithoutEncounterInput[]
+    deleteMany?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+  }
+
   export type StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput = {
     create?: XOR<StatusChangeEventCreateWithoutEncounterInput, StatusChangeEventUncheckedCreateWithoutEncounterInput> | StatusChangeEventCreateWithoutEncounterInput[] | StatusChangeEventUncheckedCreateWithoutEncounterInput[]
     connectOrCreate?: StatusChangeEventCreateOrConnectWithoutEncounterInput | StatusChangeEventCreateOrConnectWithoutEncounterInput[]
@@ -50327,6 +57917,48 @@ export namespace Prisma {
     deleteMany?: SafetyEventScalarWhereInput | SafetyEventScalarWhereInput[]
   }
 
+  export type RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput = {
+    create?: XOR<RoomOperationalStateCreateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput> | RoomOperationalStateCreateWithoutOccupiedEncounterInput[] | RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput[]
+    connectOrCreate?: RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput | RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput[]
+    upsert?: RoomOperationalStateUpsertWithWhereUniqueWithoutOccupiedEncounterInput | RoomOperationalStateUpsertWithWhereUniqueWithoutOccupiedEncounterInput[]
+    createMany?: RoomOperationalStateCreateManyOccupiedEncounterInputEnvelope
+    set?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    disconnect?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    delete?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    connect?: RoomOperationalStateWhereUniqueInput | RoomOperationalStateWhereUniqueInput[]
+    update?: RoomOperationalStateUpdateWithWhereUniqueWithoutOccupiedEncounterInput | RoomOperationalStateUpdateWithWhereUniqueWithoutOccupiedEncounterInput[]
+    updateMany?: RoomOperationalStateUpdateManyWithWhereWithoutOccupiedEncounterInput | RoomOperationalStateUpdateManyWithWhereWithoutOccupiedEncounterInput[]
+    deleteMany?: RoomOperationalStateScalarWhereInput | RoomOperationalStateScalarWhereInput[]
+  }
+
+  export type RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput = {
+    create?: XOR<RoomOperationalEventCreateWithoutEncounterInput, RoomOperationalEventUncheckedCreateWithoutEncounterInput> | RoomOperationalEventCreateWithoutEncounterInput[] | RoomOperationalEventUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomOperationalEventCreateOrConnectWithoutEncounterInput | RoomOperationalEventCreateOrConnectWithoutEncounterInput[]
+    upsert?: RoomOperationalEventUpsertWithWhereUniqueWithoutEncounterInput | RoomOperationalEventUpsertWithWhereUniqueWithoutEncounterInput[]
+    createMany?: RoomOperationalEventCreateManyEncounterInputEnvelope
+    set?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    disconnect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    delete?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    connect?: RoomOperationalEventWhereUniqueInput | RoomOperationalEventWhereUniqueInput[]
+    update?: RoomOperationalEventUpdateWithWhereUniqueWithoutEncounterInput | RoomOperationalEventUpdateWithWhereUniqueWithoutEncounterInput[]
+    updateMany?: RoomOperationalEventUpdateManyWithWhereWithoutEncounterInput | RoomOperationalEventUpdateManyWithWhereWithoutEncounterInput[]
+    deleteMany?: RoomOperationalEventScalarWhereInput | RoomOperationalEventScalarWhereInput[]
+  }
+
+  export type RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput = {
+    create?: XOR<RoomIssueCreateWithoutEncounterInput, RoomIssueUncheckedCreateWithoutEncounterInput> | RoomIssueCreateWithoutEncounterInput[] | RoomIssueUncheckedCreateWithoutEncounterInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutEncounterInput | RoomIssueCreateOrConnectWithoutEncounterInput[]
+    upsert?: RoomIssueUpsertWithWhereUniqueWithoutEncounterInput | RoomIssueUpsertWithWhereUniqueWithoutEncounterInput[]
+    createMany?: RoomIssueCreateManyEncounterInputEnvelope
+    set?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    disconnect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    delete?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    update?: RoomIssueUpdateWithWhereUniqueWithoutEncounterInput | RoomIssueUpdateWithWhereUniqueWithoutEncounterInput[]
+    updateMany?: RoomIssueUpdateManyWithWhereWithoutEncounterInput | RoomIssueUpdateManyWithWhereWithoutEncounterInput[]
+    deleteMany?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+  }
+
   export type EncounterCreateNestedOneWithoutStatusEventsInput = {
     create?: XOR<EncounterCreateWithoutStatusEventsInput, EncounterUncheckedCreateWithoutStatusEventsInput>
     connectOrCreate?: EncounterCreateOrConnectWithoutStatusEventsInput
@@ -50369,6 +58001,12 @@ export namespace Prisma {
     connect?: EncounterWhereUniqueInput
   }
 
+  export type ClinicRoomCreateNestedOneWithoutTasksInput = {
+    create?: XOR<ClinicRoomCreateWithoutTasksInput, ClinicRoomUncheckedCreateWithoutTasksInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutTasksInput
+    connect?: ClinicRoomWhereUniqueInput
+  }
+
   export type UserCreateNestedOneWithoutTasksCreatedInput = {
     create?: XOR<UserCreateWithoutTasksCreatedInput, UserUncheckedCreateWithoutTasksCreatedInput>
     connectOrCreate?: UserCreateOrConnectWithoutTasksCreatedInput
@@ -50387,16 +58025,46 @@ export namespace Prisma {
     connect?: UserWhereUniqueInput
   }
 
+  export type RoomIssueCreateNestedManyWithoutTaskInput = {
+    create?: XOR<RoomIssueCreateWithoutTaskInput, RoomIssueUncheckedCreateWithoutTaskInput> | RoomIssueCreateWithoutTaskInput[] | RoomIssueUncheckedCreateWithoutTaskInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutTaskInput | RoomIssueCreateOrConnectWithoutTaskInput[]
+    createMany?: RoomIssueCreateManyTaskInputEnvelope
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+  }
+
+  export type RoomIssueUncheckedCreateNestedManyWithoutTaskInput = {
+    create?: XOR<RoomIssueCreateWithoutTaskInput, RoomIssueUncheckedCreateWithoutTaskInput> | RoomIssueCreateWithoutTaskInput[] | RoomIssueUncheckedCreateWithoutTaskInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutTaskInput | RoomIssueCreateOrConnectWithoutTaskInput[]
+    createMany?: RoomIssueCreateManyTaskInputEnvelope
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+  }
+
+  export type NullableEnumTaskSourceTypeFieldUpdateOperationsInput = {
+    set?: $Enums.TaskSourceType | null
+  }
+
   export type NullableEnumRoleNameFieldUpdateOperationsInput = {
     set?: $Enums.RoleName | null
   }
 
-  export type EncounterUpdateOneRequiredWithoutTasksNestedInput = {
+  export type EncounterUpdateOneWithoutTasksNestedInput = {
     create?: XOR<EncounterCreateWithoutTasksInput, EncounterUncheckedCreateWithoutTasksInput>
     connectOrCreate?: EncounterCreateOrConnectWithoutTasksInput
     upsert?: EncounterUpsertWithoutTasksInput
+    disconnect?: EncounterWhereInput | boolean
+    delete?: EncounterWhereInput | boolean
     connect?: EncounterWhereUniqueInput
     update?: XOR<XOR<EncounterUpdateToOneWithWhereWithoutTasksInput, EncounterUpdateWithoutTasksInput>, EncounterUncheckedUpdateWithoutTasksInput>
+  }
+
+  export type ClinicRoomUpdateOneWithoutTasksNestedInput = {
+    create?: XOR<ClinicRoomCreateWithoutTasksInput, ClinicRoomUncheckedCreateWithoutTasksInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutTasksInput
+    upsert?: ClinicRoomUpsertWithoutTasksInput
+    disconnect?: ClinicRoomWhereInput | boolean
+    delete?: ClinicRoomWhereInput | boolean
+    connect?: ClinicRoomWhereUniqueInput
+    update?: XOR<XOR<ClinicRoomUpdateToOneWithWhereWithoutTasksInput, ClinicRoomUpdateWithoutTasksInput>, ClinicRoomUncheckedUpdateWithoutTasksInput>
   }
 
   export type UserUpdateOneRequiredWithoutTasksCreatedNestedInput = {
@@ -50425,6 +58093,182 @@ export namespace Prisma {
     delete?: UserWhereInput | boolean
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutTasksCompletedInput, UserUpdateWithoutTasksCompletedInput>, UserUncheckedUpdateWithoutTasksCompletedInput>
+  }
+
+  export type RoomIssueUpdateManyWithoutTaskNestedInput = {
+    create?: XOR<RoomIssueCreateWithoutTaskInput, RoomIssueUncheckedCreateWithoutTaskInput> | RoomIssueCreateWithoutTaskInput[] | RoomIssueUncheckedCreateWithoutTaskInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutTaskInput | RoomIssueCreateOrConnectWithoutTaskInput[]
+    upsert?: RoomIssueUpsertWithWhereUniqueWithoutTaskInput | RoomIssueUpsertWithWhereUniqueWithoutTaskInput[]
+    createMany?: RoomIssueCreateManyTaskInputEnvelope
+    set?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    disconnect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    delete?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    update?: RoomIssueUpdateWithWhereUniqueWithoutTaskInput | RoomIssueUpdateWithWhereUniqueWithoutTaskInput[]
+    updateMany?: RoomIssueUpdateManyWithWhereWithoutTaskInput | RoomIssueUpdateManyWithWhereWithoutTaskInput[]
+    deleteMany?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+  }
+
+  export type RoomIssueUncheckedUpdateManyWithoutTaskNestedInput = {
+    create?: XOR<RoomIssueCreateWithoutTaskInput, RoomIssueUncheckedCreateWithoutTaskInput> | RoomIssueCreateWithoutTaskInput[] | RoomIssueUncheckedCreateWithoutTaskInput[]
+    connectOrCreate?: RoomIssueCreateOrConnectWithoutTaskInput | RoomIssueCreateOrConnectWithoutTaskInput[]
+    upsert?: RoomIssueUpsertWithWhereUniqueWithoutTaskInput | RoomIssueUpsertWithWhereUniqueWithoutTaskInput[]
+    createMany?: RoomIssueCreateManyTaskInputEnvelope
+    set?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    disconnect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    delete?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    connect?: RoomIssueWhereUniqueInput | RoomIssueWhereUniqueInput[]
+    update?: RoomIssueUpdateWithWhereUniqueWithoutTaskInput | RoomIssueUpdateWithWhereUniqueWithoutTaskInput[]
+    updateMany?: RoomIssueUpdateManyWithWhereWithoutTaskInput | RoomIssueUpdateManyWithWhereWithoutTaskInput[]
+    deleteMany?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+  }
+
+  export type ClinicRoomCreateNestedOneWithoutOperationalStateInput = {
+    create?: XOR<ClinicRoomCreateWithoutOperationalStateInput, ClinicRoomUncheckedCreateWithoutOperationalStateInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutOperationalStateInput
+    connect?: ClinicRoomWhereUniqueInput
+  }
+
+  export type EncounterCreateNestedOneWithoutOperationalOccupanciesInput = {
+    create?: XOR<EncounterCreateWithoutOperationalOccupanciesInput, EncounterUncheckedCreateWithoutOperationalOccupanciesInput>
+    connectOrCreate?: EncounterCreateOrConnectWithoutOperationalOccupanciesInput
+    connect?: EncounterWhereUniqueInput
+  }
+
+  export type EnumRoomOperationalStatusFieldUpdateOperationsInput = {
+    set?: $Enums.RoomOperationalStatus
+  }
+
+  export type NullableEnumRoomHoldReasonFieldUpdateOperationsInput = {
+    set?: $Enums.RoomHoldReason | null
+  }
+
+  export type ClinicRoomUpdateOneRequiredWithoutOperationalStateNestedInput = {
+    create?: XOR<ClinicRoomCreateWithoutOperationalStateInput, ClinicRoomUncheckedCreateWithoutOperationalStateInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutOperationalStateInput
+    upsert?: ClinicRoomUpsertWithoutOperationalStateInput
+    connect?: ClinicRoomWhereUniqueInput
+    update?: XOR<XOR<ClinicRoomUpdateToOneWithWhereWithoutOperationalStateInput, ClinicRoomUpdateWithoutOperationalStateInput>, ClinicRoomUncheckedUpdateWithoutOperationalStateInput>
+  }
+
+  export type EncounterUpdateOneWithoutOperationalOccupanciesNestedInput = {
+    create?: XOR<EncounterCreateWithoutOperationalOccupanciesInput, EncounterUncheckedCreateWithoutOperationalOccupanciesInput>
+    connectOrCreate?: EncounterCreateOrConnectWithoutOperationalOccupanciesInput
+    upsert?: EncounterUpsertWithoutOperationalOccupanciesInput
+    disconnect?: EncounterWhereInput | boolean
+    delete?: EncounterWhereInput | boolean
+    connect?: EncounterWhereUniqueInput
+    update?: XOR<XOR<EncounterUpdateToOneWithWhereWithoutOperationalOccupanciesInput, EncounterUpdateWithoutOperationalOccupanciesInput>, EncounterUncheckedUpdateWithoutOperationalOccupanciesInput>
+  }
+
+  export type ClinicRoomCreateNestedOneWithoutOperationalEventsInput = {
+    create?: XOR<ClinicRoomCreateWithoutOperationalEventsInput, ClinicRoomUncheckedCreateWithoutOperationalEventsInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutOperationalEventsInput
+    connect?: ClinicRoomWhereUniqueInput
+  }
+
+  export type EncounterCreateNestedOneWithoutRoomOperationalEventsInput = {
+    create?: XOR<EncounterCreateWithoutRoomOperationalEventsInput, EncounterUncheckedCreateWithoutRoomOperationalEventsInput>
+    connectOrCreate?: EncounterCreateOrConnectWithoutRoomOperationalEventsInput
+    connect?: EncounterWhereUniqueInput
+  }
+
+  export type EnumRoomEventTypeFieldUpdateOperationsInput = {
+    set?: $Enums.RoomEventType
+  }
+
+  export type NullableEnumRoomOperationalStatusFieldUpdateOperationsInput = {
+    set?: $Enums.RoomOperationalStatus | null
+  }
+
+  export type ClinicRoomUpdateOneRequiredWithoutOperationalEventsNestedInput = {
+    create?: XOR<ClinicRoomCreateWithoutOperationalEventsInput, ClinicRoomUncheckedCreateWithoutOperationalEventsInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutOperationalEventsInput
+    upsert?: ClinicRoomUpsertWithoutOperationalEventsInput
+    connect?: ClinicRoomWhereUniqueInput
+    update?: XOR<XOR<ClinicRoomUpdateToOneWithWhereWithoutOperationalEventsInput, ClinicRoomUpdateWithoutOperationalEventsInput>, ClinicRoomUncheckedUpdateWithoutOperationalEventsInput>
+  }
+
+  export type EncounterUpdateOneWithoutRoomOperationalEventsNestedInput = {
+    create?: XOR<EncounterCreateWithoutRoomOperationalEventsInput, EncounterUncheckedCreateWithoutRoomOperationalEventsInput>
+    connectOrCreate?: EncounterCreateOrConnectWithoutRoomOperationalEventsInput
+    upsert?: EncounterUpsertWithoutRoomOperationalEventsInput
+    disconnect?: EncounterWhereInput | boolean
+    delete?: EncounterWhereInput | boolean
+    connect?: EncounterWhereUniqueInput
+    update?: XOR<XOR<EncounterUpdateToOneWithWhereWithoutRoomOperationalEventsInput, EncounterUpdateWithoutRoomOperationalEventsInput>, EncounterUncheckedUpdateWithoutRoomOperationalEventsInput>
+  }
+
+  export type ClinicRoomCreateNestedOneWithoutRoomIssuesInput = {
+    create?: XOR<ClinicRoomCreateWithoutRoomIssuesInput, ClinicRoomUncheckedCreateWithoutRoomIssuesInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutRoomIssuesInput
+    connect?: ClinicRoomWhereUniqueInput
+  }
+
+  export type EncounterCreateNestedOneWithoutRoomIssuesInput = {
+    create?: XOR<EncounterCreateWithoutRoomIssuesInput, EncounterUncheckedCreateWithoutRoomIssuesInput>
+    connectOrCreate?: EncounterCreateOrConnectWithoutRoomIssuesInput
+    connect?: EncounterWhereUniqueInput
+  }
+
+  export type TaskCreateNestedOneWithoutRoomIssuesInput = {
+    create?: XOR<TaskCreateWithoutRoomIssuesInput, TaskUncheckedCreateWithoutRoomIssuesInput>
+    connectOrCreate?: TaskCreateOrConnectWithoutRoomIssuesInput
+    connect?: TaskWhereUniqueInput
+  }
+
+  export type EnumRoomIssueTypeFieldUpdateOperationsInput = {
+    set?: $Enums.RoomIssueType
+  }
+
+  export type EnumRoomIssueStatusFieldUpdateOperationsInput = {
+    set?: $Enums.RoomIssueStatus
+  }
+
+  export type ClinicRoomUpdateOneRequiredWithoutRoomIssuesNestedInput = {
+    create?: XOR<ClinicRoomCreateWithoutRoomIssuesInput, ClinicRoomUncheckedCreateWithoutRoomIssuesInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutRoomIssuesInput
+    upsert?: ClinicRoomUpsertWithoutRoomIssuesInput
+    connect?: ClinicRoomWhereUniqueInput
+    update?: XOR<XOR<ClinicRoomUpdateToOneWithWhereWithoutRoomIssuesInput, ClinicRoomUpdateWithoutRoomIssuesInput>, ClinicRoomUncheckedUpdateWithoutRoomIssuesInput>
+  }
+
+  export type EncounterUpdateOneWithoutRoomIssuesNestedInput = {
+    create?: XOR<EncounterCreateWithoutRoomIssuesInput, EncounterUncheckedCreateWithoutRoomIssuesInput>
+    connectOrCreate?: EncounterCreateOrConnectWithoutRoomIssuesInput
+    upsert?: EncounterUpsertWithoutRoomIssuesInput
+    disconnect?: EncounterWhereInput | boolean
+    delete?: EncounterWhereInput | boolean
+    connect?: EncounterWhereUniqueInput
+    update?: XOR<XOR<EncounterUpdateToOneWithWhereWithoutRoomIssuesInput, EncounterUpdateWithoutRoomIssuesInput>, EncounterUncheckedUpdateWithoutRoomIssuesInput>
+  }
+
+  export type TaskUpdateOneWithoutRoomIssuesNestedInput = {
+    create?: XOR<TaskCreateWithoutRoomIssuesInput, TaskUncheckedCreateWithoutRoomIssuesInput>
+    connectOrCreate?: TaskCreateOrConnectWithoutRoomIssuesInput
+    upsert?: TaskUpsertWithoutRoomIssuesInput
+    disconnect?: TaskWhereInput | boolean
+    delete?: TaskWhereInput | boolean
+    connect?: TaskWhereUniqueInput
+    update?: XOR<XOR<TaskUpdateToOneWithWhereWithoutRoomIssuesInput, TaskUpdateWithoutRoomIssuesInput>, TaskUncheckedUpdateWithoutRoomIssuesInput>
+  }
+
+  export type ClinicRoomCreateNestedOneWithoutChecklistRunsInput = {
+    create?: XOR<ClinicRoomCreateWithoutChecklistRunsInput, ClinicRoomUncheckedCreateWithoutChecklistRunsInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutChecklistRunsInput
+    connect?: ClinicRoomWhereUniqueInput
+  }
+
+  export type EnumRoomChecklistKindFieldUpdateOperationsInput = {
+    set?: $Enums.RoomChecklistKind
+  }
+
+  export type ClinicRoomUpdateOneRequiredWithoutChecklistRunsNestedInput = {
+    create?: XOR<ClinicRoomCreateWithoutChecklistRunsInput, ClinicRoomUncheckedCreateWithoutChecklistRunsInput>
+    connectOrCreate?: ClinicRoomCreateOrConnectWithoutChecklistRunsInput
+    upsert?: ClinicRoomUpsertWithoutChecklistRunsInput
+    connect?: ClinicRoomWhereUniqueInput
+    update?: XOR<XOR<ClinicRoomUpdateToOneWithWhereWithoutChecklistRunsInput, ClinicRoomUpdateWithoutChecklistRunsInput>, ClinicRoomUncheckedUpdateWithoutChecklistRunsInput>
   }
 
   export type UserCreateNestedOneWithoutAlertInboxInput = {
@@ -50886,11 +58730,28 @@ export namespace Prisma {
     _max?: NestedEnumAlertLevelFilter<$PrismaModel>
   }
 
+  export type NestedEnumTaskSourceTypeNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.TaskSourceType | EnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    in?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumTaskSourceTypeNullableFilter<$PrismaModel> | $Enums.TaskSourceType | null
+  }
+
   export type NestedEnumRoleNameNullableFilter<$PrismaModel = never> = {
     equals?: $Enums.RoleName | EnumRoleNameFieldRefInput<$PrismaModel> | null
     in?: $Enums.RoleName[] | ListEnumRoleNameFieldRefInput<$PrismaModel> | null
     notIn?: $Enums.RoleName[] | ListEnumRoleNameFieldRefInput<$PrismaModel> | null
     not?: NestedEnumRoleNameNullableFilter<$PrismaModel> | $Enums.RoleName | null
+  }
+
+  export type NestedEnumTaskSourceTypeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.TaskSourceType | EnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    in?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.TaskSourceType[] | ListEnumTaskSourceTypeFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumTaskSourceTypeNullableWithAggregatesFilter<$PrismaModel> | $Enums.TaskSourceType | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumTaskSourceTypeNullableFilter<$PrismaModel>
+    _max?: NestedEnumTaskSourceTypeNullableFilter<$PrismaModel>
   }
 
   export type NestedEnumRoleNameNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -50901,6 +58762,125 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedEnumRoleNameNullableFilter<$PrismaModel>
     _max?: NestedEnumRoleNameNullableFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomOperationalStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomOperationalStatusFilter<$PrismaModel> | $Enums.RoomOperationalStatus
+  }
+
+  export type NestedEnumRoomHoldReasonNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomHoldReason | EnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomHoldReasonNullableFilter<$PrismaModel> | $Enums.RoomHoldReason | null
+  }
+
+  export type NestedEnumRoomOperationalStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomOperationalStatusWithAggregatesFilter<$PrismaModel> | $Enums.RoomOperationalStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomOperationalStatusFilter<$PrismaModel>
+    _max?: NestedEnumRoomOperationalStatusFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomHoldReasonNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomHoldReason | EnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomHoldReason[] | ListEnumRoomHoldReasonFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomHoldReasonNullableWithAggregatesFilter<$PrismaModel> | $Enums.RoomHoldReason | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumRoomHoldReasonNullableFilter<$PrismaModel>
+    _max?: NestedEnumRoomHoldReasonNullableFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomEventTypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomEventType | EnumRoomEventTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomEventTypeFilter<$PrismaModel> | $Enums.RoomEventType
+  }
+
+  export type NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel> | $Enums.RoomOperationalStatus | null
+  }
+
+  export type NestedEnumRoomEventTypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomEventType | EnumRoomEventTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomEventType[] | ListEnumRoomEventTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomEventTypeWithAggregatesFilter<$PrismaModel> | $Enums.RoomEventType
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomEventTypeFilter<$PrismaModel>
+    _max?: NestedEnumRoomEventTypeFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomOperationalStatusNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomOperationalStatus | EnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    in?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    notIn?: $Enums.RoomOperationalStatus[] | ListEnumRoomOperationalStatusFieldRefInput<$PrismaModel> | null
+    not?: NestedEnumRoomOperationalStatusNullableWithAggregatesFilter<$PrismaModel> | $Enums.RoomOperationalStatus | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel>
+    _max?: NestedEnumRoomOperationalStatusNullableFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomIssueTypeFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueType | EnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueTypeFilter<$PrismaModel> | $Enums.RoomIssueType
+  }
+
+  export type NestedEnumRoomIssueStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueStatus | EnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueStatusFilter<$PrismaModel> | $Enums.RoomIssueStatus
+  }
+
+  export type NestedEnumRoomIssueTypeWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueType | EnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueType[] | ListEnumRoomIssueTypeFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueTypeWithAggregatesFilter<$PrismaModel> | $Enums.RoomIssueType
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomIssueTypeFilter<$PrismaModel>
+    _max?: NestedEnumRoomIssueTypeFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomIssueStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomIssueStatus | EnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomIssueStatus[] | ListEnumRoomIssueStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomIssueStatusWithAggregatesFilter<$PrismaModel> | $Enums.RoomIssueStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomIssueStatusFilter<$PrismaModel>
+    _max?: NestedEnumRoomIssueStatusFilter<$PrismaModel>
+  }
+
+  export type NestedEnumRoomChecklistKindFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomChecklistKind | EnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomChecklistKindFilter<$PrismaModel> | $Enums.RoomChecklistKind
+  }
+
+  export type NestedEnumRoomChecklistKindWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.RoomChecklistKind | EnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    in?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.RoomChecklistKind[] | ListEnumRoomChecklistKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumRoomChecklistKindWithAggregatesFilter<$PrismaModel> | $Enums.RoomChecklistKind
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumRoomChecklistKindFilter<$PrismaModel>
+    _max?: NestedEnumRoomChecklistKindFilter<$PrismaModel>
   }
 
   export type NestedEnumAlertInboxKindFilter<$PrismaModel = never> = {
@@ -51127,6 +59107,10 @@ export namespace Prisma {
 
   export type TaskCreateWithoutCreatorInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -51139,14 +59123,21 @@ export namespace Prisma {
     completedAt?: Date | string | null
     notes?: string | null
     updatedAt?: Date | string
-    encounter: EncounterCreateNestedOneWithoutTasksInput
+    encounter?: EncounterCreateNestedOneWithoutTasksInput
+    room?: ClinicRoomCreateNestedOneWithoutTasksInput
     acknowledger?: UserCreateNestedOneWithoutTasksAcknowledgedInput
     completer?: UserCreateNestedOneWithoutTasksCompletedInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutTaskInput
   }
 
   export type TaskUncheckedCreateWithoutCreatorInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -51161,6 +59152,7 @@ export namespace Prisma {
     completedBy?: string | null
     notes?: string | null
     updatedAt?: Date | string
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutTaskInput
   }
 
   export type TaskCreateOrConnectWithoutCreatorInput = {
@@ -51175,6 +59167,10 @@ export namespace Prisma {
 
   export type TaskCreateWithoutCompleterInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -51187,14 +59183,21 @@ export namespace Prisma {
     completedAt?: Date | string | null
     notes?: string | null
     updatedAt?: Date | string
-    encounter: EncounterCreateNestedOneWithoutTasksInput
+    encounter?: EncounterCreateNestedOneWithoutTasksInput
+    room?: ClinicRoomCreateNestedOneWithoutTasksInput
     creator: UserCreateNestedOneWithoutTasksCreatedInput
     acknowledger?: UserCreateNestedOneWithoutTasksAcknowledgedInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutTaskInput
   }
 
   export type TaskUncheckedCreateWithoutCompleterInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -51209,6 +59212,7 @@ export namespace Prisma {
     completedAt?: Date | string | null
     notes?: string | null
     updatedAt?: Date | string
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutTaskInput
   }
 
   export type TaskCreateOrConnectWithoutCompleterInput = {
@@ -51223,6 +59227,10 @@ export namespace Prisma {
 
   export type TaskCreateWithoutAcknowledgerInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -51235,14 +59243,21 @@ export namespace Prisma {
     completedAt?: Date | string | null
     notes?: string | null
     updatedAt?: Date | string
-    encounter: EncounterCreateNestedOneWithoutTasksInput
+    encounter?: EncounterCreateNestedOneWithoutTasksInput
+    room?: ClinicRoomCreateNestedOneWithoutTasksInput
     creator: UserCreateNestedOneWithoutTasksCreatedInput
     completer?: UserCreateNestedOneWithoutTasksCompletedInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutTaskInput
   }
 
   export type TaskUncheckedCreateWithoutAcknowledgerInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -51257,6 +59272,7 @@ export namespace Prisma {
     completedBy?: string | null
     notes?: string | null
     updatedAt?: Date | string
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutTaskInput
   }
 
   export type TaskCreateOrConnectWithoutAcknowledgerInput = {
@@ -51457,7 +59473,12 @@ export namespace Prisma {
     OR?: TaskScalarWhereInput[]
     NOT?: TaskScalarWhereInput | TaskScalarWhereInput[]
     id?: StringFilter<"Task"> | string
-    encounterId?: StringFilter<"Task"> | string
+    facilityId?: StringNullableFilter<"Task"> | string | null
+    clinicId?: StringNullableFilter<"Task"> | string | null
+    encounterId?: StringNullableFilter<"Task"> | string | null
+    roomId?: StringNullableFilter<"Task"> | string | null
+    sourceType?: EnumTaskSourceTypeNullableFilter<"Task"> | $Enums.TaskSourceType | null
+    sourceId?: StringNullableFilter<"Task"> | string | null
     taskType?: StringFilter<"Task"> | string
     description?: StringFilter<"Task"> | string
     assignedToRole?: EnumRoleNameNullableFilter<"Task"> | $Enums.RoleName | null
@@ -51724,6 +59745,11 @@ export namespace Prisma {
     sortOrder?: number
     clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
     encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomUncheckedCreateWithoutFacilityInput = {
@@ -51735,6 +59761,11 @@ export namespace Prisma {
     sortOrder?: number
     clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomCreateOrConnectWithoutFacilityInput = {
@@ -52806,6 +60837,9 @@ export namespace Prisma {
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutClinicInput = {
@@ -52838,6 +60872,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutClinicInput = {
@@ -53580,6 +61617,9 @@ export namespace Prisma {
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutProviderInput = {
@@ -53612,6 +61652,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutProviderInput = {
@@ -54928,6 +62971,9 @@ export namespace Prisma {
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutRoomInput = {
@@ -54960,6 +63006,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutRoomInput = {
@@ -54969,6 +63018,225 @@ export namespace Prisma {
 
   export type EncounterCreateManyRoomInputEnvelope = {
     data: EncounterCreateManyRoomInput | EncounterCreateManyRoomInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomOperationalStateCreateWithoutRoomInput = {
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+    occupiedEncounter?: EncounterCreateNestedOneWithoutOperationalOccupanciesInput
+  }
+
+  export type RoomOperationalStateUncheckedCreateWithoutRoomInput = {
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    occupiedEncounterId?: string | null
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type RoomOperationalStateCreateOrConnectWithoutRoomInput = {
+    where: RoomOperationalStateWhereUniqueInput
+    create: XOR<RoomOperationalStateCreateWithoutRoomInput, RoomOperationalStateUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventCreateWithoutRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+    encounter?: EncounterCreateNestedOneWithoutRoomOperationalEventsInput
+  }
+
+  export type RoomOperationalEventUncheckedCreateWithoutRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+  }
+
+  export type RoomOperationalEventCreateOrConnectWithoutRoomInput = {
+    where: RoomOperationalEventWhereUniqueInput
+    create: XOR<RoomOperationalEventCreateWithoutRoomInput, RoomOperationalEventUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventCreateManyRoomInputEnvelope = {
+    data: RoomOperationalEventCreateManyRoomInput | RoomOperationalEventCreateManyRoomInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomIssueCreateWithoutRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+    encounter?: EncounterCreateNestedOneWithoutRoomIssuesInput
+    task?: TaskCreateNestedOneWithoutRoomIssuesInput
+  }
+
+  export type RoomIssueUncheckedCreateWithoutRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    taskId?: string | null
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomIssueCreateOrConnectWithoutRoomInput = {
+    where: RoomIssueWhereUniqueInput
+    create: XOR<RoomIssueCreateWithoutRoomInput, RoomIssueUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomIssueCreateManyRoomInputEnvelope = {
+    data: RoomIssueCreateManyRoomInput | RoomIssueCreateManyRoomInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomChecklistRunCreateWithoutRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonNullValueInput | InputJsonValue
+    completed?: boolean
+    startedAt?: Date | string
+    completedAt?: Date | string | null
+    completedByUserId?: string | null
+    note?: string | null
+  }
+
+  export type RoomChecklistRunUncheckedCreateWithoutRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonNullValueInput | InputJsonValue
+    completed?: boolean
+    startedAt?: Date | string
+    completedAt?: Date | string | null
+    completedByUserId?: string | null
+    note?: string | null
+  }
+
+  export type RoomChecklistRunCreateOrConnectWithoutRoomInput = {
+    where: RoomChecklistRunWhereUniqueInput
+    create: XOR<RoomChecklistRunCreateWithoutRoomInput, RoomChecklistRunUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomChecklistRunCreateManyRoomInputEnvelope = {
+    data: RoomChecklistRunCreateManyRoomInput | RoomChecklistRunCreateManyRoomInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type TaskCreateWithoutRoomInput = {
+    id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
+    taskType: string
+    description: string
+    assignedToRole?: $Enums.RoleName | null
+    assignedToUserId?: string | null
+    status?: string
+    priority?: number
+    blocking?: boolean
+    createdAt?: Date | string
+    acknowledgedAt?: Date | string | null
+    completedAt?: Date | string | null
+    notes?: string | null
+    updatedAt?: Date | string
+    encounter?: EncounterCreateNestedOneWithoutTasksInput
+    creator: UserCreateNestedOneWithoutTasksCreatedInput
+    acknowledger?: UserCreateNestedOneWithoutTasksAcknowledgedInput
+    completer?: UserCreateNestedOneWithoutTasksCompletedInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutTaskInput
+  }
+
+  export type TaskUncheckedCreateWithoutRoomInput = {
+    id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
+    taskType: string
+    description: string
+    assignedToRole?: $Enums.RoleName | null
+    assignedToUserId?: string | null
+    status?: string
+    priority?: number
+    blocking?: boolean
+    createdAt?: Date | string
+    createdBy: string
+    acknowledgedAt?: Date | string | null
+    acknowledgedBy?: string | null
+    completedAt?: Date | string | null
+    completedBy?: string | null
+    notes?: string | null
+    updatedAt?: Date | string
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutTaskInput
+  }
+
+  export type TaskCreateOrConnectWithoutRoomInput = {
+    where: TaskWhereUniqueInput
+    create: XOR<TaskCreateWithoutRoomInput, TaskUncheckedCreateWithoutRoomInput>
+  }
+
+  export type TaskCreateManyRoomInputEnvelope = {
+    data: TaskCreateManyRoomInput | TaskCreateManyRoomInput[]
     skipDuplicates?: boolean
   }
 
@@ -55057,6 +63325,168 @@ export namespace Prisma {
     data: XOR<EncounterUpdateManyMutationInput, EncounterUncheckedUpdateManyWithoutRoomInput>
   }
 
+  export type RoomOperationalStateUpsertWithoutRoomInput = {
+    update: XOR<RoomOperationalStateUpdateWithoutRoomInput, RoomOperationalStateUncheckedUpdateWithoutRoomInput>
+    create: XOR<RoomOperationalStateCreateWithoutRoomInput, RoomOperationalStateUncheckedCreateWithoutRoomInput>
+    where?: RoomOperationalStateWhereInput
+  }
+
+  export type RoomOperationalStateUpdateToOneWithWhereWithoutRoomInput = {
+    where?: RoomOperationalStateWhereInput
+    data: XOR<RoomOperationalStateUpdateWithoutRoomInput, RoomOperationalStateUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type RoomOperationalStateUpdateWithoutRoomInput = {
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    occupiedEncounter?: EncounterUpdateOneWithoutOperationalOccupanciesNestedInput
+  }
+
+  export type RoomOperationalStateUncheckedUpdateWithoutRoomInput = {
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    occupiedEncounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventUpsertWithWhereUniqueWithoutRoomInput = {
+    where: RoomOperationalEventWhereUniqueInput
+    update: XOR<RoomOperationalEventUpdateWithoutRoomInput, RoomOperationalEventUncheckedUpdateWithoutRoomInput>
+    create: XOR<RoomOperationalEventCreateWithoutRoomInput, RoomOperationalEventUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventUpdateWithWhereUniqueWithoutRoomInput = {
+    where: RoomOperationalEventWhereUniqueInput
+    data: XOR<RoomOperationalEventUpdateWithoutRoomInput, RoomOperationalEventUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventUpdateManyWithWhereWithoutRoomInput = {
+    where: RoomOperationalEventScalarWhereInput
+    data: XOR<RoomOperationalEventUpdateManyMutationInput, RoomOperationalEventUncheckedUpdateManyWithoutRoomInput>
+  }
+
+  export type RoomOperationalEventScalarWhereInput = {
+    AND?: RoomOperationalEventScalarWhereInput | RoomOperationalEventScalarWhereInput[]
+    OR?: RoomOperationalEventScalarWhereInput[]
+    NOT?: RoomOperationalEventScalarWhereInput | RoomOperationalEventScalarWhereInput[]
+    id?: StringFilter<"RoomOperationalEvent"> | string
+    roomId?: StringFilter<"RoomOperationalEvent"> | string
+    clinicId?: StringFilter<"RoomOperationalEvent"> | string
+    facilityId?: StringFilter<"RoomOperationalEvent"> | string
+    encounterId?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    eventType?: EnumRoomEventTypeFilter<"RoomOperationalEvent"> | $Enums.RoomEventType
+    fromStatus?: EnumRoomOperationalStatusNullableFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    toStatus?: EnumRoomOperationalStatusNullableFilter<"RoomOperationalEvent"> | $Enums.RoomOperationalStatus | null
+    note?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    metadataJson?: JsonNullableFilter<"RoomOperationalEvent">
+    createdByUserId?: StringNullableFilter<"RoomOperationalEvent"> | string | null
+    occurredAt?: DateTimeFilter<"RoomOperationalEvent"> | Date | string
+  }
+
+  export type RoomIssueUpsertWithWhereUniqueWithoutRoomInput = {
+    where: RoomIssueWhereUniqueInput
+    update: XOR<RoomIssueUpdateWithoutRoomInput, RoomIssueUncheckedUpdateWithoutRoomInput>
+    create: XOR<RoomIssueCreateWithoutRoomInput, RoomIssueUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomIssueUpdateWithWhereUniqueWithoutRoomInput = {
+    where: RoomIssueWhereUniqueInput
+    data: XOR<RoomIssueUpdateWithoutRoomInput, RoomIssueUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type RoomIssueUpdateManyWithWhereWithoutRoomInput = {
+    where: RoomIssueScalarWhereInput
+    data: XOR<RoomIssueUpdateManyMutationInput, RoomIssueUncheckedUpdateManyWithoutRoomInput>
+  }
+
+  export type RoomIssueScalarWhereInput = {
+    AND?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+    OR?: RoomIssueScalarWhereInput[]
+    NOT?: RoomIssueScalarWhereInput | RoomIssueScalarWhereInput[]
+    id?: StringFilter<"RoomIssue"> | string
+    roomId?: StringFilter<"RoomIssue"> | string
+    clinicId?: StringFilter<"RoomIssue"> | string
+    facilityId?: StringFilter<"RoomIssue"> | string
+    encounterId?: StringNullableFilter<"RoomIssue"> | string | null
+    issueType?: EnumRoomIssueTypeFilter<"RoomIssue"> | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFilter<"RoomIssue"> | $Enums.RoomIssueStatus
+    severity?: IntFilter<"RoomIssue"> | number
+    title?: StringFilter<"RoomIssue"> | string
+    description?: StringNullableFilter<"RoomIssue"> | string | null
+    placesRoomOnHold?: BoolFilter<"RoomIssue"> | boolean
+    taskId?: StringNullableFilter<"RoomIssue"> | string | null
+    sourceModule?: StringNullableFilter<"RoomIssue"> | string | null
+    metadataJson?: JsonNullableFilter<"RoomIssue">
+    createdAt?: DateTimeFilter<"RoomIssue"> | Date | string
+    createdByUserId?: StringFilter<"RoomIssue"> | string
+    resolvedAt?: DateTimeNullableFilter<"RoomIssue"> | Date | string | null
+    resolvedByUserId?: StringNullableFilter<"RoomIssue"> | string | null
+    resolutionNote?: StringNullableFilter<"RoomIssue"> | string | null
+  }
+
+  export type RoomChecklistRunUpsertWithWhereUniqueWithoutRoomInput = {
+    where: RoomChecklistRunWhereUniqueInput
+    update: XOR<RoomChecklistRunUpdateWithoutRoomInput, RoomChecklistRunUncheckedUpdateWithoutRoomInput>
+    create: XOR<RoomChecklistRunCreateWithoutRoomInput, RoomChecklistRunUncheckedCreateWithoutRoomInput>
+  }
+
+  export type RoomChecklistRunUpdateWithWhereUniqueWithoutRoomInput = {
+    where: RoomChecklistRunWhereUniqueInput
+    data: XOR<RoomChecklistRunUpdateWithoutRoomInput, RoomChecklistRunUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type RoomChecklistRunUpdateManyWithWhereWithoutRoomInput = {
+    where: RoomChecklistRunScalarWhereInput
+    data: XOR<RoomChecklistRunUpdateManyMutationInput, RoomChecklistRunUncheckedUpdateManyWithoutRoomInput>
+  }
+
+  export type RoomChecklistRunScalarWhereInput = {
+    AND?: RoomChecklistRunScalarWhereInput | RoomChecklistRunScalarWhereInput[]
+    OR?: RoomChecklistRunScalarWhereInput[]
+    NOT?: RoomChecklistRunScalarWhereInput | RoomChecklistRunScalarWhereInput[]
+    id?: StringFilter<"RoomChecklistRun"> | string
+    roomId?: StringFilter<"RoomChecklistRun"> | string
+    clinicId?: StringFilter<"RoomChecklistRun"> | string
+    facilityId?: StringFilter<"RoomChecklistRun"> | string
+    kind?: EnumRoomChecklistKindFilter<"RoomChecklistRun"> | $Enums.RoomChecklistKind
+    dateKey?: StringFilter<"RoomChecklistRun"> | string
+    itemsJson?: JsonFilter<"RoomChecklistRun">
+    completed?: BoolFilter<"RoomChecklistRun"> | boolean
+    startedAt?: DateTimeFilter<"RoomChecklistRun"> | Date | string
+    completedAt?: DateTimeNullableFilter<"RoomChecklistRun"> | Date | string | null
+    completedByUserId?: StringNullableFilter<"RoomChecklistRun"> | string | null
+    note?: StringNullableFilter<"RoomChecklistRun"> | string | null
+  }
+
+  export type TaskUpsertWithWhereUniqueWithoutRoomInput = {
+    where: TaskWhereUniqueInput
+    update: XOR<TaskUpdateWithoutRoomInput, TaskUncheckedUpdateWithoutRoomInput>
+    create: XOR<TaskCreateWithoutRoomInput, TaskUncheckedCreateWithoutRoomInput>
+  }
+
+  export type TaskUpdateWithWhereUniqueWithoutRoomInput = {
+    where: TaskWhereUniqueInput
+    data: XOR<TaskUpdateWithoutRoomInput, TaskUncheckedUpdateWithoutRoomInput>
+  }
+
+  export type TaskUpdateManyWithWhereWithoutRoomInput = {
+    where: TaskScalarWhereInput
+    data: XOR<TaskUpdateManyMutationInput, TaskUncheckedUpdateManyWithoutRoomInput>
+  }
+
   export type ClinicCreateWithoutRoomAssignmentsInput = {
     id?: string
     name: string
@@ -55127,6 +63557,11 @@ export namespace Prisma {
     sortOrder?: number
     facility: FacilityCreateNestedOneWithoutRoomsInput
     encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomUncheckedCreateWithoutClinicLinksInput = {
@@ -55138,6 +63573,11 @@ export namespace Prisma {
     status?: string
     sortOrder?: number
     encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomCreateOrConnectWithoutClinicLinksInput = {
@@ -55232,6 +63672,11 @@ export namespace Prisma {
     sortOrder?: IntFieldUpdateOperationsInput | number
     facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
     encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicRoomUncheckedUpdateWithoutClinicLinksInput = {
@@ -55243,6 +63688,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     sortOrder?: IntFieldUpdateOperationsInput | number
     encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicCreateWithoutReasonsInput = {
@@ -55535,6 +63985,9 @@ export namespace Prisma {
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutReasonInput = {
@@ -55567,6 +64020,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutReasonInput = {
@@ -57791,6 +66247,11 @@ export namespace Prisma {
     sortOrder?: number
     facility: FacilityCreateNestedOneWithoutRoomsInput
     clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomUncheckedCreateWithoutEncountersInput = {
@@ -57802,6 +66263,11 @@ export namespace Prisma {
     status?: string
     sortOrder?: number
     clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
   }
 
   export type ClinicRoomCreateOrConnectWithoutEncountersInput = {
@@ -57862,6 +66328,10 @@ export namespace Prisma {
 
   export type TaskCreateWithoutEncounterInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -57874,13 +66344,20 @@ export namespace Prisma {
     completedAt?: Date | string | null
     notes?: string | null
     updatedAt?: Date | string
+    room?: ClinicRoomCreateNestedOneWithoutTasksInput
     creator: UserCreateNestedOneWithoutTasksCreatedInput
     acknowledger?: UserCreateNestedOneWithoutTasksAcknowledgedInput
     completer?: UserCreateNestedOneWithoutTasksCompletedInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutTaskInput
   }
 
   export type TaskUncheckedCreateWithoutEncounterInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -57896,6 +66373,7 @@ export namespace Prisma {
     completedBy?: string | null
     notes?: string | null
     updatedAt?: Date | string
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutTaskInput
   }
 
   export type TaskCreateOrConnectWithoutEncounterInput = {
@@ -57935,6 +66413,132 @@ export namespace Prisma {
 
   export type SafetyEventCreateManyEncounterInputEnvelope = {
     data: SafetyEventCreateManyEncounterInput | SafetyEventCreateManyEncounterInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomOperationalStateCreateWithoutOccupiedEncounterInput = {
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+    room: ClinicRoomCreateNestedOneWithoutOperationalStateInput
+  }
+
+  export type RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput = {
+    roomId: string
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type RoomOperationalStateCreateOrConnectWithoutOccupiedEncounterInput = {
+    where: RoomOperationalStateWhereUniqueInput
+    create: XOR<RoomOperationalStateCreateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput>
+  }
+
+  export type RoomOperationalStateCreateManyOccupiedEncounterInputEnvelope = {
+    data: RoomOperationalStateCreateManyOccupiedEncounterInput | RoomOperationalStateCreateManyOccupiedEncounterInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomOperationalEventCreateWithoutEncounterInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+    room: ClinicRoomCreateNestedOneWithoutOperationalEventsInput
+  }
+
+  export type RoomOperationalEventUncheckedCreateWithoutEncounterInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+  }
+
+  export type RoomOperationalEventCreateOrConnectWithoutEncounterInput = {
+    where: RoomOperationalEventWhereUniqueInput
+    create: XOR<RoomOperationalEventCreateWithoutEncounterInput, RoomOperationalEventUncheckedCreateWithoutEncounterInput>
+  }
+
+  export type RoomOperationalEventCreateManyEncounterInputEnvelope = {
+    data: RoomOperationalEventCreateManyEncounterInput | RoomOperationalEventCreateManyEncounterInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomIssueCreateWithoutEncounterInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+    room: ClinicRoomCreateNestedOneWithoutRoomIssuesInput
+    task?: TaskCreateNestedOneWithoutRoomIssuesInput
+  }
+
+  export type RoomIssueUncheckedCreateWithoutEncounterInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    taskId?: string | null
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomIssueCreateOrConnectWithoutEncounterInput = {
+    where: RoomIssueWhereUniqueInput
+    create: XOR<RoomIssueCreateWithoutEncounterInput, RoomIssueUncheckedCreateWithoutEncounterInput>
+  }
+
+  export type RoomIssueCreateManyEncounterInputEnvelope = {
+    data: RoomIssueCreateManyEncounterInput | RoomIssueCreateManyEncounterInput[]
     skipDuplicates?: boolean
   }
 
@@ -58095,6 +66699,11 @@ export namespace Prisma {
     sortOrder?: IntFieldUpdateOperationsInput | number
     facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
     clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicRoomUncheckedUpdateWithoutEncountersInput = {
@@ -58106,6 +66715,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     sortOrder?: IntFieldUpdateOperationsInput | number
     clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
   }
 
   export type StatusChangeEventUpsertWithWhereUniqueWithoutEncounterInput = {
@@ -58212,6 +66826,71 @@ export namespace Prisma {
     location?: StringNullableFilter<"SafetyEvent"> | string | null
   }
 
+  export type RoomOperationalStateUpsertWithWhereUniqueWithoutOccupiedEncounterInput = {
+    where: RoomOperationalStateWhereUniqueInput
+    update: XOR<RoomOperationalStateUpdateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedUpdateWithoutOccupiedEncounterInput>
+    create: XOR<RoomOperationalStateCreateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedCreateWithoutOccupiedEncounterInput>
+  }
+
+  export type RoomOperationalStateUpdateWithWhereUniqueWithoutOccupiedEncounterInput = {
+    where: RoomOperationalStateWhereUniqueInput
+    data: XOR<RoomOperationalStateUpdateWithoutOccupiedEncounterInput, RoomOperationalStateUncheckedUpdateWithoutOccupiedEncounterInput>
+  }
+
+  export type RoomOperationalStateUpdateManyWithWhereWithoutOccupiedEncounterInput = {
+    where: RoomOperationalStateScalarWhereInput
+    data: XOR<RoomOperationalStateUpdateManyMutationInput, RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterInput>
+  }
+
+  export type RoomOperationalStateScalarWhereInput = {
+    AND?: RoomOperationalStateScalarWhereInput | RoomOperationalStateScalarWhereInput[]
+    OR?: RoomOperationalStateScalarWhereInput[]
+    NOT?: RoomOperationalStateScalarWhereInput | RoomOperationalStateScalarWhereInput[]
+    roomId?: StringFilter<"RoomOperationalState"> | string
+    currentStatus?: EnumRoomOperationalStatusFilter<"RoomOperationalState"> | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFilter<"RoomOperationalState"> | Date | string
+    occupiedEncounterId?: StringNullableFilter<"RoomOperationalState"> | string | null
+    activeCleanerUserId?: StringNullableFilter<"RoomOperationalState"> | string | null
+    holdReason?: EnumRoomHoldReasonNullableFilter<"RoomOperationalState"> | $Enums.RoomHoldReason | null
+    holdNote?: StringNullableFilter<"RoomOperationalState"> | string | null
+    lastReadyAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    lastOccupiedAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    lastTurnoverAt?: DateTimeNullableFilter<"RoomOperationalState"> | Date | string | null
+    updatedAt?: DateTimeFilter<"RoomOperationalState"> | Date | string
+  }
+
+  export type RoomOperationalEventUpsertWithWhereUniqueWithoutEncounterInput = {
+    where: RoomOperationalEventWhereUniqueInput
+    update: XOR<RoomOperationalEventUpdateWithoutEncounterInput, RoomOperationalEventUncheckedUpdateWithoutEncounterInput>
+    create: XOR<RoomOperationalEventCreateWithoutEncounterInput, RoomOperationalEventUncheckedCreateWithoutEncounterInput>
+  }
+
+  export type RoomOperationalEventUpdateWithWhereUniqueWithoutEncounterInput = {
+    where: RoomOperationalEventWhereUniqueInput
+    data: XOR<RoomOperationalEventUpdateWithoutEncounterInput, RoomOperationalEventUncheckedUpdateWithoutEncounterInput>
+  }
+
+  export type RoomOperationalEventUpdateManyWithWhereWithoutEncounterInput = {
+    where: RoomOperationalEventScalarWhereInput
+    data: XOR<RoomOperationalEventUpdateManyMutationInput, RoomOperationalEventUncheckedUpdateManyWithoutEncounterInput>
+  }
+
+  export type RoomIssueUpsertWithWhereUniqueWithoutEncounterInput = {
+    where: RoomIssueWhereUniqueInput
+    update: XOR<RoomIssueUpdateWithoutEncounterInput, RoomIssueUncheckedUpdateWithoutEncounterInput>
+    create: XOR<RoomIssueCreateWithoutEncounterInput, RoomIssueUncheckedCreateWithoutEncounterInput>
+  }
+
+  export type RoomIssueUpdateWithWhereUniqueWithoutEncounterInput = {
+    where: RoomIssueWhereUniqueInput
+    data: XOR<RoomIssueUpdateWithoutEncounterInput, RoomIssueUncheckedUpdateWithoutEncounterInput>
+  }
+
+  export type RoomIssueUpdateManyWithWhereWithoutEncounterInput = {
+    where: RoomIssueScalarWhereInput
+    data: XOR<RoomIssueUpdateManyMutationInput, RoomIssueUncheckedUpdateManyWithoutEncounterInput>
+  }
+
   export type EncounterCreateWithoutStatusEventsInput = {
     id?: string
     patientId: string
@@ -58242,6 +66921,9 @@ export namespace Prisma {
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutStatusEventsInput = {
@@ -58274,6 +66956,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutStatusEventsInput = {
@@ -58322,6 +67007,9 @@ export namespace Prisma {
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutStatusEventsInput = {
@@ -58354,6 +67042,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterCreateWithoutAlertStateInput = {
@@ -58386,6 +67077,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventCreateNestedManyWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutAlertStateInput = {
@@ -58418,6 +67112,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutAlertStateInput = {
@@ -58466,6 +67163,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUpdateManyWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutAlertStateInput = {
@@ -58498,6 +67198,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterCreateWithoutTasksInput = {
@@ -58530,6 +67233,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventCreateNestedManyWithoutEncounterInput
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutTasksInput = {
@@ -58562,11 +67268,51 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutTasksInput = {
     where: EncounterWhereUniqueInput
     create: XOR<EncounterCreateWithoutTasksInput, EncounterUncheckedCreateWithoutTasksInput>
+  }
+
+  export type ClinicRoomCreateWithoutTasksInput = {
+    id?: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    facility: FacilityCreateNestedOneWithoutRoomsInput
+    clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
+    encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomUncheckedCreateWithoutTasksInput = {
+    id?: string
+    facilityId: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomCreateOrConnectWithoutTasksInput = {
+    where: ClinicRoomWhereUniqueInput
+    create: XOR<ClinicRoomCreateWithoutTasksInput, ClinicRoomUncheckedCreateWithoutTasksInput>
   }
 
   export type UserCreateWithoutTasksCreatedInput = {
@@ -58734,6 +67480,58 @@ export namespace Prisma {
     create: XOR<UserCreateWithoutTasksCompletedInput, UserUncheckedCreateWithoutTasksCompletedInput>
   }
 
+  export type RoomIssueCreateWithoutTaskInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+    room: ClinicRoomCreateNestedOneWithoutRoomIssuesInput
+    encounter?: EncounterCreateNestedOneWithoutRoomIssuesInput
+  }
+
+  export type RoomIssueUncheckedCreateWithoutTaskInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomIssueCreateOrConnectWithoutTaskInput = {
+    where: RoomIssueWhereUniqueInput
+    create: XOR<RoomIssueCreateWithoutTaskInput, RoomIssueUncheckedCreateWithoutTaskInput>
+  }
+
+  export type RoomIssueCreateManyTaskInputEnvelope = {
+    data: RoomIssueCreateManyTaskInput | RoomIssueCreateManyTaskInput[]
+    skipDuplicates?: boolean
+  }
+
   export type EncounterUpsertWithoutTasksInput = {
     update: XOR<EncounterUpdateWithoutTasksInput, EncounterUncheckedUpdateWithoutTasksInput>
     create: XOR<EncounterCreateWithoutTasksInput, EncounterUncheckedCreateWithoutTasksInput>
@@ -58775,6 +67573,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUpdateManyWithoutEncounterNestedInput
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutTasksInput = {
@@ -58807,6 +67608,52 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type ClinicRoomUpsertWithoutTasksInput = {
+    update: XOR<ClinicRoomUpdateWithoutTasksInput, ClinicRoomUncheckedUpdateWithoutTasksInput>
+    create: XOR<ClinicRoomCreateWithoutTasksInput, ClinicRoomUncheckedCreateWithoutTasksInput>
+    where?: ClinicRoomWhereInput
+  }
+
+  export type ClinicRoomUpdateToOneWithWhereWithoutTasksInput = {
+    where?: ClinicRoomWhereInput
+    data: XOR<ClinicRoomUpdateWithoutTasksInput, ClinicRoomUncheckedUpdateWithoutTasksInput>
+  }
+
+  export type ClinicRoomUpdateWithoutTasksInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
+    clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+  }
+
+  export type ClinicRoomUncheckedUpdateWithoutTasksInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
   }
 
   export type UserUpsertWithoutTasksCreatedInput = {
@@ -58990,6 +67837,926 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+  }
+
+  export type RoomIssueUpsertWithWhereUniqueWithoutTaskInput = {
+    where: RoomIssueWhereUniqueInput
+    update: XOR<RoomIssueUpdateWithoutTaskInput, RoomIssueUncheckedUpdateWithoutTaskInput>
+    create: XOR<RoomIssueCreateWithoutTaskInput, RoomIssueUncheckedCreateWithoutTaskInput>
+  }
+
+  export type RoomIssueUpdateWithWhereUniqueWithoutTaskInput = {
+    where: RoomIssueWhereUniqueInput
+    data: XOR<RoomIssueUpdateWithoutTaskInput, RoomIssueUncheckedUpdateWithoutTaskInput>
+  }
+
+  export type RoomIssueUpdateManyWithWhereWithoutTaskInput = {
+    where: RoomIssueScalarWhereInput
+    data: XOR<RoomIssueUpdateManyMutationInput, RoomIssueUncheckedUpdateManyWithoutTaskInput>
+  }
+
+  export type ClinicRoomCreateWithoutOperationalStateInput = {
+    id?: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    facility: FacilityCreateNestedOneWithoutRoomsInput
+    clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
+    encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomUncheckedCreateWithoutOperationalStateInput = {
+    id?: string
+    facilityId: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomCreateOrConnectWithoutOperationalStateInput = {
+    where: ClinicRoomWhereUniqueInput
+    create: XOR<ClinicRoomCreateWithoutOperationalStateInput, ClinicRoomUncheckedCreateWithoutOperationalStateInput>
+  }
+
+  export type EncounterCreateWithoutOperationalOccupanciesInput = {
+    id?: string
+    patientId: string
+    currentStatus: $Enums.EncounterStatus
+    assignedMaUserId?: string | null
+    version?: number
+    checkInAt?: Date | string | null
+    dateOfService: Date | string
+    roomingStartAt?: Date | string | null
+    roomingCompleteAt?: Date | string | null
+    providerStartAt?: Date | string | null
+    providerEndAt?: Date | string | null
+    checkoutCompleteAt?: Date | string | null
+    closedAt?: Date | string | null
+    walkIn?: boolean
+    insuranceVerified?: boolean
+    arrivalNotes?: string | null
+    closureType?: string | null
+    closureNotes?: string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    clinic: ClinicCreateNestedOneWithoutEncountersInput
+    provider?: ProviderCreateNestedOneWithoutEncountersInput
+    reason?: ReasonForVisitCreateNestedOneWithoutEncountersInput
+    room?: ClinicRoomCreateNestedOneWithoutEncountersInput
+    statusEvents?: StatusChangeEventCreateNestedManyWithoutEncounterInput
+    alertState?: AlertStateCreateNestedOneWithoutEncounterInput
+    tasks?: TaskCreateNestedManyWithoutEncounterInput
+    safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
+  }
+
+  export type EncounterUncheckedCreateWithoutOperationalOccupanciesInput = {
+    id?: string
+    patientId: string
+    clinicId: string
+    providerId?: string | null
+    reasonForVisitId?: string | null
+    currentStatus: $Enums.EncounterStatus
+    assignedMaUserId?: string | null
+    roomId?: string | null
+    version?: number
+    checkInAt?: Date | string | null
+    dateOfService: Date | string
+    roomingStartAt?: Date | string | null
+    roomingCompleteAt?: Date | string | null
+    providerStartAt?: Date | string | null
+    providerEndAt?: Date | string | null
+    checkoutCompleteAt?: Date | string | null
+    closedAt?: Date | string | null
+    walkIn?: boolean
+    insuranceVerified?: boolean
+    arrivalNotes?: string | null
+    closureType?: string | null
+    closureNotes?: string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    statusEvents?: StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput
+    alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
+    safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
+  }
+
+  export type EncounterCreateOrConnectWithoutOperationalOccupanciesInput = {
+    where: EncounterWhereUniqueInput
+    create: XOR<EncounterCreateWithoutOperationalOccupanciesInput, EncounterUncheckedCreateWithoutOperationalOccupanciesInput>
+  }
+
+  export type ClinicRoomUpsertWithoutOperationalStateInput = {
+    update: XOR<ClinicRoomUpdateWithoutOperationalStateInput, ClinicRoomUncheckedUpdateWithoutOperationalStateInput>
+    create: XOR<ClinicRoomCreateWithoutOperationalStateInput, ClinicRoomUncheckedCreateWithoutOperationalStateInput>
+    where?: ClinicRoomWhereInput
+  }
+
+  export type ClinicRoomUpdateToOneWithWhereWithoutOperationalStateInput = {
+    where?: ClinicRoomWhereInput
+    data: XOR<ClinicRoomUpdateWithoutOperationalStateInput, ClinicRoomUncheckedUpdateWithoutOperationalStateInput>
+  }
+
+  export type ClinicRoomUpdateWithoutOperationalStateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
+    clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
+  }
+
+  export type ClinicRoomUncheckedUpdateWithoutOperationalStateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
+  }
+
+  export type EncounterUpsertWithoutOperationalOccupanciesInput = {
+    update: XOR<EncounterUpdateWithoutOperationalOccupanciesInput, EncounterUncheckedUpdateWithoutOperationalOccupanciesInput>
+    create: XOR<EncounterCreateWithoutOperationalOccupanciesInput, EncounterUncheckedCreateWithoutOperationalOccupanciesInput>
+    where?: EncounterWhereInput
+  }
+
+  export type EncounterUpdateToOneWithWhereWithoutOperationalOccupanciesInput = {
+    where?: EncounterWhereInput
+    data: XOR<EncounterUpdateWithoutOperationalOccupanciesInput, EncounterUncheckedUpdateWithoutOperationalOccupanciesInput>
+  }
+
+  export type EncounterUpdateWithoutOperationalOccupanciesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    patientId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
+    assignedMaUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    checkInAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    dateOfService?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomingStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    roomingCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerEndAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkoutCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    walkIn?: BoolFieldUpdateOperationsInput | boolean
+    insuranceVerified?: BoolFieldUpdateOperationsInput | boolean
+    arrivalNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    closureType?: NullableStringFieldUpdateOperationsInput | string | null
+    closureNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    clinic?: ClinicUpdateOneRequiredWithoutEncountersNestedInput
+    provider?: ProviderUpdateOneWithoutEncountersNestedInput
+    reason?: ReasonForVisitUpdateOneWithoutEncountersNestedInput
+    room?: ClinicRoomUpdateOneWithoutEncountersNestedInput
+    statusEvents?: StatusChangeEventUpdateManyWithoutEncounterNestedInput
+    alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
+    tasks?: TaskUpdateManyWithoutEncounterNestedInput
+    safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type EncounterUncheckedUpdateWithoutOperationalOccupanciesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    patientId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    providerId?: NullableStringFieldUpdateOperationsInput | string | null
+    reasonForVisitId?: NullableStringFieldUpdateOperationsInput | string | null
+    currentStatus?: EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
+    assignedMaUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    checkInAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    dateOfService?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomingStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    roomingCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerEndAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkoutCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    walkIn?: BoolFieldUpdateOperationsInput | boolean
+    insuranceVerified?: BoolFieldUpdateOperationsInput | boolean
+    arrivalNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    closureType?: NullableStringFieldUpdateOperationsInput | string | null
+    closureNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    statusEvents?: StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput
+    alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
+    safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type ClinicRoomCreateWithoutOperationalEventsInput = {
+    id?: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    facility: FacilityCreateNestedOneWithoutRoomsInput
+    clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
+    encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomUncheckedCreateWithoutOperationalEventsInput = {
+    id?: string
+    facilityId: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomCreateOrConnectWithoutOperationalEventsInput = {
+    where: ClinicRoomWhereUniqueInput
+    create: XOR<ClinicRoomCreateWithoutOperationalEventsInput, ClinicRoomUncheckedCreateWithoutOperationalEventsInput>
+  }
+
+  export type EncounterCreateWithoutRoomOperationalEventsInput = {
+    id?: string
+    patientId: string
+    currentStatus: $Enums.EncounterStatus
+    assignedMaUserId?: string | null
+    version?: number
+    checkInAt?: Date | string | null
+    dateOfService: Date | string
+    roomingStartAt?: Date | string | null
+    roomingCompleteAt?: Date | string | null
+    providerStartAt?: Date | string | null
+    providerEndAt?: Date | string | null
+    checkoutCompleteAt?: Date | string | null
+    closedAt?: Date | string | null
+    walkIn?: boolean
+    insuranceVerified?: boolean
+    arrivalNotes?: string | null
+    closureType?: string | null
+    closureNotes?: string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    clinic: ClinicCreateNestedOneWithoutEncountersInput
+    provider?: ProviderCreateNestedOneWithoutEncountersInput
+    reason?: ReasonForVisitCreateNestedOneWithoutEncountersInput
+    room?: ClinicRoomCreateNestedOneWithoutEncountersInput
+    statusEvents?: StatusChangeEventCreateNestedManyWithoutEncounterInput
+    alertState?: AlertStateCreateNestedOneWithoutEncounterInput
+    tasks?: TaskCreateNestedManyWithoutEncounterInput
+    safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
+  }
+
+  export type EncounterUncheckedCreateWithoutRoomOperationalEventsInput = {
+    id?: string
+    patientId: string
+    clinicId: string
+    providerId?: string | null
+    reasonForVisitId?: string | null
+    currentStatus: $Enums.EncounterStatus
+    assignedMaUserId?: string | null
+    roomId?: string | null
+    version?: number
+    checkInAt?: Date | string | null
+    dateOfService: Date | string
+    roomingStartAt?: Date | string | null
+    roomingCompleteAt?: Date | string | null
+    providerStartAt?: Date | string | null
+    providerEndAt?: Date | string | null
+    checkoutCompleteAt?: Date | string | null
+    closedAt?: Date | string | null
+    walkIn?: boolean
+    insuranceVerified?: boolean
+    arrivalNotes?: string | null
+    closureType?: string | null
+    closureNotes?: string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    statusEvents?: StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput
+    alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
+    safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
+  }
+
+  export type EncounterCreateOrConnectWithoutRoomOperationalEventsInput = {
+    where: EncounterWhereUniqueInput
+    create: XOR<EncounterCreateWithoutRoomOperationalEventsInput, EncounterUncheckedCreateWithoutRoomOperationalEventsInput>
+  }
+
+  export type ClinicRoomUpsertWithoutOperationalEventsInput = {
+    update: XOR<ClinicRoomUpdateWithoutOperationalEventsInput, ClinicRoomUncheckedUpdateWithoutOperationalEventsInput>
+    create: XOR<ClinicRoomCreateWithoutOperationalEventsInput, ClinicRoomUncheckedCreateWithoutOperationalEventsInput>
+    where?: ClinicRoomWhereInput
+  }
+
+  export type ClinicRoomUpdateToOneWithWhereWithoutOperationalEventsInput = {
+    where?: ClinicRoomWhereInput
+    data: XOR<ClinicRoomUpdateWithoutOperationalEventsInput, ClinicRoomUncheckedUpdateWithoutOperationalEventsInput>
+  }
+
+  export type ClinicRoomUpdateWithoutOperationalEventsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
+    clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
+  }
+
+  export type ClinicRoomUncheckedUpdateWithoutOperationalEventsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
+  }
+
+  export type EncounterUpsertWithoutRoomOperationalEventsInput = {
+    update: XOR<EncounterUpdateWithoutRoomOperationalEventsInput, EncounterUncheckedUpdateWithoutRoomOperationalEventsInput>
+    create: XOR<EncounterCreateWithoutRoomOperationalEventsInput, EncounterUncheckedCreateWithoutRoomOperationalEventsInput>
+    where?: EncounterWhereInput
+  }
+
+  export type EncounterUpdateToOneWithWhereWithoutRoomOperationalEventsInput = {
+    where?: EncounterWhereInput
+    data: XOR<EncounterUpdateWithoutRoomOperationalEventsInput, EncounterUncheckedUpdateWithoutRoomOperationalEventsInput>
+  }
+
+  export type EncounterUpdateWithoutRoomOperationalEventsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    patientId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
+    assignedMaUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    checkInAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    dateOfService?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomingStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    roomingCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerEndAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkoutCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    walkIn?: BoolFieldUpdateOperationsInput | boolean
+    insuranceVerified?: BoolFieldUpdateOperationsInput | boolean
+    arrivalNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    closureType?: NullableStringFieldUpdateOperationsInput | string | null
+    closureNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    clinic?: ClinicUpdateOneRequiredWithoutEncountersNestedInput
+    provider?: ProviderUpdateOneWithoutEncountersNestedInput
+    reason?: ReasonForVisitUpdateOneWithoutEncountersNestedInput
+    room?: ClinicRoomUpdateOneWithoutEncountersNestedInput
+    statusEvents?: StatusChangeEventUpdateManyWithoutEncounterNestedInput
+    alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
+    tasks?: TaskUpdateManyWithoutEncounterNestedInput
+    safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type EncounterUncheckedUpdateWithoutRoomOperationalEventsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    patientId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    providerId?: NullableStringFieldUpdateOperationsInput | string | null
+    reasonForVisitId?: NullableStringFieldUpdateOperationsInput | string | null
+    currentStatus?: EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
+    assignedMaUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    checkInAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    dateOfService?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomingStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    roomingCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerEndAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkoutCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    walkIn?: BoolFieldUpdateOperationsInput | boolean
+    insuranceVerified?: BoolFieldUpdateOperationsInput | boolean
+    arrivalNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    closureType?: NullableStringFieldUpdateOperationsInput | string | null
+    closureNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    statusEvents?: StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput
+    alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
+    safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type ClinicRoomCreateWithoutRoomIssuesInput = {
+    id?: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    facility: FacilityCreateNestedOneWithoutRoomsInput
+    clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
+    encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomUncheckedCreateWithoutRoomIssuesInput = {
+    id?: string
+    facilityId: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    checklistRuns?: RoomChecklistRunUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomCreateOrConnectWithoutRoomIssuesInput = {
+    where: ClinicRoomWhereUniqueInput
+    create: XOR<ClinicRoomCreateWithoutRoomIssuesInput, ClinicRoomUncheckedCreateWithoutRoomIssuesInput>
+  }
+
+  export type EncounterCreateWithoutRoomIssuesInput = {
+    id?: string
+    patientId: string
+    currentStatus: $Enums.EncounterStatus
+    assignedMaUserId?: string | null
+    version?: number
+    checkInAt?: Date | string | null
+    dateOfService: Date | string
+    roomingStartAt?: Date | string | null
+    roomingCompleteAt?: Date | string | null
+    providerStartAt?: Date | string | null
+    providerEndAt?: Date | string | null
+    checkoutCompleteAt?: Date | string | null
+    closedAt?: Date | string | null
+    walkIn?: boolean
+    insuranceVerified?: boolean
+    arrivalNotes?: string | null
+    closureType?: string | null
+    closureNotes?: string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    clinic: ClinicCreateNestedOneWithoutEncountersInput
+    provider?: ProviderCreateNestedOneWithoutEncountersInput
+    reason?: ReasonForVisitCreateNestedOneWithoutEncountersInput
+    room?: ClinicRoomCreateNestedOneWithoutEncountersInput
+    statusEvents?: StatusChangeEventCreateNestedManyWithoutEncounterInput
+    alertState?: AlertStateCreateNestedOneWithoutEncounterInput
+    tasks?: TaskCreateNestedManyWithoutEncounterInput
+    safetyEvents?: SafetyEventCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+  }
+
+  export type EncounterUncheckedCreateWithoutRoomIssuesInput = {
+    id?: string
+    patientId: string
+    clinicId: string
+    providerId?: string | null
+    reasonForVisitId?: string | null
+    currentStatus: $Enums.EncounterStatus
+    assignedMaUserId?: string | null
+    roomId?: string | null
+    version?: number
+    checkInAt?: Date | string | null
+    dateOfService: Date | string
+    roomingStartAt?: Date | string | null
+    roomingCompleteAt?: Date | string | null
+    providerStartAt?: Date | string | null
+    providerEndAt?: Date | string | null
+    checkoutCompleteAt?: Date | string | null
+    closedAt?: Date | string | null
+    walkIn?: boolean
+    insuranceVerified?: boolean
+    arrivalNotes?: string | null
+    closureType?: string | null
+    closureNotes?: string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    statusEvents?: StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput
+    alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
+    safetyEvents?: SafetyEventUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+  }
+
+  export type EncounterCreateOrConnectWithoutRoomIssuesInput = {
+    where: EncounterWhereUniqueInput
+    create: XOR<EncounterCreateWithoutRoomIssuesInput, EncounterUncheckedCreateWithoutRoomIssuesInput>
+  }
+
+  export type TaskCreateWithoutRoomIssuesInput = {
+    id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
+    taskType: string
+    description: string
+    assignedToRole?: $Enums.RoleName | null
+    assignedToUserId?: string | null
+    status?: string
+    priority?: number
+    blocking?: boolean
+    createdAt?: Date | string
+    acknowledgedAt?: Date | string | null
+    completedAt?: Date | string | null
+    notes?: string | null
+    updatedAt?: Date | string
+    encounter?: EncounterCreateNestedOneWithoutTasksInput
+    room?: ClinicRoomCreateNestedOneWithoutTasksInput
+    creator: UserCreateNestedOneWithoutTasksCreatedInput
+    acknowledger?: UserCreateNestedOneWithoutTasksAcknowledgedInput
+    completer?: UserCreateNestedOneWithoutTasksCompletedInput
+  }
+
+  export type TaskUncheckedCreateWithoutRoomIssuesInput = {
+    id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
+    taskType: string
+    description: string
+    assignedToRole?: $Enums.RoleName | null
+    assignedToUserId?: string | null
+    status?: string
+    priority?: number
+    blocking?: boolean
+    createdAt?: Date | string
+    createdBy: string
+    acknowledgedAt?: Date | string | null
+    acknowledgedBy?: string | null
+    completedAt?: Date | string | null
+    completedBy?: string | null
+    notes?: string | null
+    updatedAt?: Date | string
+  }
+
+  export type TaskCreateOrConnectWithoutRoomIssuesInput = {
+    where: TaskWhereUniqueInput
+    create: XOR<TaskCreateWithoutRoomIssuesInput, TaskUncheckedCreateWithoutRoomIssuesInput>
+  }
+
+  export type ClinicRoomUpsertWithoutRoomIssuesInput = {
+    update: XOR<ClinicRoomUpdateWithoutRoomIssuesInput, ClinicRoomUncheckedUpdateWithoutRoomIssuesInput>
+    create: XOR<ClinicRoomCreateWithoutRoomIssuesInput, ClinicRoomUncheckedCreateWithoutRoomIssuesInput>
+    where?: ClinicRoomWhereInput
+  }
+
+  export type ClinicRoomUpdateToOneWithWhereWithoutRoomIssuesInput = {
+    where?: ClinicRoomWhereInput
+    data: XOR<ClinicRoomUpdateWithoutRoomIssuesInput, ClinicRoomUncheckedUpdateWithoutRoomIssuesInput>
+  }
+
+  export type ClinicRoomUpdateWithoutRoomIssuesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
+    clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
+  }
+
+  export type ClinicRoomUncheckedUpdateWithoutRoomIssuesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
+  }
+
+  export type EncounterUpsertWithoutRoomIssuesInput = {
+    update: XOR<EncounterUpdateWithoutRoomIssuesInput, EncounterUncheckedUpdateWithoutRoomIssuesInput>
+    create: XOR<EncounterCreateWithoutRoomIssuesInput, EncounterUncheckedCreateWithoutRoomIssuesInput>
+    where?: EncounterWhereInput
+  }
+
+  export type EncounterUpdateToOneWithWhereWithoutRoomIssuesInput = {
+    where?: EncounterWhereInput
+    data: XOR<EncounterUpdateWithoutRoomIssuesInput, EncounterUncheckedUpdateWithoutRoomIssuesInput>
+  }
+
+  export type EncounterUpdateWithoutRoomIssuesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    patientId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
+    assignedMaUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    checkInAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    dateOfService?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomingStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    roomingCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerEndAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkoutCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    walkIn?: BoolFieldUpdateOperationsInput | boolean
+    insuranceVerified?: BoolFieldUpdateOperationsInput | boolean
+    arrivalNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    closureType?: NullableStringFieldUpdateOperationsInput | string | null
+    closureNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    clinic?: ClinicUpdateOneRequiredWithoutEncountersNestedInput
+    provider?: ProviderUpdateOneWithoutEncountersNestedInput
+    reason?: ReasonForVisitUpdateOneWithoutEncountersNestedInput
+    room?: ClinicRoomUpdateOneWithoutEncountersNestedInput
+    statusEvents?: StatusChangeEventUpdateManyWithoutEncounterNestedInput
+    alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
+    tasks?: TaskUpdateManyWithoutEncounterNestedInput
+    safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type EncounterUncheckedUpdateWithoutRoomIssuesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    patientId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    providerId?: NullableStringFieldUpdateOperationsInput | string | null
+    reasonForVisitId?: NullableStringFieldUpdateOperationsInput | string | null
+    currentStatus?: EnumEncounterStatusFieldUpdateOperationsInput | $Enums.EncounterStatus
+    assignedMaUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    checkInAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    dateOfService?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomingStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    roomingCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerStartAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    providerEndAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkoutCompleteAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    walkIn?: BoolFieldUpdateOperationsInput | boolean
+    insuranceVerified?: BoolFieldUpdateOperationsInput | boolean
+    arrivalNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    closureType?: NullableStringFieldUpdateOperationsInput | string | null
+    closureNotes?: NullableStringFieldUpdateOperationsInput | string | null
+    roomingData?: NullableJsonNullValueInput | InputJsonValue
+    clinicianData?: NullableJsonNullValueInput | InputJsonValue
+    checkoutData?: NullableJsonNullValueInput | InputJsonValue
+    intakeData?: NullableJsonNullValueInput | InputJsonValue
+    statusEvents?: StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput
+    alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
+    safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+  }
+
+  export type TaskUpsertWithoutRoomIssuesInput = {
+    update: XOR<TaskUpdateWithoutRoomIssuesInput, TaskUncheckedUpdateWithoutRoomIssuesInput>
+    create: XOR<TaskCreateWithoutRoomIssuesInput, TaskUncheckedCreateWithoutRoomIssuesInput>
+    where?: TaskWhereInput
+  }
+
+  export type TaskUpdateToOneWithWhereWithoutRoomIssuesInput = {
+    where?: TaskWhereInput
+    data: XOR<TaskUpdateWithoutRoomIssuesInput, TaskUncheckedUpdateWithoutRoomIssuesInput>
+  }
+
+  export type TaskUpdateWithoutRoomIssuesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
+    taskType?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
+    assignedToUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: IntFieldUpdateOperationsInput | number
+    blocking?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    encounter?: EncounterUpdateOneWithoutTasksNestedInput
+    room?: ClinicRoomUpdateOneWithoutTasksNestedInput
+    creator?: UserUpdateOneRequiredWithoutTasksCreatedNestedInput
+    acknowledger?: UserUpdateOneWithoutTasksAcknowledgedNestedInput
+    completer?: UserUpdateOneWithoutTasksCompletedNestedInput
+  }
+
+  export type TaskUncheckedUpdateWithoutRoomIssuesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
+    taskType?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
+    assignedToUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: IntFieldUpdateOperationsInput | number
+    blocking?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdBy?: StringFieldUpdateOperationsInput | string
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ClinicRoomCreateWithoutChecklistRunsInput = {
+    id?: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    facility: FacilityCreateNestedOneWithoutRoomsInput
+    clinicLinks?: ClinicRoomAssignmentCreateNestedManyWithoutRoomInput
+    encounters?: EncounterCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutRoomInput
+    tasks?: TaskCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomUncheckedCreateWithoutChecklistRunsInput = {
+    id?: string
+    facilityId: string
+    name: string
+    roomNumber?: number
+    roomType?: string
+    status?: string
+    sortOrder?: number
+    clinicLinks?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutRoomInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutRoomInput
+    operationalState?: RoomOperationalStateUncheckedCreateNestedOneWithoutRoomInput
+    operationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutRoomInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutRoomInput
+    tasks?: TaskUncheckedCreateNestedManyWithoutRoomInput
+  }
+
+  export type ClinicRoomCreateOrConnectWithoutChecklistRunsInput = {
+    where: ClinicRoomWhereUniqueInput
+    create: XOR<ClinicRoomCreateWithoutChecklistRunsInput, ClinicRoomUncheckedCreateWithoutChecklistRunsInput>
+  }
+
+  export type ClinicRoomUpsertWithoutChecklistRunsInput = {
+    update: XOR<ClinicRoomUpdateWithoutChecklistRunsInput, ClinicRoomUncheckedUpdateWithoutChecklistRunsInput>
+    create: XOR<ClinicRoomCreateWithoutChecklistRunsInput, ClinicRoomUncheckedCreateWithoutChecklistRunsInput>
+    where?: ClinicRoomWhereInput
+  }
+
+  export type ClinicRoomUpdateToOneWithWhereWithoutChecklistRunsInput = {
+    where?: ClinicRoomWhereInput
+    data: XOR<ClinicRoomUpdateWithoutChecklistRunsInput, ClinicRoomUncheckedUpdateWithoutChecklistRunsInput>
+  }
+
+  export type ClinicRoomUpdateWithoutChecklistRunsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    facility?: FacilityUpdateOneRequiredWithoutRoomsNestedInput
+    clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
+  }
+
+  export type ClinicRoomUncheckedUpdateWithoutChecklistRunsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    roomNumber?: IntFieldUpdateOperationsInput | number
+    roomType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
   }
 
   export type UserCreateWithoutAlertInboxInput = {
@@ -59366,6 +69133,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventCreateNestedManyWithoutEncounterInput
     alertState?: AlertStateCreateNestedOneWithoutEncounterInput
     tasks?: TaskCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterUncheckedCreateWithoutSafetyEventsInput = {
@@ -59398,6 +69168,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUncheckedCreateNestedManyWithoutEncounterInput
     alertState?: AlertStateUncheckedCreateNestedOneWithoutEncounterInput
     tasks?: TaskUncheckedCreateNestedManyWithoutEncounterInput
+    operationalOccupancies?: RoomOperationalStateUncheckedCreateNestedManyWithoutOccupiedEncounterInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedCreateNestedManyWithoutEncounterInput
+    roomIssues?: RoomIssueUncheckedCreateNestedManyWithoutEncounterInput
   }
 
   export type EncounterCreateOrConnectWithoutSafetyEventsInput = {
@@ -59446,6 +69219,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUpdateManyWithoutEncounterNestedInput
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutSafetyEventsInput = {
@@ -59478,6 +69254,9 @@ export namespace Prisma {
     statusEvents?: StatusChangeEventUncheckedUpdateManyWithoutEncounterNestedInput
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type FacilityCreateWithoutAlertThresholdsInput = {
@@ -59835,7 +69614,12 @@ export namespace Prisma {
 
   export type TaskCreateManyCreatorInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -59854,7 +69638,12 @@ export namespace Prisma {
 
   export type TaskCreateManyCompleterInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -59873,7 +69662,12 @@ export namespace Prisma {
 
   export type TaskCreateManyAcknowledgerInput = {
     id?: string
-    encounterId: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -59983,6 +69777,10 @@ export namespace Prisma {
 
   export type TaskUpdateWithoutCreatorInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -59995,14 +69793,21 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    encounter?: EncounterUpdateOneRequiredWithoutTasksNestedInput
+    encounter?: EncounterUpdateOneWithoutTasksNestedInput
+    room?: ClinicRoomUpdateOneWithoutTasksNestedInput
     acknowledger?: UserUpdateOneWithoutTasksAcknowledgedNestedInput
     completer?: UserUpdateOneWithoutTasksCompletedNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateWithoutCreatorInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60017,11 +69822,17 @@ export namespace Prisma {
     completedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateManyWithoutCreatorInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60040,6 +69851,10 @@ export namespace Prisma {
 
   export type TaskUpdateWithoutCompleterInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60052,14 +69867,21 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    encounter?: EncounterUpdateOneRequiredWithoutTasksNestedInput
+    encounter?: EncounterUpdateOneWithoutTasksNestedInput
+    room?: ClinicRoomUpdateOneWithoutTasksNestedInput
     creator?: UserUpdateOneRequiredWithoutTasksCreatedNestedInput
     acknowledger?: UserUpdateOneWithoutTasksAcknowledgedNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateWithoutCompleterInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60074,11 +69896,17 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateManyWithoutCompleterInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60097,6 +69925,10 @@ export namespace Prisma {
 
   export type TaskUpdateWithoutAcknowledgerInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60109,14 +69941,21 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
-    encounter?: EncounterUpdateOneRequiredWithoutTasksNestedInput
+    encounter?: EncounterUpdateOneWithoutTasksNestedInput
+    room?: ClinicRoomUpdateOneWithoutTasksNestedInput
     creator?: UserUpdateOneRequiredWithoutTasksCreatedNestedInput
     completer?: UserUpdateOneWithoutTasksCompletedNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateWithoutAcknowledgerInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60131,11 +69970,17 @@ export namespace Prisma {
     completedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateManyWithoutAcknowledgerInput = {
     id?: StringFieldUpdateOperationsInput | string
-    encounterId?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -60530,6 +70375,11 @@ export namespace Prisma {
     sortOrder?: IntFieldUpdateOperationsInput | number
     clinicLinks?: ClinicRoomAssignmentUpdateManyWithoutRoomNestedInput
     encounters?: EncounterUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicRoomUncheckedUpdateWithoutFacilityInput = {
@@ -60541,6 +70391,11 @@ export namespace Prisma {
     sortOrder?: IntFieldUpdateOperationsInput | number
     clinicLinks?: ClinicRoomAssignmentUncheckedUpdateManyWithoutRoomNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutRoomNestedInput
+    operationalState?: RoomOperationalStateUncheckedUpdateOneWithoutRoomNestedInput
+    operationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutRoomNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutRoomNestedInput
+    checklistRuns?: RoomChecklistRunUncheckedUpdateManyWithoutRoomNestedInput
+    tasks?: TaskUncheckedUpdateManyWithoutRoomNestedInput
   }
 
   export type ClinicRoomUncheckedUpdateManyWithoutFacilityInput = {
@@ -61421,6 +71276,9 @@ export namespace Prisma {
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutClinicInput = {
@@ -61453,6 +71311,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateManyWithoutClinicInput = {
@@ -61806,6 +71667,9 @@ export namespace Prisma {
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutProviderInput = {
@@ -61838,6 +71702,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateManyWithoutProviderInput = {
@@ -61903,6 +71770,79 @@ export namespace Prisma {
     intakeData?: NullableJsonNullValueInput | InputJsonValue
   }
 
+  export type RoomOperationalEventCreateManyRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+  }
+
+  export type RoomIssueCreateManyRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    taskId?: string | null
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomChecklistRunCreateManyRoomInput = {
+    id?: string
+    clinicId: string
+    facilityId: string
+    kind: $Enums.RoomChecklistKind
+    dateKey: string
+    itemsJson: JsonNullValueInput | InputJsonValue
+    completed?: boolean
+    startedAt?: Date | string
+    completedAt?: Date | string | null
+    completedByUserId?: string | null
+    note?: string | null
+  }
+
+  export type TaskCreateManyRoomInput = {
+    id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    encounterId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
+    taskType: string
+    description: string
+    assignedToRole?: $Enums.RoleName | null
+    assignedToUserId?: string | null
+    status?: string
+    priority?: number
+    blocking?: boolean
+    createdAt?: Date | string
+    createdBy: string
+    acknowledgedAt?: Date | string | null
+    acknowledgedBy?: string | null
+    completedAt?: Date | string | null
+    completedBy?: string | null
+    notes?: string | null
+    updatedAt?: Date | string
+  }
+
   export type ClinicRoomAssignmentUpdateWithoutRoomInput = {
     id?: StringFieldUpdateOperationsInput | string
     active?: BoolFieldUpdateOperationsInput | boolean
@@ -61954,6 +71894,9 @@ export namespace Prisma {
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutRoomInput = {
@@ -61986,6 +71929,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateManyWithoutRoomInput = {
@@ -62014,6 +71960,227 @@ export namespace Prisma {
     clinicianData?: NullableJsonNullValueInput | InputJsonValue
     checkoutData?: NullableJsonNullValueInput | InputJsonValue
     intakeData?: NullableJsonNullValueInput | InputJsonValue
+  }
+
+  export type RoomOperationalEventUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    encounter?: EncounterUpdateOneWithoutRoomOperationalEventsNestedInput
+  }
+
+  export type RoomOperationalEventUncheckedUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventUncheckedUpdateManyWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomIssueUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+    encounter?: EncounterUpdateOneWithoutRoomIssuesNestedInput
+    task?: TaskUpdateOneWithoutRoomIssuesNestedInput
+  }
+
+  export type RoomIssueUncheckedUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    taskId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomIssueUncheckedUpdateManyWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    taskId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomChecklistRunUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomChecklistRunUncheckedUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomChecklistRunUncheckedUpdateManyWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    kind?: EnumRoomChecklistKindFieldUpdateOperationsInput | $Enums.RoomChecklistKind
+    dateKey?: StringFieldUpdateOperationsInput | string
+    itemsJson?: JsonNullValueInput | InputJsonValue
+    completed?: BoolFieldUpdateOperationsInput | boolean
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TaskUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
+    taskType?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
+    assignedToUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: IntFieldUpdateOperationsInput | number
+    blocking?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    encounter?: EncounterUpdateOneWithoutTasksNestedInput
+    creator?: UserUpdateOneRequiredWithoutTasksCreatedNestedInput
+    acknowledger?: UserUpdateOneWithoutTasksAcknowledgedNestedInput
+    completer?: UserUpdateOneWithoutTasksCompletedNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutTaskNestedInput
+  }
+
+  export type TaskUncheckedUpdateWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
+    taskType?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
+    assignedToUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: IntFieldUpdateOperationsInput | number
+    blocking?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdBy?: StringFieldUpdateOperationsInput | string
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutTaskNestedInput
+  }
+
+  export type TaskUncheckedUpdateManyWithoutRoomInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
+    taskType?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
+    assignedToUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: IntFieldUpdateOperationsInput | number
+    blocking?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdBy?: StringFieldUpdateOperationsInput | string
+    acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    acknowledgedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type TemplateCreateManyReasonInput = {
@@ -62294,6 +72461,9 @@ export namespace Prisma {
     alertState?: AlertStateUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateWithoutReasonInput = {
@@ -62326,6 +72496,9 @@ export namespace Prisma {
     alertState?: AlertStateUncheckedUpdateOneWithoutEncounterNestedInput
     tasks?: TaskUncheckedUpdateManyWithoutEncounterNestedInput
     safetyEvents?: SafetyEventUncheckedUpdateManyWithoutEncounterNestedInput
+    operationalOccupancies?: RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterNestedInput
+    roomOperationalEvents?: RoomOperationalEventUncheckedUpdateManyWithoutEncounterNestedInput
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutEncounterNestedInput
   }
 
   export type EncounterUncheckedUpdateManyWithoutReasonInput = {
@@ -62617,6 +72790,11 @@ export namespace Prisma {
 
   export type TaskCreateManyEncounterInput = {
     id?: string
+    facilityId?: string | null
+    clinicId?: string | null
+    roomId?: string | null
+    sourceType?: $Enums.TaskSourceType | null
+    sourceId?: string | null
     taskType: string
     description: string
     assignedToRole?: $Enums.RoleName | null
@@ -62642,6 +72820,54 @@ export namespace Prisma {
     resolvedBy?: string | null
     resolutionNote?: string | null
     location?: string | null
+  }
+
+  export type RoomOperationalStateCreateManyOccupiedEncounterInput = {
+    roomId: string
+    currentStatus?: $Enums.RoomOperationalStatus
+    statusSinceAt?: Date | string
+    activeCleanerUserId?: string | null
+    holdReason?: $Enums.RoomHoldReason | null
+    holdNote?: string | null
+    lastReadyAt?: Date | string | null
+    lastOccupiedAt?: Date | string | null
+    lastTurnoverAt?: Date | string | null
+    updatedAt?: Date | string
+  }
+
+  export type RoomOperationalEventCreateManyEncounterInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    eventType: $Enums.RoomEventType
+    fromStatus?: $Enums.RoomOperationalStatus | null
+    toStatus?: $Enums.RoomOperationalStatus | null
+    note?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: string | null
+    occurredAt?: Date | string
+  }
+
+  export type RoomIssueCreateManyEncounterInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    taskId?: string | null
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
   }
 
   export type StatusChangeEventUpdateWithoutEncounterInput = {
@@ -62673,6 +72899,10 @@ export namespace Prisma {
 
   export type TaskUpdateWithoutEncounterInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -62685,13 +72915,20 @@ export namespace Prisma {
     completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    room?: ClinicRoomUpdateOneWithoutTasksNestedInput
     creator?: UserUpdateOneRequiredWithoutTasksCreatedNestedInput
     acknowledger?: UserUpdateOneWithoutTasksAcknowledgedNestedInput
     completer?: UserUpdateOneWithoutTasksCompletedNestedInput
+    roomIssues?: RoomIssueUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateWithoutEncounterInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -62707,10 +72944,16 @@ export namespace Prisma {
     completedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roomIssues?: RoomIssueUncheckedUpdateManyWithoutTaskNestedInput
   }
 
   export type TaskUncheckedUpdateManyWithoutEncounterInput = {
     id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    clinicId?: NullableStringFieldUpdateOperationsInput | string | null
+    roomId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceType?: NullableEnumTaskSourceTypeFieldUpdateOperationsInput | $Enums.TaskSourceType | null
+    sourceId?: NullableStringFieldUpdateOperationsInput | string | null
     taskType?: StringFieldUpdateOperationsInput | string
     description?: StringFieldUpdateOperationsInput | string
     assignedToRole?: NullableEnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName | null
@@ -62756,6 +72999,234 @@ export namespace Prisma {
     resolvedBy?: NullableStringFieldUpdateOperationsInput | string | null
     resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
     location?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomOperationalStateUpdateWithoutOccupiedEncounterInput = {
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    room?: ClinicRoomUpdateOneRequiredWithoutOperationalStateNestedInput
+  }
+
+  export type RoomOperationalStateUncheckedUpdateWithoutOccupiedEncounterInput = {
+    roomId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalStateUncheckedUpdateManyWithoutOccupiedEncounterInput = {
+    roomId?: StringFieldUpdateOperationsInput | string
+    currentStatus?: EnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus
+    statusSinceAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeCleanerUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    holdReason?: NullableEnumRoomHoldReasonFieldUpdateOperationsInput | $Enums.RoomHoldReason | null
+    holdNote?: NullableStringFieldUpdateOperationsInput | string | null
+    lastReadyAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastOccupiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastTurnoverAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventUpdateWithoutEncounterInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    room?: ClinicRoomUpdateOneRequiredWithoutOperationalEventsNestedInput
+  }
+
+  export type RoomOperationalEventUncheckedUpdateWithoutEncounterInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomOperationalEventUncheckedUpdateManyWithoutEncounterInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    eventType?: EnumRoomEventTypeFieldUpdateOperationsInput | $Enums.RoomEventType
+    fromStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    toStatus?: NullableEnumRoomOperationalStatusFieldUpdateOperationsInput | $Enums.RoomOperationalStatus | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    occurredAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomIssueUpdateWithoutEncounterInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+    room?: ClinicRoomUpdateOneRequiredWithoutRoomIssuesNestedInput
+    task?: TaskUpdateOneWithoutRoomIssuesNestedInput
+  }
+
+  export type RoomIssueUncheckedUpdateWithoutEncounterInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    taskId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomIssueUncheckedUpdateManyWithoutEncounterInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    taskId?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomIssueCreateManyTaskInput = {
+    id?: string
+    roomId: string
+    clinicId: string
+    facilityId: string
+    encounterId?: string | null
+    issueType: $Enums.RoomIssueType
+    status?: $Enums.RoomIssueStatus
+    severity?: number
+    title: string
+    description?: string | null
+    placesRoomOnHold?: boolean
+    sourceModule?: string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    createdByUserId: string
+    resolvedAt?: Date | string | null
+    resolvedByUserId?: string | null
+    resolutionNote?: string | null
+  }
+
+  export type RoomIssueUpdateWithoutTaskInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+    room?: ClinicRoomUpdateOneRequiredWithoutRoomIssuesNestedInput
+    encounter?: EncounterUpdateOneWithoutRoomIssuesNestedInput
+  }
+
+  export type RoomIssueUncheckedUpdateWithoutTaskInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomIssueUncheckedUpdateManyWithoutTaskInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    roomId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    encounterId?: NullableStringFieldUpdateOperationsInput | string | null
+    issueType?: EnumRoomIssueTypeFieldUpdateOperationsInput | $Enums.RoomIssueType
+    status?: EnumRoomIssueStatusFieldUpdateOperationsInput | $Enums.RoomIssueStatus
+    severity?: IntFieldUpdateOperationsInput | number
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    placesRoomOnHold?: BoolFieldUpdateOperationsInput | boolean
+    sourceModule?: NullableStringFieldUpdateOperationsInput | string | null
+    metadataJson?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    resolvedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    resolvedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    resolutionNote?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
 

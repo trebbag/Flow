@@ -503,7 +503,12 @@ export const incoming = {
 
 export type BackendTask = {
   id: string;
-  encounterId: string;
+  facilityId?: string | null;
+  clinicId?: string | null;
+  encounterId: string | null;
+  roomId?: string | null;
+  sourceType?: "Encounter" | "RoomIssue" | "RoomSupplyFlag" | "RoomAudit" | null;
+  sourceId?: string | null;
   taskType: string;
   description: string;
   assignedToRole: Role | null;
@@ -525,7 +530,125 @@ export type BackendTask = {
     clinicId: string;
     currentStatus: string;
     checkInAt: string | null;
+  } | null;
+  room?: {
+    id: string;
+    name: string;
+    roomNumber?: number | null;
+    roomType?: string | null;
+  } | null;
+};
+
+export type RoomOperationalStatus = "Ready" | "Occupied" | "NeedsTurnover" | "Cleaning" | "Hold";
+export type RoomIssueStatus = "Open" | "Acknowledged" | "Resolved" | "Dismissed";
+export type RoomIssueType = "Equipment" | "Maintenance" | "General" | "SupplyLow" | "SupplyOut" | "AuditFailure";
+export type RoomChecklistKind = "DayStart" | "DayEnd";
+
+export type RoomLiveCard = {
+  id: string;
+  roomId: string;
+  name: string;
+  roomNumber?: number | null;
+  roomType?: string | null;
+  clinicId: string;
+  clinicName: string;
+  facilityId?: string | null;
+  operationalStatus: RoomOperationalStatus;
+  statusSinceAt: string;
+  minutesInStatus: number;
+  timerLabel: string;
+  currentEncounter: { id: string; patientId: string; currentStatus: string } | null;
+  issueCount: number;
+  hasOpenIssue: boolean;
+  holdReason: string | null;
+  holdNote: string | null;
+  dayStartCompleted: boolean;
+  dayEndCompleted: boolean;
+  lowStock: boolean;
+  auditDue: boolean;
+};
+
+export type RoomDetail = {
+  room: {
+    id: string;
+    name: string;
+    roomNumber?: number | null;
+    roomType?: string | null;
+    facilityId: string;
+    clinicId: string;
+    clinicName: string;
   };
+  operationalState: {
+    roomId: string;
+    currentStatus: RoomOperationalStatus;
+    statusSinceAt: string;
+    occupiedEncounterId: string | null;
+    activeCleanerUserId: string | null;
+    holdReason: string | null;
+    holdNote: string | null;
+    lastReadyAt: string | null;
+    lastOccupiedAt: string | null;
+    lastTurnoverAt: string | null;
+    occupiedEncounter?: { id: string; patientId: string; currentStatus: string } | null;
+  };
+  events: Array<{
+    id: string;
+    eventType: string;
+    fromStatus: RoomOperationalStatus | null;
+    toStatus: RoomOperationalStatus | null;
+    note: string | null;
+    occurredAt: string;
+    createdByUserId: string | null;
+  }>;
+  issues: RoomIssue[];
+  checklistRuns: RoomChecklistRun[];
+  placeholders: { supplies: string; audits: string };
+};
+
+export type RoomIssue = {
+  id: string;
+  roomId: string;
+  clinicId: string;
+  facilityId: string;
+  encounterId: string | null;
+  issueType: RoomIssueType;
+  status: RoomIssueStatus;
+  severity: number;
+  title: string;
+  description: string | null;
+  placesRoomOnHold: boolean;
+  taskId: string | null;
+  createdAt: string;
+  createdByUserId: string;
+  resolvedAt: string | null;
+  resolvedByUserId: string | null;
+  resolutionNote: string | null;
+  room?: { id: string; name: string; roomNumber?: number | null };
+  task?: { id: string; status: string; assignedToRole: Role | null; assignedToUserId: string | null } | null;
+};
+
+export type RoomChecklistRun = {
+  id: string;
+  roomId: string;
+  clinicId: string;
+  facilityId: string;
+  kind: RoomChecklistKind;
+  dateKey: string;
+  itemsJson: unknown;
+  completed: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  completedByUserId: string | null;
+  note: string | null;
+};
+
+export type PreRoomingCheckResult = {
+  encounterId: string;
+  readyCount: number;
+  preferredRoomId: string | null;
+  lastReadyRoom: boolean;
+  blocked: boolean;
+  rooms: RoomLiveCard[];
 };
 
 export type AlertInboxItem = {
@@ -548,6 +671,7 @@ export type AlertInboxItem = {
 export const tasks = {
   list(params?: {
     encounterId?: string;
+    roomId?: string;
     assignedToUserId?: string;
     assignedToRole?: Role;
     mine?: boolean;
@@ -555,6 +679,7 @@ export const tasks = {
   }) {
     const qs = new URLSearchParams();
     if (params?.encounterId) qs.set("encounterId", params.encounterId);
+    if (params?.roomId) qs.set("roomId", params.roomId);
     if (params?.assignedToUserId) qs.set("assignedToUserId", params.assignedToUserId);
     if (params?.assignedToRole) qs.set("assignedToRole", params.assignedToRole);
     if (params?.mine) qs.set("mine", "true");
@@ -563,7 +688,12 @@ export const tasks = {
     return apiFetch<BackendTask[]>(`/tasks${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
   create(dto: {
-    encounterId: string;
+    facilityId?: string;
+    clinicId?: string;
+    encounterId?: string;
+    roomId?: string;
+    sourceType?: "Encounter" | "RoomIssue" | "RoomSupplyFlag" | "RoomAudit";
+    sourceId?: string;
     taskType: string;
     description: string;
     assignedToRole?: Role;
@@ -593,6 +723,101 @@ export const tasks = {
   },
   remove(id: string) {
     return apiFetch<void>(`/tasks/${id}`, { method: "DELETE" });
+  },
+};
+
+export const rooms = {
+  live(params?: { mine?: boolean; clinicId?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.mine) qs.set("mine", "true");
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    const q = qs.toString();
+    return apiFetch<RoomLiveCard[]>(`/rooms/live${q ? `?${q}` : ""}`, { cacheTtlMs: 5_000 });
+  },
+  detail(roomId: string, params?: { clinicId?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    const q = qs.toString();
+    return apiFetch<RoomDetail>(`/rooms/${roomId}${q ? `?${q}` : ""}`, { cacheTtlMs: 5_000 });
+  },
+  preRoomingCheck(encounterId: string) {
+    return apiFetch<PreRoomingCheckResult>("/rooms/pre-rooming-check", {
+      method: "POST",
+      body: JSON.stringify({ encounterId }),
+    });
+  },
+  startCleaning(roomId: string, dto?: { clinicId?: string; note?: string }) {
+    return apiFetch(`/rooms/${roomId}/actions/start-cleaning`, {
+      method: "POST",
+      body: JSON.stringify(dto || {}),
+    });
+  },
+  markReady(roomId: string, dto?: { clinicId?: string; note?: string }) {
+    return apiFetch(`/rooms/${roomId}/actions/mark-ready`, {
+      method: "POST",
+      body: JSON.stringify(dto || {}),
+    });
+  },
+  placeHold(roomId: string, dto: { clinicId?: string; reason?: string; note?: string }) {
+    return apiFetch(`/rooms/${roomId}/actions/place-hold`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  clearHold(roomId: string, dto?: { clinicId?: string; targetStatus?: "Ready" | "NeedsTurnover"; note?: string }) {
+    return apiFetch(`/rooms/${roomId}/actions/clear-hold`, {
+      method: "POST",
+      body: JSON.stringify(dto || {}),
+    });
+  },
+  createIssue(roomId: string, dto: {
+    clinicId?: string;
+    encounterId?: string;
+    issueType?: RoomIssueType;
+    severity?: number;
+    title: string;
+    description?: string;
+    placesRoomOnHold?: boolean;
+  }) {
+    return apiFetch<{ issue: RoomIssue; task: BackendTask }>(`/rooms/${roomId}/issues`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  updateIssue(issueId: string, dto: {
+    status?: RoomIssueStatus;
+    severity?: number;
+    title?: string;
+    description?: string | null;
+    resolutionNote?: string;
+  }) {
+    return apiFetch<RoomIssue>(`/rooms/issues/${issueId}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    });
+  },
+  listIssues(params?: { roomId?: string; clinicId?: string; status?: RoomIssueStatus; includeResolved?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.roomId) qs.set("roomId", params.roomId);
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.includeResolved) qs.set("includeResolved", "true");
+    const q = qs.toString();
+    return apiFetch<RoomIssue[]>(`/rooms/issues${q ? `?${q}` : ""}`, { cacheTtlMs: 5_000 });
+  },
+  submitChecklist(kind: RoomChecklistKind, dto: {
+    roomId: string;
+    clinicId?: string;
+    dateKey?: string;
+    items?: Array<Record<string, unknown>>;
+    completed?: boolean;
+    note?: string;
+  }) {
+    const path = kind === "DayStart" ? "/rooms/checklists/day-start" : "/rooms/checklists/day-end";
+    return apiFetch<RoomChecklistRun>(path, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
   },
 };
 
@@ -1401,6 +1626,13 @@ export async function primeRouteData(path: string) {
         admin.listRooms({ facilityId }),
         admin.listThresholds(facilityId),
         dashboards.officeManager(),
+      ];
+      break;
+    case "/rooms":
+      requests = [
+        rooms.live({ mine: true }),
+        rooms.listIssues(),
+        tasks.list({ mine: true, includeCompleted: false }),
       ];
       break;
     case "/revenue-cycle":

@@ -6,6 +6,7 @@ export type AppPath =
   | "/ma-board"
   | "/clinician"
   | "/checkout"
+  | "/rooms"
   | "/office-manager"
   | "/revenue-cycle"
   | "/closeout"
@@ -21,6 +22,7 @@ const ROLE_ROUTE_ACCESS: Record<Role, Set<AppPath>> = {
     "/ma-board",
     "/clinician",
     "/checkout",
+    "/rooms",
     "/office-manager",
     "/revenue-cycle",
     "/closeout",
@@ -30,9 +32,10 @@ const ROLE_ROUTE_ACCESS: Record<Role, Set<AppPath>> = {
     "/settings",
   ]),
   FrontDeskCheckIn: new Set(["/", "/checkin", "/alerts", "/tasks"]),
-  MA: new Set(["/", "/ma-board", "/alerts", "/tasks"]),
+  MA: new Set(["/", "/ma-board", "/rooms", "/alerts", "/tasks"]),
   Clinician: new Set(["/", "/clinician", "/alerts", "/tasks"]),
   FrontDeskCheckOut: new Set(["/", "/checkout", "/closeout", "/alerts", "/tasks"]),
+  OfficeManager: new Set(["/", "/rooms", "/office-manager", "/alerts", "/tasks"]),
   RevenueCycle: new Set(["/", "/revenue-cycle", "/alerts", "/tasks"]),
 };
 
@@ -40,6 +43,7 @@ const ROUTE_PREFIXES: Array<[AppPath, string]> = [
   ["/settings", "/settings"],
   ["/analytics", "/analytics"],
   ["/office-manager", "/office-manager"],
+  ["/rooms", "/rooms"],
   ["/revenue-cycle", "/revenue-cycle"],
   ["/closeout", "/closeout"],
   ["/checkout", "/checkout"],
@@ -65,4 +69,3 @@ export function canAccessPath(role: Role, pathname: string): boolean {
     )?.[0] || "/";
   return ROLE_ROUTE_ACCESS[role].has(matchedPath);
 }
-

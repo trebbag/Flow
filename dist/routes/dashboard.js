@@ -72,7 +72,7 @@ function averageMinutes(values) {
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 export async function registerDashboardRoutes(app) {
-    const officeGuard = requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin);
+    const officeGuard = requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin);
     app.get("/dashboard/office-manager", { preHandler: officeGuard }, async (request) => {
         const query = dashboardQuerySchema.parse(request.query);
         const matchers = await resolveEncounterMatchers(request.user, query.clinicId, query.date);

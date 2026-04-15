@@ -353,6 +353,34 @@ async function assertUserRoleForFacility(params) {
     });
     assert(matchedRole, 400, `Selected user is not assigned to role ${role} in this facility`);
 }
+async function syncUserActiveFacilityToScope(params) {
+    const user = await prisma.user.findUnique({
+        where: { id: params.userId },
+        include: {
+            roles: {
+                include: {
+                    clinic: { select: { facilityId: true } }
+                }
+            }
+        }
+    });
+    assert(user, 404, "User not found");
+    const availableFacilityIds = Array.from(new Set(user.roles
+        .map((entry) => entry.facilityId || entry.clinic?.facilityId || null)
+        .filter((entry) => Boolean(entry))));
+    const preferredFacilityId = params.preferredFacilityId?.trim() || null;
+    const nextActiveFacilityId = (preferredFacilityId && availableFacilityIds.includes(preferredFacilityId) ? preferredFacilityId : null) ||
+        (user.activeFacilityId && availableFacilityIds.includes(user.activeFacilityId) ? user.activeFacilityId : null) ||
+        availableFacilityIds[0] ||
+        null;
+    if (user.activeFacilityId !== nextActiveFacilityId) {
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { activeFacilityId: nextActiveFacilityId }
+        });
+    }
+    return nextActiveFacilityId;
+}
 async function ensureProviderRecordForClinic(params) {
     const { tx, clinicId, providerUserId, providerUserName } = params;
     const byExistingAssignment = await tx.clinicAssignment.findFirst({
@@ -711,7 +739,7 @@ async function listUserAssignmentImpact(userId) {
     };
 }
 export async function registerAdminRoutes(app) {
-    app.get("/admin/clinics", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
+    app.get("/admin/clinics", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
         const query = request.query;
         const includeInactive = query.includeInactive === "true";
         const includeArchived = query.includeArchived === "true";
@@ -797,14 +825,14 @@ export async function registerAdminRoutes(app) {
             };
         });
     });
-    app.get("/admin/facilities", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
+    app.get("/admin/facilities", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
         const scopedIds = scopedFacilityIds(request);
         return prisma.facility.findMany({
             where: scopedIds ? { id: { in: scopedIds } } : { status: { not: "archived" } },
             orderBy: { name: "asc" }
         });
     });
-    app.get("/admin/facility-profile", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
+    app.get("/admin/facility-profile", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
         const query = request.query;
         const facility = await resolveFacilityForRequest(request, query.facilityId);
         return facility;
@@ -1027,7 +1055,7 @@ export async function registerAdminRoutes(app) {
             clinicIds: Array.from(clinicIds.values())
         };
     }
-    app.get("/admin/reasons", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+    app.get("/admin/reasons", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
         const query = request.query;
         const includeInactive = query.includeInactive === "true";
         const includeArchived = query.includeArchived === "true";
@@ -1161,7 +1189,7 @@ export async function registerAdminRoutes(app) {
         });
         return { status: "archived", reason: mapReasonRow(archived) };
     });
-    app.get("/admin/rooms", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+    app.get("/admin/rooms", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
         const query = request.query;
         const includeInactive = query.includeInactive === "true";
         const includeArchived = query.includeArchived === "true";
@@ -1217,12 +1245,20 @@ export async function registerAdminRoutes(app) {
         const dto = roomSchema.parse(request.body);
         const facility = await resolveFacilityForRequest(request, dto.facilityId);
         const roomType = normalizeRoomType(dto.roomType);
-        return createRoomWithAllocatedNumber({
+        const room = await createRoomWithAllocatedNumber({
             facilityId: facility.id,
             name: dto.name,
             roomType,
             status: dto.status ?? "active"
         });
+        if (room.status === "active") {
+            await prisma.roomOperationalState.upsert({
+                where: { roomId: room.id },
+                create: { roomId: room.id, currentStatus: "Ready", lastReadyAt: new Date() },
+                update: {}
+            });
+        }
+        return room;
     });
     app.post("/admin/rooms/reorder", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
         const dto = roomReorderSchema.parse(request.body);
@@ -1286,7 +1322,7 @@ export async function registerAdminRoutes(app) {
         if (dto.roomNumber !== undefined) {
             throw new ApiError(400, "Room # is system-managed. Reorder rooms to change numbering.");
         }
-        return prisma.clinicRoom.update({
+        const updated = await prisma.clinicRoom.update({
             where: { id: roomId },
             data: {
                 name: dto.name,
@@ -1294,6 +1330,14 @@ export async function registerAdminRoutes(app) {
                 status: dto.status ?? (dto.active === undefined ? undefined : dto.active ? "active" : "inactive")
             }
         });
+        if (updated.status === "active") {
+            await prisma.roomOperationalState.upsert({
+                where: { roomId: updated.id },
+                create: { roomId: updated.id, currentStatus: "Ready", lastReadyAt: new Date() },
+                update: {}
+            });
+        }
+        return updated;
     });
     app.delete("/admin/rooms/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
         const roomId = request.params.id;
@@ -1323,9 +1367,15 @@ export async function registerAdminRoutes(app) {
         const room = await prisma.clinicRoom.findUnique({ where: { id: roomId } });
         assert(room, 404, "Room not found");
         await resolveFacilityForRequest(request, room.facilityId);
-        return restoreRoomWithAllocatedNumber(roomId);
+        const restored = await restoreRoomWithAllocatedNumber(roomId);
+        await prisma.roomOperationalState.upsert({
+            where: { roomId: restored.id },
+            create: { roomId: restored.id, currentStatus: "Ready", lastReadyAt: new Date() },
+            update: {}
+        });
+        return restored;
     });
-    app.get("/admin/assignments", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+    app.get("/admin/assignments", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
         const query = request.query;
         const facility = await resolveFacilityForRequest(request, query.facilityId);
         const clinics = await prisma.clinic.findMany({
@@ -1540,7 +1590,7 @@ export async function registerAdminRoutes(app) {
             data: { status: "inactive", active: false }
         });
     }
-    app.get("/admin/templates", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+    app.get("/admin/templates", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
         const query = request.query;
         const includeInactive = query.includeInactive === "true";
         const includeArchived = query.includeArchived === "true";
@@ -2371,6 +2421,10 @@ export async function registerAdminRoutes(app) {
                 }
             }
         }
+        await syncUserActiveFacilityToScope({
+            userId: user.id,
+            preferredFacilityId: fallbackFacility
+        });
         return prisma.user.findUnique({
             where: { id: user.id },
             include: { roles: true }
@@ -2380,12 +2434,21 @@ export async function registerAdminRoutes(app) {
         const userId = request.params.id;
         const existing = await prisma.user.findUnique({
             where: { id: userId },
-            select: { id: true, entraObjectId: true, cognitoSub: true }
+            select: {
+                id: true,
+                email: true,
+                entraObjectId: true,
+                entraUserPrincipalName: true,
+                cognitoSub: true
+            }
         });
         assert(existing, 404, "User not found");
         const objectId = existing.entraObjectId || existing.cognitoSub;
         assert(objectId, 400, "User is not linked to Microsoft Entra");
-        const directoryUser = await getEntraDirectoryUserByObjectId(objectId);
+        const directoryUser = await getEntraDirectoryUserByObjectId(objectId, {
+            email: existing.email,
+            userPrincipalName: existing.entraUserPrincipalName
+        });
         return syncUserFromDirectory({
             userId,
             directoryUser
@@ -2469,6 +2532,10 @@ export async function registerAdminRoutes(app) {
                 });
             }
         }
+        await syncUserActiveFacilityToScope({
+            userId: user.id,
+            preferredFacilityId: fallbackFacility
+        });
         return prisma.user.findUnique({
             where: { id: user.id },
             include: {
@@ -2636,6 +2703,16 @@ export async function registerAdminRoutes(app) {
         if (dto.clinicId) {
             await resolveFacilityForRequest(request, clinicFacilityId || undefined);
         }
+        if (!dto.clinicId) {
+            await prisma.userRole.deleteMany({
+                where: {
+                    userId,
+                    role: dto.role,
+                    clinicId: null,
+                    NOT: { facilityId }
+                }
+            });
+        }
         const existingRole = await prisma.userRole.findFirst({
             where: {
                 userId,
@@ -2644,15 +2721,31 @@ export async function registerAdminRoutes(app) {
                 facilityId
             }
         });
-        if (existingRole)
-            return existingRole;
-        return prisma.userRole.create({
+        if (existingRole) {
+            await syncUserActiveFacilityToScope({
+                userId,
+                preferredFacilityId: facilityId
+            });
+            return prisma.user.findUniqueOrThrow({
+                where: { id: userId },
+                include: { roles: true }
+            });
+        }
+        await prisma.userRole.create({
             data: {
                 userId,
                 role: dto.role,
                 clinicId: dto.clinicId,
                 facilityId
             }
+        });
+        await syncUserActiveFacilityToScope({
+            userId,
+            preferredFacilityId: facilityId
+        });
+        return prisma.user.findUniqueOrThrow({
+            where: { id: userId },
+            include: { roles: true }
         });
     });
     app.post("/admin/users/:id/roles/remove", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
@@ -2678,7 +2771,18 @@ export async function registerAdminRoutes(app) {
         const deleted = await prisma.userRole.deleteMany({
             where: { id: { in: idsToDelete } }
         });
-        return { removed: deleted.count };
+        await syncUserActiveFacilityToScope({ userId });
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { roles: true }
+        });
+        if (!user) {
+            return { removed: deleted.count };
+        }
+        return {
+            ...user,
+            removed: deleted.count
+        };
     });
 }
 //# sourceMappingURL=admin.js.map

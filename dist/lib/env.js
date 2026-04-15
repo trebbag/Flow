@@ -24,7 +24,7 @@ const envSchema = z.object({
     JWT_AUDIENCE: z.string().trim().optional(),
     JWT_JWKS_URI: z.string().trim().optional(),
     JWT_SECRET: z.string().trim().optional(),
-    JWT_SUBJECT_CLAIMS: z.string().default("sub,oid,objectidentifier"),
+    JWT_SUBJECT_CLAIMS: z.string().default("oid,objectidentifier,sub"),
     JWT_ROLE_CLAIMS: z.string().default("clinops_role,custom:role,role,roles"),
     JWT_EMAIL_CLAIMS: z.string().default("email,upn,preferred_username"),
     JWT_CLINIC_ID_CLAIMS: z.string().default("clinic_id,clinicId,custom:clinic_id"),

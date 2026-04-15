@@ -18,6 +18,7 @@ export async function registerAlertRoutes(app: FastifyInstance) {
     RoleName.MA,
     RoleName.Clinician,
     RoleName.FrontDeskCheckOut,
+    RoleName.OfficeManager,
     RoleName.Admin,
     RoleName.RevenueCycle
   );

@@ -6,6 +6,7 @@ import { ApiError, assert } from "../lib/errors.js";
 import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
 import { requireRoles } from "../lib/auth.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
+import { assertRoomAssignableForEncounter, markEncounterRoomNeedsTurnover, markEncounterRoomOccupiedInTx } from "../lib/room-operations.js";
 import { formatClinicDisplayName, formatProviderDisplayName, formatReasonDisplayName, formatRoomDisplayName, formatUserDisplayName } from "../lib/display-names.js";
 const allowedTransitions = {
     Incoming: ["Lobby"],
@@ -201,7 +202,7 @@ async function assertEncounterInScope(encounter, user) {
     assertClinicInUserScope(user, clinic);
 }
 async function assertEncounterAccess(encounter, userId, role) {
-    if (role === RoleName.Admin || role === RoleName.FrontDeskCheckIn || role === RoleName.FrontDeskCheckOut) {
+    if (role === RoleName.Admin || role === RoleName.OfficeManager || role === RoleName.FrontDeskCheckIn || role === RoleName.FrontDeskCheckOut) {
         return;
     }
     if (role === RoleName.MA) {
@@ -565,7 +566,7 @@ export async function registerEncounterRoutes(app) {
         });
         return withStatusAlias(encounter);
     });
-    app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+    app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
         const query = request.query;
         const user = request.user;
         const requestedClinicId = query.clinicId?.trim() || undefined;
@@ -590,7 +591,7 @@ export async function registerEncounterRoutes(app) {
             role: user.role
         });
     });
-    app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+    app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
         const encounterId = request.params.id;
         await refreshEncounterAlertStates(prisma, {
             encounterIds: [encounterId]
@@ -692,6 +693,12 @@ export async function registerEncounterRoutes(app) {
                 }
             }
         });
+        if (dto.toStatus === "CheckOut") {
+            await markEncounterRoomNeedsTurnover({
+                encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
+                userId: request.user.id
+            });
+        }
         return withStatusAlias(updated);
     });
     app.patch("/encounters/:id/rooming", { preHandler: requireRoles(RoleName.MA, RoleName.Admin) }, async (request) => {
@@ -701,30 +708,33 @@ export async function registerEncounterRoutes(app) {
         assert(encounter, 404, "Encounter not found");
         await assertEncounterInScope(encounter, request.user);
         await assertEncounterAccess(encounter, request.user.id, request.user.role);
-        if (dto.roomId) {
-            const room = await prisma.clinicRoom.findFirst({
-                where: {
-                    id: dto.roomId,
-                    status: "active",
-                    clinicLinks: {
-                        some: {
-                            clinicId: encounter.clinicId,
-                            active: true
-                        }
-                    }
-                }
-            });
-            assert(room, 400, "Room not found for clinic");
-        }
+        const roomContext = dto.roomId
+            ? await assertRoomAssignableForEncounter({
+                encounter: { id: encounter.id, clinicId: encounter.clinicId, roomId: encounter.roomId },
+                roomId: dto.roomId,
+                user: request.user
+            })
+            : null;
         const data = {
             roomId: dto.roomId ?? encounter.roomId
         };
         if (dto.data !== undefined) {
             data.roomingData = dto.data;
         }
-        const updated = await prisma.encounter.update({
-            where: { id: encounterId },
-            data
+        const updated = await prisma.$transaction(async (tx) => {
+            const row = await tx.encounter.update({
+                where: { id: encounterId },
+                data
+            });
+            if (dto.roomId && roomContext) {
+                await markEncounterRoomOccupiedInTx(tx, {
+                    encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
+                    roomId: dto.roomId,
+                    userId: request.user.id,
+                    facilityId: roomContext.facilityId
+                });
+            }
+            return row;
         });
         return withStatusAlias(updated);
     });
@@ -902,6 +912,10 @@ export async function registerEncounterRoutes(app) {
         const updated = await prisma.encounter.update({
             where: { id: encounterId },
             data
+        });
+        await markEncounterRoomNeedsTurnover({
+            encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
+            userId: request.user.id
         });
         return withStatusAlias(updated);
     });

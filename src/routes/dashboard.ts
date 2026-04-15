@@ -98,6 +98,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
     RoleName.MA,
     RoleName.Clinician,
     RoleName.FrontDeskCheckOut,
+    RoleName.OfficeManager,
     RoleName.Admin
   );
 

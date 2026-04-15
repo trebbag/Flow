@@ -157,7 +157,10 @@ async function resolveUserFromJwt(request) {
         const { payload } = jwtSecret
             ? await jwtVerify(token, jwtSecret, verifyOptions)
             : await jwtVerify(token, remoteJwks, verifyOptions);
-        const subject = firstClaim(payload, jwtSubjectClaims);
+        const entraObjectIdClaim = claimToString(payload.oid) ||
+            claimToString(payload.objectidentifier) ||
+            null;
+        const subject = entraObjectIdClaim || firstClaim(payload, jwtSubjectClaims);
         if (!subject) {
             request.log.warn({
                 authStage: "jwt_subject_missing",
@@ -184,7 +187,14 @@ async function resolveUserFromJwt(request) {
                 throw new ApiError(403, "Guest and B2B Microsoft accounts are not allowed.");
             }
         }
-        const user = await prisma.user.findFirst({
+        const userInclude = {
+            roles: {
+                include: {
+                    clinic: { select: { facilityId: true } }
+                }
+            }
+        };
+        let user = await prisma.user.findFirst({
             where: {
                 OR: [
                     { id: subject },
@@ -193,16 +203,37 @@ async function resolveUserFromJwt(request) {
                     ...(emailClaim ? [{ email: emailClaim }] : [])
                 ]
             },
-            include: {
-                roles: {
-                    include: {
-                        clinic: { select: { facilityId: true } }
-                    }
-                }
-            }
+            include: userInclude
         });
         if (!user) {
             throw new ApiError(403, "This Microsoft account is not provisioned for Flow.");
+        }
+        const matchedBySubject = user.id === subject || user.entraObjectId === subject || user.cognitoSub === subject;
+        const matchedByEmail = Boolean(emailClaim) && user.email === emailClaim;
+        const staleDirectorySuspension = env.ENTRA_STRICT_MODE &&
+            matchedByEmail &&
+            user.identityProvider === "entra" &&
+            user.status === "suspended" &&
+            user.roles.length > 0 &&
+            (user.directoryAccountEnabled === false ||
+                ["deleted", "disabled", "guest"].includes(String(user.directoryStatus || "").toLowerCase()));
+        if (staleDirectorySuspension) {
+            user = await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    status: "active",
+                    entraObjectId: subject,
+                    entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
+                    entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
+                    identityProvider: "entra",
+                    cognitoSub: entraObjectIdClaim || user.cognitoSub || subject,
+                    directoryStatus: "active",
+                    directoryUserType: tokenUserType || user.directoryUserType || "Member",
+                    directoryAccountEnabled: true,
+                    lastDirectorySyncAt: new Date()
+                },
+                include: userInclude
+            });
         }
         if (user.status === "archived") {
             throw new ApiError(403, "This Flow account has been archived.");
@@ -237,7 +268,7 @@ async function resolveUserFromJwt(request) {
                     entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
                     entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
                     identityProvider: "entra",
-                    cognitoSub: user.cognitoSub || subject,
+                    cognitoSub: entraObjectIdClaim || user.cognitoSub || subject,
                     lastDirectorySyncAt: new Date()
                 }
             });

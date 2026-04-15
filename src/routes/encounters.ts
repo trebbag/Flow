@@ -9,6 +9,11 @@ import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 import {
+  assertRoomAssignableForEncounter,
+  markEncounterRoomNeedsTurnover,
+  markEncounterRoomOccupiedInTx
+} from "../lib/room-operations.js";
+import {
   formatClinicDisplayName,
   formatProviderDisplayName,
   formatReasonDisplayName,
@@ -245,7 +250,7 @@ async function assertEncounterAccess(
   userId: string,
   role: RoleName
 ) {
-  if (role === RoleName.Admin || role === RoleName.FrontDeskCheckIn || role === RoleName.FrontDeskCheckOut) {
+  if (role === RoleName.Admin || role === RoleName.OfficeManager || role === RoleName.FrontDeskCheckIn || role === RoleName.FrontDeskCheckOut) {
     return;
   }
 
@@ -704,7 +709,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     return withStatusAlias(encounter);
   });
 
-  app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+  app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
     const query = request.query as {
       clinicId?: string;
       status?: EncounterStatus;
@@ -737,7 +742,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
+  app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
 
     await refreshEncounterAlertStates(prisma, {
@@ -853,6 +858,12 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         }
       }
     });
+    if (dto.toStatus === "CheckOut") {
+      await markEncounterRoomNeedsTurnover({
+        encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
+        userId: request.user!.id
+      });
+    }
     return withStatusAlias(updated);
   });
 
@@ -866,21 +877,13 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
 
     await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    if (dto.roomId) {
-      const room = await prisma.clinicRoom.findFirst({
-        where: {
-          id: dto.roomId,
-          status: "active",
-          clinicLinks: {
-            some: {
-              clinicId: encounter.clinicId,
-              active: true
-            }
-          }
-        }
-      });
-      assert(room, 400, "Room not found for clinic");
-    }
+    const roomContext = dto.roomId
+      ? await assertRoomAssignableForEncounter({
+          encounter: { id: encounter.id, clinicId: encounter.clinicId, roomId: encounter.roomId },
+          roomId: dto.roomId,
+          user: request.user!
+        })
+      : null;
 
     const data: Prisma.EncounterUncheckedUpdateInput = {
       roomId: dto.roomId ?? encounter.roomId
@@ -890,9 +893,20 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       data.roomingData = dto.data as Prisma.InputJsonValue;
     }
 
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.encounter.update({
+        where: { id: encounterId },
+        data
+      });
+      if (dto.roomId && roomContext) {
+        await markEncounterRoomOccupiedInTx(tx, {
+          encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
+          roomId: dto.roomId,
+          userId: request.user!.id,
+          facilityId: roomContext.facilityId
+        });
+      }
+      return row;
     });
     return withStatusAlias(updated);
   });
@@ -1095,6 +1109,10 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     const updated = await prisma.encounter.update({
       where: { id: encounterId },
       data
+    });
+    await markEncounterRoomNeedsTurnover({
+      encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
+      userId: request.user!.id
     });
     return withStatusAlias(updated);
   });

@@ -1,11 +1,16 @@
-import { AlertInboxKind, RoleName } from "@prisma/client";
+import { AlertInboxKind, RoleName, TaskSourceType } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ApiError, assert } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 const createTaskSchema = z.object({
-    encounterId: z.string().uuid(),
+    facilityId: z.string().uuid().optional(),
+    clinicId: z.string().uuid().optional(),
+    encounterId: z.string().uuid().optional(),
+    roomId: z.string().uuid().optional(),
+    sourceType: z.nativeEnum(TaskSourceType).optional(),
+    sourceId: z.string().uuid().optional(),
     taskType: z.string().min(1),
     description: z.string().min(1),
     assignedToRole: z.nativeEnum(RoleName).optional(),
@@ -24,42 +29,128 @@ const updateTaskSchema = z.object({
     completed: z.boolean().optional()
 });
 async function maybeCreateTaskAssignmentAlert(params) {
-    if (!params.assignedToUserId)
+    if (!params.assignedToUserId && !params.assignedToRole)
         return;
-    const encounter = await prisma.encounter.findUnique({
-        where: { id: params.encounterId },
-        include: {
-            clinic: {
-                select: { id: true, facilityId: true, name: true }
-            }
+    let scope = {
+        facilityId: params.facilityId || null,
+        clinicId: params.clinicId || null,
+        label: params.description,
+        payload: {
+            taskId: params.taskId,
+            taskType: params.taskType
         }
-    });
-    if (!encounter?.clinic?.facilityId)
+    };
+    if (params.encounterId) {
+        const encounter = await prisma.encounter.findUnique({
+            where: { id: params.encounterId },
+            include: {
+                clinic: {
+                    select: { id: true, facilityId: true, name: true }
+                }
+            }
+        });
+        if (encounter?.clinic?.facilityId) {
+            scope = {
+                facilityId: encounter.clinic.facilityId,
+                clinicId: encounter.clinic.id,
+                label: `encounter ${encounter.patientId}`,
+                payload: {
+                    ...scope.payload,
+                    encounterId: encounter.id,
+                    patientId: encounter.patientId,
+                    clinicId: encounter.clinicId
+                }
+            };
+        }
+    }
+    else if (params.roomId) {
+        const room = await prisma.clinicRoom.findUnique({
+            where: { id: params.roomId },
+            include: {
+                clinicLinks: {
+                    where: params.clinicId ? { clinicId: params.clinicId, active: true } : { active: true },
+                    include: { clinic: { select: { id: true, facilityId: true, name: true } } },
+                    take: 1
+                }
+            }
+        });
+        const link = room?.clinicLinks[0];
+        if (room && (link?.clinic.facilityId || room.facilityId || params.facilityId)) {
+            scope = {
+                facilityId: link?.clinic.facilityId || room.facilityId || params.facilityId || null,
+                clinicId: link?.clinic.id || params.clinicId || null,
+                label: `room ${room.name}`,
+                payload: {
+                    ...scope.payload,
+                    roomId: room.id,
+                    roomName: room.name,
+                    clinicId: link?.clinic.id || params.clinicId || null
+                }
+            };
+        }
+    }
+    if (!scope.facilityId)
         return;
     await createInboxAlert({
-        facilityId: encounter.clinic.facilityId,
-        clinicId: encounter.clinic.id,
+        facilityId: scope.facilityId,
+        clinicId: scope.clinicId,
         kind: AlertInboxKind.task,
         sourceId: params.taskId,
-        sourceVersionKey: `task:${params.taskId}:assigned:${params.assignedToUserId}`,
+        sourceVersionKey: params.assignedToUserId
+            ? `task:${params.taskId}:assigned:${params.assignedToUserId}`
+            : `task:${params.taskId}:role:${params.assignedToRole}`,
         title: "New task assigned",
-        message: `A new task has been assigned for encounter ${encounter.patientId}.`,
-        payload: {
-            encounterId: encounter.id,
-            patientId: encounter.patientId,
-            clinicId: encounter.clinicId
-        },
-        userIds: [params.assignedToUserId]
+        message: `A new ${params.taskType} task has been assigned for ${scope.label}.`,
+        payload: scope.payload,
+        ...(params.assignedToUserId
+            ? { userIds: [params.assignedToUserId] }
+            : { roles: [params.assignedToRole] })
     });
 }
+async function resolveTaskScope(dto) {
+    if (!dto.encounterId && !dto.roomId) {
+        throw new ApiError(400, "Task must reference an encounter or a room.");
+    }
+    let facilityId = dto.facilityId || null;
+    let clinicId = dto.clinicId || null;
+    if (dto.encounterId) {
+        const encounter = await prisma.encounter.findUnique({
+            where: { id: dto.encounterId },
+            include: { clinic: { select: { id: true, facilityId: true } } }
+        });
+        assert(encounter, 404, "Encounter not found");
+        clinicId = encounter.clinicId;
+        facilityId = encounter.clinic?.facilityId || facilityId;
+    }
+    if (dto.roomId) {
+        const room = await prisma.clinicRoom.findUnique({
+            where: { id: dto.roomId },
+            include: {
+                clinicLinks: {
+                    where: clinicId ? { clinicId, active: true } : { active: true },
+                    include: { clinic: { select: { id: true, facilityId: true } } },
+                    take: 1
+                }
+            }
+        });
+        assert(room, 404, "Room not found");
+        const link = room.clinicLinks[0];
+        clinicId = clinicId || link?.clinicId || null;
+        facilityId = facilityId || link?.clinic.facilityId || room.facilityId;
+    }
+    assert(facilityId, 400, "Task facility scope is required.");
+    assert(clinicId, 400, "Task clinic scope is required.");
+    return { facilityId, clinicId };
+}
 export async function registerTaskRoutes(app) {
-    const guard = requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin, RoleName.RevenueCycle);
+    const guard = requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle);
     app.get("/tasks", { preHandler: guard }, async (request) => {
         const query = request.query;
         const includeCompleted = String(query.includeCompleted || "true").toLowerCase() !== "false";
         const mine = String(query.mine || "false").toLowerCase() === "true";
         const where = {
             encounterId: query.encounterId,
+            roomId: query.roomId,
             ...(mine
                 ? {
                     OR: [
@@ -84,6 +175,14 @@ export async function registerTaskRoutes(app) {
                         currentStatus: true,
                         checkInAt: true
                     }
+                },
+                room: {
+                    select: {
+                        id: true,
+                        name: true,
+                        roomNumber: true,
+                        roomType: true
+                    }
                 }
             },
             orderBy: { createdAt: "desc" }
@@ -107,11 +206,15 @@ export async function registerTaskRoutes(app) {
     });
     app.post("/tasks", { preHandler: guard }, async (request) => {
         const dto = createTaskSchema.parse(request.body);
-        const encounter = await prisma.encounter.findUnique({ where: { id: dto.encounterId } });
-        assert(encounter, 404, "Encounter not found");
+        const scope = await resolveTaskScope(dto);
         const created = await prisma.task.create({
             data: {
-                encounterId: dto.encounterId,
+                facilityId: scope.facilityId,
+                clinicId: scope.clinicId,
+                encounterId: dto.encounterId || null,
+                roomId: dto.roomId || null,
+                sourceType: dto.sourceType,
+                sourceId: dto.sourceId || null,
                 taskType: dto.taskType,
                 description: dto.description,
                 assignedToRole: dto.assignedToRole,
@@ -125,7 +228,13 @@ export async function registerTaskRoutes(app) {
         await maybeCreateTaskAssignmentAlert({
             taskId: created.id,
             assignedToUserId: created.assignedToUserId,
-            encounterId: created.encounterId
+            assignedToRole: created.assignedToRole,
+            encounterId: created.encounterId,
+            roomId: created.roomId,
+            facilityId: created.facilityId,
+            clinicId: created.clinicId,
+            taskType: created.taskType,
+            description: created.description
         });
         return created;
     });
@@ -157,7 +266,26 @@ export async function registerTaskRoutes(app) {
             await maybeCreateTaskAssignmentAlert({
                 taskId: updated.id,
                 assignedToUserId,
-                encounterId: updated.encounterId
+                assignedToRole: updated.assignedToRole,
+                encounterId: updated.encounterId,
+                roomId: updated.roomId,
+                facilityId: updated.facilityId,
+                clinicId: updated.clinicId,
+                taskType: updated.taskType,
+                description: updated.description
+            });
+        }
+        if (!assignedToUserId && assignedToRole && assignedToRole !== task.assignedToRole) {
+            await maybeCreateTaskAssignmentAlert({
+                taskId: updated.id,
+                assignedToUserId: null,
+                assignedToRole,
+                encounterId: updated.encounterId,
+                roomId: updated.roomId,
+                facilityId: updated.facilityId,
+                clinicId: updated.clinicId,
+                taskType: updated.taskType,
+                description: updated.description
             });
         }
         return updated;

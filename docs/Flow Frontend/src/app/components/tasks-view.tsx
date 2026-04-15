@@ -111,6 +111,10 @@ export function TasksView() {
                 const acknowledgedAt = task.acknowledgedAt ? new Date(task.acknowledgedAt).toLocaleString() : "—";
                 const completedAt = task.completedAt ? new Date(task.completedAt).toLocaleString() : "—";
                 const notes = notesByTask[task.id] ?? "";
+                const hasEncounter = Boolean(task.encounterId);
+                const scopeLabel = hasEncounter
+                  ? `Encounter ${task.encounterId}${task.encounter?.patientId ? ` · Patient ${task.encounter.patientId}` : ""}`
+                  : `Room ${task.room?.name || task.roomId || "task"}`;
 
                 return (
                   <Card key={task.id} className="border-0 shadow-sm">
@@ -124,17 +128,25 @@ export function TasksView() {
                           </div>
                           <p className="text-[13px]" style={{ fontWeight: 600 }}>{task.description}</p>
                           <div className="text-[11px] text-muted-foreground mt-1">
-                            Encounter {task.encounterId}
-                            {task.encounter?.patientId ? ` · Patient ${task.encounter.patientId}` : ""}
+                            {scopeLabel}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => navigate(`/encounter/${task.encounterId}`)}
-                            className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
-                          >
-                            View Encounter
-                          </button>
+                          {hasEncounter ? (
+                            <button
+                              onClick={() => navigate(`/encounter/${task.encounterId}`)}
+                              className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                              View Encounter
+                            </button>
+                          ) : task.roomId ? (
+                            <button
+                              onClick={() => navigate("/rooms")}
+                              className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                              View Rooms
+                            </button>
+                          ) : null}
                           {displayTaskState(task) === "open" && (
                             <button
                               onClick={async () => {

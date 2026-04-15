@@ -47,6 +47,13 @@ const mappings: Mapping[] = [
     defaultName: 'Check Out',
   },
   {
+    role: RoleName.OfficeManager,
+    oidEnv: 'ENTRA_OID_OFFICEMANAGER',
+    emailEnv: 'ENTRA_EMAIL_OFFICEMANAGER',
+    defaultEmail: 'office@clinicos1.onmicrosoft.com',
+    defaultName: 'Office Manager',
+  },
+  {
     role: RoleName.RevenueCycle,
     oidEnv: 'ENTRA_OID_REVENUECYCLE',
     emailEnv: 'ENTRA_EMAIL_REVENUECYCLE',

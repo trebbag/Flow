@@ -1,6 +1,7 @@
 import { DefaultAzureCredential } from "@azure/identity";
 import { env } from "./env.js";
 import { ApiError } from "./errors.js";
+const GRAPH_USER_SELECT = "id,displayName,mail,userPrincipalName,accountEnabled,userType";
 let credential = null;
 function getCredential() {
     if (!credential) {
@@ -52,32 +53,9 @@ async function graphRequest(pathname, init) {
     }
     return (await response.json());
 }
-export async function searchEntraDirectoryUsers(query) {
-    const normalizedQuery = query.trim();
-    if (normalizedQuery.length < 2) {
-        return [];
-    }
-    const escaped = escapeODataLiteral(normalizedQuery);
-    const search = new URLSearchParams({
-        $select: "id,displayName,mail,userPrincipalName,accountEnabled,userType",
-        $top: "15",
-        $filter: `accountEnabled eq true and userType eq 'Member' and (` +
-            `startsWith(displayName,'${escaped}') or startsWith(userPrincipalName,'${escaped}') or startsWith(mail,'${escaped}'))`
-    });
-    const payload = await graphRequest(`/users?${search.toString()}`);
-    return (payload.value || []).map(normalizeDirectoryUser);
-}
-export async function getEntraDirectoryUserByObjectId(objectId) {
-    const trimmed = objectId.trim();
-    if (!trimmed) {
-        throw new ApiError(400, "Microsoft Entra object ID is required.");
-    }
+async function graphRequestMaybe(pathname, init) {
     try {
-        const search = new URLSearchParams({
-            $select: "id,displayName,mail,userPrincipalName,accountEnabled,userType"
-        });
-        const payload = await graphRequest(`/users/${encodeURIComponent(trimmed)}?${search.toString()}`);
-        return normalizeDirectoryUser(payload);
+        return await graphRequest(pathname, init);
     }
     catch (error) {
         if (error instanceof ApiError && error.statusCode === 404) {
@@ -85,5 +63,62 @@ export async function getEntraDirectoryUserByObjectId(objectId) {
         }
         throw error;
     }
+}
+async function getEntraDirectoryUserByPrincipal(params) {
+    const exactMatches = Array.from(new Set([params.userPrincipalName, params.email]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean)));
+    if (exactMatches.length === 0) {
+        return null;
+    }
+    const filter = exactMatches
+        .flatMap((value) => {
+        const escaped = escapeODataLiteral(value);
+        return [`userPrincipalName eq '${escaped}'`, `mail eq '${escaped}'`];
+    })
+        .join(" or ");
+    const search = new URLSearchParams({
+        $select: GRAPH_USER_SELECT,
+        $top: "5",
+        $filter: filter
+    });
+    const payload = await graphRequest(`/users?${search.toString()}`);
+    const rows = Array.isArray(payload.value) ? payload.value : [];
+    for (const row of rows) {
+        const normalized = normalizeDirectoryUser(row);
+        if (exactMatches.includes(normalized.userPrincipalName) || exactMatches.includes(normalized.email)) {
+            return normalized;
+        }
+    }
+    return rows.length > 0 ? normalizeDirectoryUser(rows[0]) : null;
+}
+export async function searchEntraDirectoryUsers(query) {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) {
+        return [];
+    }
+    const escaped = escapeODataLiteral(normalizedQuery);
+    const search = new URLSearchParams({
+        $select: GRAPH_USER_SELECT,
+        $top: "15",
+        $filter: `accountEnabled eq true and userType eq 'Member' and (` +
+            `startsWith(displayName,'${escaped}') or startsWith(userPrincipalName,'${escaped}') or startsWith(mail,'${escaped}'))`
+    });
+    const payload = await graphRequest(`/users?${search.toString()}`);
+    return (payload.value || []).map(normalizeDirectoryUser);
+}
+export async function getEntraDirectoryUserByObjectId(objectId, fallbackIdentifiers) {
+    const trimmed = objectId.trim();
+    if (!trimmed) {
+        throw new ApiError(400, "Microsoft Entra object ID is required.");
+    }
+    const search = new URLSearchParams({
+        $select: GRAPH_USER_SELECT
+    });
+    const payload = await graphRequestMaybe(`/users/${encodeURIComponent(trimmed)}?${search.toString()}`);
+    if (payload) {
+        return normalizeDirectoryUser(payload);
+    }
+    return getEntraDirectoryUserByPrincipal(fallbackIdentifiers || {});
 }
 //# sourceMappingURL=entra-directory.js.map
