@@ -94,6 +94,55 @@ function fmtTimer(totalSec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function parseIsoMs(value?: string | null) {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stageDurationSeconds(encounter: Encounter, status: EncounterStatus, nowMs: number) {
+  if (status === "Incoming" || status === "Optimized") return null;
+
+  const events = [...(encounter.statusEvents || [])]
+    .flatMap((event) => {
+      const atMs = parseIsoMs(event.changedAt);
+      return atMs === null ? [] : [{ ...event, atMs }];
+    })
+    .sort((a, b) => a.atMs - b.atMs);
+
+  const entryEvent = events.find((event) => event.toStatus === status);
+  const fallbackStart =
+    status === "Lobby"
+      ? parseIsoMs(encounter.checkInAtIso)
+      : status === encounter.status
+        ? parseIsoMs(encounter.currentStageStartAtIso)
+        : null;
+  const startMs = entryEvent?.atMs ?? fallbackStart;
+  if (startMs === null) return null;
+
+  const statusIdx = statusFlow.indexOf(status);
+  const currentIdx = statusFlow.indexOf(encounter.status);
+  const isCurrent = status === encounter.status;
+  const exitEvent = events.find(
+    (event) =>
+      event.atMs > startMs &&
+      (event.fromStatus === status || statusFlow.indexOf(event.toStatus) > statusIdx),
+  );
+  const endMs =
+    isCurrent || currentIdx === statusIdx
+      ? nowMs
+      : exitEvent?.atMs ?? (statusIdx < currentIdx ? parseIsoMs(encounter.completedAtIso) : null);
+  if (endMs === null || endMs <= startMs) return null;
+
+  return Math.max(0, Math.floor((endMs - startMs) / 1000));
+}
+
+function stageDurationLabel(encounter: Encounter, status: EncounterStatus, nowMs: number) {
+  const seconds = stageDurationSeconds(encounter, status, nowMs);
+  if (seconds === null) return null;
+  return fmtTimer(seconds);
+}
+
 // ── Task type config ──
 
 const taskTypeConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -156,11 +205,35 @@ const priorityOptions = [
 type TemplateField = {
   key?: string;
   name: string;
-  type: "text" | "checkbox" | "select" | "textarea" | "number" | "radio" | "date" | "time";
+  type:
+    | "text"
+    | "checkbox"
+    | "select"
+    | "textarea"
+    | "number"
+    | "radio"
+    | "date"
+    | "time"
+    | "bloodPressure"
+    | "temperature"
+    | "pulse"
+    | "respirations"
+    | "oxygenSaturation"
+    | "height"
+    | "weight"
+    | "painScore"
+    | "yesNo";
   required: boolean;
   options?: string[];
   group?: string;
 };
+
+const standardRoomingFields: TemplateField[] = [
+  { key: "allergiesChanged", name: "Allergies changed", type: "yesNo", required: true, group: "Standard Rooming" },
+  { key: "medicationReconciliationChanged", name: "Medication reconciliation changed", type: "yesNo", required: true, group: "Standard Rooming" },
+  { key: "labChanged", name: "Lab changed", type: "yesNo", required: true, group: "Standard Rooming" },
+  { key: "pharmacyChanged", name: "Pharmacy changed", type: "yesNo", required: true, group: "Standard Rooming" },
+];
 
 function fieldKey(field: TemplateField) {
   return field.key || field.name;
@@ -168,6 +241,7 @@ function fieldKey(field: TemplateField) {
 
 function isTemplateFieldComplete(field: TemplateField, value: string | boolean | undefined) {
   if (field.type === "checkbox") return Boolean(value);
+  if (field.type === "yesNo") return value !== undefined;
   if (typeof value === "string") return value.trim().length > 0;
   return Boolean(value);
 }
@@ -186,8 +260,22 @@ function normalizeRuntimeTemplateFields(input: any[]): TemplateField[] {
         typeRaw === "select" ||
         typeRaw === "radio" ||
         typeRaw === "date" ||
-        typeRaw === "time"
-          ? typeRaw
+        typeRaw === "time" ||
+        typeRaw === "bloodpressure" ||
+        typeRaw === "temperature" ||
+        typeRaw === "pulse" ||
+        typeRaw === "respirations" ||
+        typeRaw === "oxygensaturation" ||
+        typeRaw === "height" ||
+        typeRaw === "weight" ||
+        typeRaw === "painscore" ||
+        typeRaw === "yesno"
+          ? ({
+              bloodpressure: "bloodPressure",
+              oxygensaturation: "oxygenSaturation",
+              painscore: "painScore",
+              yesno: "yesNo",
+            }[typeRaw] as TemplateField["type"] | undefined) || (typeRaw as TemplateField["type"])
           : "text";
       return {
         key,
@@ -583,7 +671,7 @@ export function EncounterDetailView() {
     const status = localStatus ?? baseEnc.status;
     const { fields } = getTemplateForStatus(status, baseEnc.visitType, runtimeTemplates);
     const currentVals = templateValues[status] || {};
-    const required = fields.filter((field) => field.required);
+    const required = (status === "Rooming" ? [...standardRoomingFields, ...fields] : fields).filter((field) => field.required);
     const allComplete = required.every((field) =>
       isTemplateFieldComplete(field, currentVals[fieldKey(field)]),
     );
@@ -630,7 +718,8 @@ export function EncounterDetailView() {
   const canAdvance = !!nextStatusMap[enc.status];
 
   const currentTemplateVals = templateValues[enc.status] || {};
-  const requiredFields = templateFields.filter((f) => f.required);
+  const fieldsForCompletion = enc.status === "Rooming" ? [...standardRoomingFields, ...templateFields] : templateFields;
+  const requiredFields = fieldsForCompletion.filter((f) => f.required);
   const requiredCount = requiredFields.length;
   const completedCount = requiredFields.filter((f) => isTemplateFieldComplete(f, currentTemplateVals[fieldKey(f)])).length;
   const allRequiredComplete = requiredCount > 0 ? completedCount === requiredCount : true;
@@ -652,7 +741,7 @@ export function EncounterDetailView() {
   const capturedVitals = (() => {
     const roomingVals = (enc.roomingData as Record<string, unknown> | null) || templateValues["Rooming"];
     if (!roomingVals) return null;
-    if (!completedStages.has("Rooming")) return null;
+    if (!completedStages.has("Rooming") && !["ReadyForProvider", "Optimizing", "CheckOut", "Optimized"].includes(enc.status)) return null;
     const read = (...keys: string[]) => {
       for (const key of keys) {
         const value = roomingVals[key];
@@ -672,6 +761,18 @@ export function EncounterDetailView() {
       }
       return false;
     };
+    const readYesNo = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = roomingVals[key];
+        if (typeof value === "boolean") return value ? "Yes" : "No";
+        if (typeof value === "string") {
+          const normalized = value.trim().toLowerCase();
+          if (["true", "yes", "y", "1"].includes(normalized)) return "Yes";
+          if (["false", "no", "n", "0"].includes(normalized)) return "No";
+        }
+      }
+      return "Not recorded";
+    };
     return {
       reasonForVisit: read("reason_for_visit", "Reason for Visit"),
       bloodPressure: read("bp", "BP", "blood_pressure", "Blood Pressure"),
@@ -682,6 +783,10 @@ export function EncounterDetailView() {
       o2Sat: read("oxygen_saturation", "Oxygen Saturation", "o2_saturation", "O2 Saturation"),
       allergyReview: readBool("allergy_review", "Allergy Review"),
       medicationReconciliation: readBool("medication_reconciliation", "Medication Reconciliation"),
+      allergiesChanged: readYesNo("allergiesChanged"),
+      medicationReconciliationChanged: readYesNo("medicationReconciliationChanged"),
+      labChanged: readYesNo("labChanged"),
+      pharmacyChanged: readYesNo("pharmacyChanged"),
     };
   })();
 
@@ -1025,6 +1130,17 @@ export function EncounterDetailView() {
                       <CheckRow label="Allergy Review" checked={capturedVitals.allergyReview} />
                       <CheckRow label="Medication Reconciliation" checked={capturedVitals.medicationReconciliation} />
                     </div>
+                    <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                      <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-2" style={{ fontWeight: 700 }}>
+                        Standard MA changes
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>Allergies: <span style={{ fontWeight: 700 }}>{capturedVitals.allergiesChanged}</span></div>
+                        <div>Meds: <span style={{ fontWeight: 700 }}>{capturedVitals.medicationReconciliationChanged}</span></div>
+                        <div>Lab: <span style={{ fontWeight: 700 }}>{capturedVitals.labChanged}</span></div>
+                        <div>Pharmacy: <span style={{ fontWeight: 700 }}>{capturedVitals.pharmacyChanged}</span></div>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -1124,6 +1240,7 @@ export function EncounterDetailView() {
                     {statusFlow.slice(0, currentIdx + 1).map((status, idx) => {
                       const color = statusColors[status];
                       const isLast = idx === currentIdx;
+                      const durationLabel = stageDurationLabel(enc, status, nowMs);
                       return (
                         <div key={status} className="flex gap-3">
                           <div className="flex flex-col items-center">
@@ -1131,7 +1248,14 @@ export function EncounterDetailView() {
                             {!isLast && <div className="w-0.5 flex-1 bg-gray-200 my-0.5" />}
                           </div>
                           <div className="pb-3">
-                            <span className="text-[11px]" style={{ fontWeight: 500 }}>{statusLabels[status]}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px]" style={{ fontWeight: 500 }}>{statusLabels[status]}</span>
+                              {durationLabel && (
+                                <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] text-gray-500">
+                                  {durationLabel}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-muted-foreground">
                               {status === "Incoming" && `Scheduled ${enc.checkinTime}`}
                               {status === "Lobby" && `Checked in at ${enc.checkinTime}`}
@@ -1337,6 +1461,32 @@ export function EncounterDetailView() {
 
                         {/* Template fields — grouped by section */}
                         <div className="p-5 space-y-5">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2.5">
+                              <div className="w-5 h-5 rounded-md flex items-center justify-center bg-emerald-50">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              </div>
+                              <span className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                                Standard MA Rooming
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">Always required</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pl-7">
+                              {standardRoomingFields.map((field) => (
+                                <TemplateFieldInput
+                                  key={`standard-${field.key}`}
+                                  field={field}
+                                  value={currentTemplateVals[fieldKey(field)]}
+                                  invalid={
+                                    showRequiredFieldErrors &&
+                                    field.required &&
+                                    !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
+                                  }
+                                  onChange={(val) => setFieldValue(fieldKey(field), val)}
+                                />
+                              ))}
+                            </div>
+                          </div>
                           {hasGroups ? (
                             fieldGroups.map((grp) => {
                               const GrpIcon = groupIcons[grp.group] || FileText;
@@ -1917,6 +2067,39 @@ function TemplateFieldInput({
     );
   }
 
+  if (field.type === "yesNo") {
+    const current = typeof value === "boolean" ? (value ? "yes" : "no") : typeof value === "string" ? value.toLowerCase() : "";
+    return (
+      <div>
+        <label className={labelClass} style={{ fontWeight: 500 }}>
+          {field.name}
+          {field.required && <span className="text-red-400">*</span>}
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {(["yes", "no"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChange(option === "yes")}
+              aria-invalid={showError}
+              className={`h-10 rounded-lg border text-[12px] transition-colors ${
+                current === option
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  : showError
+                    ? "border-red-300 bg-white text-red-700"
+                    : "border-purple-200/80 bg-white text-gray-700 hover:border-purple-300"
+              }`}
+              style={{ fontWeight: 600 }}
+            >
+              {option === "yes" ? "Yes" : "No"}
+            </button>
+          ))}
+        </div>
+        {showError && <p className="text-[10px] text-red-600 mt-1">Choose yes or no to continue.</p>}
+      </div>
+    );
+  }
+
   if (field.type === "textarea") {
     return (
       <div>
@@ -1994,7 +2177,36 @@ function TemplateFieldInput({
     );
   }
 
-  if (field.type === "date" || field.type === "time" || field.type === "number") {
+  if (
+    field.type === "date" ||
+    field.type === "time" ||
+    field.type === "number" ||
+    field.type === "bloodPressure" ||
+    field.type === "temperature" ||
+    field.type === "pulse" ||
+    field.type === "respirations" ||
+    field.type === "oxygenSaturation" ||
+    field.type === "height" ||
+    field.type === "weight" ||
+    field.type === "painScore"
+  ) {
+    const vitalPlaceholders: Partial<Record<TemplateField["type"], string>> = {
+      bloodPressure: "120/80",
+      temperature: "98.6",
+      pulse: "72",
+      respirations: "16",
+      oxygenSaturation: "98",
+      height: "5'8\" or 68 in",
+      weight: "165 lb",
+      painScore: "0-10",
+    };
+    const numericVitalTypes = new Set<TemplateField["type"]>(["temperature", "pulse", "respirations", "oxygenSaturation", "painScore"]);
+    const inputType =
+      field.type === "date" || field.type === "time" || field.type === "number"
+        ? field.type
+        : numericVitalTypes.has(field.type)
+          ? "number"
+          : "text";
     return (
       <div>
         <label className={labelClass} style={{ fontWeight: 500 }}>
@@ -2002,8 +2214,8 @@ function TemplateFieldInput({
           {field.required && <span className="text-red-400">*</span>}
         </label>
         <input
-          type={field.type}
-          placeholder={field.name}
+          type={inputType}
+          placeholder={vitalPlaceholders[field.type] || field.name}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={showError}

@@ -1,14 +1,17 @@
 import {
   RoleName,
+  RoomChecklistKind,
   RoomEventType,
   RoomHoldReason,
   RoomIssueStatus,
   RoomOperationalStatus
 } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import { DateTime } from "luxon";
 import { prisma } from "./prisma.js";
 import { ApiError, assert } from "./errors.js";
 import type { RequestUser } from "./auth.js";
+import { listActiveTemporaryClinicOverrideIds } from "./assignment-overrides.js";
 
 type RoomOpsTx = Prisma.TransactionClient;
 
@@ -29,8 +32,8 @@ function unique(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
 
-function currentDateKey() {
-  return new Date().toISOString().slice(0, 10);
+export function currentRoomDateKey(timezone = "America/New_York") {
+  return DateTime.now().setZone(timezone || "America/New_York").toISODate() || new Date().toISOString().slice(0, 10);
 }
 
 function elapsedMinutes(sinceAt?: Date | string | null) {
@@ -46,6 +49,31 @@ function formatTimer(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const rem = minutes % 60;
   return `${hours}h ${rem}m`;
+}
+
+function isDayStartCompleted(checklistRuns: Array<{ kind: string; completed: boolean }>) {
+  return checklistRuns.some((run) => run.kind === "DayStart" && run.completed);
+}
+
+function isDayEndCompleted(checklistRuns: Array<{ kind: string; completed: boolean }>) {
+  return checklistRuns.some((run) => run.kind === "DayEnd" && run.completed);
+}
+
+function effectiveRoomStatus(currentStatus: RoomOperationalStatus, dayStartCompleted: boolean) {
+  if (currentStatus === RoomOperationalStatus.Ready && !dayStartCompleted) {
+    return RoomOperationalStatus.NotReady;
+  }
+  return currentStatus;
+}
+
+function readinessBlockedReason(currentStatus: RoomOperationalStatus, dayStartCompleted: boolean) {
+  if (currentStatus !== RoomOperationalStatus.Ready) {
+    return `Room is ${currentStatus}`;
+  }
+  if (!dayStartCompleted) {
+    return "Day Start checklist must be completed before rooming";
+  }
+  return null;
 }
 
 export async function backfillRoomOperationalStates() {
@@ -106,7 +134,7 @@ export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId
     return user.clinicId && (!requested || requested === user.clinicId) ? [user.clinicId] : [];
   }
 
-  const [maClinicMaps, clinicAssignments] = await Promise.all([
+  const [maClinicMaps, clinicAssignments, temporaryOverrideClinicIds] = await Promise.all([
     prisma.maClinicMap.findMany({
       where: {
         maUserId: user.id,
@@ -120,13 +148,19 @@ export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId
         clinic: clinicWhere
       },
       select: { clinicId: true }
+    }),
+    listActiveTemporaryClinicOverrideIds({
+      userId: user.id,
+      role: user.role,
+      facilityId: user.facilityId
     })
   ]);
 
   let clinicIds = unique([
     user.clinicId,
     ...maClinicMaps.map((row) => row.clinicId),
-    ...clinicAssignments.map((row) => row.clinicId)
+    ...clinicAssignments.map((row) => row.clinicId),
+    ...temporaryOverrideClinicIds
   ]);
   if (requested) clinicIds = clinicIds.filter((id) => id === requested);
   if (requested && clinicIds.length === 0) {
@@ -250,10 +284,6 @@ export async function transitionRoomOperationalStateInTx(
     data.lastTurnoverAt = now;
   }
 
-  if (params.toStatus === RoomOperationalStatus.Cleaning) {
-    data.activeCleanerUserId = params.createdByUserId || null;
-  }
-
   if (params.toStatus === RoomOperationalStatus.Hold) {
     data.holdReason = params.holdReason || RoomHoldReason.Manual;
     data.holdNote = params.holdNote || params.note || null;
@@ -309,6 +339,21 @@ export async function assertRoomAssignableForEncounter(params: {
 
   if (state.currentStatus !== RoomOperationalStatus.Ready) {
     throw new ApiError(409, `Room ${context.room.name} is ${state.currentStatus} and cannot be assigned.`);
+  }
+
+  const dateKey = currentRoomDateKey(context.clinic.timezone);
+  const dayStart = await prisma.roomChecklistRun.findUnique({
+    where: {
+      roomId_kind_dateKey: {
+        roomId: params.roomId,
+        kind: RoomChecklistKind.DayStart,
+        dateKey
+      }
+    },
+    select: { completed: true }
+  });
+  if (!dayStart?.completed) {
+    throw new ApiError(409, `Room ${context.room.name} is not ready. Complete Day Start before rooming a patient.`);
   }
 
   return { ...context, state };
@@ -377,7 +422,7 @@ export async function listRoomCards(params: {
       room: { status: "active" }
     },
     include: {
-      clinic: { select: { id: true, name: true, facilityId: true } },
+      clinic: { select: { id: true, name: true, facilityId: true, timezone: true } },
       room: {
         include: {
           operationalState: {
@@ -397,8 +442,7 @@ export async function listRoomCards(params: {
             select: { id: true, status: true, placesRoomOnHold: true }
           },
           checklistRuns: {
-            where: { dateKey: params.dateKey || currentDateKey() },
-            select: { kind: true, completed: true }
+            select: { kind: true, completed: true, dateKey: true }
           }
         }
       }
@@ -432,9 +476,13 @@ export async function listRoomCards(params: {
   return assignments.map((assignment) => {
     const state = assignment.room.operationalState;
     const currentStatus = state?.currentStatus || RoomOperationalStatus.Ready;
+    const dateKey = params.dateKey || currentRoomDateKey(assignment.clinic.timezone);
+    const todaysChecklistRuns = assignment.room.checklistRuns.filter((run) => run.dateKey === dateKey);
+    const dayStartCompleted = isDayStartCompleted(todaysChecklistRuns);
+    const dayEndCompleted = isDayEndCompleted(todaysChecklistRuns);
+    const operationalStatus = effectiveRoomStatus(currentStatus, dayStartCompleted);
+    const blockedReason = readinessBlockedReason(currentStatus, dayStartCompleted);
     const minutesInStatus = elapsedMinutes(state?.statusSinceAt || new Date());
-    const dayStartCompleted = assignment.room.checklistRuns.some((run) => run.kind === "DayStart" && run.completed);
-    const dayEndCompleted = assignment.room.checklistRuns.some((run) => run.kind === "DayEnd" && run.completed);
     return {
       id: `${assignment.clinicId}:${assignment.roomId}`,
       roomId: assignment.roomId,
@@ -444,7 +492,8 @@ export async function listRoomCards(params: {
       clinicId: assignment.clinicId,
       clinicName: assignment.clinic.name,
       facilityId: assignment.clinic.facilityId || assignment.room.facilityId,
-      operationalStatus: currentStatus,
+      operationalStatus,
+      actualOperationalStatus: currentStatus,
       statusSinceAt: state?.statusSinceAt || new Date(),
       minutesInStatus,
       timerLabel: formatTimer(minutesInStatus),
@@ -461,6 +510,8 @@ export async function listRoomCards(params: {
       holdNote: state?.holdNote || null,
       dayStartCompleted,
       dayEndCompleted,
+      assignable: currentStatus === RoomOperationalStatus.Ready && dayStartCompleted,
+      readinessBlockedReason: blockedReason,
       lowStock: false,
       auditDue: false
     };
@@ -473,7 +524,7 @@ export async function getRoomDetail(params: {
   clinicId?: string | null;
 }) {
   const context = await resolveRoomContext(params);
-  const dateKey = currentDateKey();
+  const dateKey = currentRoomDateKey(context.clinic.timezone);
   const [state, events, issues, checklistRuns] = await Promise.all([
     prisma.roomOperationalState.findUnique({
       where: { roomId: params.roomId },
@@ -511,7 +562,7 @@ export async function getRoomDetail(params: {
     },
     operationalState: state || {
       roomId: params.roomId,
-      currentStatus: RoomOperationalStatus.Ready,
+      currentStatus: RoomOperationalStatus.NotReady,
       statusSinceAt: new Date(),
       occupiedEncounterId: null,
       activeCleanerUserId: null,
@@ -521,6 +572,8 @@ export async function getRoomDetail(params: {
       lastOccupiedAt: null,
       lastTurnoverAt: null
     },
+    dayStartCompleted: checklistRuns.some((run) => run.kind === "DayStart" && run.completed),
+    dayEndCompleted: checklistRuns.some((run) => run.kind === "DayEnd" && run.completed),
     events,
     issues,
     checklistRuns,
@@ -541,7 +594,7 @@ export async function getPreRoomingAvailability(params: {
   });
   assert(encounter, 404, "Encounter not found");
   const rooms = await listRoomCards({ user: params.user, clinicId: encounter.clinicId });
-  const readyRooms = rooms.filter((room) => room.operationalStatus === RoomOperationalStatus.Ready);
+  const readyRooms = rooms.filter((room) => room.assignable);
   return {
     encounterId: encounter.id,
     readyCount: readyRooms.length,

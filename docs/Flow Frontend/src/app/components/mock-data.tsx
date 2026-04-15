@@ -43,6 +43,12 @@ export interface Encounter {
   arrivalNotes?: string;
   intakeData?: Record<string, unknown> | null;
   roomingData?: Record<string, unknown> | null;
+  statusEvents?: Array<{
+    fromStatus?: EncounterStatus | null;
+    toStatus: EncounterStatus;
+    changedAt: string;
+    reasonCode?: string | null;
+  }>;
   closureType?: string;
   cardTags?: string[];
 }

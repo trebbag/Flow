@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { RoleName } from "@prisma/client";
+import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus } from "@prisma/client";
+import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
 import { authHeaders, bootstrapCore, jwtHeaders, prisma, resetDb } from "./helpers.js";
 
@@ -434,6 +435,96 @@ describe("Flow backend core relationships", () => {
     expect(secondRead.json().daily[0].encounterCount).toBe(payload.daily[0].encounterCount);
   });
 
+  it("returns persisted room daily history rollups", async () => {
+    const ctx = await bootstrapCore();
+    const date = DateTime.now().setZone("America/New_York").toISODate()!;
+    const at = (hour: number, minute: number) =>
+      DateTime.fromISO(date, { zone: "America/New_York" }).plus({ hours: hour, minutes: minute }).toUTC().toJSDate();
+
+    await prisma.roomOperationalEvent.createMany({
+      data: [
+        {
+          roomId: ctx.clinicRoomA.id,
+          clinicId: ctx.clinic.id,
+          facilityId: ctx.facility.id,
+          eventType: RoomEventType.MarkedReady,
+          fromStatus: RoomOperationalStatus.NotReady,
+          toStatus: RoomOperationalStatus.Ready,
+          occurredAt: at(8, 0),
+          createdByUserId: ctx.admin.id
+        },
+        {
+          roomId: ctx.clinicRoomA.id,
+          clinicId: ctx.clinic.id,
+          facilityId: ctx.facility.id,
+          eventType: RoomEventType.AssignedToEncounter,
+          fromStatus: RoomOperationalStatus.Ready,
+          toStatus: RoomOperationalStatus.Occupied,
+          occurredAt: at(9, 0),
+          createdByUserId: ctx.ma.id
+        },
+        {
+          roomId: ctx.clinicRoomA.id,
+          clinicId: ctx.clinic.id,
+          facilityId: ctx.facility.id,
+          eventType: RoomEventType.PatientLeftForCheckout,
+          fromStatus: RoomOperationalStatus.Occupied,
+          toStatus: RoomOperationalStatus.NeedsTurnover,
+          occurredAt: at(9, 20),
+          createdByUserId: ctx.clinician.id
+        },
+        {
+          roomId: ctx.clinicRoomA.id,
+          clinicId: ctx.clinic.id,
+          facilityId: ctx.facility.id,
+          eventType: RoomEventType.MarkedReady,
+          fromStatus: RoomOperationalStatus.NeedsTurnover,
+          toStatus: RoomOperationalStatus.Ready,
+          occurredAt: at(9, 30),
+          createdByUserId: ctx.ma.id
+        }
+      ]
+    });
+
+    await prisma.roomIssue.create({
+      data: {
+        roomId: ctx.clinicRoomA.id,
+        clinicId: ctx.clinic.id,
+        facilityId: ctx.facility.id,
+        issueType: RoomIssueType.Equipment,
+        status: RoomIssueStatus.Resolved,
+        severity: 2,
+        title: "BP cuff replacement",
+        createdAt: at(8, 15),
+        createdByUserId: ctx.ma.id,
+        resolvedAt: at(8, 45),
+        resolvedByUserId: ctx.officeManager.id,
+        resolutionNote: "Replaced cuff."
+      }
+    });
+
+    const history = await app.inject({
+      method: "GET",
+      url: `/dashboard/rooms/history?clinicId=${ctx.clinic.id}&from=${date}&to=${date}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin)
+    });
+
+    expect(history.statusCode).toBe(200);
+    const payload = history.json();
+    expect(payload.daily).toHaveLength(1);
+    expect(payload.daily[0].roomCount).toBe(1);
+    expect(payload.daily[0].dayStartCompletedCount).toBe(1);
+    expect(payload.daily[0].turnoverCount).toBeGreaterThanOrEqual(1);
+    expect(payload.daily[0].issueCount).toBe(1);
+    expect(payload.daily[0].statusMinutes.Occupied).toBeGreaterThanOrEqual(20);
+    expect(payload.daily[0].statusMinutes.NeedsTurnover).toBeGreaterThanOrEqual(10);
+
+    const persisted = await prisma.roomDailyRollup.findFirst({
+      where: { clinicId: ctx.clinic.id, dateKey: date }
+    });
+    expect(persisted).toBeTruthy();
+  });
+
   it("enforces MA pre-rooming availability and room Ready state before assignment", async () => {
     const ctx = await bootstrapCore();
     const created = await app.inject({
@@ -502,6 +593,155 @@ describe("Flow backend core relationships", () => {
     const roomState = await prisma.roomOperationalState.findUnique({ where: { roomId: ctx.clinicRoomA.id } });
     expect(roomState?.currentStatus).toBe("Occupied");
     expect(roomState?.occupiedEncounterId).toBe(encounter.id);
+  });
+
+  it("treats rooms without today's Day Start checklist as NotReady and blocks rooming", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-DAYSTART-GATE-1",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const encounter = created.json();
+
+    await prisma.roomChecklistRun.deleteMany({
+      where: { roomId: ctx.clinicRoomA.id, kind: "DayStart" }
+    });
+    await prisma.roomOperationalState.update({
+      where: { roomId: ctx.clinicRoomA.id },
+      data: { currentStatus: "Ready", statusSinceAt: new Date(), lastReadyAt: new Date() }
+    });
+
+    const live = await app.inject({
+      method: "GET",
+      url: "/rooms/live?mine=true",
+      headers: authHeaders(ctx.ma.id, RoleName.MA)
+    });
+    expect(live.statusCode).toBe(200);
+    const room = live.json().find((entry: { roomId: string }) => entry.roomId === ctx.clinicRoomA.id);
+    expect(room).toMatchObject({
+      operationalStatus: "NotReady",
+      actualOperationalStatus: "Ready",
+      assignable: false
+    });
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/rooms/pre-rooming-check",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { encounterId: encounter.id }
+    });
+    expect(blocked.statusCode).toBe(200);
+    expect(blocked.json()).toMatchObject({ blocked: true, readyCount: 0 });
+
+    const rejectedAssignment = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+    });
+    expect(rejectedAssignment.statusCode).toBe(409);
+    expect(rejectedAssignment.json().message).toContain("Day Start");
+
+    const dayStart = await app.inject({
+      method: "POST",
+      url: "/rooms/checklists/day-start",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        clinicId: ctx.clinic.id,
+        completed: true,
+        items: [{ key: "visual-ready", label: "Room visually ready", completed: true }]
+      }
+    });
+    expect(dayStart.statusCode).toBe(200);
+
+    const allowed = await app.inject({
+      method: "POST",
+      url: "/rooms/pre-rooming-check",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { encounterId: encounter.id }
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json()).toMatchObject({ blocked: false, readyCount: 1 });
+  });
+
+  it("grants and revokes time-bounded temporary MA clinic coverage", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-TEMP-COVERAGE-1",
+        clinicId: ctx.maRunClinic.id,
+        reasonForVisitId: ctx.reasonMaRun.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const encounter = created.json();
+
+    const deniedBefore = await app.inject({
+      method: "GET",
+      url: `/encounters/${encounter.id}`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA)
+    });
+    expect(deniedBefore.statusCode).toBe(403);
+
+    const startsAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const endsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const override = await app.inject({
+      method: "POST",
+      url: "/admin/assignment-overrides",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        userId: ctx.ma.id,
+        role: RoleName.MA,
+        clinicId: ctx.maRunClinic.id,
+        facilityId: ctx.facility.id,
+        startsAt,
+        endsAt,
+        reason: "Lunch coverage"
+      }
+    });
+    expect(override.statusCode).toBe(200);
+
+    const visible = await app.inject({
+      method: "GET",
+      url: "/encounters",
+      headers: authHeaders(ctx.ma.id, RoleName.MA)
+    });
+    expect(visible.statusCode).toBe(200);
+    expect(visible.json().some((row: { id: string }) => row.id === encounter.id)).toBe(true);
+
+    const allowedAfter = await app.inject({
+      method: "GET",
+      url: `/encounters/${encounter.id}`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA)
+    });
+    expect(allowedAfter.statusCode).toBe(200);
+
+    const revoked = await app.inject({
+      method: "POST",
+      url: `/admin/assignment-overrides/${override.json().id}/revoke`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin)
+    });
+    expect(revoked.statusCode).toBe(200);
+
+    const deniedAfter = await app.inject({
+      method: "GET",
+      url: `/encounters/${encounter.id}`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA)
+    });
+    expect(deniedAfter.statusCode).toBe(403);
   });
 
   it("moves an occupied room to NeedsTurnover when the encounter enters CheckOut", async () => {
@@ -872,7 +1112,8 @@ describe("Flow backend core relationships", () => {
     async () => {
       const ctx = await bootstrapCore();
       const rowCount = 250;
-      const date = ctx.day.toISOString().slice(0, 10);
+      const importDay = new Date(ctx.day.getTime() + 24 * 60 * 60 * 1000);
+      const date = importDay.toISOString().slice(0, 10);
       const header = "patientId,appointmentTime,providerLastName,reasonForVisit";
       const rows = Array.from({ length: rowCount }, (_, index) => {
         const minutes = String((index % 12) * 5).padStart(2, "0");
@@ -898,18 +1139,18 @@ describe("Flow backend core relationships", () => {
       expect(imported.json().pendingCount).toBe(0);
 
       const totalRows = await prisma.incomingSchedule.count({
-        where: { clinicId: ctx.clinic.id, dateOfService: ctx.day }
+        where: { clinicId: ctx.clinic.id, patientId: { startsWith: "HV-" } }
       });
 
-      // Includes one seed incoming row plus imported rows.
-      expect(totalRows).toBeGreaterThanOrEqual(rowCount + 1);
+      expect(totalRows).toBe(rowCount);
     },
     20000
   );
 
   it("imports CSV rows with spaced headers and clinic short-name values into accepted + pending buckets", async () => {
     const ctx = await bootstrapCore();
-    const date = ctx.day.toISOString().slice(0, 10);
+    const importDay = new Date(ctx.day.getTime() + 24 * 60 * 60 * 1000);
+    const date = importDay.toISOString().slice(0, 10);
     const csvText = [
       "Clinic Short Name,Patient ID,Appointment Time,Provider Last Name,Reason",
       `${ctx.clinic.shortCode},PT-CSV-OK-1,09:00,A,Follow-up`,
@@ -936,7 +1177,6 @@ describe("Flow backend core relationships", () => {
     const accepted = await prisma.incomingSchedule.findMany({
       where: {
         clinicId: ctx.clinic.id,
-        dateOfService: ctx.day,
         patientId: "PT-CSV-OK-1"
       }
     });
@@ -954,7 +1194,7 @@ describe("Flow backend core relationships", () => {
     const ctx = await bootstrapCore();
     await prisma.user.update({
       where: { id: ctx.clinician.id },
-      data: { name: "Jordan Smith NP" }
+      data: { name: "Jordan Smith, NP" }
     });
 
     const response = await app.inject({
@@ -978,15 +1218,17 @@ describe("Flow backend core relationships", () => {
     const ctx = await bootstrapCore();
     await prisma.user.update({
       where: { id: ctx.clinician.id },
-      data: { name: "Jordan Smith NP" }
+      data: { name: "Jordan Smith, NP" }
     });
 
     const tomorrow = new Date(ctx.day.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const yesterday = new Date(ctx.day.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today = DateTime.now().setZone("America/New_York").toISODate();
     const csvText = [
       "clinic,patientId,appointmentDate,appointmentTime,providerLastName,reasonForVisit",
-      `${ctx.clinic.name} (${ctx.clinic.shortCode}),PT-FUTURE-1,${tomorrow},09:00,Smith,Follow-up`,
+      `${ctx.clinic.name} (${ctx.clinic.shortCode}),PT-FUTURE-1,${tomorrow},09:00,"Smith, NP",Follow-up`,
       `${ctx.clinic.shortCode},PT-PAST-1,${yesterday},09:15,Smith,Follow-up`,
+      `${ctx.clinic.shortCode},PT-SAME-DAY-PAST,${today},00:00,Smith,Follow-up`,
     ].join("\n");
 
     const imported = await app.inject({
@@ -1003,21 +1245,49 @@ describe("Flow backend core relationships", () => {
 
     expect(imported.statusCode).toBe(200);
     expect(imported.json().acceptedCount).toBe(1);
-    expect(imported.json().pendingCount).toBe(1);
+    expect(imported.json().pendingCount).toBe(2);
 
     const accepted = await prisma.incomingSchedule.findFirst({
       where: { patientId: "PT-FUTURE-1" }
     });
     expect(accepted).toBeTruthy();
     expect(accepted?.dateOfService.toISOString().slice(0, 10)).toBe(tomorrow);
+    expect(accepted?.providerLastName).toBe("Smith");
 
-    const pending = await prisma.incomingImportIssue.findFirst({
+    const pendingRows = await prisma.incomingImportIssue.findMany({
       where: { facilityId: ctx.facility.id, rawPayloadJson: { not: null } },
       orderBy: { createdAt: "desc" }
     });
-    expect(pending).toBeTruthy();
-    expect(Array.isArray(pending?.validationErrors)).toBe(true);
-    expect((pending?.validationErrors as string[]).some((entry) => entry.toLowerCase().includes("past"))).toBe(true);
+    expect(pendingRows.length).toBeGreaterThanOrEqual(2);
+    expect(
+      pendingRows.some(
+        (pending) =>
+          Array.isArray(pending.validationErrors) &&
+          (pending.validationErrors as string[]).some((entry) => entry.toLowerCase().includes("future")),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects incoming imports with no data rows instead of reporting zero accepted rows", async () => {
+    const ctx = await bootstrapCore();
+    const importDay = new Date(ctx.day.getTime() + 24 * 60 * 60 * 1000);
+    const date = importDay.toISOString().slice(0, 10);
+
+    const imported = await app.inject({
+      method: "POST",
+      url: "/incoming/import",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        clinicId: ctx.clinic.id,
+        dateOfService: date,
+        csvText: "patientId,appointmentTime,providerLastName,reasonForVisit\n",
+        source: "csv",
+        fileName: "headers-only.csv"
+      }
+    });
+
+    expect(imported.statusCode).toBe(400);
+    expect(imported.json().message).toContain("No schedule data rows");
   });
 
   it("enforces required template fields before status transitions", async () => {

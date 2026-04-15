@@ -539,7 +539,7 @@ export type BackendTask = {
   } | null;
 };
 
-export type RoomOperationalStatus = "Ready" | "Occupied" | "NeedsTurnover" | "Cleaning" | "Hold";
+export type RoomOperationalStatus = "Ready" | "NotReady" | "Occupied" | "NeedsTurnover" | "Hold";
 export type RoomIssueStatus = "Open" | "Acknowledged" | "Resolved" | "Dismissed";
 export type RoomIssueType = "Equipment" | "Maintenance" | "General" | "SupplyLow" | "SupplyOut" | "AuditFailure";
 export type RoomChecklistKind = "DayStart" | "DayEnd";
@@ -554,6 +554,7 @@ export type RoomLiveCard = {
   clinicName: string;
   facilityId?: string | null;
   operationalStatus: RoomOperationalStatus;
+  actualOperationalStatus?: RoomOperationalStatus;
   statusSinceAt: string;
   minutesInStatus: number;
   timerLabel: string;
@@ -564,6 +565,8 @@ export type RoomLiveCard = {
   holdNote: string | null;
   dayStartCompleted: boolean;
   dayEndCompleted: boolean;
+  assignable: boolean;
+  readinessBlockedReason: string | null;
   lowStock: boolean;
   auditDue: boolean;
 };
@@ -602,6 +605,8 @@ export type RoomDetail = {
   }>;
   issues: RoomIssue[];
   checklistRuns: RoomChecklistRun[];
+  dayStartCompleted?: boolean;
+  dayEndCompleted?: boolean;
   placeholders: { supplies: string; audits: string };
 };
 
@@ -640,6 +645,68 @@ export type RoomChecklistRun = {
   completedAt: string | null;
   completedByUserId: string | null;
   note: string | null;
+};
+
+export type RoomDailyHistoryRollup = {
+  date: string;
+  roomCount: number;
+  dayStartCompletedCount: number;
+  dayEndCompletedCount: number;
+  turnoverCount: number;
+  holdCount: number;
+  issueCount: number;
+  resolvedIssueCount: number;
+  avgOccupiedMins: number;
+  avgTurnoverMins: number;
+  statusMinutes: Record<RoomOperationalStatus, number>;
+  issueRollups: Array<{
+    issueType: RoomIssueType;
+    count: number;
+    openCount: number;
+    resolvedCount: number;
+    avgResolutionMins: number;
+  }>;
+  roomRollups: Array<{
+    roomId: string;
+    roomName: string;
+    roomNumber: number | null;
+    occupiedMinutes: number;
+    turnoverMinutes: number;
+    holdMinutes: number;
+    notReadyMinutes: number;
+    turnoverCount: number;
+    holdCount: number;
+    issueCount: number;
+    dayStartCompleted: boolean;
+    dayEndCompleted: boolean;
+    avgOccupiedMins: number;
+    avgTurnoverMins: number;
+  }>;
+};
+
+export type TemporaryClinicAssignmentOverride = {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userStatus: string;
+  role: Role;
+  clinicId: string;
+  clinicName: string;
+  clinicShortCode?: string | null;
+  clinicStatus: string;
+  facilityId: string;
+  facilityName: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  createdAt: string;
+  createdByUserId: string;
+  createdByName: string;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedByName: string | null;
+  state: "active" | "upcoming" | "expired" | "revoked";
 };
 
 export type PreRoomingCheckResult = {
@@ -744,12 +811,6 @@ export const rooms = {
     return apiFetch<PreRoomingCheckResult>("/rooms/pre-rooming-check", {
       method: "POST",
       body: JSON.stringify({ encounterId }),
-    });
-  },
-  startCleaning(roomId: string, dto?: { clinicId?: string; note?: string }) {
-    return apiFetch(`/rooms/${roomId}/actions/start-cleaning`, {
-      method: "POST",
-      body: JSON.stringify(dto || {}),
     });
   },
   markReady(roomId: string, dto?: { clinicId?: string; note?: string }) {
@@ -1270,6 +1331,42 @@ export const admin = {
       body: JSON.stringify(dto),
     });
   },
+  listAssignmentOverrides(params?: {
+    facilityId?: string;
+    clinicId?: string;
+    userId?: string;
+    role?: Role;
+    state?: "active" | "upcoming" | "expired" | "all";
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.facilityId) qs.set("facilityId", params.facilityId);
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.userId) qs.set("userId", params.userId);
+    if (params?.role) qs.set("role", params.role);
+    if (params?.state) qs.set("state", params.state);
+    const q = qs.toString();
+    return apiFetch<TemporaryClinicAssignmentOverride[]>(`/admin/assignment-overrides${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
+  },
+  createAssignmentOverride(dto: {
+    userId: string;
+    role: "MA" | "Clinician";
+    clinicId: string;
+    facilityId: string;
+    startsAt: string;
+    endsAt: string;
+    reason: string;
+  }) {
+    return apiFetch<TemporaryClinicAssignmentOverride>("/admin/assignment-overrides", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  revokeAssignmentOverride(id: string) {
+    return apiFetch<TemporaryClinicAssignmentOverride>(`/admin/assignment-overrides/${id}/revoke`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
 
   // Integrations (AthenaOne)
   getAthenaOneConnector(facilityId?: string) {
@@ -1535,6 +1632,17 @@ export const dashboards = {
     const q = qs.toString();
     return apiFetch<unknown>(`/dashboard/office-manager/history${q ? `?${q}` : ""}`, { cacheTtlMs: 30_000 });
   },
+  roomHistory(params?: { clinicId?: string; from?: string; to?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const q = qs.toString();
+    return apiFetch<{ scope: { clinicId?: string | null; from: string; to: string }; daily: RoomDailyHistoryRollup[] }>(
+      `/dashboard/rooms/history${q ? `?${q}` : ""}`,
+      { cacheTtlMs: 30_000 },
+    );
+  },
   revenueCycle(params?: { clinicId?: string; date?: string }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
@@ -1550,6 +1658,10 @@ export const auth = {
   getContext() {
     return apiFetch<{
       userId: string;
+      name: string | null;
+      email: string | null;
+      firstName: string | null;
+      lastName: string | null;
       role: string;
       roles: string[];
       clinicId: string | null;
@@ -1567,6 +1679,10 @@ export const auth = {
   setActiveFacility(facilityId: string) {
     return apiFetch<{
       userId: string;
+      name: string | null;
+      email: string | null;
+      firstName: string | null;
+      lastName: string | null;
       role: string;
       roles: string[];
       clinicId: string | null;

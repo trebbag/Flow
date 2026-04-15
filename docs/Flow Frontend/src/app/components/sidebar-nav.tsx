@@ -19,7 +19,7 @@ import {
 import { cn } from "./ui/utils";
 import { alerts as alertsApi, tasks as tasksApi, primeRouteData } from "./api-client";
 import { useSidebar } from "./sidebar-context";
-import { clearSession, loadSession } from "./auth-session";
+import { clearSession, loadSession, type AuthSession } from "./auth-session";
 import { auth } from "./api-client";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT, SESSION_CHANGED_EVENT } from "./app-events";
 import { logoutFromMicrosoft, resetMicrosoftLoginState } from "./microsoft-auth";
@@ -47,6 +47,37 @@ const adminItems: Array<{ to: AppPath; icon: React.ElementType; label: string }>
 // ── Fixed-position tooltip state ──
 type TooltipState = { label: string; top: number; left: number } | null;
 
+function nameParts(session: AuthSession | null) {
+  const explicitFirst = session?.firstName?.trim();
+  const explicitLast = session?.lastName?.trim();
+  if (explicitFirst || explicitLast) {
+    return {
+      first: explicitFirst || explicitLast || "User",
+      last: explicitLast || ""
+    };
+  }
+  const source = session?.name?.trim() || session?.username?.split("@")[0] || session?.email?.split("@")[0] || "";
+  const parts = source.split(/\s+/).filter(Boolean);
+  return {
+    first: parts[0] || "User",
+    last: parts.length > 1 ? parts[parts.length - 1] || "" : ""
+  };
+}
+
+function deriveUserLabel(session: AuthSession | null) {
+  if (!session) return "User";
+  const parts = nameParts(session);
+  const label = [parts.first, parts.last].filter(Boolean).join(" ").trim();
+  return label || session.email || session.username || "User";
+}
+
+function deriveInitials(session: AuthSession | null) {
+  const parts = nameParts(session);
+  const first = parts.first?.[0] || session?.email?.[0] || session?.username?.[0] || "U";
+  const last = parts.last?.[0] || "";
+  return `${first}${last || (parts.first?.[1] || "")}`.toUpperCase();
+}
+
 export function SidebarNav() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -64,13 +95,8 @@ export function SidebarNav() {
   const allowedPaths = session ? getAllowedPathsForRole(session.role) : new Set<AppPath>();
   const visibleWorkflowItems = workflowItems.filter((item) => allowedPaths.has(item.to));
   const visibleAdminItems = activeRole === "Admin" ? adminItems.filter((item) => allowedPaths.has(item.to)) : [];
-  const userLabel =
-    session?.mode === "dev_header"
-      ? `User ${session.userId?.slice(0, 8) || "Session"}`
-      : "JWT Session";
-  const initials = session?.mode === "dev_header"
-    ? (session.userId?.slice(0, 2).toUpperCase() || "US")
-    : "JW";
+  const userLabel = deriveUserLabel(session);
+  const initials = deriveInitials(session);
 
   useEffect(() => {
     let active = true;
@@ -86,6 +112,18 @@ export function SidebarNav() {
         .getContext()
         .then((context) => {
           if (!active) return;
+          setSession((current) =>
+            current
+              ? {
+                  ...current,
+                  userId: context.userId || current.userId,
+                  name: context.name || current.name,
+                  email: context.email || current.email,
+                  firstName: context.firstName || current.firstName,
+                  lastName: context.lastName || current.lastName,
+                }
+              : current,
+          );
           const match = (context.availableFacilities || []).find(
             (facility) => facility.id === (context.activeFacilityId || nextSession.facilityId),
           );
@@ -337,7 +375,6 @@ export function SidebarNav() {
 
       {/* Nav items */}
       <nav className={cn("flex-1 py-3 overflow-y-auto", collapsed ? "px-2 space-y-1" : "px-3 space-y-0.5")}>
-        {!collapsed && <div className="px-2 py-2 text-[10px] text-white/30 uppercase tracking-widest">Workflow</div>}
         {visibleWorkflowItems.map((item) => renderNavItem(item, item.to === "/alerts" || item.to === "/tasks"))}
 
         {visibleAdminItems.length > 0 && (

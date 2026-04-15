@@ -7,6 +7,7 @@ import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
 import { requireRoles } from "../lib/auth.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 import { assertRoomAssignableForEncounter, markEncounterRoomNeedsTurnover, markEncounterRoomOccupiedInTx } from "../lib/room-operations.js";
+import { hasActiveTemporaryClinicOverride, listActiveTemporaryClinicOverrideIds } from "../lib/assignment-overrides.js";
 import { formatClinicDisplayName, formatProviderDisplayName, formatReasonDisplayName, formatRoomDisplayName, formatUserDisplayName } from "../lib/display-names.js";
 const allowedTransitions = {
     Incoming: ["Lobby"],
@@ -176,9 +177,17 @@ async function getClinicianProviderIds(userId) {
     });
     return providers.map((provider) => provider.id);
 }
-function assertClinicInUserScope(user, clinic) {
+async function assertClinicInUserScope(user, clinic) {
     if (user.clinicId && clinic.id !== user.clinicId) {
-        throw new ApiError(403, "Clinic is outside your assigned scope");
+        const hasOverride = await hasActiveTemporaryClinicOverride({
+            userId: user.id,
+            role: user.role,
+            clinicId: clinic.id,
+            facilityId: user.facilityId || clinic.facilityId
+        });
+        if (!hasOverride) {
+            throw new ApiError(403, "Clinic is outside your assigned scope");
+        }
     }
     if (user.facilityId && clinic.facilityId !== user.facilityId) {
         throw new ApiError(403, "Clinic is outside your assigned scope");
@@ -190,7 +199,7 @@ async function resolveScopedClinic(user, clinicId) {
         select: { id: true, facilityId: true, timezone: true, status: true, maRun: true }
     });
     assert(clinic, 404, "Clinic not found");
-    assertClinicInUserScope(user, clinic);
+    await assertClinicInUserScope(user, clinic);
     return clinic;
 }
 async function assertEncounterInScope(encounter, user) {
@@ -199,22 +208,33 @@ async function assertEncounterInScope(encounter, user) {
         select: { id: true, facilityId: true }
     });
     assert(clinic, 404, "Clinic not found");
-    assertClinicInUserScope(user, clinic);
+    await assertClinicInUserScope(user, clinic);
 }
 async function assertEncounterAccess(encounter, userId, role) {
     if (role === RoleName.Admin || role === RoleName.OfficeManager || role === RoleName.FrontDeskCheckIn || role === RoleName.FrontDeskCheckOut) {
         return;
     }
     if (role === RoleName.MA) {
-        if (!encounter.assignedMaUserId || encounter.assignedMaUserId !== userId) {
+        const hasClinicOverride = await hasActiveTemporaryClinicOverride({
+            userId,
+            role,
+            clinicId: encounter.clinicId
+        });
+        if (!hasClinicOverride && (!encounter.assignedMaUserId || encounter.assignedMaUserId !== userId)) {
             throw new ApiError(403, "Access denied: encounter is assigned to another MA.");
         }
         return;
     }
     if (role === RoleName.Clinician) {
-        if (!encounter.providerId) {
+        const hasClinicOverride = await hasActiveTemporaryClinicOverride({
+            userId,
+            role,
+            clinicId: encounter.clinicId
+        });
+        if (hasClinicOverride)
+            return;
+        if (!encounter.providerId)
             throw new ApiError(403, "Access denied: encounter has no provider assignment.");
-        }
         const providerIds = await getClinicianProviderIds(userId);
         if (!providerIds.includes(encounter.providerId)) {
             throw new ApiError(403, "Access denied: encounter is assigned to another provider.");
@@ -313,13 +333,18 @@ async function listEncountersForRole(filters) {
             dateRange = dateRangeForDay(filters.date, timezone);
         }
     }
-    if (filters.role === RoleName.MA) {
-        filters.assignedMaUserId = filters.userId;
-    }
+    const temporaryOverrideClinicIds = await listActiveTemporaryClinicOverrideIds({
+        userId: filters.userId,
+        role: filters.role,
+        facilityId: filters.facilityId
+    });
+    const filteredOverrideClinicIds = filters.clinicId
+        ? temporaryOverrideClinicIds.filter((clinicId) => clinicId === filters.clinicId)
+        : temporaryOverrideClinicIds;
     let clinicianProviderIds;
     if (filters.role === RoleName.Clinician) {
         clinicianProviderIds = await getClinicianProviderIds(filters.userId);
-        if (clinicianProviderIds.length === 0) {
+        if (clinicianProviderIds.length === 0 && filteredOverrideClinicIds.length === 0) {
             return [];
         }
     }
@@ -328,8 +353,24 @@ async function listEncountersForRole(filters) {
             clinicId: filters.clinicId,
             clinic: filters.facilityId ? { facilityId: filters.facilityId } : undefined,
             currentStatus: filters.status,
-            assignedMaUserId: filters.assignedMaUserId,
-            ...(filters.role === RoleName.Clinician ? { providerId: { in: clinicianProviderIds } } : {}),
+            ...(filters.role === RoleName.MA
+                ? {
+                    OR: [
+                        { assignedMaUserId: filters.userId },
+                        ...(filteredOverrideClinicIds.length > 0 ? [{ clinicId: { in: filteredOverrideClinicIds } }] : [])
+                    ]
+                }
+                : {
+                    assignedMaUserId: filters.assignedMaUserId
+                }),
+            ...(filters.role === RoleName.Clinician
+                ? {
+                    OR: [
+                        ...(clinicianProviderIds && clinicianProviderIds.length > 0 ? [{ providerId: { in: clinicianProviderIds } }] : []),
+                        ...(filteredOverrideClinicIds.length > 0 ? [{ clinicId: { in: filteredOverrideClinicIds } }] : [])
+                    ]
+                }
+                : {}),
             ...(dateRange ? { dateOfService: { gte: dateRange.start, lt: dateRange.end } } : { dateOfService })
         },
         include: {
@@ -348,6 +389,15 @@ async function listEncountersForRole(filters) {
             room: { select: { id: true, name: true, status: true } },
             tasks: true,
             alertState: true,
+            statusEvents: {
+                orderBy: { changedAt: "asc" },
+                select: {
+                    fromStatus: true,
+                    toStatus: true,
+                    changedAt: true,
+                    reasonCode: true
+                }
+            },
             safetyEvents: {
                 where: { resolvedAt: null },
                 orderBy: { activatedAt: "desc" },
@@ -570,10 +620,8 @@ export async function registerEncounterRoutes(app) {
         const query = request.query;
         const user = request.user;
         const requestedClinicId = query.clinicId?.trim() || undefined;
-        const scopedClinicId = user.clinicId || requestedClinicId;
-        if (user.clinicId && requestedClinicId && requestedClinicId !== user.clinicId) {
-            throw new ApiError(403, "Clinic is outside your assigned scope");
-        }
+        const scopedClinicId = requestedClinicId ||
+            (user.role === RoleName.MA || user.role === RoleName.Clinician ? undefined : user.clinicId || undefined);
         if (scopedClinicId) {
             await resolveScopedClinic(user, scopedClinicId);
         }
@@ -615,6 +663,15 @@ export async function registerEncounterRoutes(app) {
                 room: { select: { id: true, name: true, status: true } },
                 tasks: true,
                 alertState: true,
+                statusEvents: {
+                    orderBy: { changedAt: "asc" },
+                    select: {
+                        fromStatus: true,
+                        toStatus: true,
+                        changedAt: true,
+                        reasonCode: true
+                    }
+                },
                 safetyEvents: {
                     orderBy: { activatedAt: "desc" },
                     take: 1
@@ -622,7 +679,7 @@ export async function registerEncounterRoutes(app) {
             }
         });
         assert(encounter, 404, "Encounter not found");
-        assertClinicInUserScope(request.user, {
+        await assertClinicInUserScope(request.user, {
             id: encounter.clinicId,
             facilityId: encounter.clinic?.facilityId || null
         });

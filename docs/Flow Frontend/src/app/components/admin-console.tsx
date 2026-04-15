@@ -79,6 +79,7 @@ import {
   incoming as incomingApi,
   incomingDispositionReasons,
   type IncomingDispositionReason,
+  type TemporaryClinicAssignmentOverride,
 } from "./api-client";
 import { useEncounters } from "./encounter-context";
 import { applySession, loadSession, saveSession } from "./auth-session";
@@ -139,7 +140,24 @@ type TemplateFieldDefinition = {
   id?: string;
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "checkbox" | "select" | "radio" | "date" | "time";
+  type:
+    | "text"
+    | "textarea"
+    | "number"
+    | "checkbox"
+    | "select"
+    | "radio"
+    | "date"
+    | "time"
+    | "bloodPressure"
+    | "temperature"
+    | "pulse"
+    | "respirations"
+    | "oxygenSaturation"
+    | "height"
+    | "weight"
+    | "painScore"
+    | "yesNo";
   required?: boolean;
   options?: string[];
   group?: string;
@@ -2252,6 +2270,7 @@ function NotificationsTab({
 // ── Tab: Assignments ──
 function AssignmentsTab() {
   const {
+    facility,
     clinics: mockClinics,
     assignments: mockAssignments,
     maUsers,
@@ -2262,6 +2281,35 @@ function AssignmentsTab() {
   const [draftMaByClinic, setDraftMaByClinic] = useState<Record<string, string>>({});
   const [assignmentVersion, setAssignmentVersion] = useState(0);
   const [savingClinicId, setSavingClinicId] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<TemporaryClinicAssignmentOverride[]>([]);
+  const [overrideLoading, setOverrideLoading] = useState(false);
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  const [overrideDraft, setOverrideDraft] = useState({
+    userId: "",
+    role: "MA" as "MA" | "Clinician",
+    clinicId: "",
+    startsAt: "",
+    endsAt: "",
+    reason: "",
+  });
+
+  const loadOverrides = useCallback(async () => {
+    setOverrideLoading(true);
+    try {
+      const rows = await admin.listAssignmentOverrides({ facilityId: facility.id, state: "all" });
+      setOverrides(rows || []);
+    } catch (error) {
+      toast.error("Unable to load temporary coverage", {
+        description: (error as Error).message || "Assignment overrides could not be loaded",
+      });
+    } finally {
+      setOverrideLoading(false);
+    }
+  }, [facility.id]);
+
+  useEffect(() => {
+    loadOverrides().catch(() => undefined);
+  }, [loadOverrides]);
 
   const assignmentRows = useMemo(() => {
     return mockClinics
@@ -2290,6 +2338,58 @@ function AssignmentsTab() {
 
   const availableMas = maUsers.filter((user) => String(user.status || "").toLowerCase() === "active");
   const availableProviders = clinicianUsers.filter((user) => String(user.status || "").toLowerCase() === "active");
+  const overrideUsers = overrideDraft.role === "MA" ? availableMas : availableProviders;
+
+  async function saveTemporaryOverride() {
+    if (!overrideDraft.userId || !overrideDraft.clinicId || !overrideDraft.startsAt || !overrideDraft.endsAt || !overrideDraft.reason.trim()) {
+      toast.error("Temporary coverage needs user, clinic, start/end, and reason");
+      return;
+    }
+    const startsAt = new Date(overrideDraft.startsAt);
+    const endsAt = new Date(overrideDraft.endsAt);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
+      toast.error("Temporary coverage end must be after the start");
+      return;
+    }
+    setOverrideSaving(true);
+    try {
+      await admin.createAssignmentOverride({
+        userId: overrideDraft.userId,
+        role: overrideDraft.role,
+        clinicId: overrideDraft.clinicId,
+        facilityId: facility.id,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        reason: overrideDraft.reason.trim(),
+      });
+      toast.success("Temporary coverage added");
+      setOverrideDraft({ userId: "", role: overrideDraft.role, clinicId: "", startsAt: "", endsAt: "", reason: "" });
+      await loadOverrides();
+      requestAdminRefresh();
+    } catch (error) {
+      toast.error("Unable to add temporary coverage", {
+        description: (error as Error).message || "Please verify the user has the selected role in this facility.",
+      });
+    } finally {
+      setOverrideSaving(false);
+    }
+  }
+
+  async function revokeOverride(row: TemporaryClinicAssignmentOverride) {
+    setSavingClinicId(row.id);
+    try {
+      await admin.revokeAssignmentOverride(row.id);
+      toast.success("Temporary coverage revoked");
+      await loadOverrides();
+      requestAdminRefresh();
+    } catch (error) {
+      toast.error("Unable to revoke coverage", {
+        description: (error as Error).message || "The temporary override could not be revoked.",
+      });
+    } finally {
+      setSavingClinicId(null);
+    }
+  }
 
   return (
     <TabPanel accentColor="bg-cyan-500">
@@ -2447,6 +2547,130 @@ function AssignmentsTab() {
                   </div>
                 );
               })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-400" />
+          <CardContent className="p-5">
+            <SectionHeader icon={History} title="Temporary Coverage" count={overrides.length} iconColor="text-blue-500" />
+            <p className="text-[12px] text-muted-foreground mb-4">
+              Grant a time-bounded clinic assignment for an MA or clinician without changing their permanent clinic.
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3 mb-4">
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Role</label>
+                <select
+                  value={overrideDraft.role}
+                  onChange={(event) =>
+                    setOverrideDraft((current) => ({ ...current, role: event.target.value as "MA" | "Clinician", userId: "" }))
+                  }
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                >
+                  <option value="MA">MA</option>
+                  <option value="Clinician">Clinician</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">User</label>
+                <select
+                  value={overrideDraft.userId}
+                  onChange={(event) => setOverrideDraft((current) => ({ ...current, userId: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                >
+                  <option value="">Select user...</option>
+                  {overrideUsers.map((user) => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Clinic</label>
+                <select
+                  value={overrideDraft.clinicId}
+                  onChange={(event) => setOverrideDraft((current) => ({ ...current, clinicId: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                >
+                  <option value="">Select clinic...</option>
+                  {assignmentRows.filter((row) => row.clinicStatus === "active").map((row) => (
+                    <option key={row.clinicId} value={row.clinicId}>{row.clinicName}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Starts</label>
+                <input
+                  type="datetime-local"
+                  value={overrideDraft.startsAt}
+                  onChange={(event) => setOverrideDraft((current) => ({ ...current, startsAt: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Ends</label>
+                <input
+                  type="datetime-local"
+                  value={overrideDraft.endsAt}
+                  onChange={(event) => setOverrideDraft((current) => ({ ...current, endsAt: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Reason</label>
+                <input
+                  value={overrideDraft.reason}
+                  onChange={(event) => setOverrideDraft((current) => ({ ...current, reason: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                  placeholder="Coverage reason"
+                />
+              </div>
+              <div className="lg:col-span-6 flex justify-end">
+                <button
+                  onClick={() => saveTemporaryOverride().catch(() => undefined)}
+                  disabled={overrideSaving}
+                  className="h-9 px-4 rounded-lg bg-blue-600 text-white text-[12px] hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  style={{ fontWeight: 600 }}
+                >
+                  {overrideSaving ? "Adding..." : "Add Temporary Coverage"}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {overrideLoading ? (
+                <div className="text-[12px] text-muted-foreground">Loading temporary coverage...</div>
+              ) : overrides.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-200 p-4 text-[12px] text-muted-foreground">
+                  No temporary coverage rules have been added.
+                </div>
+              ) : (
+                overrides.map((row) => (
+                  <div key={row.id} className="rounded-lg border border-gray-100 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px]" style={{ fontWeight: 700 }}>{row.userName}</span>
+                        <Badge className="border-0 bg-blue-100 text-blue-700 text-[10px] h-5">{row.role}</Badge>
+                        <Badge className={`border-0 text-[10px] h-5 ${row.state === "active" ? "bg-emerald-100 text-emerald-700" : row.state === "upcoming" ? "bg-sky-100 text-sky-700" : "bg-slate-100 text-slate-600"}`}>{row.state}</Badge>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-1">
+                        {row.clinicName} · {formatDateTime(row.startsAt)} to {formatDateTime(row.endsAt)}
+                      </div>
+                      <div className="text-[11px] text-gray-600 mt-1">{row.reason}</div>
+                    </div>
+                    {!row.revokedAt && row.state !== "expired" && (
+                      <button
+                        onClick={() => revokeOverride(row).catch(() => undefined)}
+                        disabled={savingClinicId === row.id}
+                        className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700 hover:bg-gray-50"
+                      >
+                        {savingClinicId === row.id ? "Revoking..." : "Revoke"}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -2757,15 +2981,26 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
         source,
       });
 
-      toast.success(`Accepted ${created.acceptedCount} schedule row${created.acceptedCount === 1 ? "" : "s"}`, {
-        description:
-          created.pendingCount > 0
-            ? `${created.pendingCount} row${created.pendingCount === 1 ? "" : "s"} moved to Pending Review.`
-            : "Incoming patient schedule has been updated for the selected day.",
-      });
+      if (created.acceptedCount === 0 && created.pendingCount > 0) {
+        toast.warning("No rows were accepted", {
+          description: `${created.pendingCount} row${created.pendingCount === 1 ? "" : "s"} moved to Pending Review for correction.`,
+        });
+      } else {
+        toast.success(
+          `Accepted ${created.acceptedCount} schedule row${created.acceptedCount === 1 ? "" : "s"}`,
+          {
+            description:
+              created.pendingCount > 0
+                ? `${created.pendingCount} row${created.pendingCount === 1 ? "" : "s"} moved to Pending Review.`
+                : "Incoming patient schedule has been updated for the selected day.",
+          },
+        );
+      }
 
-      setCsvText("");
-      setFileName("");
+      if (created.acceptedCount > 0) {
+        setCsvText("");
+        setFileName("");
+      }
       requestAdminRefresh();
       await refreshSchedule();
     } catch (error) {
@@ -3154,12 +3389,16 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                 rows={9}
                 className="mt-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[12px] font-mono focus:outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                 placeholder={[
-                  "patientId,clinic,appointmentDate,appointmentTime,providerLastName,reasonForVisit",
-                  "PT-1045,Downtown Clinic (DT),2026-03-06,08:30,Chen,Follow-up",
-                  "PT-2046,ES,2026-03-07,09:15,Patel,Sick Visit",
+                  "clinic,patientId,appointmentDate,appointmentTime,providerLastName,reasonForVisit",
+                  "Downtown Clinic (DT),PT-1045,2026-03-06,08:30,Chen,Follow-up",
+                  "ES,PT-2046,2026-03-07,09:15,Patel,Sick Visit",
                 ].join("\n")}
               />
               <div className="mt-2 space-y-2">
+                <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                  <span style={{ fontWeight: 700 }}>Expected column order:</span>{" "}
+                  clinic, patientId, appointmentDate, appointmentTime, providerLastName, reasonForVisit
+                </div>
                 <div className="text-[11px] text-muted-foreground">
                   Required headers and accepted aliases:
                 </div>

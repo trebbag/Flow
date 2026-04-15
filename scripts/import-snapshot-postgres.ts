@@ -17,6 +17,7 @@ const TABLE_ORDER = [
   "MaProviderMap",
   "MaClinicMap",
   "ClinicAssignment",
+  "TemporaryClinicAssignmentOverride",
   "ClinicRoom",
   "ClinicRoomAssignment",
   "ReasonForVisit",
@@ -36,6 +37,7 @@ const TABLE_ORDER = [
   "AlertThreshold",
   "NotificationPolicy",
   "OfficeManagerDailyRollup",
+  "RoomDailyRollup",
   "AuditLog",
   "EventOutbox"
 ] as const;

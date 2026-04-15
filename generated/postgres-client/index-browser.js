@@ -202,6 +202,21 @@ exports.Prisma.ClinicAssignmentScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.TemporaryClinicAssignmentOverrideScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  role: 'role',
+  clinicId: 'clinicId',
+  facilityId: 'facilityId',
+  startsAt: 'startsAt',
+  endsAt: 'endsAt',
+  reason: 'reason',
+  createdByUserId: 'createdByUserId',
+  createdAt: 'createdAt',
+  revokedAt: 'revokedAt',
+  revokedByUserId: 'revokedByUserId'
+};
+
 exports.Prisma.ClinicRoomScalarFieldEnum = {
   id: 'id',
   facilityId: 'facilityId',
@@ -531,6 +546,28 @@ exports.Prisma.OfficeManagerDailyRollupScalarFieldEnum = {
   computedAt: 'computedAt'
 };
 
+exports.Prisma.RoomDailyRollupScalarFieldEnum = {
+  id: 'id',
+  facilityId: 'facilityId',
+  clinicId: 'clinicId',
+  dateKey: 'dateKey',
+  roomCount: 'roomCount',
+  dayStartCompletedCount: 'dayStartCompletedCount',
+  dayEndCompletedCount: 'dayEndCompletedCount',
+  turnoverCount: 'turnoverCount',
+  holdCount: 'holdCount',
+  issueCount: 'issueCount',
+  resolvedIssueCount: 'resolvedIssueCount',
+  occupiedTotalMins: 'occupiedTotalMins',
+  occupiedSamples: 'occupiedSamples',
+  turnoverTotalMins: 'turnoverTotalMins',
+  turnoverSamples: 'turnoverSamples',
+  statusMinutesJson: 'statusMinutesJson',
+  roomRollupsJson: 'roomRollupsJson',
+  issueRollupsJson: 'issueRollupsJson',
+  computedAt: 'computedAt'
+};
+
 exports.Prisma.AuditLogScalarFieldEnum = {
   id: 'id',
   requestId: 'requestId',
@@ -658,9 +695,9 @@ exports.TaskSourceType = exports.$Enums.TaskSourceType = {
 
 exports.RoomOperationalStatus = exports.$Enums.RoomOperationalStatus = {
   Ready: 'Ready',
+  NotReady: 'NotReady',
   Occupied: 'Occupied',
   NeedsTurnover: 'NeedsTurnover',
-  Cleaning: 'Cleaning',
   Hold: 'Hold'
 };
 
@@ -675,7 +712,6 @@ exports.RoomHoldReason = exports.$Enums.RoomHoldReason = {
 exports.RoomEventType = exports.$Enums.RoomEventType = {
   AssignedToEncounter: 'AssignedToEncounter',
   PatientLeftForCheckout: 'PatientLeftForCheckout',
-  CleaningStarted: 'CleaningStarted',
   MarkedReady: 'MarkedReady',
   HoldPlaced: 'HoldPlaced',
   HoldCleared: 'HoldCleared',
@@ -737,6 +773,7 @@ exports.Prisma.ModelName = {
   MaProviderMap: 'MaProviderMap',
   MaClinicMap: 'MaClinicMap',
   ClinicAssignment: 'ClinicAssignment',
+  TemporaryClinicAssignmentOverride: 'TemporaryClinicAssignmentOverride',
   ClinicRoom: 'ClinicRoom',
   ClinicRoomAssignment: 'ClinicRoomAssignment',
   ReasonForVisit: 'ReasonForVisit',
@@ -759,6 +796,7 @@ exports.Prisma.ModelName = {
   AlertThreshold: 'AlertThreshold',
   NotificationPolicy: 'NotificationPolicy',
   OfficeManagerDailyRollup: 'OfficeManagerDailyRollup',
+  RoomDailyRollup: 'RoomDailyRollup',
   AuditLog: 'AuditLog',
   EventOutbox: 'EventOutbox',
   IntegrationConnector: 'IntegrationConnector'

@@ -36,7 +36,24 @@ export type RevenueCycleStatus =
 export type TemplateType = "checkin" | "rooming" | "clinician" | "checkout";
 export type TemplateStatus = "active" | "inactive" | "archived";
 export type ReasonStatus = "active" | "inactive" | "archived";
-export type TemplateFieldType = "text" | "textarea" | "number" | "checkbox" | "select" | "radio" | "date" | "time";
+export type TemplateFieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "checkbox"
+  | "select"
+  | "radio"
+  | "date"
+  | "time"
+  | "bloodPressure"
+  | "temperature"
+  | "pulse"
+  | "respirations"
+  | "oxygenSaturation"
+  | "height"
+  | "weight"
+  | "painScore"
+  | "yesNo";
 export type AlertThresholdMetric = "stage" | "overall_visit";
 
 export type SafetyState = "Inactive" | "Active";

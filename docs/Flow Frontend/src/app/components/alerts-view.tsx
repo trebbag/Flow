@@ -20,6 +20,7 @@ export function AlertsView() {
   const [rows, setRows] = useState<AlertInboxItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [clearingIds, setClearingIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,8 +104,14 @@ export function AlertsView() {
               {rows.map((row) => {
                 const Icon = kindIcon(row.kind);
                 const encounterId = String((row.payload as any)?.encounterId || "");
+                const clearing = clearingIds.has(row.id);
                 return (
-                  <Card key={row.id} className="border-0 shadow-sm">
+                  <Card
+                    key={row.id}
+                    className={`border-0 shadow-sm transition-all duration-200 ${
+                      clearing ? "opacity-0 -translate-y-1 scale-[0.98] max-h-0 overflow-hidden" : "opacity-100 translate-y-0"
+                    }`}
+                  >
                     <CardContent className="p-4 flex items-start gap-3">
                       <div
                         className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -137,12 +144,30 @@ export function AlertsView() {
                         {tab === "active" ? (
                           <button
                             onClick={async () => {
+                              const removed = row;
+                              setClearingIds((current) => new Set([...current, row.id]));
+                              window.setTimeout(() => {
+                                setRows((current) => current.filter((entry) => entry.id !== row.id));
+                                setTotal((current) => Math.max(0, current - 1));
+                                setClearingIds((current) => {
+                                  const next = new Set(current);
+                                  next.delete(row.id);
+                                  return next;
+                                });
+                              }, 160);
                               try {
                                 await alertsApi.acknowledge(row.id);
-                                toast.success("Alert archived");
+                                toast.success("Alert archived", { description: "Cleared from the active queue." });
                                 dispatchAdminRefresh();
                                 load().catch(() => undefined);
                               } catch (error) {
+                                setRows((current) => current.some((entry) => entry.id === removed.id) ? current : [removed, ...current]);
+                                setTotal((current) => current + 1);
+                                setClearingIds((current) => {
+                                  const next = new Set(current);
+                                  next.delete(row.id);
+                                  return next;
+                                });
                                 toast.error("Unable to archive alert", { description: (error as Error).message });
                               }
                             }}

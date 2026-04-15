@@ -13,6 +13,7 @@ type EncounterRoomCandidate = {
     clinicId: string;
     roomId: string | null;
 };
+export declare function currentRoomDateKey(timezone?: string): string;
 export declare function backfillRoomOperationalStates(): Promise<number>;
 export declare function getRoomScopeClinicIds(user: RequestUser, requestedClinicId?: string | null): Promise<string[]>;
 export declare function ensureRoomOperationalStateInTx(tx: RoomOpsTx, roomId: string): Promise<{
@@ -173,6 +174,7 @@ export declare function listRoomCards(params: {
     clinicName: string;
     facilityId: string;
     operationalStatus: import("@prisma/client").$Enums.RoomOperationalStatus;
+    actualOperationalStatus: import("@prisma/client").$Enums.RoomOperationalStatus;
     statusSinceAt: Date;
     minutesInStatus: number;
     timerLabel: string;
@@ -187,6 +189,8 @@ export declare function listRoomCards(params: {
     holdNote: string;
     dayStartCompleted: boolean;
     dayEndCompleted: boolean;
+    assignable: boolean;
+    readinessBlockedReason: string;
     lowStock: boolean;
     auditDue: boolean;
 }[]>;
@@ -225,7 +229,7 @@ export declare function getRoomDetail(params: {
         lastTurnoverAt: Date | null;
     }) | {
         roomId: string;
-        currentStatus: "Ready";
+        currentStatus: "NotReady";
         statusSinceAt: Date;
         occupiedEncounterId: any;
         activeCleanerUserId: any;
@@ -235,18 +239,20 @@ export declare function getRoomDetail(params: {
         lastOccupiedAt: any;
         lastTurnoverAt: any;
     };
+    dayStartCompleted: boolean;
+    dayEndCompleted: boolean;
     events: {
         id: string;
         clinicId: string;
         facilityId: string;
         encounterId: string | null;
         roomId: string;
+        createdByUserId: string | null;
         eventType: import("@prisma/client").$Enums.RoomEventType;
         fromStatus: import("@prisma/client").$Enums.RoomOperationalStatus | null;
         toStatus: import("@prisma/client").$Enums.RoomOperationalStatus | null;
         note: string | null;
         metadataJson: Prisma.JsonValue | null;
-        createdByUserId: string | null;
         occurredAt: Date;
     }[];
     issues: {
@@ -259,8 +265,8 @@ export declare function getRoomDetail(params: {
         roomId: string;
         description: string | null;
         title: string;
-        metadataJson: Prisma.JsonValue | null;
         createdByUserId: string;
+        metadataJson: Prisma.JsonValue | null;
         issueType: import("@prisma/client").$Enums.RoomIssueType;
         severity: number;
         placesRoomOnHold: boolean;
@@ -308,6 +314,7 @@ export declare function getPreRoomingAvailability(params: {
         clinicName: string;
         facilityId: string;
         operationalStatus: import("@prisma/client").$Enums.RoomOperationalStatus;
+        actualOperationalStatus: import("@prisma/client").$Enums.RoomOperationalStatus;
         statusSinceAt: Date;
         minutesInStatus: number;
         timerLabel: string;
@@ -322,6 +329,8 @@ export declare function getPreRoomingAvailability(params: {
         holdNote: string;
         dayStartCompleted: boolean;
         dayEndCompleted: boolean;
+        assignable: boolean;
+        readinessBlockedReason: string;
         lowStock: boolean;
         auditDue: boolean;
     }[];

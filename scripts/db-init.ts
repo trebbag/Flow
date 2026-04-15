@@ -56,7 +56,9 @@ const requiresRebuild =
   !hasTable("RoomOperationalEvent") ||
   !hasTable("RoomIssue") ||
   !hasTable("RoomChecklistRun") ||
+  !hasTable("RoomDailyRollup") ||
   !hasTable("ClinicAssignment") ||
+  !hasTable("TemporaryClinicAssignmentOverride") ||
   !hasTable("ReasonClinicAssignment") ||
   !hasTable("TemplateReasonAssignment") ||
   !hasColumn("ReasonForVisit", "appointmentLengthMinutes") ||
@@ -79,6 +81,7 @@ if (requiresRebuild) {
   db.exec(`
 DROP TABLE IF EXISTS EventOutbox;
 DROP TABLE IF EXISTS AuditLog;
+DROP TABLE IF EXISTS RoomDailyRollup;
 DROP TABLE IF EXISTS OfficeManagerDailyRollup;
 DROP TABLE IF EXISTS NotificationPolicy;
 DROP TABLE IF EXISTS AlertThreshold;
@@ -102,6 +105,7 @@ DROP TABLE IF EXISTS ReasonForVisit;
 DROP TABLE IF EXISTS ClinicRoomAssignment;
 DROP TABLE IF EXISTS ClinicRoom;
 DROP TABLE IF EXISTS ClinicAssignment;
+DROP TABLE IF EXISTS TemporaryClinicAssignmentOverride;
 DROP TABLE IF EXISTS MaClinicMap;
 DROP TABLE IF EXISTS MaProviderMap;
 DROP TABLE IF EXISTS Provider;
@@ -210,6 +214,26 @@ CREATE TABLE IF NOT EXISTS ClinicAssignment (
   FOREIGN KEY (providerUserId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (providerId) REFERENCES Provider(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (maUserId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS TemporaryClinicAssignmentOverride (
+  id TEXT PRIMARY KEY NOT NULL,
+  userId TEXT NOT NULL,
+  role TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  facilityId TEXT NOT NULL,
+  startsAt TEXT NOT NULL,
+  endsAt TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  createdByUserId TEXT NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revokedAt TEXT,
+  revokedByUserId TEXT,
+  FOREIGN KEY (userId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (createdByUserId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (revokedByUserId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS ClinicRoom (
@@ -597,6 +621,31 @@ CREATE TABLE IF NOT EXISTS OfficeManagerDailyRollup (
   UNIQUE (clinicId, dateKey)
 );
 
+CREATE TABLE IF NOT EXISTS RoomDailyRollup (
+  id TEXT PRIMARY KEY NOT NULL,
+  facilityId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  dateKey TEXT NOT NULL,
+  roomCount INTEGER NOT NULL DEFAULT 0,
+  dayStartCompletedCount INTEGER NOT NULL DEFAULT 0,
+  dayEndCompletedCount INTEGER NOT NULL DEFAULT 0,
+  turnoverCount INTEGER NOT NULL DEFAULT 0,
+  holdCount INTEGER NOT NULL DEFAULT 0,
+  issueCount INTEGER NOT NULL DEFAULT 0,
+  resolvedIssueCount INTEGER NOT NULL DEFAULT 0,
+  occupiedTotalMins INTEGER NOT NULL DEFAULT 0,
+  occupiedSamples INTEGER NOT NULL DEFAULT 0,
+  turnoverTotalMins INTEGER NOT NULL DEFAULT 0,
+  turnoverSamples INTEGER NOT NULL DEFAULT 0,
+  statusMinutesJson TEXT NOT NULL,
+  roomRollupsJson TEXT NOT NULL,
+  issueRollupsJson TEXT NOT NULL,
+  computedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  UNIQUE (clinicId, dateKey)
+);
+
 CREATE TABLE IF NOT EXISTS AuditLog (
   id TEXT PRIMARY KEY NOT NULL,
   requestId TEXT NOT NULL,
@@ -691,6 +740,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS ClinicRoom_facilityId_roomNumber_live_unique
   WHERE status IN ('active', 'inactive');
 CREATE INDEX IF NOT EXISTS ClinicRoomAssignment_clinicId_active_idx ON ClinicRoomAssignment(clinicId, active);
 CREATE INDEX IF NOT EXISTS ClinicRoomAssignment_roomId_active_idx ON ClinicRoomAssignment(roomId, active);
+CREATE INDEX IF NOT EXISTS TemporaryClinicAssignmentOverride_userId_role_startsAt_endsAt_idx ON TemporaryClinicAssignmentOverride(userId, role, startsAt, endsAt);
+CREATE INDEX IF NOT EXISTS TemporaryClinicAssignmentOverride_clinicId_startsAt_endsAt_idx ON TemporaryClinicAssignmentOverride(clinicId, startsAt, endsAt);
+CREATE INDEX IF NOT EXISTS TemporaryClinicAssignmentOverride_facilityId_startsAt_endsAt_idx ON TemporaryClinicAssignmentOverride(facilityId, startsAt, endsAt);
+CREATE INDEX IF NOT EXISTS TemporaryClinicAssignmentOverride_revokedAt_idx ON TemporaryClinicAssignmentOverride(revokedAt);
 INSERT OR IGNORE INTO RoomOperationalState (roomId, currentStatus, statusSinceAt, lastReadyAt)
 SELECT id, 'Ready', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM ClinicRoom
@@ -726,6 +779,9 @@ CREATE INDEX IF NOT EXISTS UserAlertInbox_facility_clinic_kind_status_idx ON Use
 CREATE INDEX IF NOT EXISTS SafetyEvent_encounterId_resolvedAt_idx ON SafetyEvent(encounterId, resolvedAt);
 CREATE INDEX IF NOT EXISTS OfficeManagerDailyRollup_dateKey_idx ON OfficeManagerDailyRollup(dateKey);
 CREATE INDEX IF NOT EXISTS OfficeManagerDailyRollup_clinicId_dateKey_idx ON OfficeManagerDailyRollup(clinicId, dateKey);
+CREATE INDEX IF NOT EXISTS RoomDailyRollup_facilityId_dateKey_idx ON RoomDailyRollup(facilityId, dateKey);
+CREATE INDEX IF NOT EXISTS RoomDailyRollup_dateKey_idx ON RoomDailyRollup(dateKey);
+CREATE INDEX IF NOT EXISTS RoomDailyRollup_clinicId_dateKey_idx ON RoomDailyRollup(clinicId, dateKey);
 CREATE INDEX IF NOT EXISTS AuditLog_occurredAt_idx ON AuditLog(occurredAt);
 CREATE INDEX IF NOT EXISTS AuditLog_requestId_idx ON AuditLog(requestId);
 CREATE INDEX IF NOT EXISTS AuditLog_route_method_idx ON AuditLog(route, method);

@@ -48,7 +48,16 @@ const templateFieldTypeSchema = z.enum([
   "select",
   "radio",
   "date",
-  "time"
+  "time",
+  "bloodPressure",
+  "temperature",
+  "pulse",
+  "respirations",
+  "oxygenSaturation",
+  "height",
+  "weight",
+  "painScore",
+  "yesNo"
 ]);
 const templateFieldSchema = z.object({
   id: z.string().trim().optional(),
@@ -336,6 +345,24 @@ const roleSchema = z.object({
 const clinicAssignmentSchema = z.object({
   providerUserId: z.string().uuid().nullable().optional(),
   maUserId: z.string().uuid().nullable().optional()
+});
+
+const assignmentOverrideQuerySchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  clinicId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
+  role: z.nativeEnum(RoleName).optional(),
+  state: z.enum(["active", "upcoming", "expired", "all"]).optional()
+});
+
+const assignmentOverrideSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum([RoleName.MA, RoleName.Clinician]),
+  clinicId: z.string().uuid(),
+  facilityId: z.string().uuid(),
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime(),
+  reason: z.string().trim().min(3).max(500)
 });
 
 async function getFirstActiveFacility() {
@@ -1800,6 +1827,117 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       maUserName: formatUserDisplayName(assignment.maUser) || null,
       maUserStatus: assignment.maUser?.status || null
     };
+  });
+
+  app.get("/admin/assignment-overrides", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const query = assignmentOverrideQuerySchema.parse(request.query);
+    const facility = await resolveFacilityForRequest(request, query.facilityId);
+    const now = new Date();
+    const state = query.state || "all";
+    const rows = await prisma.temporaryClinicAssignmentOverride.findMany({
+      where: {
+        facilityId: facility.id,
+        clinicId: query.clinicId,
+        userId: query.userId,
+        role: query.role,
+        ...(state === "active"
+          ? { revokedAt: null, startsAt: { lte: now }, endsAt: { gt: now } }
+          : state === "upcoming"
+            ? { revokedAt: null, startsAt: { gt: now } }
+            : state === "expired"
+              ? { OR: [{ endsAt: { lte: now } }, { revokedAt: { not: null } }] }
+              : {})
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, status: true } },
+        clinic: { select: { id: true, name: true, shortCode: true, status: true } },
+        facility: { select: { id: true, name: true, shortCode: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        revokedBy: { select: { id: true, name: true, email: true } }
+      },
+      orderBy: [{ startsAt: "desc" }, { createdAt: "desc" }]
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      userName: formatUserDisplayName(row.user) || row.user.email,
+      userEmail: row.user.email,
+      userStatus: row.user.status,
+      role: row.role,
+      clinicId: row.clinicId,
+      clinicName: row.clinic.name,
+      clinicShortCode: row.clinic.shortCode,
+      clinicStatus: row.clinic.status,
+      facilityId: row.facilityId,
+      facilityName: row.facility.name,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+      reason: row.reason,
+      createdAt: row.createdAt,
+      createdByUserId: row.createdByUserId,
+      createdByName: formatUserDisplayName(row.createdBy) || row.createdBy.email,
+      revokedAt: row.revokedAt,
+      revokedByUserId: row.revokedByUserId,
+      revokedByName: row.revokedBy ? formatUserDisplayName(row.revokedBy) || row.revokedBy.email : null,
+      state: row.revokedAt ? "revoked" : row.startsAt > now ? "upcoming" : row.endsAt <= now ? "expired" : "active"
+    }));
+  });
+
+  app.post("/admin/assignment-overrides", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const dto = assignmentOverrideSchema.parse(request.body);
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+    assert(endsAt > startsAt, 400, "Temporary coverage end must be after the start.");
+
+    const [clinic, user] = await Promise.all([
+      prisma.clinic.findUnique({
+        where: { id: dto.clinicId },
+        select: { id: true, facilityId: true, status: true }
+      }),
+      prisma.user.findUnique({
+        where: { id: dto.userId },
+        select: { id: true, status: true }
+      })
+    ]);
+    assert(clinic, 404, "Clinic not found");
+    assert(clinic.facilityId === dto.facilityId, 400, "Clinic is outside the selected facility.");
+    assert(clinic.status === "active", 400, "Temporary coverage can only be added for active clinics.");
+    assert(user, 404, "User not found");
+    assert(user.status === "active", 400, "Temporary coverage can only be added for active users.");
+    await resolveFacilityForRequest(request, dto.facilityId);
+    await assertUserRoleForFacility({ userId: dto.userId, role: dto.role, facilityId: dto.facilityId });
+
+    return prisma.temporaryClinicAssignmentOverride.create({
+      data: {
+        userId: dto.userId,
+        role: dto.role,
+        clinicId: dto.clinicId,
+        facilityId: dto.facilityId,
+        startsAt,
+        endsAt,
+        reason: dto.reason,
+        createdByUserId: request.user!.id
+      }
+    });
+  });
+
+  app.post("/admin/assignment-overrides/:id/revoke", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const overrideId = (request.params as { id: string }).id;
+    const existing = await prisma.temporaryClinicAssignmentOverride.findUnique({
+      where: { id: overrideId },
+      select: { id: true, facilityId: true, revokedAt: true }
+    });
+    assert(existing, 404, "Temporary coverage override not found");
+    await resolveFacilityForRequest(request, existing.facilityId);
+    if (existing.revokedAt) return existing;
+    return prisma.temporaryClinicAssignmentOverride.update({
+      where: { id: overrideId },
+      data: {
+        revokedAt: new Date(),
+        revokedByUserId: request.user!.id
+      }
+    });
   });
 
   type TemplateWithAssignments = {

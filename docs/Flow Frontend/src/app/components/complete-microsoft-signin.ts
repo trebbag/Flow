@@ -30,6 +30,7 @@ export async function completeMicrosoftSignIn(fallbackPath = "/") {
     accountHomeId: account.homeAccountId,
     username: account.username,
     name: account.name || undefined,
+    email: account.username || undefined,
   };
 
   applySession(provisional);
@@ -54,6 +55,10 @@ export async function completeMicrosoftSignIn(fallbackPath = "/") {
     role: ((context.role as Role) || provisional.role),
     userId: context.userId,
     facilityId: activeFacilityId,
+    name: context.name || provisional.name,
+    email: context.email || provisional.email,
+    firstName: context.firstName || undefined,
+    lastName: context.lastName || undefined,
   };
 
   saveSession(nextSession);

@@ -20,6 +20,7 @@ async function main() {
       MaProviderMap: await prisma.maProviderMap.findMany(),
       MaClinicMap: await prisma.maClinicMap.findMany(),
       ClinicAssignment: await prisma.clinicAssignment.findMany(),
+      TemporaryClinicAssignmentOverride: await prisma.temporaryClinicAssignmentOverride.findMany(),
       ClinicRoom: await prisma.clinicRoom.findMany(),
       ClinicRoomAssignment: await prisma.clinicRoomAssignment.findMany(),
       ReasonForVisit: await prisma.reasonForVisit.findMany(),
@@ -39,6 +40,7 @@ async function main() {
       AlertThreshold: await prisma.alertThreshold.findMany(),
       NotificationPolicy: await prisma.notificationPolicy.findMany(),
       OfficeManagerDailyRollup: await prisma.officeManagerDailyRollup.findMany(),
+      RoomDailyRollup: await prisma.roomDailyRollup.findMany(),
       AuditLog: await prisma.auditLog.findMany(),
       EventOutbox: await prisma.eventOutbox.findMany(),
       IntegrationConnector: await prisma.integrationConnector.findMany()

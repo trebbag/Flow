@@ -140,6 +140,13 @@ function normalizeStatus(raw: unknown): EncounterStatus {
   return allowed.includes(value) ? value : "Incoming";
 }
 
+function normalizeOptionalStatus(raw: unknown): EncounterStatus | null {
+  if (!raw) return null;
+  const value = String(raw) as EncounterStatus;
+  const allowed: EncounterStatus[] = ["Incoming", "Lobby", "Rooming", "ReadyForProvider", "Optimizing", "CheckOut", "Optimized"];
+  return allowed.includes(value) ? value : null;
+}
+
 function mapTaskType(raw: string): MATask["taskType"] {
   const normalized = raw.toLowerCase();
   if (normalized.includes("room")) return "rooming";
@@ -220,6 +227,21 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     const alertLevel = (raw.alertLevel || raw.alertState?.currentAlertLevel || "Green") as Encounter["alertLevel"];
     const stageStartIso = raw.alertState?.enteredStatusAt || raw.checkInAt || raw.createdAt || null;
     const completedAtIso = raw.checkoutCompleteAt || raw.closedAt || null;
+    const statusEvents = Array.isArray(raw.statusEvents)
+      ? raw.statusEvents
+          .map((event: any) => {
+            const toStatus = normalizeOptionalStatus(event?.toStatus);
+            const changedAt = event?.changedAt ? String(event.changedAt) : "";
+            if (!toStatus || !changedAt) return null;
+            return {
+              fromStatus: normalizeOptionalStatus(event?.fromStatus),
+              toStatus,
+              changedAt,
+              reasonCode: event?.reasonCode || null,
+            };
+          })
+          .filter(Boolean) as Encounter["statusEvents"]
+      : [];
 
     const safeClinicColor = clinic?.cardColor || colorFromText(clinic?.name || clinicId || "clinic");
 
@@ -253,6 +275,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       arrivalNotes: raw.arrivalNotes || undefined,
       intakeData: raw.intakeData || null,
       roomingData: raw.roomingData || null,
+      statusEvents,
       closureType: raw.closureType || undefined,
       cardTags: Array.isArray(clinic?.cardTags) ? clinic.cardTags : undefined,
     };
@@ -297,6 +320,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       arrivalNotes: undefined,
       closureType: undefined,
       roomingData: null,
+      statusEvents: appointmentIso ? [{ fromStatus: null, toStatus: "Incoming", changedAt: appointmentIso }] : [],
       cardTags: undefined,
     };
   }, []);
@@ -493,6 +517,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => {
       const current = encountersRef.current.find((entry) => entry.id === id);
       if (!current) return;
+      const changedAt = new Date().toISOString();
 
       setEncounters((prev) =>
         prev.map((entry) =>
@@ -503,9 +528,13 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
                 status: newStatus,
                 version: entry.version + 1,
                 currentStageStart: timeFromIso(new Date().toISOString()),
-                currentStageStartAtIso: new Date().toISOString(),
-                completedAtIso: newStatus === "Optimized" ? new Date().toISOString() : entry.completedAtIso,
+                currentStageStartAtIso: changedAt,
+                completedAtIso: newStatus === "Optimized" ? changedAt : entry.completedAtIso,
                 minutesInStage: 0,
+                statusEvents: [
+                  ...(entry.statusEvents || []),
+                  { fromStatus: entry.status, toStatus: newStatus, changedAt },
+                ],
               }
             : entry,
         ),

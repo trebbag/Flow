@@ -8,15 +8,27 @@ export async function registerAuthRoutes(app) {
         facilityId: z.string().uuid()
     });
     async function buildAuthContext(user) {
-        const facilities = user.availableFacilityIds.length > 0
-            ? await prisma.facility.findMany({
-                where: { id: { in: user.availableFacilityIds } },
-                select: { id: true, name: true, shortCode: true, timezone: true, status: true },
-                orderBy: { name: "asc" }
+        const [facilities, persistedUser] = await Promise.all([
+            user.availableFacilityIds.length > 0
+                ? prisma.facility.findMany({
+                    where: { id: { in: user.availableFacilityIds } },
+                    select: { id: true, name: true, shortCode: true, timezone: true, status: true },
+                    orderBy: { name: "asc" }
+                })
+                : Promise.resolve([]),
+            prisma.user.findUnique({
+                where: { id: user.id },
+                select: { name: true, email: true, entraUserPrincipalName: true }
             })
-            : [];
+        ]);
+        const displayName = persistedUser?.name?.trim() || persistedUser?.entraUserPrincipalName || persistedUser?.email || null;
+        const nameParts = (displayName || "").split(/\s+/).filter(Boolean);
         return {
             userId: user.id,
+            name: displayName,
+            email: persistedUser?.email || persistedUser?.entraUserPrincipalName || null,
+            firstName: nameParts[0] || null,
+            lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] || null : null,
             role: user.role,
             roles: user.roles,
             clinicId: user.clinicId,

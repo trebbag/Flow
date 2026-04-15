@@ -223,7 +223,7 @@ export function CheckOutView() {
     [encounters],
   );
 
-  const [expandedId, setExpandedId] = useState<string | null>(checkoutEncounters[0]?.id || null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedCompletedId, setSelectedCompletedId] = useState<string | null>(null);
 
   useEffect(() => {

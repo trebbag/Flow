@@ -78,16 +78,15 @@ enum TaskSourceType {
 
 enum RoomOperationalStatus {
   Ready
+  NotReady
   Occupied
   NeedsTurnover
-  Cleaning
   Hold
 }
 
 enum RoomEventType {
   AssignedToEncounter
   PatientLeftForCheckout
-  CleaningStarted
   MarkedReady
   HoldPlaced
   HoldCleared
@@ -127,30 +126,33 @@ enum RoomChecklistKind {
 }
 
 model User {
-  id                    String     @id @default(uuid())
-  email                 String     @unique
-  name                  String
-  status                String     @default("active")
-  phone                 String?
-  cognitoSub            String?    @unique
-  entraObjectId         String?    @unique
-  entraTenantId         String?
-  entraUserPrincipalName String?
-  identityProvider      String?
-  directoryStatus       String?
-  directoryUserType     String?
-  directoryAccountEnabled Boolean?
-  lastDirectorySyncAt   DateTime?
-  activeFacilityId      String?
-  createdAt             DateTime   @default(now())
-  activeFacility        Facility?  @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
-  roles                 UserRole[]
-  providerAssignments ClinicAssignment[] @relation("ClinicAssignmentProviderUser")
-  maAssignments     ClinicAssignment[] @relation("ClinicAssignmentMaUser")
-  tasksCreated      Task[]     @relation("TaskCreatedBy")
-  tasksCompleted    Task[]     @relation("TaskCompletedBy")
-  tasksAcknowledged Task[]     @relation("TaskAcknowledgedBy")
-  alertInbox        UserAlertInbox[]
+  id                        String                              @id @default(uuid())
+  email                     String                              @unique
+  name                      String
+  status                    String                              @default("active")
+  phone                     String?
+  cognitoSub                String?                             @unique
+  entraObjectId             String?                             @unique
+  entraTenantId             String?
+  entraUserPrincipalName    String?
+  identityProvider          String?
+  directoryStatus           String?
+  directoryUserType         String?
+  directoryAccountEnabled   Boolean?
+  lastDirectorySyncAt       DateTime?
+  activeFacilityId          String?
+  createdAt                 DateTime                            @default(now())
+  activeFacility            Facility?                           @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
+  roles                     UserRole[]
+  providerAssignments       ClinicAssignment[]                  @relation("ClinicAssignmentProviderUser")
+  maAssignments             ClinicAssignment[]                  @relation("ClinicAssignmentMaUser")
+  tasksCreated              Task[]                              @relation("TaskCreatedBy")
+  tasksCompleted            Task[]                              @relation("TaskCompletedBy")
+  tasksAcknowledged         Task[]                              @relation("TaskAcknowledgedBy")
+  alertInbox                UserAlertInbox[]
+  temporaryClinicOverrides  TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentUser")
+  temporaryOverridesCreated TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentCreatedBy")
+  temporaryOverridesRevoked TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentRevokedBy")
 
   @@index([activeFacilityId])
   @@index([entraTenantId])
@@ -158,72 +160,76 @@ model User {
 }
 
 model Facility {
-  id               String   @id @default(uuid())
-  name             String
-  shortCode        String?
-  address          String?
-  phone            String?
-  timezone         String   @default("America/New_York")
-  status           String   @default("active")
-  createdAt        DateTime @default(now())
+  id        String   @id @default(uuid())
+  name      String
+  shortCode String?
+  address   String?
+  phone     String?
+  timezone  String   @default("America/New_York")
+  status    String   @default("active")
+  createdAt DateTime @default(now())
 
-  clinics          Clinic[]
-  roles            UserRole[]
-  reasons          ReasonForVisit[]
-  templates        Template[]
-  rooms            ClinicRoom[]
-  activeForUsers   User[]   @relation("UserActiveFacility")
-  alertThresholds  AlertThreshold[]
-  importBatches    IncomingImportBatch[]
-  incomingIssues   IncomingImportIssue[]
-  connectors       IntegrationConnector[]
-  alertInbox       UserAlertInbox[]
+  clinics                            Clinic[]
+  roles                              UserRole[]
+  reasons                            ReasonForVisit[]
+  templates                          Template[]
+  rooms                              ClinicRoom[]
+  activeForUsers                     User[]                              @relation("UserActiveFacility")
+  alertThresholds                    AlertThreshold[]
+  importBatches                      IncomingImportBatch[]
+  incomingIssues                     IncomingImportIssue[]
+  connectors                         IntegrationConnector[]
+  alertInbox                         UserAlertInbox[]
+  temporaryClinicAssignmentOverrides TemporaryClinicAssignmentOverride[]
+  roomDailyRollups                   RoomDailyRollup[]
 }
 
 model Clinic {
-  id               String   @id @default(uuid())
+  id               String  @id @default(uuid())
   facilityId       String?
   name             String
   shortCode        String?
   timezone         String
-  status           String   @default("active")
-  maRun            Boolean  @default(false)
-  autoCloseEnabled Boolean  @default(false)
+  status           String  @default("active")
+  maRun            Boolean @default(false)
+  autoCloseEnabled Boolean @default(false)
   autoCloseTime    String?
   cardColor        String?
   cardTags         Json?
 
-  facility         Facility?           @relation(fields: [facilityId], references: [id])
-  providers        Provider[]
-  roles            UserRole[]
-  reasons          ReasonForVisit[]
-  reasonAssignments ReasonClinicAssignment[]
-  templates        Template[]
-  roomAssignments  ClinicRoomAssignment[]
-  staffAssignment  ClinicAssignment?
-  maProviderMaps   MaProviderMap[]
-  maClinicMaps     MaClinicMap[]
-  incomingSchedules IncomingSchedule[]
-  importBatches    IncomingImportBatch[]
-  incomingIssues   IncomingImportIssue[]
-  encounters       Encounter[]
-  officeManagerDailyRollups OfficeManagerDailyRollup[]
-  alertInbox       UserAlertInbox[]
+  facility                     Facility?                           @relation(fields: [facilityId], references: [id])
+  providers                    Provider[]
+  roles                        UserRole[]
+  reasons                      ReasonForVisit[]
+  reasonAssignments            ReasonClinicAssignment[]
+  templates                    Template[]
+  roomAssignments              ClinicRoomAssignment[]
+  staffAssignment              ClinicAssignment?
+  maProviderMaps               MaProviderMap[]
+  maClinicMaps                 MaClinicMap[]
+  incomingSchedules            IncomingSchedule[]
+  importBatches                IncomingImportBatch[]
+  incomingIssues               IncomingImportIssue[]
+  encounters                   Encounter[]
+  officeManagerDailyRollups    OfficeManagerDailyRollup[]
+  roomDailyRollups             RoomDailyRollup[]
+  alertInbox                   UserAlertInbox[]
+  temporaryAssignmentOverrides TemporaryClinicAssignmentOverride[]
 
   @@index([facilityId])
 }
 
 model Provider {
-  id        String   @id @default(uuid())
-  name      String
-  active    Boolean  @default(true)
-  clinicId  String
+  id       String  @id @default(uuid())
+  name     String
+  active   Boolean @default(true)
+  clinicId String
 
-  clinic    Clinic   @relation(fields: [clinicId], references: [id])
-  mappings  MaProviderMap[]
+  clinic            Clinic             @relation(fields: [clinicId], references: [id])
+  mappings          MaProviderMap[]
   clinicAssignments ClinicAssignment[]
   incomingSchedules IncomingSchedule[]
-  encounters Encounter[]
+  encounters        Encounter[]
 
   @@index([clinicId, active])
 }
@@ -235,9 +241,9 @@ model UserRole {
   clinicId   String?
   facilityId String?
 
-  user       User      @relation(fields: [userId], references: [id])
-  clinic     Clinic?   @relation(fields: [clinicId], references: [id])
-  facility   Facility? @relation(fields: [facilityId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+  clinic   Clinic?   @relation(fields: [clinicId], references: [id])
+  facility Facility? @relation(fields: [facilityId], references: [id])
 
   @@unique([userId, role, clinicId, facilityId])
   @@index([clinicId])
@@ -245,13 +251,13 @@ model UserRole {
 }
 
 model MaProviderMap {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   providerId String
   maUserId   String
   clinicId   String
 
-  provider   Provider @relation(fields: [providerId], references: [id])
-  clinic     Clinic   @relation(fields: [clinicId], references: [id])
+  provider Provider @relation(fields: [providerId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
 
   @@unique([providerId, maUserId, clinicId])
   @@index([clinicId])
@@ -262,25 +268,25 @@ model MaClinicMap {
   clinicId String
   maUserId String
 
-  clinic   Clinic @relation(fields: [clinicId], references: [id])
+  clinic Clinic @relation(fields: [clinicId], references: [id])
 
   @@unique([clinicId, maUserId])
   @@index([clinicId])
 }
 
 model ClinicAssignment {
-  id             String    @id @default(uuid())
-  clinicId       String    @unique
+  id             String   @id @default(uuid())
+  clinicId       String   @unique
   providerUserId String?
   providerId     String?
   maUserId       String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  clinic         Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  providerUser   User?     @relation("ClinicAssignmentProviderUser", fields: [providerUserId], references: [id])
-  provider       Provider? @relation(fields: [providerId], references: [id])
-  maUser         User?     @relation("ClinicAssignmentMaUser", fields: [maUserId], references: [id])
+  clinic       Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  providerUser User?     @relation("ClinicAssignmentProviderUser", fields: [providerUserId], references: [id])
+  provider     Provider? @relation(fields: [providerId], references: [id])
+  maUser       User?     @relation("ClinicAssignmentMaUser", fields: [maUserId], references: [id])
 
   @@index([clinicId])
   @@index([providerUserId])
@@ -288,23 +294,49 @@ model ClinicAssignment {
   @@index([maUserId])
 }
 
-model ClinicRoom {
-  id           String   @id @default(uuid())
-  facilityId   String
-  name         String
-  roomNumber   Int      @default(0)
-  roomType     String   @default("exam")
-  status       String   @default("active")
-  sortOrder    Int      @default(0)
+model TemporaryClinicAssignmentOverride {
+  id              String    @id @default(uuid())
+  userId          String
+  role            RoleName
+  clinicId        String
+  facilityId      String
+  startsAt        DateTime
+  endsAt          DateTime
+  reason          String
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  revokedByUserId String?
 
-  facility     Facility @relation(fields: [facilityId], references: [id])
-  clinicLinks  ClinicRoomAssignment[]
-  encounters   Encounter[]
-  operationalState RoomOperationalState?
+  user      User     @relation("TemporaryClinicAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  clinic    Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  facility  Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("TemporaryClinicAssignmentCreatedBy", fields: [createdByUserId], references: [id])
+  revokedBy User?    @relation("TemporaryClinicAssignmentRevokedBy", fields: [revokedByUserId], references: [id])
+
+  @@index([userId, role, startsAt, endsAt])
+  @@index([clinicId, startsAt, endsAt])
+  @@index([facilityId, startsAt, endsAt])
+  @@index([revokedAt])
+}
+
+model ClinicRoom {
+  id         String @id @default(uuid())
+  facilityId String
+  name       String
+  roomNumber Int    @default(0)
+  roomType   String @default("exam")
+  status     String @default("active")
+  sortOrder  Int    @default(0)
+
+  facility          Facility               @relation(fields: [facilityId], references: [id])
+  clinicLinks       ClinicRoomAssignment[]
+  encounters        Encounter[]
+  operationalState  RoomOperationalState?
   operationalEvents RoomOperationalEvent[]
-  roomIssues RoomIssue[]
-  checklistRuns RoomChecklistRun[]
-  tasks Task[]
+  roomIssues        RoomIssue[]
+  checklistRuns     RoomChecklistRun[]
+  tasks             Task[]
 
   // Active/inactive room-number uniqueness is enforced with a partial unique index in scripts/db-init.ts.
   @@index([facilityId, status])
@@ -312,14 +344,14 @@ model ClinicRoom {
 }
 
 model ClinicRoomAssignment {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   clinicId  String
   roomId    String
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
-  clinic    Clinic    @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  room      ClinicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  clinic Clinic     @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  room   ClinicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([clinicId, roomId])
   @@index([clinicId, active])
@@ -327,21 +359,21 @@ model ClinicRoomAssignment {
 }
 
 model ReasonForVisit {
-  id         String   @id @default(uuid())
-  clinicId   String?
-  facilityId String?
-  name       String
-  appointmentLengthMinutes Int @default(20)
-  status     String   @default("active")
-  active     Boolean  @default(true)
+  id                       String  @id @default(uuid())
+  clinicId                 String?
+  facilityId               String?
+  name                     String
+  appointmentLengthMinutes Int     @default(20)
+  status                   String  @default("active")
+  active                   Boolean @default(true)
 
-  clinic     Clinic?   @relation(fields: [clinicId], references: [id])
-  facility   Facility? @relation(fields: [facilityId], references: [id])
-  templates  Template[] @relation("LegacyTemplateReason")
-  clinicAssignments ReasonClinicAssignment[]
+  clinic              Clinic?                    @relation(fields: [clinicId], references: [id])
+  facility            Facility?                  @relation(fields: [facilityId], references: [id])
+  templates           Template[]                 @relation("LegacyTemplateReason")
+  clinicAssignments   ReasonClinicAssignment[]
   templateAssignments TemplateReasonAssignment[]
-  incomingSchedules IncomingSchedule[]
-  encounters Encounter[]
+  incomingSchedules   IncomingSchedule[]
+  encounters          Encounter[]
 
   @@index([clinicId, status])
   @@index([facilityId, status])
@@ -364,9 +396,9 @@ model Template {
   uiSchema         Json
   requiredFields   Json
 
-  facility         Facility      @relation(fields: [facilityId], references: [id])
-  clinic           Clinic?       @relation(fields: [clinicId], references: [id])
-  reason           ReasonForVisit? @relation("LegacyTemplateReason", fields: [reasonForVisitId], references: [id])
+  facility          Facility                   @relation(fields: [facilityId], references: [id])
+  clinic            Clinic?                    @relation(fields: [clinicId], references: [id])
+  reason            ReasonForVisit?            @relation("LegacyTemplateReason", fields: [reasonForVisitId], references: [id])
   reasonAssignments TemplateReasonAssignment[]
 
   @@index([facilityId, status, type])
@@ -380,8 +412,8 @@ model ReasonClinicAssignment {
   clinicId  String
   createdAt DateTime @default(now())
 
-  reason    ReasonForVisit @relation(fields: [reasonId], references: [id], onDelete: Cascade)
-  clinic    Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  reason ReasonForVisit @relation(fields: [reasonId], references: [id], onDelete: Cascade)
+  clinic Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@unique([reasonId, clinicId])
   @@index([clinicId])
@@ -393,90 +425,90 @@ model TemplateReasonAssignment {
   reasonId   String
   createdAt  DateTime @default(now())
 
-  template   Template       @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  reason     ReasonForVisit @relation(fields: [reasonId], references: [id], onDelete: Cascade)
+  template Template       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  reason   ReasonForVisit @relation(fields: [reasonId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, reasonId])
   @@index([reasonId])
 }
 
 model IncomingImportBatch {
-  id        String       @id @default(uuid())
-  facilityId String
-  clinicId  String?
-  date      DateTime
-  source    ScheduleSource
-  fileName  String?
-  rowCount  Int          @default(0)
-  acceptedRowCount Int   @default(0)
-  pendingRowCount Int    @default(0)
-  status    String       @default("processed")
-  createdAt DateTime     @default(now())
+  id               String         @id @default(uuid())
+  facilityId       String
+  clinicId         String?
+  date             DateTime
+  source           ScheduleSource
+  fileName         String?
+  rowCount         Int            @default(0)
+  acceptedRowCount Int            @default(0)
+  pendingRowCount  Int            @default(0)
+  status           String         @default("processed")
+  createdAt        DateTime       @default(now())
 
-  facility  Facility      @relation(fields: [facilityId], references: [id])
-  clinic    Clinic?       @relation(fields: [clinicId], references: [id])
-  incoming  IncomingSchedule[]
-  issues    IncomingImportIssue[]
+  facility Facility              @relation(fields: [facilityId], references: [id])
+  clinic   Clinic?               @relation(fields: [clinicId], references: [id])
+  incoming IncomingSchedule[]
+  issues   IncomingImportIssue[]
 
   @@index([facilityId, date, status])
   @@index([clinicId, date, status])
 }
 
 model IncomingSchedule {
-  id                    String        @id @default(uuid())
-  clinicId              String
-  dateOfService         DateTime
-  patientId             String
-  appointmentTime       String?
-  appointmentAt         DateTime?
-  providerId            String?
-  providerLastName      String?
-  reasonForVisitId      String?
-  reasonText            String?
-  source                ScheduleSource
-  rawPayloadJson        Json
-  isValid               Boolean       @default(true)
-  validationErrors      Json?
-  checkedInAt           DateTime?
-  checkedInByUserId     String?
-  checkedInEncounterId  String?
-  dispositionType       String?
-  dispositionNote       String?
-  dispositionAt         DateTime?
-  dispositionByUserId   String?
+  id                     String         @id @default(uuid())
+  clinicId               String
+  dateOfService          DateTime
+  patientId              String
+  appointmentTime        String?
+  appointmentAt          DateTime?
+  providerId             String?
+  providerLastName       String?
+  reasonForVisitId       String?
+  reasonText             String?
+  source                 ScheduleSource
+  rawPayloadJson         Json
+  isValid                Boolean        @default(true)
+  validationErrors       Json?
+  checkedInAt            DateTime?
+  checkedInByUserId      String?
+  checkedInEncounterId   String?
+  dispositionType        String?
+  dispositionNote        String?
+  dispositionAt          DateTime?
+  dispositionByUserId    String?
   dispositionEncounterId String?
-  intakeData            Json?
-  importBatchId         String?
+  intakeData             Json?
+  importBatchId          String?
 
-  clinic                Clinic          @relation(fields: [clinicId], references: [id])
-  provider              Provider?       @relation(fields: [providerId], references: [id])
-  reason                ReasonForVisit? @relation(fields: [reasonForVisitId], references: [id])
-  importBatch           IncomingImportBatch? @relation(fields: [importBatchId], references: [id])
-  resolvedIssues        IncomingImportIssue[]
+  clinic         Clinic                @relation(fields: [clinicId], references: [id])
+  provider       Provider?             @relation(fields: [providerId], references: [id])
+  reason         ReasonForVisit?       @relation(fields: [reasonForVisitId], references: [id])
+  importBatch    IncomingImportBatch?  @relation(fields: [importBatchId], references: [id])
+  resolvedIssues IncomingImportIssue[]
 
   @@index([clinicId, dateOfService, checkedInAt])
   @@index([dateOfService, patientId, appointmentTime])
 }
 
 model IncomingImportIssue {
-  id                String      @id @default(uuid())
-  batchId           String
-  facilityId        String
-  clinicId          String?
-  dateOfService     DateTime
-  rawPayloadJson    Json
-  normalizedJson    Json?
-  validationErrors  Json
-  status            String      @default("pending")
-  retryCount        Int         @default(0)
+  id                 String   @id @default(uuid())
+  batchId            String
+  facilityId         String
+  clinicId           String?
+  dateOfService      DateTime
+  rawPayloadJson     Json
+  normalizedJson     Json?
+  validationErrors   Json
+  status             String   @default("pending")
+  retryCount         Int      @default(0)
   resolvedIncomingId String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  batch             IncomingImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  facility          Facility            @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  clinic            Clinic?             @relation(fields: [clinicId], references: [id], onDelete: SetNull)
-  resolvedIncoming  IncomingSchedule?   @relation(fields: [resolvedIncomingId], references: [id], onDelete: SetNull)
+  batch            IncomingImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  facility         Facility            @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  clinic           Clinic?             @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  resolvedIncoming IncomingSchedule?   @relation(fields: [resolvedIncomingId], references: [id], onDelete: SetNull)
 
   @@index([batchId, status])
   @@index([facilityId, dateOfService, status])
@@ -511,17 +543,17 @@ model Encounter {
   checkoutData       Json?
   intakeData         Json?
 
-  clinic             Clinic          @relation(fields: [clinicId], references: [id])
-  provider           Provider?       @relation(fields: [providerId], references: [id])
-  reason             ReasonForVisit? @relation(fields: [reasonForVisitId], references: [id])
-  room               ClinicRoom?     @relation(fields: [roomId], references: [id])
-  statusEvents       StatusChangeEvent[]
-  alertState         AlertState?
-  tasks              Task[]
-  safetyEvents       SafetyEvent[]
+  clinic                 Clinic                 @relation(fields: [clinicId], references: [id])
+  provider               Provider?              @relation(fields: [providerId], references: [id])
+  reason                 ReasonForVisit?        @relation(fields: [reasonForVisitId], references: [id])
+  room                   ClinicRoom?            @relation(fields: [roomId], references: [id])
+  statusEvents           StatusChangeEvent[]
+  alertState             AlertState?
+  tasks                  Task[]
+  safetyEvents           SafetyEvent[]
   operationalOccupancies RoomOperationalState[] @relation("RoomOperationalEncounter")
-  roomOperationalEvents RoomOperationalEvent[]
-  roomIssues         RoomIssue[]
+  roomOperationalEvents  RoomOperationalEvent[]
+  roomIssues             RoomIssue[]
 
   @@unique([patientId, clinicId, dateOfService])
   @@index([clinicId, currentStatus])
@@ -529,33 +561,33 @@ model Encounter {
 }
 
 model StatusChangeEvent {
-  id              String          @id @default(uuid())
+  id              String           @id @default(uuid())
   encounterId     String
   fromStatus      EncounterStatus?
   toStatus        EncounterStatus
-  changedAt       DateTime        @default(now())
+  changedAt       DateTime         @default(now())
   changedByUserId String
   reasonCode      String?
 
-  encounter       Encounter       @relation(fields: [encounterId], references: [id])
+  encounter Encounter @relation(fields: [encounterId], references: [id])
 
   @@index([encounterId, changedAt])
 }
 
 model AlertState {
-  encounterId         String     @id
-  enteredStatusAt     DateTime
-  currentAlertLevel   AlertLevel @default(Green)
-  yellowTriggeredAt   DateTime?
-  redTriggeredAt      DateTime?
+  encounterId           String     @id
+  enteredStatusAt       DateTime
+  currentAlertLevel     AlertLevel @default(Green)
+  yellowTriggeredAt     DateTime?
+  redTriggeredAt        DateTime?
   escalationTriggeredAt DateTime?
-  lastAckAt           DateTime?
+  lastAckAt             DateTime?
 
-  encounter           Encounter  @relation(fields: [encounterId], references: [id])
+  encounter Encounter @relation(fields: [encounterId], references: [id])
 }
 
 model Task {
-  id               String    @id @default(uuid())
+  id               String          @id @default(uuid())
   facilityId       String?
   clinicId         String?
   encounterId      String?
@@ -566,24 +598,24 @@ model Task {
   description      String
   assignedToRole   RoleName?
   assignedToUserId String?
-  status           String    @default("open")
-  priority         Int       @default(0)
-  blocking         Boolean   @default(false)
-  createdAt        DateTime  @default(now())
+  status           String          @default("open")
+  priority         Int             @default(0)
+  blocking         Boolean         @default(false)
+  createdAt        DateTime        @default(now())
   createdBy        String
   acknowledgedAt   DateTime?
   acknowledgedBy   String?
   completedAt      DateTime?
   completedBy      String?
   notes            String?
-  updatedAt        DateTime  @updatedAt
+  updatedAt        DateTime        @updatedAt
 
-  encounter        Encounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
-  room             ClinicRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  creator          User      @relation("TaskCreatedBy", fields: [createdBy], references: [id])
-  acknowledger     User?     @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id])
-  completer        User?     @relation("TaskCompletedBy", fields: [completedBy], references: [id])
-  roomIssues       RoomIssue[]
+  encounter    Encounter?  @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  room         ClinicRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  creator      User        @relation("TaskCreatedBy", fields: [createdBy], references: [id])
+  acknowledger User?       @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id])
+  completer    User?       @relation("TaskCompletedBy", fields: [completedBy], references: [id])
+  roomIssues   RoomIssue[]
 
   @@index([clinicId, status, createdAt])
   @@index([roomId, status, createdAt])
@@ -604,8 +636,8 @@ model RoomOperationalState {
   lastTurnoverAt      DateTime?
   updatedAt           DateTime              @updatedAt
 
-  room                ClinicRoom            @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  occupiedEncounter   Encounter?            @relation("RoomOperationalEncounter", fields: [occupiedEncounterId], references: [id], onDelete: SetNull)
+  room              ClinicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  occupiedEncounter Encounter? @relation("RoomOperationalEncounter", fields: [occupiedEncounterId], references: [id], onDelete: SetNull)
 
   @@index([currentStatus, statusSinceAt])
   @@index([occupiedEncounterId])
@@ -625,8 +657,8 @@ model RoomOperationalEvent {
   createdByUserId String?
   occurredAt      DateTime               @default(now())
 
-  room            ClinicRoom             @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  encounter       Encounter?             @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  room      ClinicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  encounter Encounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
 
   @@index([roomId, occurredAt])
   @@index([clinicId, occurredAt])
@@ -634,29 +666,29 @@ model RoomOperationalEvent {
 }
 
 model RoomIssue {
-  id                String          @id @default(uuid())
-  roomId            String
-  clinicId          String
-  facilityId        String
-  encounterId       String?
-  issueType         RoomIssueType
-  status            RoomIssueStatus @default(Open)
-  severity          Int             @default(0)
-  title             String
-  description       String?
-  placesRoomOnHold  Boolean         @default(false)
-  taskId            String?
-  sourceModule      String?
-  metadataJson      Json?
-  createdAt         DateTime        @default(now())
-  createdByUserId   String
-  resolvedAt        DateTime?
-  resolvedByUserId  String?
-  resolutionNote    String?
+  id               String          @id @default(uuid())
+  roomId           String
+  clinicId         String
+  facilityId       String
+  encounterId      String?
+  issueType        RoomIssueType
+  status           RoomIssueStatus @default(Open)
+  severity         Int             @default(0)
+  title            String
+  description      String?
+  placesRoomOnHold Boolean         @default(false)
+  taskId           String?
+  sourceModule     String?
+  metadataJson     Json?
+  createdAt        DateTime        @default(now())
+  createdByUserId  String
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  resolutionNote   String?
 
-  room              ClinicRoom      @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  encounter         Encounter?      @relation(fields: [encounterId], references: [id], onDelete: SetNull)
-  task              Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  room      ClinicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  encounter Encounter? @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  task      Task?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([roomId, status, createdAt])
   @@index([clinicId, status, createdAt])
@@ -677,7 +709,7 @@ model RoomChecklistRun {
   completedByUserId String?
   note              String?
 
-  room              ClinicRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  room ClinicRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, kind, dateKey])
   @@index([clinicId, kind, dateKey])
@@ -699,9 +731,9 @@ model UserAlertInbox {
   acknowledgedAt   DateTime?
   archivedAt       DateTime?
 
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  facility         Facility         @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-  clinic           Clinic?          @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  clinic   Clinic?  @relation(fields: [clinicId], references: [id], onDelete: SetNull)
 
   @@unique([userId, kind, sourceVersionKey])
   @@index([userId, status, createdAt])
@@ -718,81 +750,111 @@ model SafetyEvent {
   resolutionNote String?
   location       String?
 
-  encounter      Encounter @relation(fields: [encounterId], references: [id])
+  encounter Encounter @relation(fields: [encounterId], references: [id])
 
   @@index([encounterId, resolvedAt])
 }
 
 model AlertThreshold {
-  id             String          @id @default(uuid())
-  facilityId     String
-  clinicId       String?
-  metric         AlertThresholdMetric @default(stage)
-  status         EncounterStatus?
+  id               String               @id @default(uuid())
+  facilityId       String
+  clinicId         String?
+  metric           AlertThresholdMetric @default(stage)
+  status           EncounterStatus?
   reasonForVisitId String?
-  providerId     String?
-  yellowAtMin    Int
-  redAtMin       Int
-  escalation2Min Int?
+  providerId       String?
+  yellowAtMin      Int
+  redAtMin         Int
+  escalation2Min   Int?
 
-  facility       Facility        @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
 
-  @@index([facilityId, clinicId, metric, status])
   @@unique([facilityId, clinicId, metric, status])
+  @@index([facilityId, clinicId, metric, status])
 }
 
 model NotificationPolicy {
-  id                   String          @id @default(uuid())
-  clinicId             String
-  status               EncounterStatus
-  severity             AlertLevel
-  recipientsJson       Json
-  channelsJson         Json
-  cooldownMinutes      Int             @default(10)
-  ackRequired          Boolean         @default(false)
-  escalationAfterMin   Int?
+  id                       String          @id @default(uuid())
+  clinicId                 String
+  status                   EncounterStatus
+  severity                 AlertLevel
+  recipientsJson           Json
+  channelsJson             Json
+  cooldownMinutes          Int             @default(10)
+  ackRequired              Boolean         @default(false)
+  escalationAfterMin       Int?
   escalationRecipientsJson Json?
-  quietHoursJson       Json?
+  quietHoursJson           Json?
 }
 
 model OfficeManagerDailyRollup {
-  id                    String   @id @default(uuid())
-  clinicId              String
-  dateKey               String
-  queueByStatus         Json
-  alertsByLevel         Json
-  encounterCount        Int      @default(0)
-  lobbyWaitTotalMins    Int      @default(0)
-  lobbyWaitSamples      Int      @default(0)
-  roomingWaitTotalMins  Int      @default(0)
-  roomingWaitSamples    Int      @default(0)
-  providerVisitTotalMins Int     @default(0)
-  providerVisitSamples  Int      @default(0)
-  stageRollupsJson      Json
-  providerRollupsJson   Json
-  computedAt            DateTime @default(now())
+  id                     String   @id @default(uuid())
+  clinicId               String
+  dateKey                String
+  queueByStatus          Json
+  alertsByLevel          Json
+  encounterCount         Int      @default(0)
+  lobbyWaitTotalMins     Int      @default(0)
+  lobbyWaitSamples       Int      @default(0)
+  roomingWaitTotalMins   Int      @default(0)
+  roomingWaitSamples     Int      @default(0)
+  providerVisitTotalMins Int      @default(0)
+  providerVisitSamples   Int      @default(0)
+  stageRollupsJson       Json
+  providerRollupsJson    Json
+  computedAt             DateTime @default(now())
 
-  clinic                Clinic   @relation(fields: [clinicId], references: [id])
+  clinic Clinic @relation(fields: [clinicId], references: [id])
 
   @@unique([clinicId, dateKey])
   @@index([dateKey])
   @@index([clinicId, dateKey])
 }
 
+model RoomDailyRollup {
+  id                     String   @id @default(uuid())
+  facilityId             String
+  clinicId               String
+  dateKey                String
+  roomCount              Int      @default(0)
+  dayStartCompletedCount Int      @default(0)
+  dayEndCompletedCount   Int      @default(0)
+  turnoverCount          Int      @default(0)
+  holdCount              Int      @default(0)
+  issueCount             Int      @default(0)
+  resolvedIssueCount     Int      @default(0)
+  occupiedTotalMins      Int      @default(0)
+  occupiedSamples        Int      @default(0)
+  turnoverTotalMins      Int      @default(0)
+  turnoverSamples        Int      @default(0)
+  statusMinutesJson      Json
+  roomRollupsJson        Json
+  issueRollupsJson       Json
+  computedAt             DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+
+  @@unique([clinicId, dateKey])
+  @@index([facilityId, dateKey])
+  @@index([dateKey])
+  @@index([clinicId, dateKey])
+}
+
 model AuditLog {
-  id         String    @id @default(uuid())
-  requestId  String
-  occurredAt DateTime  @default(now())
+  id          String    @id @default(uuid())
+  requestId   String
+  occurredAt  DateTime  @default(now())
   actorUserId String?
-  actorRole  RoleName?
-  authSource String?
-  method     String
-  route      String
-  statusCode Int
-  clinicId   String?
-  facilityId String?
-  entityType String?
-  entityId   String?
+  actorRole   RoleName?
+  authSource  String?
+  method      String
+  route       String
+  statusCode  Int
+  clinicId    String?
+  facilityId  String?
+  entityType  String?
+  entityId    String?
   payloadJson Json?
 
   @@index([occurredAt])
@@ -803,7 +865,7 @@ model AuditLog {
 }
 
 model EventOutbox {
-  id            String      @id @default(uuid())
+  id            String       @id @default(uuid())
   topic         String
   eventType     String
   aggregateType String?
@@ -811,8 +873,8 @@ model EventOutbox {
   requestId     String?
   payloadJson   Json
   status        OutboxStatus @default(pending)
-  attempts      Int         @default(0)
-  createdAt     DateTime    @default(now())
+  attempts      Int          @default(0)
+  createdAt     DateTime     @default(now())
   dispatchedAt  DateTime?
   lastError     String?
 
@@ -822,10 +884,10 @@ model EventOutbox {
 }
 
 model IntegrationConnector {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   facilityId      String
   vendor          String
-  enabled         Boolean  @default(false)
+  enabled         Boolean   @default(false)
   configJson      Json
   mappingJson     Json?
   lastTestStatus  String?
@@ -834,10 +896,10 @@ model IntegrationConnector {
   lastSyncStatus  String?
   lastSyncAt      DateTime?
   lastSyncMessage String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  facility        Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
 
   @@unique([facilityId, vendor])
   @@index([vendor, enabled])

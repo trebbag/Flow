@@ -6,6 +6,7 @@ const REQUIRED_TABLES = [
   "User",
   "UserRole",
   "Provider",
+  "TemporaryClinicAssignmentOverride",
   "ReasonForVisit",
   "Template",
   "IncomingSchedule",
@@ -17,6 +18,7 @@ const REQUIRED_TABLES = [
   "RoomChecklistRun",
   "SafetyEvent",
   "OfficeManagerDailyRollup",
+  "RoomDailyRollup",
   "AuditLog",
   "EventOutbox"
 ] as const;

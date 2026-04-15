@@ -1,5 +1,6 @@
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient, RoleName, TemplateType } from "@prisma/client";
+import { DateTime } from "luxon";
 import { normalizeDate } from "../src/lib/dates.js";
 
 const prisma = new PrismaClient({
@@ -32,6 +33,7 @@ async function main() {
   await prisma.clinicRoom.deleteMany();
   await prisma.maProviderMap.deleteMany();
   await prisma.maClinicMap.deleteMany();
+  await prisma.temporaryClinicAssignmentOverride.deleteMany();
   await prisma.provider.deleteMany();
   await prisma.userRole.deleteMany();
   await prisma.user.deleteMany();
@@ -359,6 +361,45 @@ async function main() {
   });
 
   const today = normalizeDate(new Date().toISOString().slice(0, 10), "America/New_York");
+  const todayKey = DateTime.now().setZone("America/New_York").toISODate()!;
+
+  await prisma.roomChecklistRun.createMany({
+    data: [
+      {
+        roomId: downtownRoom1.id,
+        clinicId: downtown.id,
+        facilityId: facility.id,
+        kind: "DayStart",
+        dateKey: todayKey,
+        itemsJson: [{ key: "seed-ready", label: "Seeded room readiness", completed: true }],
+        completed: true,
+        completedAt: new Date(),
+        completedByUserId: admin.id
+      },
+      {
+        roomId: downtownRoom2.id,
+        clinicId: downtown.id,
+        facilityId: facility.id,
+        kind: "DayStart",
+        dateKey: todayKey,
+        itemsJson: [{ key: "seed-ready", label: "Seeded room readiness", completed: true }],
+        completed: true,
+        completedAt: new Date(),
+        completedByUserId: admin.id
+      },
+      {
+        roomId: eastsideRoom1.id,
+        clinicId: eastside.id,
+        facilityId: facility.id,
+        kind: "DayStart",
+        dateKey: todayKey,
+        itemsJson: [{ key: "seed-ready", label: "Seeded room readiness", completed: true }],
+        completed: true,
+        completedAt: new Date(),
+        completedByUserId: admin.id
+      }
+    ]
+  });
 
   const batch = await prisma.incomingImportBatch.create({
     data: {

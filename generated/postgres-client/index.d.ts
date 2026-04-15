@@ -54,6 +54,11 @@ export type MaClinicMap = $Result.DefaultSelection<Prisma.$MaClinicMapPayload>
  */
 export type ClinicAssignment = $Result.DefaultSelection<Prisma.$ClinicAssignmentPayload>
 /**
+ * Model TemporaryClinicAssignmentOverride
+ * 
+ */
+export type TemporaryClinicAssignmentOverride = $Result.DefaultSelection<Prisma.$TemporaryClinicAssignmentOverridePayload>
+/**
  * Model ClinicRoom
  * 
  */
@@ -163,6 +168,11 @@ export type NotificationPolicy = $Result.DefaultSelection<Prisma.$NotificationPo
  * 
  */
 export type OfficeManagerDailyRollup = $Result.DefaultSelection<Prisma.$OfficeManagerDailyRollupPayload>
+/**
+ * Model RoomDailyRollup
+ * 
+ */
+export type RoomDailyRollup = $Result.DefaultSelection<Prisma.$RoomDailyRollupPayload>
 /**
  * Model AuditLog
  * 
@@ -284,9 +294,9 @@ export type TaskSourceType = (typeof TaskSourceType)[keyof typeof TaskSourceType
 
 export const RoomOperationalStatus: {
   Ready: 'Ready',
+  NotReady: 'NotReady',
   Occupied: 'Occupied',
   NeedsTurnover: 'NeedsTurnover',
-  Cleaning: 'Cleaning',
   Hold: 'Hold'
 };
 
@@ -296,7 +306,6 @@ export type RoomOperationalStatus = (typeof RoomOperationalStatus)[keyof typeof 
 export const RoomEventType: {
   AssignedToEncounter: 'AssignedToEncounter',
   PatientLeftForCheckout: 'PatientLeftForCheckout',
-  CleaningStarted: 'CleaningStarted',
   MarkedReady: 'MarkedReady',
   HoldPlaced: 'HoldPlaced',
   HoldCleared: 'HoldCleared',
@@ -617,6 +626,16 @@ export class PrismaClient<
   get clinicAssignment(): Prisma.ClinicAssignmentDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.temporaryClinicAssignmentOverride`: Exposes CRUD operations for the **TemporaryClinicAssignmentOverride** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more TemporaryClinicAssignmentOverrides
+    * const temporaryClinicAssignmentOverrides = await prisma.temporaryClinicAssignmentOverride.findMany()
+    * ```
+    */
+  get temporaryClinicAssignmentOverride(): Prisma.TemporaryClinicAssignmentOverrideDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.clinicRoom`: Exposes CRUD operations for the **ClinicRoom** model.
     * Example usage:
     * ```ts
@@ -835,6 +854,16 @@ export class PrismaClient<
     * ```
     */
   get officeManagerDailyRollup(): Prisma.OfficeManagerDailyRollupDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.roomDailyRollup`: Exposes CRUD operations for the **RoomDailyRollup** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RoomDailyRollups
+    * const roomDailyRollups = await prisma.roomDailyRollup.findMany()
+    * ```
+    */
+  get roomDailyRollup(): Prisma.RoomDailyRollupDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.auditLog`: Exposes CRUD operations for the **AuditLog** model.
@@ -1307,6 +1336,7 @@ export namespace Prisma {
     MaProviderMap: 'MaProviderMap',
     MaClinicMap: 'MaClinicMap',
     ClinicAssignment: 'ClinicAssignment',
+    TemporaryClinicAssignmentOverride: 'TemporaryClinicAssignmentOverride',
     ClinicRoom: 'ClinicRoom',
     ClinicRoomAssignment: 'ClinicRoomAssignment',
     ReasonForVisit: 'ReasonForVisit',
@@ -1329,6 +1359,7 @@ export namespace Prisma {
     AlertThreshold: 'AlertThreshold',
     NotificationPolicy: 'NotificationPolicy',
     OfficeManagerDailyRollup: 'OfficeManagerDailyRollup',
+    RoomDailyRollup: 'RoomDailyRollup',
     AuditLog: 'AuditLog',
     EventOutbox: 'EventOutbox',
     IntegrationConnector: 'IntegrationConnector'
@@ -1347,7 +1378,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "user" | "facility" | "clinic" | "provider" | "userRole" | "maProviderMap" | "maClinicMap" | "clinicAssignment" | "clinicRoom" | "clinicRoomAssignment" | "reasonForVisit" | "template" | "reasonClinicAssignment" | "templateReasonAssignment" | "incomingImportBatch" | "incomingSchedule" | "incomingImportIssue" | "encounter" | "statusChangeEvent" | "alertState" | "task" | "roomOperationalState" | "roomOperationalEvent" | "roomIssue" | "roomChecklistRun" | "userAlertInbox" | "safetyEvent" | "alertThreshold" | "notificationPolicy" | "officeManagerDailyRollup" | "auditLog" | "eventOutbox" | "integrationConnector"
+      modelProps: "user" | "facility" | "clinic" | "provider" | "userRole" | "maProviderMap" | "maClinicMap" | "clinicAssignment" | "temporaryClinicAssignmentOverride" | "clinicRoom" | "clinicRoomAssignment" | "reasonForVisit" | "template" | "reasonClinicAssignment" | "templateReasonAssignment" | "incomingImportBatch" | "incomingSchedule" | "incomingImportIssue" | "encounter" | "statusChangeEvent" | "alertState" | "task" | "roomOperationalState" | "roomOperationalEvent" | "roomIssue" | "roomChecklistRun" | "userAlertInbox" | "safetyEvent" | "alertThreshold" | "notificationPolicy" | "officeManagerDailyRollup" | "roomDailyRollup" | "auditLog" | "eventOutbox" | "integrationConnector"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1940,6 +1971,80 @@ export namespace Prisma {
           count: {
             args: Prisma.ClinicAssignmentCountArgs<ExtArgs>
             result: $Utils.Optional<ClinicAssignmentCountAggregateOutputType> | number
+          }
+        }
+      }
+      TemporaryClinicAssignmentOverride: {
+        payload: Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>
+        fields: Prisma.TemporaryClinicAssignmentOverrideFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.TemporaryClinicAssignmentOverrideFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.TemporaryClinicAssignmentOverrideFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>
+          }
+          findFirst: {
+            args: Prisma.TemporaryClinicAssignmentOverrideFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.TemporaryClinicAssignmentOverrideFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>
+          }
+          findMany: {
+            args: Prisma.TemporaryClinicAssignmentOverrideFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>[]
+          }
+          create: {
+            args: Prisma.TemporaryClinicAssignmentOverrideCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>
+          }
+          createMany: {
+            args: Prisma.TemporaryClinicAssignmentOverrideCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.TemporaryClinicAssignmentOverrideCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>[]
+          }
+          delete: {
+            args: Prisma.TemporaryClinicAssignmentOverrideDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>
+          }
+          update: {
+            args: Prisma.TemporaryClinicAssignmentOverrideUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>
+          }
+          deleteMany: {
+            args: Prisma.TemporaryClinicAssignmentOverrideDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.TemporaryClinicAssignmentOverrideUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.TemporaryClinicAssignmentOverrideUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>[]
+          }
+          upsert: {
+            args: Prisma.TemporaryClinicAssignmentOverrideUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$TemporaryClinicAssignmentOverridePayload>
+          }
+          aggregate: {
+            args: Prisma.TemporaryClinicAssignmentOverrideAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateTemporaryClinicAssignmentOverride>
+          }
+          groupBy: {
+            args: Prisma.TemporaryClinicAssignmentOverrideGroupByArgs<ExtArgs>
+            result: $Utils.Optional<TemporaryClinicAssignmentOverrideGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.TemporaryClinicAssignmentOverrideCountArgs<ExtArgs>
+            result: $Utils.Optional<TemporaryClinicAssignmentOverrideCountAggregateOutputType> | number
           }
         }
       }
@@ -3571,6 +3676,80 @@ export namespace Prisma {
           }
         }
       }
+      RoomDailyRollup: {
+        payload: Prisma.$RoomDailyRollupPayload<ExtArgs>
+        fields: Prisma.RoomDailyRollupFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RoomDailyRollupFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RoomDailyRollupFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>
+          }
+          findFirst: {
+            args: Prisma.RoomDailyRollupFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RoomDailyRollupFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>
+          }
+          findMany: {
+            args: Prisma.RoomDailyRollupFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>[]
+          }
+          create: {
+            args: Prisma.RoomDailyRollupCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>
+          }
+          createMany: {
+            args: Prisma.RoomDailyRollupCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RoomDailyRollupCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>[]
+          }
+          delete: {
+            args: Prisma.RoomDailyRollupDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>
+          }
+          update: {
+            args: Prisma.RoomDailyRollupUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>
+          }
+          deleteMany: {
+            args: Prisma.RoomDailyRollupDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RoomDailyRollupUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.RoomDailyRollupUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>[]
+          }
+          upsert: {
+            args: Prisma.RoomDailyRollupUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RoomDailyRollupPayload>
+          }
+          aggregate: {
+            args: Prisma.RoomDailyRollupAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRoomDailyRollup>
+          }
+          groupBy: {
+            args: Prisma.RoomDailyRollupGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RoomDailyRollupGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RoomDailyRollupCountArgs<ExtArgs>
+            result: $Utils.Optional<RoomDailyRollupCountAggregateOutputType> | number
+          }
+        }
+      }
       AuditLog: {
         payload: Prisma.$AuditLogPayload<ExtArgs>
         fields: Prisma.AuditLogFieldRefs
@@ -3909,6 +4088,7 @@ export namespace Prisma {
     maProviderMap?: MaProviderMapOmit
     maClinicMap?: MaClinicMapOmit
     clinicAssignment?: ClinicAssignmentOmit
+    temporaryClinicAssignmentOverride?: TemporaryClinicAssignmentOverrideOmit
     clinicRoom?: ClinicRoomOmit
     clinicRoomAssignment?: ClinicRoomAssignmentOmit
     reasonForVisit?: ReasonForVisitOmit
@@ -3931,6 +4111,7 @@ export namespace Prisma {
     alertThreshold?: AlertThresholdOmit
     notificationPolicy?: NotificationPolicyOmit
     officeManagerDailyRollup?: OfficeManagerDailyRollupOmit
+    roomDailyRollup?: RoomDailyRollupOmit
     auditLog?: AuditLogOmit
     eventOutbox?: EventOutboxOmit
     integrationConnector?: IntegrationConnectorOmit
@@ -4021,6 +4202,9 @@ export namespace Prisma {
     tasksCompleted: number
     tasksAcknowledged: number
     alertInbox: number
+    temporaryClinicOverrides: number
+    temporaryOverridesCreated: number
+    temporaryOverridesRevoked: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -4031,6 +4215,9 @@ export namespace Prisma {
     tasksCompleted?: boolean | UserCountOutputTypeCountTasksCompletedArgs
     tasksAcknowledged?: boolean | UserCountOutputTypeCountTasksAcknowledgedArgs
     alertInbox?: boolean | UserCountOutputTypeCountAlertInboxArgs
+    temporaryClinicOverrides?: boolean | UserCountOutputTypeCountTemporaryClinicOverridesArgs
+    temporaryOverridesCreated?: boolean | UserCountOutputTypeCountTemporaryOverridesCreatedArgs
+    temporaryOverridesRevoked?: boolean | UserCountOutputTypeCountTemporaryOverridesRevokedArgs
   }
 
   // Custom InputTypes
@@ -4093,6 +4280,27 @@ export namespace Prisma {
     where?: UserAlertInboxWhereInput
   }
 
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountTemporaryClinicOverridesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountTemporaryOverridesCreatedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountTemporaryOverridesRevokedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+  }
+
 
   /**
    * Count Type FacilityCountOutputType
@@ -4110,6 +4318,8 @@ export namespace Prisma {
     incomingIssues: number
     connectors: number
     alertInbox: number
+    temporaryClinicAssignmentOverrides: number
+    roomDailyRollups: number
   }
 
   export type FacilityCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -4124,6 +4334,8 @@ export namespace Prisma {
     incomingIssues?: boolean | FacilityCountOutputTypeCountIncomingIssuesArgs
     connectors?: boolean | FacilityCountOutputTypeCountConnectorsArgs
     alertInbox?: boolean | FacilityCountOutputTypeCountAlertInboxArgs
+    temporaryClinicAssignmentOverrides?: boolean | FacilityCountOutputTypeCountTemporaryClinicAssignmentOverridesArgs
+    roomDailyRollups?: boolean | FacilityCountOutputTypeCountRoomDailyRollupsArgs
   }
 
   // Custom InputTypes
@@ -4214,6 +4426,20 @@ export namespace Prisma {
     where?: UserAlertInboxWhereInput
   }
 
+  /**
+   * FacilityCountOutputType without action
+   */
+  export type FacilityCountOutputTypeCountTemporaryClinicAssignmentOverridesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+  }
+
+  /**
+   * FacilityCountOutputType without action
+   */
+  export type FacilityCountOutputTypeCountRoomDailyRollupsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomDailyRollupWhereInput
+  }
+
 
   /**
    * Count Type ClinicCountOutputType
@@ -4233,7 +4459,9 @@ export namespace Prisma {
     incomingIssues: number
     encounters: number
     officeManagerDailyRollups: number
+    roomDailyRollups: number
     alertInbox: number
+    temporaryAssignmentOverrides: number
   }
 
   export type ClinicCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -4250,7 +4478,9 @@ export namespace Prisma {
     incomingIssues?: boolean | ClinicCountOutputTypeCountIncomingIssuesArgs
     encounters?: boolean | ClinicCountOutputTypeCountEncountersArgs
     officeManagerDailyRollups?: boolean | ClinicCountOutputTypeCountOfficeManagerDailyRollupsArgs
+    roomDailyRollups?: boolean | ClinicCountOutputTypeCountRoomDailyRollupsArgs
     alertInbox?: boolean | ClinicCountOutputTypeCountAlertInboxArgs
+    temporaryAssignmentOverrides?: boolean | ClinicCountOutputTypeCountTemporaryAssignmentOverridesArgs
   }
 
   // Custom InputTypes
@@ -4358,8 +4588,22 @@ export namespace Prisma {
   /**
    * ClinicCountOutputType without action
    */
+  export type ClinicCountOutputTypeCountRoomDailyRollupsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomDailyRollupWhereInput
+  }
+
+  /**
+   * ClinicCountOutputType without action
+   */
   export type ClinicCountOutputTypeCountAlertInboxArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: UserAlertInboxWhereInput
+  }
+
+  /**
+   * ClinicCountOutputType without action
+   */
+  export type ClinicCountOutputTypeCountTemporaryAssignmentOverridesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TemporaryClinicAssignmentOverrideWhereInput
   }
 
 
@@ -5037,6 +5281,9 @@ export namespace Prisma {
     tasksCompleted?: boolean | User$tasksCompletedArgs<ExtArgs>
     tasksAcknowledged?: boolean | User$tasksAcknowledgedArgs<ExtArgs>
     alertInbox?: boolean | User$alertInboxArgs<ExtArgs>
+    temporaryClinicOverrides?: boolean | User$temporaryClinicOverridesArgs<ExtArgs>
+    temporaryOverridesCreated?: boolean | User$temporaryOverridesCreatedArgs<ExtArgs>
+    temporaryOverridesRevoked?: boolean | User$temporaryOverridesRevokedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -5109,6 +5356,9 @@ export namespace Prisma {
     tasksCompleted?: boolean | User$tasksCompletedArgs<ExtArgs>
     tasksAcknowledged?: boolean | User$tasksAcknowledgedArgs<ExtArgs>
     alertInbox?: boolean | User$alertInboxArgs<ExtArgs>
+    temporaryClinicOverrides?: boolean | User$temporaryClinicOverridesArgs<ExtArgs>
+    temporaryOverridesCreated?: boolean | User$temporaryOverridesCreatedArgs<ExtArgs>
+    temporaryOverridesRevoked?: boolean | User$temporaryOverridesRevokedArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type UserIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -5129,6 +5379,9 @@ export namespace Prisma {
       tasksCompleted: Prisma.$TaskPayload<ExtArgs>[]
       tasksAcknowledged: Prisma.$TaskPayload<ExtArgs>[]
       alertInbox: Prisma.$UserAlertInboxPayload<ExtArgs>[]
+      temporaryClinicOverrides: Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>[]
+      temporaryOverridesCreated: Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>[]
+      temporaryOverridesRevoked: Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -5549,6 +5802,9 @@ export namespace Prisma {
     tasksCompleted<T extends User$tasksCompletedArgs<ExtArgs> = {}>(args?: Subset<T, User$tasksCompletedArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     tasksAcknowledged<T extends User$tasksAcknowledgedArgs<ExtArgs> = {}>(args?: Subset<T, User$tasksAcknowledgedArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     alertInbox<T extends User$alertInboxArgs<ExtArgs> = {}>(args?: Subset<T, User$alertInboxArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$UserAlertInboxPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    temporaryClinicOverrides<T extends User$temporaryClinicOverridesArgs<ExtArgs> = {}>(args?: Subset<T, User$temporaryClinicOverridesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    temporaryOverridesCreated<T extends User$temporaryOverridesCreatedArgs<ExtArgs> = {}>(args?: Subset<T, User$temporaryOverridesCreatedArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    temporaryOverridesRevoked<T extends User$temporaryOverridesRevokedArgs<ExtArgs> = {}>(args?: Subset<T, User$temporaryOverridesRevokedArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -6177,6 +6433,78 @@ export namespace Prisma {
   }
 
   /**
+   * User.temporaryClinicOverrides
+   */
+  export type User$temporaryClinicOverridesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
+   * User.temporaryOverridesCreated
+   */
+  export type User$temporaryOverridesCreatedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
+   * User.temporaryOverridesRevoked
+   */
+  export type User$temporaryOverridesRevokedArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
    * User without action
    */
   export type UserDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -6394,6 +6722,8 @@ export namespace Prisma {
     incomingIssues?: boolean | Facility$incomingIssuesArgs<ExtArgs>
     connectors?: boolean | Facility$connectorsArgs<ExtArgs>
     alertInbox?: boolean | Facility$alertInboxArgs<ExtArgs>
+    temporaryClinicAssignmentOverrides?: boolean | Facility$temporaryClinicAssignmentOverridesArgs<ExtArgs>
+    roomDailyRollups?: boolean | Facility$roomDailyRollupsArgs<ExtArgs>
     _count?: boolean | FacilityCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["facility"]>
 
@@ -6443,6 +6773,8 @@ export namespace Prisma {
     incomingIssues?: boolean | Facility$incomingIssuesArgs<ExtArgs>
     connectors?: boolean | Facility$connectorsArgs<ExtArgs>
     alertInbox?: boolean | Facility$alertInboxArgs<ExtArgs>
+    temporaryClinicAssignmentOverrides?: boolean | Facility$temporaryClinicAssignmentOverridesArgs<ExtArgs>
+    roomDailyRollups?: boolean | Facility$roomDailyRollupsArgs<ExtArgs>
     _count?: boolean | FacilityCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type FacilityIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -6462,6 +6794,8 @@ export namespace Prisma {
       incomingIssues: Prisma.$IncomingImportIssuePayload<ExtArgs>[]
       connectors: Prisma.$IntegrationConnectorPayload<ExtArgs>[]
       alertInbox: Prisma.$UserAlertInboxPayload<ExtArgs>[]
+      temporaryClinicAssignmentOverrides: Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>[]
+      roomDailyRollups: Prisma.$RoomDailyRollupPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -6877,6 +7211,8 @@ export namespace Prisma {
     incomingIssues<T extends Facility$incomingIssuesArgs<ExtArgs> = {}>(args?: Subset<T, Facility$incomingIssuesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$IncomingImportIssuePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     connectors<T extends Facility$connectorsArgs<ExtArgs> = {}>(args?: Subset<T, Facility$connectorsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$IntegrationConnectorPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     alertInbox<T extends Facility$alertInboxArgs<ExtArgs> = {}>(args?: Subset<T, Facility$alertInboxArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$UserAlertInboxPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    temporaryClinicAssignmentOverrides<T extends Facility$temporaryClinicAssignmentOverridesArgs<ExtArgs> = {}>(args?: Subset<T, Facility$temporaryClinicAssignmentOverridesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roomDailyRollups<T extends Facility$roomDailyRollupsArgs<ExtArgs> = {}>(args?: Subset<T, Facility$roomDailyRollupsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -7566,6 +7902,54 @@ export namespace Prisma {
   }
 
   /**
+   * Facility.temporaryClinicAssignmentOverrides
+   */
+  export type Facility$temporaryClinicAssignmentOverridesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
+   * Facility.roomDailyRollups
+   */
+  export type Facility$roomDailyRollupsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    where?: RoomDailyRollupWhereInput
+    orderBy?: RoomDailyRollupOrderByWithRelationInput | RoomDailyRollupOrderByWithRelationInput[]
+    cursor?: RoomDailyRollupWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomDailyRollupScalarFieldEnum | RoomDailyRollupScalarFieldEnum[]
+  }
+
+  /**
    * Facility without action
    */
   export type FacilityDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -7807,7 +8191,9 @@ export namespace Prisma {
     incomingIssues?: boolean | Clinic$incomingIssuesArgs<ExtArgs>
     encounters?: boolean | Clinic$encountersArgs<ExtArgs>
     officeManagerDailyRollups?: boolean | Clinic$officeManagerDailyRollupsArgs<ExtArgs>
+    roomDailyRollups?: boolean | Clinic$roomDailyRollupsArgs<ExtArgs>
     alertInbox?: boolean | Clinic$alertInboxArgs<ExtArgs>
+    temporaryAssignmentOverrides?: boolean | Clinic$temporaryAssignmentOverridesArgs<ExtArgs>
     _count?: boolean | ClinicCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["clinic"]>
 
@@ -7872,7 +8258,9 @@ export namespace Prisma {
     incomingIssues?: boolean | Clinic$incomingIssuesArgs<ExtArgs>
     encounters?: boolean | Clinic$encountersArgs<ExtArgs>
     officeManagerDailyRollups?: boolean | Clinic$officeManagerDailyRollupsArgs<ExtArgs>
+    roomDailyRollups?: boolean | Clinic$roomDailyRollupsArgs<ExtArgs>
     alertInbox?: boolean | Clinic$alertInboxArgs<ExtArgs>
+    temporaryAssignmentOverrides?: boolean | Clinic$temporaryAssignmentOverridesArgs<ExtArgs>
     _count?: boolean | ClinicCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type ClinicIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -7900,7 +8288,9 @@ export namespace Prisma {
       incomingIssues: Prisma.$IncomingImportIssuePayload<ExtArgs>[]
       encounters: Prisma.$EncounterPayload<ExtArgs>[]
       officeManagerDailyRollups: Prisma.$OfficeManagerDailyRollupPayload<ExtArgs>[]
+      roomDailyRollups: Prisma.$RoomDailyRollupPayload<ExtArgs>[]
       alertInbox: Prisma.$UserAlertInboxPayload<ExtArgs>[]
+      temporaryAssignmentOverrides: Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -8323,7 +8713,9 @@ export namespace Prisma {
     incomingIssues<T extends Clinic$incomingIssuesArgs<ExtArgs> = {}>(args?: Subset<T, Clinic$incomingIssuesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$IncomingImportIssuePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     encounters<T extends Clinic$encountersArgs<ExtArgs> = {}>(args?: Subset<T, Clinic$encountersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EncounterPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     officeManagerDailyRollups<T extends Clinic$officeManagerDailyRollupsArgs<ExtArgs> = {}>(args?: Subset<T, Clinic$officeManagerDailyRollupsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OfficeManagerDailyRollupPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    roomDailyRollups<T extends Clinic$roomDailyRollupsArgs<ExtArgs> = {}>(args?: Subset<T, Clinic$roomDailyRollupsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     alertInbox<T extends Clinic$alertInboxArgs<ExtArgs> = {}>(args?: Subset<T, Clinic$alertInboxArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$UserAlertInboxPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    temporaryAssignmentOverrides<T extends Clinic$temporaryAssignmentOverridesArgs<ExtArgs> = {}>(args?: Subset<T, Clinic$temporaryAssignmentOverridesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -9110,6 +9502,30 @@ export namespace Prisma {
   }
 
   /**
+   * Clinic.roomDailyRollups
+   */
+  export type Clinic$roomDailyRollupsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    where?: RoomDailyRollupWhereInput
+    orderBy?: RoomDailyRollupOrderByWithRelationInput | RoomDailyRollupOrderByWithRelationInput[]
+    cursor?: RoomDailyRollupWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RoomDailyRollupScalarFieldEnum | RoomDailyRollupScalarFieldEnum[]
+  }
+
+  /**
    * Clinic.alertInbox
    */
   export type Clinic$alertInboxArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -9131,6 +9547,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: UserAlertInboxScalarFieldEnum | UserAlertInboxScalarFieldEnum[]
+  }
+
+  /**
+   * Clinic.temporaryAssignmentOverrides
+   */
+  export type Clinic$temporaryAssignmentOverridesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
   }
 
   /**
@@ -14670,6 +15110,1206 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: ClinicAssignmentInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model TemporaryClinicAssignmentOverride
+   */
+
+  export type AggregateTemporaryClinicAssignmentOverride = {
+    _count: TemporaryClinicAssignmentOverrideCountAggregateOutputType | null
+    _min: TemporaryClinicAssignmentOverrideMinAggregateOutputType | null
+    _max: TemporaryClinicAssignmentOverrideMaxAggregateOutputType | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideMinAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    role: $Enums.RoleName | null
+    clinicId: string | null
+    facilityId: string | null
+    startsAt: Date | null
+    endsAt: Date | null
+    reason: string | null
+    createdByUserId: string | null
+    createdAt: Date | null
+    revokedAt: Date | null
+    revokedByUserId: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideMaxAggregateOutputType = {
+    id: string | null
+    userId: string | null
+    role: $Enums.RoleName | null
+    clinicId: string | null
+    facilityId: string | null
+    startsAt: Date | null
+    endsAt: Date | null
+    reason: string | null
+    createdByUserId: string | null
+    createdAt: Date | null
+    revokedAt: Date | null
+    revokedByUserId: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCountAggregateOutputType = {
+    id: number
+    userId: number
+    role: number
+    clinicId: number
+    facilityId: number
+    startsAt: number
+    endsAt: number
+    reason: number
+    createdByUserId: number
+    createdAt: number
+    revokedAt: number
+    revokedByUserId: number
+    _all: number
+  }
+
+
+  export type TemporaryClinicAssignmentOverrideMinAggregateInputType = {
+    id?: true
+    userId?: true
+    role?: true
+    clinicId?: true
+    facilityId?: true
+    startsAt?: true
+    endsAt?: true
+    reason?: true
+    createdByUserId?: true
+    createdAt?: true
+    revokedAt?: true
+    revokedByUserId?: true
+  }
+
+  export type TemporaryClinicAssignmentOverrideMaxAggregateInputType = {
+    id?: true
+    userId?: true
+    role?: true
+    clinicId?: true
+    facilityId?: true
+    startsAt?: true
+    endsAt?: true
+    reason?: true
+    createdByUserId?: true
+    createdAt?: true
+    revokedAt?: true
+    revokedByUserId?: true
+  }
+
+  export type TemporaryClinicAssignmentOverrideCountAggregateInputType = {
+    id?: true
+    userId?: true
+    role?: true
+    clinicId?: true
+    facilityId?: true
+    startsAt?: true
+    endsAt?: true
+    reason?: true
+    createdByUserId?: true
+    createdAt?: true
+    revokedAt?: true
+    revokedByUserId?: true
+    _all?: true
+  }
+
+  export type TemporaryClinicAssignmentOverrideAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which TemporaryClinicAssignmentOverride to aggregate.
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of TemporaryClinicAssignmentOverrides to fetch.
+     */
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` TemporaryClinicAssignmentOverrides from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` TemporaryClinicAssignmentOverrides.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned TemporaryClinicAssignmentOverrides
+    **/
+    _count?: true | TemporaryClinicAssignmentOverrideCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: TemporaryClinicAssignmentOverrideMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: TemporaryClinicAssignmentOverrideMaxAggregateInputType
+  }
+
+  export type GetTemporaryClinicAssignmentOverrideAggregateType<T extends TemporaryClinicAssignmentOverrideAggregateArgs> = {
+        [P in keyof T & keyof AggregateTemporaryClinicAssignmentOverride]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateTemporaryClinicAssignmentOverride[P]>
+      : GetScalarType<T[P], AggregateTemporaryClinicAssignmentOverride[P]>
+  }
+
+
+
+
+  export type TemporaryClinicAssignmentOverrideGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithAggregationInput | TemporaryClinicAssignmentOverrideOrderByWithAggregationInput[]
+    by: TemporaryClinicAssignmentOverrideScalarFieldEnum[] | TemporaryClinicAssignmentOverrideScalarFieldEnum
+    having?: TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: TemporaryClinicAssignmentOverrideCountAggregateInputType | true
+    _min?: TemporaryClinicAssignmentOverrideMinAggregateInputType
+    _max?: TemporaryClinicAssignmentOverrideMaxAggregateInputType
+  }
+
+  export type TemporaryClinicAssignmentOverrideGroupByOutputType = {
+    id: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date
+    endsAt: Date
+    reason: string
+    createdByUserId: string
+    createdAt: Date
+    revokedAt: Date | null
+    revokedByUserId: string | null
+    _count: TemporaryClinicAssignmentOverrideCountAggregateOutputType | null
+    _min: TemporaryClinicAssignmentOverrideMinAggregateOutputType | null
+    _max: TemporaryClinicAssignmentOverrideMaxAggregateOutputType | null
+  }
+
+  type GetTemporaryClinicAssignmentOverrideGroupByPayload<T extends TemporaryClinicAssignmentOverrideGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<TemporaryClinicAssignmentOverrideGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof TemporaryClinicAssignmentOverrideGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], TemporaryClinicAssignmentOverrideGroupByOutputType[P]>
+            : GetScalarType<T[P], TemporaryClinicAssignmentOverrideGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type TemporaryClinicAssignmentOverrideSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    role?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    reason?: boolean
+    createdByUserId?: boolean
+    createdAt?: boolean
+    revokedAt?: boolean
+    revokedByUserId?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    createdBy?: boolean | UserDefaultArgs<ExtArgs>
+    revokedBy?: boolean | TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>
+  }, ExtArgs["result"]["temporaryClinicAssignmentOverride"]>
+
+  export type TemporaryClinicAssignmentOverrideSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    role?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    reason?: boolean
+    createdByUserId?: boolean
+    createdAt?: boolean
+    revokedAt?: boolean
+    revokedByUserId?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    createdBy?: boolean | UserDefaultArgs<ExtArgs>
+    revokedBy?: boolean | TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>
+  }, ExtArgs["result"]["temporaryClinicAssignmentOverride"]>
+
+  export type TemporaryClinicAssignmentOverrideSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    userId?: boolean
+    role?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    reason?: boolean
+    createdByUserId?: boolean
+    createdAt?: boolean
+    revokedAt?: boolean
+    revokedByUserId?: boolean
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    createdBy?: boolean | UserDefaultArgs<ExtArgs>
+    revokedBy?: boolean | TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>
+  }, ExtArgs["result"]["temporaryClinicAssignmentOverride"]>
+
+  export type TemporaryClinicAssignmentOverrideSelectScalar = {
+    id?: boolean
+    userId?: boolean
+    role?: boolean
+    clinicId?: boolean
+    facilityId?: boolean
+    startsAt?: boolean
+    endsAt?: boolean
+    reason?: boolean
+    createdByUserId?: boolean
+    createdAt?: boolean
+    revokedAt?: boolean
+    revokedByUserId?: boolean
+  }
+
+  export type TemporaryClinicAssignmentOverrideOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "userId" | "role" | "clinicId" | "facilityId" | "startsAt" | "endsAt" | "reason" | "createdByUserId" | "createdAt" | "revokedAt" | "revokedByUserId", ExtArgs["result"]["temporaryClinicAssignmentOverride"]>
+  export type TemporaryClinicAssignmentOverrideInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    createdBy?: boolean | UserDefaultArgs<ExtArgs>
+    revokedBy?: boolean | TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>
+  }
+  export type TemporaryClinicAssignmentOverrideIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    createdBy?: boolean | UserDefaultArgs<ExtArgs>
+    revokedBy?: boolean | TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>
+  }
+  export type TemporaryClinicAssignmentOverrideIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    user?: boolean | UserDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    createdBy?: boolean | UserDefaultArgs<ExtArgs>
+    revokedBy?: boolean | TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>
+  }
+
+  export type $TemporaryClinicAssignmentOverridePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "TemporaryClinicAssignmentOverride"
+    objects: {
+      user: Prisma.$UserPayload<ExtArgs>
+      clinic: Prisma.$ClinicPayload<ExtArgs>
+      facility: Prisma.$FacilityPayload<ExtArgs>
+      createdBy: Prisma.$UserPayload<ExtArgs>
+      revokedBy: Prisma.$UserPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      userId: string
+      role: $Enums.RoleName
+      clinicId: string
+      facilityId: string
+      startsAt: Date
+      endsAt: Date
+      reason: string
+      createdByUserId: string
+      createdAt: Date
+      revokedAt: Date | null
+      revokedByUserId: string | null
+    }, ExtArgs["result"]["temporaryClinicAssignmentOverride"]>
+    composites: {}
+  }
+
+  type TemporaryClinicAssignmentOverrideGetPayload<S extends boolean | null | undefined | TemporaryClinicAssignmentOverrideDefaultArgs> = $Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload, S>
+
+  type TemporaryClinicAssignmentOverrideCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<TemporaryClinicAssignmentOverrideFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: TemporaryClinicAssignmentOverrideCountAggregateInputType | true
+    }
+
+  export interface TemporaryClinicAssignmentOverrideDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['TemporaryClinicAssignmentOverride'], meta: { name: 'TemporaryClinicAssignmentOverride' } }
+    /**
+     * Find zero or one TemporaryClinicAssignmentOverride that matches the filter.
+     * @param {TemporaryClinicAssignmentOverrideFindUniqueArgs} args - Arguments to find a TemporaryClinicAssignmentOverride
+     * @example
+     * // Get one TemporaryClinicAssignmentOverride
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends TemporaryClinicAssignmentOverrideFindUniqueArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideFindUniqueArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one TemporaryClinicAssignmentOverride that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {TemporaryClinicAssignmentOverrideFindUniqueOrThrowArgs} args - Arguments to find a TemporaryClinicAssignmentOverride
+     * @example
+     * // Get one TemporaryClinicAssignmentOverride
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends TemporaryClinicAssignmentOverrideFindUniqueOrThrowArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideFindUniqueOrThrowArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first TemporaryClinicAssignmentOverride that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideFindFirstArgs} args - Arguments to find a TemporaryClinicAssignmentOverride
+     * @example
+     * // Get one TemporaryClinicAssignmentOverride
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends TemporaryClinicAssignmentOverrideFindFirstArgs>(args?: SelectSubset<T, TemporaryClinicAssignmentOverrideFindFirstArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first TemporaryClinicAssignmentOverride that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideFindFirstOrThrowArgs} args - Arguments to find a TemporaryClinicAssignmentOverride
+     * @example
+     * // Get one TemporaryClinicAssignmentOverride
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends TemporaryClinicAssignmentOverrideFindFirstOrThrowArgs>(args?: SelectSubset<T, TemporaryClinicAssignmentOverrideFindFirstOrThrowArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more TemporaryClinicAssignmentOverrides that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all TemporaryClinicAssignmentOverrides
+     * const temporaryClinicAssignmentOverrides = await prisma.temporaryClinicAssignmentOverride.findMany()
+     * 
+     * // Get first 10 TemporaryClinicAssignmentOverrides
+     * const temporaryClinicAssignmentOverrides = await prisma.temporaryClinicAssignmentOverride.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const temporaryClinicAssignmentOverrideWithIdOnly = await prisma.temporaryClinicAssignmentOverride.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends TemporaryClinicAssignmentOverrideFindManyArgs>(args?: SelectSubset<T, TemporaryClinicAssignmentOverrideFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a TemporaryClinicAssignmentOverride.
+     * @param {TemporaryClinicAssignmentOverrideCreateArgs} args - Arguments to create a TemporaryClinicAssignmentOverride.
+     * @example
+     * // Create one TemporaryClinicAssignmentOverride
+     * const TemporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.create({
+     *   data: {
+     *     // ... data to create a TemporaryClinicAssignmentOverride
+     *   }
+     * })
+     * 
+     */
+    create<T extends TemporaryClinicAssignmentOverrideCreateArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideCreateArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many TemporaryClinicAssignmentOverrides.
+     * @param {TemporaryClinicAssignmentOverrideCreateManyArgs} args - Arguments to create many TemporaryClinicAssignmentOverrides.
+     * @example
+     * // Create many TemporaryClinicAssignmentOverrides
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends TemporaryClinicAssignmentOverrideCreateManyArgs>(args?: SelectSubset<T, TemporaryClinicAssignmentOverrideCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many TemporaryClinicAssignmentOverrides and returns the data saved in the database.
+     * @param {TemporaryClinicAssignmentOverrideCreateManyAndReturnArgs} args - Arguments to create many TemporaryClinicAssignmentOverrides.
+     * @example
+     * // Create many TemporaryClinicAssignmentOverrides
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many TemporaryClinicAssignmentOverrides and only return the `id`
+     * const temporaryClinicAssignmentOverrideWithIdOnly = await prisma.temporaryClinicAssignmentOverride.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends TemporaryClinicAssignmentOverrideCreateManyAndReturnArgs>(args?: SelectSubset<T, TemporaryClinicAssignmentOverrideCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a TemporaryClinicAssignmentOverride.
+     * @param {TemporaryClinicAssignmentOverrideDeleteArgs} args - Arguments to delete one TemporaryClinicAssignmentOverride.
+     * @example
+     * // Delete one TemporaryClinicAssignmentOverride
+     * const TemporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.delete({
+     *   where: {
+     *     // ... filter to delete one TemporaryClinicAssignmentOverride
+     *   }
+     * })
+     * 
+     */
+    delete<T extends TemporaryClinicAssignmentOverrideDeleteArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideDeleteArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one TemporaryClinicAssignmentOverride.
+     * @param {TemporaryClinicAssignmentOverrideUpdateArgs} args - Arguments to update one TemporaryClinicAssignmentOverride.
+     * @example
+     * // Update one TemporaryClinicAssignmentOverride
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends TemporaryClinicAssignmentOverrideUpdateArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideUpdateArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more TemporaryClinicAssignmentOverrides.
+     * @param {TemporaryClinicAssignmentOverrideDeleteManyArgs} args - Arguments to filter TemporaryClinicAssignmentOverrides to delete.
+     * @example
+     * // Delete a few TemporaryClinicAssignmentOverrides
+     * const { count } = await prisma.temporaryClinicAssignmentOverride.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends TemporaryClinicAssignmentOverrideDeleteManyArgs>(args?: SelectSubset<T, TemporaryClinicAssignmentOverrideDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more TemporaryClinicAssignmentOverrides.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many TemporaryClinicAssignmentOverrides
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends TemporaryClinicAssignmentOverrideUpdateManyArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more TemporaryClinicAssignmentOverrides and returns the data updated in the database.
+     * @param {TemporaryClinicAssignmentOverrideUpdateManyAndReturnArgs} args - Arguments to update many TemporaryClinicAssignmentOverrides.
+     * @example
+     * // Update many TemporaryClinicAssignmentOverrides
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more TemporaryClinicAssignmentOverrides and only return the `id`
+     * const temporaryClinicAssignmentOverrideWithIdOnly = await prisma.temporaryClinicAssignmentOverride.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends TemporaryClinicAssignmentOverrideUpdateManyAndReturnArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one TemporaryClinicAssignmentOverride.
+     * @param {TemporaryClinicAssignmentOverrideUpsertArgs} args - Arguments to update or create a TemporaryClinicAssignmentOverride.
+     * @example
+     * // Update or create a TemporaryClinicAssignmentOverride
+     * const temporaryClinicAssignmentOverride = await prisma.temporaryClinicAssignmentOverride.upsert({
+     *   create: {
+     *     // ... data to create a TemporaryClinicAssignmentOverride
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the TemporaryClinicAssignmentOverride we want to update
+     *   }
+     * })
+     */
+    upsert<T extends TemporaryClinicAssignmentOverrideUpsertArgs>(args: SelectSubset<T, TemporaryClinicAssignmentOverrideUpsertArgs<ExtArgs>>): Prisma__TemporaryClinicAssignmentOverrideClient<$Result.GetResult<Prisma.$TemporaryClinicAssignmentOverridePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of TemporaryClinicAssignmentOverrides.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideCountArgs} args - Arguments to filter TemporaryClinicAssignmentOverrides to count.
+     * @example
+     * // Count the number of TemporaryClinicAssignmentOverrides
+     * const count = await prisma.temporaryClinicAssignmentOverride.count({
+     *   where: {
+     *     // ... the filter for the TemporaryClinicAssignmentOverrides we want to count
+     *   }
+     * })
+    **/
+    count<T extends TemporaryClinicAssignmentOverrideCountArgs>(
+      args?: Subset<T, TemporaryClinicAssignmentOverrideCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], TemporaryClinicAssignmentOverrideCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a TemporaryClinicAssignmentOverride.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends TemporaryClinicAssignmentOverrideAggregateArgs>(args: Subset<T, TemporaryClinicAssignmentOverrideAggregateArgs>): Prisma.PrismaPromise<GetTemporaryClinicAssignmentOverrideAggregateType<T>>
+
+    /**
+     * Group by TemporaryClinicAssignmentOverride.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {TemporaryClinicAssignmentOverrideGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends TemporaryClinicAssignmentOverrideGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: TemporaryClinicAssignmentOverrideGroupByArgs['orderBy'] }
+        : { orderBy?: TemporaryClinicAssignmentOverrideGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, TemporaryClinicAssignmentOverrideGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetTemporaryClinicAssignmentOverrideGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the TemporaryClinicAssignmentOverride model
+   */
+  readonly fields: TemporaryClinicAssignmentOverrideFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for TemporaryClinicAssignmentOverride.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__TemporaryClinicAssignmentOverrideClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    user<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    clinic<T extends ClinicDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClinicDefaultArgs<ExtArgs>>): Prisma__ClinicClient<$Result.GetResult<Prisma.$ClinicPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    facility<T extends FacilityDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FacilityDefaultArgs<ExtArgs>>): Prisma__FacilityClient<$Result.GetResult<Prisma.$FacilityPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    createdBy<T extends UserDefaultArgs<ExtArgs> = {}>(args?: Subset<T, UserDefaultArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    revokedBy<T extends TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs> = {}>(args?: Subset<T, TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the TemporaryClinicAssignmentOverride model
+   */
+  interface TemporaryClinicAssignmentOverrideFieldRefs {
+    readonly id: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+    readonly userId: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+    readonly role: FieldRef<"TemporaryClinicAssignmentOverride", 'RoleName'>
+    readonly clinicId: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+    readonly facilityId: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+    readonly startsAt: FieldRef<"TemporaryClinicAssignmentOverride", 'DateTime'>
+    readonly endsAt: FieldRef<"TemporaryClinicAssignmentOverride", 'DateTime'>
+    readonly reason: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+    readonly createdByUserId: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+    readonly createdAt: FieldRef<"TemporaryClinicAssignmentOverride", 'DateTime'>
+    readonly revokedAt: FieldRef<"TemporaryClinicAssignmentOverride", 'DateTime'>
+    readonly revokedByUserId: FieldRef<"TemporaryClinicAssignmentOverride", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * TemporaryClinicAssignmentOverride findUnique
+   */
+  export type TemporaryClinicAssignmentOverrideFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * Filter, which TemporaryClinicAssignmentOverride to fetch.
+     */
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride findUniqueOrThrow
+   */
+  export type TemporaryClinicAssignmentOverrideFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * Filter, which TemporaryClinicAssignmentOverride to fetch.
+     */
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride findFirst
+   */
+  export type TemporaryClinicAssignmentOverrideFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * Filter, which TemporaryClinicAssignmentOverride to fetch.
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of TemporaryClinicAssignmentOverrides to fetch.
+     */
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for TemporaryClinicAssignmentOverrides.
+     */
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` TemporaryClinicAssignmentOverrides from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` TemporaryClinicAssignmentOverrides.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of TemporaryClinicAssignmentOverrides.
+     */
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride findFirstOrThrow
+   */
+  export type TemporaryClinicAssignmentOverrideFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * Filter, which TemporaryClinicAssignmentOverride to fetch.
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of TemporaryClinicAssignmentOverrides to fetch.
+     */
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for TemporaryClinicAssignmentOverrides.
+     */
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` TemporaryClinicAssignmentOverrides from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` TemporaryClinicAssignmentOverrides.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of TemporaryClinicAssignmentOverrides.
+     */
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride findMany
+   */
+  export type TemporaryClinicAssignmentOverrideFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * Filter, which TemporaryClinicAssignmentOverrides to fetch.
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of TemporaryClinicAssignmentOverrides to fetch.
+     */
+    orderBy?: TemporaryClinicAssignmentOverrideOrderByWithRelationInput | TemporaryClinicAssignmentOverrideOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing TemporaryClinicAssignmentOverrides.
+     */
+    cursor?: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` TemporaryClinicAssignmentOverrides from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` TemporaryClinicAssignmentOverrides.
+     */
+    skip?: number
+    distinct?: TemporaryClinicAssignmentOverrideScalarFieldEnum | TemporaryClinicAssignmentOverrideScalarFieldEnum[]
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride create
+   */
+  export type TemporaryClinicAssignmentOverrideCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * The data needed to create a TemporaryClinicAssignmentOverride.
+     */
+    data: XOR<TemporaryClinicAssignmentOverrideCreateInput, TemporaryClinicAssignmentOverrideUncheckedCreateInput>
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride createMany
+   */
+  export type TemporaryClinicAssignmentOverrideCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many TemporaryClinicAssignmentOverrides.
+     */
+    data: TemporaryClinicAssignmentOverrideCreateManyInput | TemporaryClinicAssignmentOverrideCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride createManyAndReturn
+   */
+  export type TemporaryClinicAssignmentOverrideCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * The data used to create many TemporaryClinicAssignmentOverrides.
+     */
+    data: TemporaryClinicAssignmentOverrideCreateManyInput | TemporaryClinicAssignmentOverrideCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride update
+   */
+  export type TemporaryClinicAssignmentOverrideUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * The data needed to update a TemporaryClinicAssignmentOverride.
+     */
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateInput, TemporaryClinicAssignmentOverrideUncheckedUpdateInput>
+    /**
+     * Choose, which TemporaryClinicAssignmentOverride to update.
+     */
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride updateMany
+   */
+  export type TemporaryClinicAssignmentOverrideUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update TemporaryClinicAssignmentOverrides.
+     */
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyInput>
+    /**
+     * Filter which TemporaryClinicAssignmentOverrides to update
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * Limit how many TemporaryClinicAssignmentOverrides to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride updateManyAndReturn
+   */
+  export type TemporaryClinicAssignmentOverrideUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * The data used to update TemporaryClinicAssignmentOverrides.
+     */
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyInput>
+    /**
+     * Filter which TemporaryClinicAssignmentOverrides to update
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * Limit how many TemporaryClinicAssignmentOverrides to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride upsert
+   */
+  export type TemporaryClinicAssignmentOverrideUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * The filter to search for the TemporaryClinicAssignmentOverride to update in case it exists.
+     */
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    /**
+     * In case the TemporaryClinicAssignmentOverride found by the `where` argument doesn't exist, create a new TemporaryClinicAssignmentOverride with this data.
+     */
+    create: XOR<TemporaryClinicAssignmentOverrideCreateInput, TemporaryClinicAssignmentOverrideUncheckedCreateInput>
+    /**
+     * In case the TemporaryClinicAssignmentOverride was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<TemporaryClinicAssignmentOverrideUpdateInput, TemporaryClinicAssignmentOverrideUncheckedUpdateInput>
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride delete
+   */
+  export type TemporaryClinicAssignmentOverrideDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
+    /**
+     * Filter which TemporaryClinicAssignmentOverride to delete.
+     */
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride deleteMany
+   */
+  export type TemporaryClinicAssignmentOverrideDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which TemporaryClinicAssignmentOverrides to delete
+     */
+    where?: TemporaryClinicAssignmentOverrideWhereInput
+    /**
+     * Limit how many TemporaryClinicAssignmentOverrides to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride.revokedBy
+   */
+  export type TemporaryClinicAssignmentOverride$revokedByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the User
+     */
+    select?: UserSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the User
+     */
+    omit?: UserOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: UserInclude<ExtArgs> | null
+    where?: UserWhereInput
+  }
+
+  /**
+   * TemporaryClinicAssignmentOverride without action
+   */
+  export type TemporaryClinicAssignmentOverrideDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TemporaryClinicAssignmentOverride
+     */
+    select?: TemporaryClinicAssignmentOverrideSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TemporaryClinicAssignmentOverride
+     */
+    omit?: TemporaryClinicAssignmentOverrideOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TemporaryClinicAssignmentOverrideInclude<ExtArgs> | null
   }
 
 
@@ -41462,6 +43102,1316 @@ export namespace Prisma {
 
 
   /**
+   * Model RoomDailyRollup
+   */
+
+  export type AggregateRoomDailyRollup = {
+    _count: RoomDailyRollupCountAggregateOutputType | null
+    _avg: RoomDailyRollupAvgAggregateOutputType | null
+    _sum: RoomDailyRollupSumAggregateOutputType | null
+    _min: RoomDailyRollupMinAggregateOutputType | null
+    _max: RoomDailyRollupMaxAggregateOutputType | null
+  }
+
+  export type RoomDailyRollupAvgAggregateOutputType = {
+    roomCount: number | null
+    dayStartCompletedCount: number | null
+    dayEndCompletedCount: number | null
+    turnoverCount: number | null
+    holdCount: number | null
+    issueCount: number | null
+    resolvedIssueCount: number | null
+    occupiedTotalMins: number | null
+    occupiedSamples: number | null
+    turnoverTotalMins: number | null
+    turnoverSamples: number | null
+  }
+
+  export type RoomDailyRollupSumAggregateOutputType = {
+    roomCount: number | null
+    dayStartCompletedCount: number | null
+    dayEndCompletedCount: number | null
+    turnoverCount: number | null
+    holdCount: number | null
+    issueCount: number | null
+    resolvedIssueCount: number | null
+    occupiedTotalMins: number | null
+    occupiedSamples: number | null
+    turnoverTotalMins: number | null
+    turnoverSamples: number | null
+  }
+
+  export type RoomDailyRollupMinAggregateOutputType = {
+    id: string | null
+    facilityId: string | null
+    clinicId: string | null
+    dateKey: string | null
+    roomCount: number | null
+    dayStartCompletedCount: number | null
+    dayEndCompletedCount: number | null
+    turnoverCount: number | null
+    holdCount: number | null
+    issueCount: number | null
+    resolvedIssueCount: number | null
+    occupiedTotalMins: number | null
+    occupiedSamples: number | null
+    turnoverTotalMins: number | null
+    turnoverSamples: number | null
+    computedAt: Date | null
+  }
+
+  export type RoomDailyRollupMaxAggregateOutputType = {
+    id: string | null
+    facilityId: string | null
+    clinicId: string | null
+    dateKey: string | null
+    roomCount: number | null
+    dayStartCompletedCount: number | null
+    dayEndCompletedCount: number | null
+    turnoverCount: number | null
+    holdCount: number | null
+    issueCount: number | null
+    resolvedIssueCount: number | null
+    occupiedTotalMins: number | null
+    occupiedSamples: number | null
+    turnoverTotalMins: number | null
+    turnoverSamples: number | null
+    computedAt: Date | null
+  }
+
+  export type RoomDailyRollupCountAggregateOutputType = {
+    id: number
+    facilityId: number
+    clinicId: number
+    dateKey: number
+    roomCount: number
+    dayStartCompletedCount: number
+    dayEndCompletedCount: number
+    turnoverCount: number
+    holdCount: number
+    issueCount: number
+    resolvedIssueCount: number
+    occupiedTotalMins: number
+    occupiedSamples: number
+    turnoverTotalMins: number
+    turnoverSamples: number
+    statusMinutesJson: number
+    roomRollupsJson: number
+    issueRollupsJson: number
+    computedAt: number
+    _all: number
+  }
+
+
+  export type RoomDailyRollupAvgAggregateInputType = {
+    roomCount?: true
+    dayStartCompletedCount?: true
+    dayEndCompletedCount?: true
+    turnoverCount?: true
+    holdCount?: true
+    issueCount?: true
+    resolvedIssueCount?: true
+    occupiedTotalMins?: true
+    occupiedSamples?: true
+    turnoverTotalMins?: true
+    turnoverSamples?: true
+  }
+
+  export type RoomDailyRollupSumAggregateInputType = {
+    roomCount?: true
+    dayStartCompletedCount?: true
+    dayEndCompletedCount?: true
+    turnoverCount?: true
+    holdCount?: true
+    issueCount?: true
+    resolvedIssueCount?: true
+    occupiedTotalMins?: true
+    occupiedSamples?: true
+    turnoverTotalMins?: true
+    turnoverSamples?: true
+  }
+
+  export type RoomDailyRollupMinAggregateInputType = {
+    id?: true
+    facilityId?: true
+    clinicId?: true
+    dateKey?: true
+    roomCount?: true
+    dayStartCompletedCount?: true
+    dayEndCompletedCount?: true
+    turnoverCount?: true
+    holdCount?: true
+    issueCount?: true
+    resolvedIssueCount?: true
+    occupiedTotalMins?: true
+    occupiedSamples?: true
+    turnoverTotalMins?: true
+    turnoverSamples?: true
+    computedAt?: true
+  }
+
+  export type RoomDailyRollupMaxAggregateInputType = {
+    id?: true
+    facilityId?: true
+    clinicId?: true
+    dateKey?: true
+    roomCount?: true
+    dayStartCompletedCount?: true
+    dayEndCompletedCount?: true
+    turnoverCount?: true
+    holdCount?: true
+    issueCount?: true
+    resolvedIssueCount?: true
+    occupiedTotalMins?: true
+    occupiedSamples?: true
+    turnoverTotalMins?: true
+    turnoverSamples?: true
+    computedAt?: true
+  }
+
+  export type RoomDailyRollupCountAggregateInputType = {
+    id?: true
+    facilityId?: true
+    clinicId?: true
+    dateKey?: true
+    roomCount?: true
+    dayStartCompletedCount?: true
+    dayEndCompletedCount?: true
+    turnoverCount?: true
+    holdCount?: true
+    issueCount?: true
+    resolvedIssueCount?: true
+    occupiedTotalMins?: true
+    occupiedSamples?: true
+    turnoverTotalMins?: true
+    turnoverSamples?: true
+    statusMinutesJson?: true
+    roomRollupsJson?: true
+    issueRollupsJson?: true
+    computedAt?: true
+    _all?: true
+  }
+
+  export type RoomDailyRollupAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomDailyRollup to aggregate.
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomDailyRollups to fetch.
+     */
+    orderBy?: RoomDailyRollupOrderByWithRelationInput | RoomDailyRollupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RoomDailyRollupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomDailyRollups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomDailyRollups.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RoomDailyRollups
+    **/
+    _count?: true | RoomDailyRollupCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: RoomDailyRollupAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: RoomDailyRollupSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RoomDailyRollupMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RoomDailyRollupMaxAggregateInputType
+  }
+
+  export type GetRoomDailyRollupAggregateType<T extends RoomDailyRollupAggregateArgs> = {
+        [P in keyof T & keyof AggregateRoomDailyRollup]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRoomDailyRollup[P]>
+      : GetScalarType<T[P], AggregateRoomDailyRollup[P]>
+  }
+
+
+
+
+  export type RoomDailyRollupGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RoomDailyRollupWhereInput
+    orderBy?: RoomDailyRollupOrderByWithAggregationInput | RoomDailyRollupOrderByWithAggregationInput[]
+    by: RoomDailyRollupScalarFieldEnum[] | RoomDailyRollupScalarFieldEnum
+    having?: RoomDailyRollupScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RoomDailyRollupCountAggregateInputType | true
+    _avg?: RoomDailyRollupAvgAggregateInputType
+    _sum?: RoomDailyRollupSumAggregateInputType
+    _min?: RoomDailyRollupMinAggregateInputType
+    _max?: RoomDailyRollupMaxAggregateInputType
+  }
+
+  export type RoomDailyRollupGroupByOutputType = {
+    id: string
+    facilityId: string
+    clinicId: string
+    dateKey: string
+    roomCount: number
+    dayStartCompletedCount: number
+    dayEndCompletedCount: number
+    turnoverCount: number
+    holdCount: number
+    issueCount: number
+    resolvedIssueCount: number
+    occupiedTotalMins: number
+    occupiedSamples: number
+    turnoverTotalMins: number
+    turnoverSamples: number
+    statusMinutesJson: JsonValue
+    roomRollupsJson: JsonValue
+    issueRollupsJson: JsonValue
+    computedAt: Date
+    _count: RoomDailyRollupCountAggregateOutputType | null
+    _avg: RoomDailyRollupAvgAggregateOutputType | null
+    _sum: RoomDailyRollupSumAggregateOutputType | null
+    _min: RoomDailyRollupMinAggregateOutputType | null
+    _max: RoomDailyRollupMaxAggregateOutputType | null
+  }
+
+  type GetRoomDailyRollupGroupByPayload<T extends RoomDailyRollupGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RoomDailyRollupGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RoomDailyRollupGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RoomDailyRollupGroupByOutputType[P]>
+            : GetScalarType<T[P], RoomDailyRollupGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RoomDailyRollupSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
+    dateKey?: boolean
+    roomCount?: boolean
+    dayStartCompletedCount?: boolean
+    dayEndCompletedCount?: boolean
+    turnoverCount?: boolean
+    holdCount?: boolean
+    issueCount?: boolean
+    resolvedIssueCount?: boolean
+    occupiedTotalMins?: boolean
+    occupiedSamples?: boolean
+    turnoverTotalMins?: boolean
+    turnoverSamples?: boolean
+    statusMinutesJson?: boolean
+    roomRollupsJson?: boolean
+    issueRollupsJson?: boolean
+    computedAt?: boolean
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["roomDailyRollup"]>
+
+  export type RoomDailyRollupSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
+    dateKey?: boolean
+    roomCount?: boolean
+    dayStartCompletedCount?: boolean
+    dayEndCompletedCount?: boolean
+    turnoverCount?: boolean
+    holdCount?: boolean
+    issueCount?: boolean
+    resolvedIssueCount?: boolean
+    occupiedTotalMins?: boolean
+    occupiedSamples?: boolean
+    turnoverTotalMins?: boolean
+    turnoverSamples?: boolean
+    statusMinutesJson?: boolean
+    roomRollupsJson?: boolean
+    issueRollupsJson?: boolean
+    computedAt?: boolean
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["roomDailyRollup"]>
+
+  export type RoomDailyRollupSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
+    dateKey?: boolean
+    roomCount?: boolean
+    dayStartCompletedCount?: boolean
+    dayEndCompletedCount?: boolean
+    turnoverCount?: boolean
+    holdCount?: boolean
+    issueCount?: boolean
+    resolvedIssueCount?: boolean
+    occupiedTotalMins?: boolean
+    occupiedSamples?: boolean
+    turnoverTotalMins?: boolean
+    turnoverSamples?: boolean
+    statusMinutesJson?: boolean
+    roomRollupsJson?: boolean
+    issueRollupsJson?: boolean
+    computedAt?: boolean
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["roomDailyRollup"]>
+
+  export type RoomDailyRollupSelectScalar = {
+    id?: boolean
+    facilityId?: boolean
+    clinicId?: boolean
+    dateKey?: boolean
+    roomCount?: boolean
+    dayStartCompletedCount?: boolean
+    dayEndCompletedCount?: boolean
+    turnoverCount?: boolean
+    holdCount?: boolean
+    issueCount?: boolean
+    resolvedIssueCount?: boolean
+    occupiedTotalMins?: boolean
+    occupiedSamples?: boolean
+    turnoverTotalMins?: boolean
+    turnoverSamples?: boolean
+    statusMinutesJson?: boolean
+    roomRollupsJson?: boolean
+    issueRollupsJson?: boolean
+    computedAt?: boolean
+  }
+
+  export type RoomDailyRollupOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "facilityId" | "clinicId" | "dateKey" | "roomCount" | "dayStartCompletedCount" | "dayEndCompletedCount" | "turnoverCount" | "holdCount" | "issueCount" | "resolvedIssueCount" | "occupiedTotalMins" | "occupiedSamples" | "turnoverTotalMins" | "turnoverSamples" | "statusMinutesJson" | "roomRollupsJson" | "issueRollupsJson" | "computedAt", ExtArgs["result"]["roomDailyRollup"]>
+  export type RoomDailyRollupInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+  }
+  export type RoomDailyRollupIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+  }
+  export type RoomDailyRollupIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    facility?: boolean | FacilityDefaultArgs<ExtArgs>
+    clinic?: boolean | ClinicDefaultArgs<ExtArgs>
+  }
+
+  export type $RoomDailyRollupPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RoomDailyRollup"
+    objects: {
+      facility: Prisma.$FacilityPayload<ExtArgs>
+      clinic: Prisma.$ClinicPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      facilityId: string
+      clinicId: string
+      dateKey: string
+      roomCount: number
+      dayStartCompletedCount: number
+      dayEndCompletedCount: number
+      turnoverCount: number
+      holdCount: number
+      issueCount: number
+      resolvedIssueCount: number
+      occupiedTotalMins: number
+      occupiedSamples: number
+      turnoverTotalMins: number
+      turnoverSamples: number
+      statusMinutesJson: Prisma.JsonValue
+      roomRollupsJson: Prisma.JsonValue
+      issueRollupsJson: Prisma.JsonValue
+      computedAt: Date
+    }, ExtArgs["result"]["roomDailyRollup"]>
+    composites: {}
+  }
+
+  type RoomDailyRollupGetPayload<S extends boolean | null | undefined | RoomDailyRollupDefaultArgs> = $Result.GetResult<Prisma.$RoomDailyRollupPayload, S>
+
+  type RoomDailyRollupCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RoomDailyRollupFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RoomDailyRollupCountAggregateInputType | true
+    }
+
+  export interface RoomDailyRollupDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RoomDailyRollup'], meta: { name: 'RoomDailyRollup' } }
+    /**
+     * Find zero or one RoomDailyRollup that matches the filter.
+     * @param {RoomDailyRollupFindUniqueArgs} args - Arguments to find a RoomDailyRollup
+     * @example
+     * // Get one RoomDailyRollup
+     * const roomDailyRollup = await prisma.roomDailyRollup.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RoomDailyRollupFindUniqueArgs>(args: SelectSubset<T, RoomDailyRollupFindUniqueArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RoomDailyRollup that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RoomDailyRollupFindUniqueOrThrowArgs} args - Arguments to find a RoomDailyRollup
+     * @example
+     * // Get one RoomDailyRollup
+     * const roomDailyRollup = await prisma.roomDailyRollup.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RoomDailyRollupFindUniqueOrThrowArgs>(args: SelectSubset<T, RoomDailyRollupFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomDailyRollup that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupFindFirstArgs} args - Arguments to find a RoomDailyRollup
+     * @example
+     * // Get one RoomDailyRollup
+     * const roomDailyRollup = await prisma.roomDailyRollup.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RoomDailyRollupFindFirstArgs>(args?: SelectSubset<T, RoomDailyRollupFindFirstArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RoomDailyRollup that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupFindFirstOrThrowArgs} args - Arguments to find a RoomDailyRollup
+     * @example
+     * // Get one RoomDailyRollup
+     * const roomDailyRollup = await prisma.roomDailyRollup.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RoomDailyRollupFindFirstOrThrowArgs>(args?: SelectSubset<T, RoomDailyRollupFindFirstOrThrowArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RoomDailyRollups that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RoomDailyRollups
+     * const roomDailyRollups = await prisma.roomDailyRollup.findMany()
+     * 
+     * // Get first 10 RoomDailyRollups
+     * const roomDailyRollups = await prisma.roomDailyRollup.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const roomDailyRollupWithIdOnly = await prisma.roomDailyRollup.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends RoomDailyRollupFindManyArgs>(args?: SelectSubset<T, RoomDailyRollupFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RoomDailyRollup.
+     * @param {RoomDailyRollupCreateArgs} args - Arguments to create a RoomDailyRollup.
+     * @example
+     * // Create one RoomDailyRollup
+     * const RoomDailyRollup = await prisma.roomDailyRollup.create({
+     *   data: {
+     *     // ... data to create a RoomDailyRollup
+     *   }
+     * })
+     * 
+     */
+    create<T extends RoomDailyRollupCreateArgs>(args: SelectSubset<T, RoomDailyRollupCreateArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RoomDailyRollups.
+     * @param {RoomDailyRollupCreateManyArgs} args - Arguments to create many RoomDailyRollups.
+     * @example
+     * // Create many RoomDailyRollups
+     * const roomDailyRollup = await prisma.roomDailyRollup.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RoomDailyRollupCreateManyArgs>(args?: SelectSubset<T, RoomDailyRollupCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RoomDailyRollups and returns the data saved in the database.
+     * @param {RoomDailyRollupCreateManyAndReturnArgs} args - Arguments to create many RoomDailyRollups.
+     * @example
+     * // Create many RoomDailyRollups
+     * const roomDailyRollup = await prisma.roomDailyRollup.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RoomDailyRollups and only return the `id`
+     * const roomDailyRollupWithIdOnly = await prisma.roomDailyRollup.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RoomDailyRollupCreateManyAndReturnArgs>(args?: SelectSubset<T, RoomDailyRollupCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a RoomDailyRollup.
+     * @param {RoomDailyRollupDeleteArgs} args - Arguments to delete one RoomDailyRollup.
+     * @example
+     * // Delete one RoomDailyRollup
+     * const RoomDailyRollup = await prisma.roomDailyRollup.delete({
+     *   where: {
+     *     // ... filter to delete one RoomDailyRollup
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RoomDailyRollupDeleteArgs>(args: SelectSubset<T, RoomDailyRollupDeleteArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RoomDailyRollup.
+     * @param {RoomDailyRollupUpdateArgs} args - Arguments to update one RoomDailyRollup.
+     * @example
+     * // Update one RoomDailyRollup
+     * const roomDailyRollup = await prisma.roomDailyRollup.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RoomDailyRollupUpdateArgs>(args: SelectSubset<T, RoomDailyRollupUpdateArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RoomDailyRollups.
+     * @param {RoomDailyRollupDeleteManyArgs} args - Arguments to filter RoomDailyRollups to delete.
+     * @example
+     * // Delete a few RoomDailyRollups
+     * const { count } = await prisma.roomDailyRollup.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RoomDailyRollupDeleteManyArgs>(args?: SelectSubset<T, RoomDailyRollupDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomDailyRollups.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RoomDailyRollups
+     * const roomDailyRollup = await prisma.roomDailyRollup.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RoomDailyRollupUpdateManyArgs>(args: SelectSubset<T, RoomDailyRollupUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RoomDailyRollups and returns the data updated in the database.
+     * @param {RoomDailyRollupUpdateManyAndReturnArgs} args - Arguments to update many RoomDailyRollups.
+     * @example
+     * // Update many RoomDailyRollups
+     * const roomDailyRollup = await prisma.roomDailyRollup.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more RoomDailyRollups and only return the `id`
+     * const roomDailyRollupWithIdOnly = await prisma.roomDailyRollup.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends RoomDailyRollupUpdateManyAndReturnArgs>(args: SelectSubset<T, RoomDailyRollupUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one RoomDailyRollup.
+     * @param {RoomDailyRollupUpsertArgs} args - Arguments to update or create a RoomDailyRollup.
+     * @example
+     * // Update or create a RoomDailyRollup
+     * const roomDailyRollup = await prisma.roomDailyRollup.upsert({
+     *   create: {
+     *     // ... data to create a RoomDailyRollup
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RoomDailyRollup we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RoomDailyRollupUpsertArgs>(args: SelectSubset<T, RoomDailyRollupUpsertArgs<ExtArgs>>): Prisma__RoomDailyRollupClient<$Result.GetResult<Prisma.$RoomDailyRollupPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RoomDailyRollups.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupCountArgs} args - Arguments to filter RoomDailyRollups to count.
+     * @example
+     * // Count the number of RoomDailyRollups
+     * const count = await prisma.roomDailyRollup.count({
+     *   where: {
+     *     // ... the filter for the RoomDailyRollups we want to count
+     *   }
+     * })
+    **/
+    count<T extends RoomDailyRollupCountArgs>(
+      args?: Subset<T, RoomDailyRollupCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RoomDailyRollupCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RoomDailyRollup.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RoomDailyRollupAggregateArgs>(args: Subset<T, RoomDailyRollupAggregateArgs>): Prisma.PrismaPromise<GetRoomDailyRollupAggregateType<T>>
+
+    /**
+     * Group by RoomDailyRollup.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RoomDailyRollupGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RoomDailyRollupGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RoomDailyRollupGroupByArgs['orderBy'] }
+        : { orderBy?: RoomDailyRollupGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RoomDailyRollupGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRoomDailyRollupGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RoomDailyRollup model
+   */
+  readonly fields: RoomDailyRollupFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RoomDailyRollup.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RoomDailyRollupClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    facility<T extends FacilityDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FacilityDefaultArgs<ExtArgs>>): Prisma__FacilityClient<$Result.GetResult<Prisma.$FacilityPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    clinic<T extends ClinicDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ClinicDefaultArgs<ExtArgs>>): Prisma__ClinicClient<$Result.GetResult<Prisma.$ClinicPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RoomDailyRollup model
+   */
+  interface RoomDailyRollupFieldRefs {
+    readonly id: FieldRef<"RoomDailyRollup", 'String'>
+    readonly facilityId: FieldRef<"RoomDailyRollup", 'String'>
+    readonly clinicId: FieldRef<"RoomDailyRollup", 'String'>
+    readonly dateKey: FieldRef<"RoomDailyRollup", 'String'>
+    readonly roomCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly dayStartCompletedCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly dayEndCompletedCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly turnoverCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly holdCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly issueCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly resolvedIssueCount: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly occupiedTotalMins: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly occupiedSamples: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly turnoverTotalMins: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly turnoverSamples: FieldRef<"RoomDailyRollup", 'Int'>
+    readonly statusMinutesJson: FieldRef<"RoomDailyRollup", 'Json'>
+    readonly roomRollupsJson: FieldRef<"RoomDailyRollup", 'Json'>
+    readonly issueRollupsJson: FieldRef<"RoomDailyRollup", 'Json'>
+    readonly computedAt: FieldRef<"RoomDailyRollup", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RoomDailyRollup findUnique
+   */
+  export type RoomDailyRollupFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomDailyRollup to fetch.
+     */
+    where: RoomDailyRollupWhereUniqueInput
+  }
+
+  /**
+   * RoomDailyRollup findUniqueOrThrow
+   */
+  export type RoomDailyRollupFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomDailyRollup to fetch.
+     */
+    where: RoomDailyRollupWhereUniqueInput
+  }
+
+  /**
+   * RoomDailyRollup findFirst
+   */
+  export type RoomDailyRollupFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomDailyRollup to fetch.
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomDailyRollups to fetch.
+     */
+    orderBy?: RoomDailyRollupOrderByWithRelationInput | RoomDailyRollupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomDailyRollups.
+     */
+    cursor?: RoomDailyRollupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomDailyRollups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomDailyRollups.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomDailyRollups.
+     */
+    distinct?: RoomDailyRollupScalarFieldEnum | RoomDailyRollupScalarFieldEnum[]
+  }
+
+  /**
+   * RoomDailyRollup findFirstOrThrow
+   */
+  export type RoomDailyRollupFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomDailyRollup to fetch.
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomDailyRollups to fetch.
+     */
+    orderBy?: RoomDailyRollupOrderByWithRelationInput | RoomDailyRollupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RoomDailyRollups.
+     */
+    cursor?: RoomDailyRollupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomDailyRollups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomDailyRollups.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RoomDailyRollups.
+     */
+    distinct?: RoomDailyRollupScalarFieldEnum | RoomDailyRollupScalarFieldEnum[]
+  }
+
+  /**
+   * RoomDailyRollup findMany
+   */
+  export type RoomDailyRollupFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * Filter, which RoomDailyRollups to fetch.
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RoomDailyRollups to fetch.
+     */
+    orderBy?: RoomDailyRollupOrderByWithRelationInput | RoomDailyRollupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RoomDailyRollups.
+     */
+    cursor?: RoomDailyRollupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RoomDailyRollups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RoomDailyRollups.
+     */
+    skip?: number
+    distinct?: RoomDailyRollupScalarFieldEnum | RoomDailyRollupScalarFieldEnum[]
+  }
+
+  /**
+   * RoomDailyRollup create
+   */
+  export type RoomDailyRollupCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RoomDailyRollup.
+     */
+    data: XOR<RoomDailyRollupCreateInput, RoomDailyRollupUncheckedCreateInput>
+  }
+
+  /**
+   * RoomDailyRollup createMany
+   */
+  export type RoomDailyRollupCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RoomDailyRollups.
+     */
+    data: RoomDailyRollupCreateManyInput | RoomDailyRollupCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RoomDailyRollup createManyAndReturn
+   */
+  export type RoomDailyRollupCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * The data used to create many RoomDailyRollups.
+     */
+    data: RoomDailyRollupCreateManyInput | RoomDailyRollupCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomDailyRollup update
+   */
+  export type RoomDailyRollupUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RoomDailyRollup.
+     */
+    data: XOR<RoomDailyRollupUpdateInput, RoomDailyRollupUncheckedUpdateInput>
+    /**
+     * Choose, which RoomDailyRollup to update.
+     */
+    where: RoomDailyRollupWhereUniqueInput
+  }
+
+  /**
+   * RoomDailyRollup updateMany
+   */
+  export type RoomDailyRollupUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RoomDailyRollups.
+     */
+    data: XOR<RoomDailyRollupUpdateManyMutationInput, RoomDailyRollupUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomDailyRollups to update
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * Limit how many RoomDailyRollups to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomDailyRollup updateManyAndReturn
+   */
+  export type RoomDailyRollupUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * The data used to update RoomDailyRollups.
+     */
+    data: XOR<RoomDailyRollupUpdateManyMutationInput, RoomDailyRollupUncheckedUpdateManyInput>
+    /**
+     * Filter which RoomDailyRollups to update
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * Limit how many RoomDailyRollups to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RoomDailyRollup upsert
+   */
+  export type RoomDailyRollupUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RoomDailyRollup to update in case it exists.
+     */
+    where: RoomDailyRollupWhereUniqueInput
+    /**
+     * In case the RoomDailyRollup found by the `where` argument doesn't exist, create a new RoomDailyRollup with this data.
+     */
+    create: XOR<RoomDailyRollupCreateInput, RoomDailyRollupUncheckedCreateInput>
+    /**
+     * In case the RoomDailyRollup was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RoomDailyRollupUpdateInput, RoomDailyRollupUncheckedUpdateInput>
+  }
+
+  /**
+   * RoomDailyRollup delete
+   */
+  export type RoomDailyRollupDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+    /**
+     * Filter which RoomDailyRollup to delete.
+     */
+    where: RoomDailyRollupWhereUniqueInput
+  }
+
+  /**
+   * RoomDailyRollup deleteMany
+   */
+  export type RoomDailyRollupDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RoomDailyRollups to delete
+     */
+    where?: RoomDailyRollupWhereInput
+    /**
+     * Limit how many RoomDailyRollups to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RoomDailyRollup without action
+   */
+  export type RoomDailyRollupDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RoomDailyRollup
+     */
+    select?: RoomDailyRollupSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RoomDailyRollup
+     */
+    omit?: RoomDailyRollupOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RoomDailyRollupInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Model AuditLog
    */
 
@@ -45006,6 +47956,24 @@ export namespace Prisma {
   export type ClinicAssignmentScalarFieldEnum = (typeof ClinicAssignmentScalarFieldEnum)[keyof typeof ClinicAssignmentScalarFieldEnum]
 
 
+  export const TemporaryClinicAssignmentOverrideScalarFieldEnum: {
+    id: 'id',
+    userId: 'userId',
+    role: 'role',
+    clinicId: 'clinicId',
+    facilityId: 'facilityId',
+    startsAt: 'startsAt',
+    endsAt: 'endsAt',
+    reason: 'reason',
+    createdByUserId: 'createdByUserId',
+    createdAt: 'createdAt',
+    revokedAt: 'revokedAt',
+    revokedByUserId: 'revokedByUserId'
+  };
+
+  export type TemporaryClinicAssignmentOverrideScalarFieldEnum = (typeof TemporaryClinicAssignmentOverrideScalarFieldEnum)[keyof typeof TemporaryClinicAssignmentOverrideScalarFieldEnum]
+
+
   export const ClinicRoomScalarFieldEnum: {
     id: 'id',
     facilityId: 'facilityId',
@@ -45399,6 +48367,31 @@ export namespace Prisma {
   };
 
   export type OfficeManagerDailyRollupScalarFieldEnum = (typeof OfficeManagerDailyRollupScalarFieldEnum)[keyof typeof OfficeManagerDailyRollupScalarFieldEnum]
+
+
+  export const RoomDailyRollupScalarFieldEnum: {
+    id: 'id',
+    facilityId: 'facilityId',
+    clinicId: 'clinicId',
+    dateKey: 'dateKey',
+    roomCount: 'roomCount',
+    dayStartCompletedCount: 'dayStartCompletedCount',
+    dayEndCompletedCount: 'dayEndCompletedCount',
+    turnoverCount: 'turnoverCount',
+    holdCount: 'holdCount',
+    issueCount: 'issueCount',
+    resolvedIssueCount: 'resolvedIssueCount',
+    occupiedTotalMins: 'occupiedTotalMins',
+    occupiedSamples: 'occupiedSamples',
+    turnoverTotalMins: 'turnoverTotalMins',
+    turnoverSamples: 'turnoverSamples',
+    statusMinutesJson: 'statusMinutesJson',
+    roomRollupsJson: 'roomRollupsJson',
+    issueRollupsJson: 'issueRollupsJson',
+    computedAt: 'computedAt'
+  };
+
+  export type RoomDailyRollupScalarFieldEnum = (typeof RoomDailyRollupScalarFieldEnum)[keyof typeof RoomDailyRollupScalarFieldEnum]
 
 
   export const AuditLogScalarFieldEnum: {
@@ -45844,6 +48837,9 @@ export namespace Prisma {
     tasksCompleted?: TaskListRelationFilter
     tasksAcknowledged?: TaskListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideListRelationFilter
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideListRelationFilter
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -45871,6 +48867,9 @@ export namespace Prisma {
     tasksCompleted?: TaskOrderByRelationAggregateInput
     tasksAcknowledged?: TaskOrderByRelationAggregateInput
     alertInbox?: UserAlertInboxOrderByRelationAggregateInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideOrderByRelationAggregateInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideOrderByRelationAggregateInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -45901,6 +48900,9 @@ export namespace Prisma {
     tasksCompleted?: TaskListRelationFilter
     tasksAcknowledged?: TaskListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideListRelationFilter
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideListRelationFilter
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideListRelationFilter
   }, "id" | "email" | "cognitoSub" | "entraObjectId">
 
   export type UserOrderByWithAggregationInput = {
@@ -45970,6 +48972,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueListRelationFilter
     connectors?: IntegrationConnectorListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideListRelationFilter
+    roomDailyRollups?: RoomDailyRollupListRelationFilter
   }
 
   export type FacilityOrderByWithRelationInput = {
@@ -45992,6 +48996,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueOrderByRelationAggregateInput
     connectors?: IntegrationConnectorOrderByRelationAggregateInput
     alertInbox?: UserAlertInboxOrderByRelationAggregateInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideOrderByRelationAggregateInput
+    roomDailyRollups?: RoomDailyRollupOrderByRelationAggregateInput
   }
 
   export type FacilityWhereUniqueInput = Prisma.AtLeast<{
@@ -46017,6 +49023,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueListRelationFilter
     connectors?: IntegrationConnectorListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideListRelationFilter
+    roomDailyRollups?: RoomDailyRollupListRelationFilter
   }, "id">
 
   export type FacilityOrderByWithAggregationInput = {
@@ -46077,7 +49085,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueListRelationFilter
     encounters?: EncounterListRelationFilter
     officeManagerDailyRollups?: OfficeManagerDailyRollupListRelationFilter
+    roomDailyRollups?: RoomDailyRollupListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideListRelationFilter
   }
 
   export type ClinicOrderByWithRelationInput = {
@@ -46107,7 +49117,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueOrderByRelationAggregateInput
     encounters?: EncounterOrderByRelationAggregateInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupOrderByRelationAggregateInput
+    roomDailyRollups?: RoomDailyRollupOrderByRelationAggregateInput
     alertInbox?: UserAlertInboxOrderByRelationAggregateInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideOrderByRelationAggregateInput
   }
 
   export type ClinicWhereUniqueInput = Prisma.AtLeast<{
@@ -46140,7 +49152,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueListRelationFilter
     encounters?: EncounterListRelationFilter
     officeManagerDailyRollups?: OfficeManagerDailyRollupListRelationFilter
+    roomDailyRollups?: RoomDailyRollupListRelationFilter
     alertInbox?: UserAlertInboxListRelationFilter
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideListRelationFilter
   }, "id">
 
   export type ClinicOrderByWithAggregationInput = {
@@ -46473,6 +49487,108 @@ export namespace Prisma {
     maUserId?: StringNullableWithAggregatesFilter<"ClinicAssignment"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"ClinicAssignment"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"ClinicAssignment"> | Date | string
+  }
+
+  export type TemporaryClinicAssignmentOverrideWhereInput = {
+    AND?: TemporaryClinicAssignmentOverrideWhereInput | TemporaryClinicAssignmentOverrideWhereInput[]
+    OR?: TemporaryClinicAssignmentOverrideWhereInput[]
+    NOT?: TemporaryClinicAssignmentOverrideWhereInput | TemporaryClinicAssignmentOverrideWhereInput[]
+    id?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    userId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    role?: EnumRoleNameFilter<"TemporaryClinicAssignmentOverride"> | $Enums.RoleName
+    clinicId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    facilityId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    startsAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    endsAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    reason?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdByUserId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    revokedAt?: DateTimeNullableFilter<"TemporaryClinicAssignmentOverride"> | Date | string | null
+    revokedByUserId?: StringNullableFilter<"TemporaryClinicAssignmentOverride"> | string | null
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+    clinic?: XOR<ClinicScalarRelationFilter, ClinicWhereInput>
+    facility?: XOR<FacilityScalarRelationFilter, FacilityWhereInput>
+    createdBy?: XOR<UserScalarRelationFilter, UserWhereInput>
+    revokedBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideOrderByWithRelationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    reason?: SortOrder
+    createdByUserId?: SortOrder
+    createdAt?: SortOrder
+    revokedAt?: SortOrderInput | SortOrder
+    revokedByUserId?: SortOrderInput | SortOrder
+    user?: UserOrderByWithRelationInput
+    clinic?: ClinicOrderByWithRelationInput
+    facility?: FacilityOrderByWithRelationInput
+    createdBy?: UserOrderByWithRelationInput
+    revokedBy?: UserOrderByWithRelationInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: TemporaryClinicAssignmentOverrideWhereInput | TemporaryClinicAssignmentOverrideWhereInput[]
+    OR?: TemporaryClinicAssignmentOverrideWhereInput[]
+    NOT?: TemporaryClinicAssignmentOverrideWhereInput | TemporaryClinicAssignmentOverrideWhereInput[]
+    userId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    role?: EnumRoleNameFilter<"TemporaryClinicAssignmentOverride"> | $Enums.RoleName
+    clinicId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    facilityId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    startsAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    endsAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    reason?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdByUserId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    revokedAt?: DateTimeNullableFilter<"TemporaryClinicAssignmentOverride"> | Date | string | null
+    revokedByUserId?: StringNullableFilter<"TemporaryClinicAssignmentOverride"> | string | null
+    user?: XOR<UserScalarRelationFilter, UserWhereInput>
+    clinic?: XOR<ClinicScalarRelationFilter, ClinicWhereInput>
+    facility?: XOR<FacilityScalarRelationFilter, FacilityWhereInput>
+    createdBy?: XOR<UserScalarRelationFilter, UserWhereInput>
+    revokedBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+  }, "id">
+
+  export type TemporaryClinicAssignmentOverrideOrderByWithAggregationInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    reason?: SortOrder
+    createdByUserId?: SortOrder
+    createdAt?: SortOrder
+    revokedAt?: SortOrderInput | SortOrder
+    revokedByUserId?: SortOrderInput | SortOrder
+    _count?: TemporaryClinicAssignmentOverrideCountOrderByAggregateInput
+    _max?: TemporaryClinicAssignmentOverrideMaxOrderByAggregateInput
+    _min?: TemporaryClinicAssignmentOverrideMinOrderByAggregateInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput = {
+    AND?: TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput | TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput[]
+    OR?: TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput[]
+    NOT?: TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput | TemporaryClinicAssignmentOverrideScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string
+    userId?: StringWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string
+    role?: EnumRoleNameWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | $Enums.RoleName
+    clinicId?: StringWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string
+    facilityId?: StringWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string
+    startsAt?: DateTimeWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    endsAt?: DateTimeWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    reason?: StringWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdByUserId?: StringWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdAt?: DateTimeWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    revokedAt?: DateTimeNullableWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | Date | string | null
+    revokedByUserId?: StringNullableWithAggregatesFilter<"TemporaryClinicAssignmentOverride"> | string | null
   }
 
   export type ClinicRoomWhereInput = {
@@ -48625,6 +51741,137 @@ export namespace Prisma {
     computedAt?: DateTimeWithAggregatesFilter<"OfficeManagerDailyRollup"> | Date | string
   }
 
+  export type RoomDailyRollupWhereInput = {
+    AND?: RoomDailyRollupWhereInput | RoomDailyRollupWhereInput[]
+    OR?: RoomDailyRollupWhereInput[]
+    NOT?: RoomDailyRollupWhereInput | RoomDailyRollupWhereInput[]
+    id?: StringFilter<"RoomDailyRollup"> | string
+    facilityId?: StringFilter<"RoomDailyRollup"> | string
+    clinicId?: StringFilter<"RoomDailyRollup"> | string
+    dateKey?: StringFilter<"RoomDailyRollup"> | string
+    roomCount?: IntFilter<"RoomDailyRollup"> | number
+    dayStartCompletedCount?: IntFilter<"RoomDailyRollup"> | number
+    dayEndCompletedCount?: IntFilter<"RoomDailyRollup"> | number
+    turnoverCount?: IntFilter<"RoomDailyRollup"> | number
+    holdCount?: IntFilter<"RoomDailyRollup"> | number
+    issueCount?: IntFilter<"RoomDailyRollup"> | number
+    resolvedIssueCount?: IntFilter<"RoomDailyRollup"> | number
+    occupiedTotalMins?: IntFilter<"RoomDailyRollup"> | number
+    occupiedSamples?: IntFilter<"RoomDailyRollup"> | number
+    turnoverTotalMins?: IntFilter<"RoomDailyRollup"> | number
+    turnoverSamples?: IntFilter<"RoomDailyRollup"> | number
+    statusMinutesJson?: JsonFilter<"RoomDailyRollup">
+    roomRollupsJson?: JsonFilter<"RoomDailyRollup">
+    issueRollupsJson?: JsonFilter<"RoomDailyRollup">
+    computedAt?: DateTimeFilter<"RoomDailyRollup"> | Date | string
+    facility?: XOR<FacilityScalarRelationFilter, FacilityWhereInput>
+    clinic?: XOR<ClinicScalarRelationFilter, ClinicWhereInput>
+  }
+
+  export type RoomDailyRollupOrderByWithRelationInput = {
+    id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
+    dateKey?: SortOrder
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+    statusMinutesJson?: SortOrder
+    roomRollupsJson?: SortOrder
+    issueRollupsJson?: SortOrder
+    computedAt?: SortOrder
+    facility?: FacilityOrderByWithRelationInput
+    clinic?: ClinicOrderByWithRelationInput
+  }
+
+  export type RoomDailyRollupWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    clinicId_dateKey?: RoomDailyRollupClinicIdDateKeyCompoundUniqueInput
+    AND?: RoomDailyRollupWhereInput | RoomDailyRollupWhereInput[]
+    OR?: RoomDailyRollupWhereInput[]
+    NOT?: RoomDailyRollupWhereInput | RoomDailyRollupWhereInput[]
+    facilityId?: StringFilter<"RoomDailyRollup"> | string
+    clinicId?: StringFilter<"RoomDailyRollup"> | string
+    dateKey?: StringFilter<"RoomDailyRollup"> | string
+    roomCount?: IntFilter<"RoomDailyRollup"> | number
+    dayStartCompletedCount?: IntFilter<"RoomDailyRollup"> | number
+    dayEndCompletedCount?: IntFilter<"RoomDailyRollup"> | number
+    turnoverCount?: IntFilter<"RoomDailyRollup"> | number
+    holdCount?: IntFilter<"RoomDailyRollup"> | number
+    issueCount?: IntFilter<"RoomDailyRollup"> | number
+    resolvedIssueCount?: IntFilter<"RoomDailyRollup"> | number
+    occupiedTotalMins?: IntFilter<"RoomDailyRollup"> | number
+    occupiedSamples?: IntFilter<"RoomDailyRollup"> | number
+    turnoverTotalMins?: IntFilter<"RoomDailyRollup"> | number
+    turnoverSamples?: IntFilter<"RoomDailyRollup"> | number
+    statusMinutesJson?: JsonFilter<"RoomDailyRollup">
+    roomRollupsJson?: JsonFilter<"RoomDailyRollup">
+    issueRollupsJson?: JsonFilter<"RoomDailyRollup">
+    computedAt?: DateTimeFilter<"RoomDailyRollup"> | Date | string
+    facility?: XOR<FacilityScalarRelationFilter, FacilityWhereInput>
+    clinic?: XOR<ClinicScalarRelationFilter, ClinicWhereInput>
+  }, "id" | "clinicId_dateKey">
+
+  export type RoomDailyRollupOrderByWithAggregationInput = {
+    id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
+    dateKey?: SortOrder
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+    statusMinutesJson?: SortOrder
+    roomRollupsJson?: SortOrder
+    issueRollupsJson?: SortOrder
+    computedAt?: SortOrder
+    _count?: RoomDailyRollupCountOrderByAggregateInput
+    _avg?: RoomDailyRollupAvgOrderByAggregateInput
+    _max?: RoomDailyRollupMaxOrderByAggregateInput
+    _min?: RoomDailyRollupMinOrderByAggregateInput
+    _sum?: RoomDailyRollupSumOrderByAggregateInput
+  }
+
+  export type RoomDailyRollupScalarWhereWithAggregatesInput = {
+    AND?: RoomDailyRollupScalarWhereWithAggregatesInput | RoomDailyRollupScalarWhereWithAggregatesInput[]
+    OR?: RoomDailyRollupScalarWhereWithAggregatesInput[]
+    NOT?: RoomDailyRollupScalarWhereWithAggregatesInput | RoomDailyRollupScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"RoomDailyRollup"> | string
+    facilityId?: StringWithAggregatesFilter<"RoomDailyRollup"> | string
+    clinicId?: StringWithAggregatesFilter<"RoomDailyRollup"> | string
+    dateKey?: StringWithAggregatesFilter<"RoomDailyRollup"> | string
+    roomCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    dayStartCompletedCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    dayEndCompletedCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    turnoverCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    holdCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    issueCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    resolvedIssueCount?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    occupiedTotalMins?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    occupiedSamples?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    turnoverTotalMins?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    turnoverSamples?: IntWithAggregatesFilter<"RoomDailyRollup"> | number
+    statusMinutesJson?: JsonWithAggregatesFilter<"RoomDailyRollup">
+    roomRollupsJson?: JsonWithAggregatesFilter<"RoomDailyRollup">
+    issueRollupsJson?: JsonWithAggregatesFilter<"RoomDailyRollup">
+    computedAt?: DateTimeWithAggregatesFilter<"RoomDailyRollup"> | Date | string
+  }
+
   export type AuditLogWhereInput = {
     AND?: AuditLogWhereInput | AuditLogWhereInput[]
     OR?: AuditLogWhereInput[]
@@ -48938,6 +52185,9 @@ export namespace Prisma {
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -48964,6 +52214,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUpdateInput = {
@@ -48990,6 +52243,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -49016,6 +52272,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -49094,6 +52353,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateInput = {
@@ -49116,6 +52377,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUpdateInput = {
@@ -49138,6 +52401,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateInput = {
@@ -49160,6 +52425,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityCreateManyInput = {
@@ -49221,7 +52488,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateInput = {
@@ -49250,7 +52519,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUpdateInput = {
@@ -49279,7 +52550,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateInput = {
@@ -49308,7 +52581,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicCreateManyInput = {
@@ -49621,6 +52896,106 @@ export namespace Prisma {
     maUserId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateInput = {
+    id?: string
+    role: $Enums.RoleName
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    user: UserCreateNestedOneWithoutTemporaryClinicOverridesInput
+    clinic: ClinicCreateNestedOneWithoutTemporaryAssignmentOverridesInput
+    facility: FacilityCreateNestedOneWithoutTemporaryClinicAssignmentOverridesInput
+    createdBy: UserCreateNestedOneWithoutTemporaryOverridesCreatedInput
+    revokedBy?: UserCreateNestedOneWithoutTemporaryOverridesRevokedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    user?: UserUpdateOneRequiredWithoutTemporaryClinicOverridesNestedInput
+    clinic?: ClinicUpdateOneRequiredWithoutTemporaryAssignmentOverridesNestedInput
+    facility?: FacilityUpdateOneRequiredWithoutTemporaryClinicAssignmentOverridesNestedInput
+    createdBy?: UserUpdateOneRequiredWithoutTemporaryOverridesCreatedNestedInput
+    revokedBy?: UserUpdateOneWithoutTemporaryOverridesRevokedNestedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type ClinicRoomCreateInput = {
@@ -51975,6 +55350,158 @@ export namespace Prisma {
     computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type RoomDailyRollupCreateInput = {
+    id?: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+    facility: FacilityCreateNestedOneWithoutRoomDailyRollupsInput
+    clinic: ClinicCreateNestedOneWithoutRoomDailyRollupsInput
+  }
+
+  export type RoomDailyRollupUncheckedCreateInput = {
+    id?: string
+    facilityId: string
+    clinicId: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+  }
+
+  export type RoomDailyRollupUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    facility?: FacilityUpdateOneRequiredWithoutRoomDailyRollupsNestedInput
+    clinic?: ClinicUpdateOneRequiredWithoutRoomDailyRollupsNestedInput
+  }
+
+  export type RoomDailyRollupUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomDailyRollupCreateManyInput = {
+    id?: string
+    facilityId: string
+    clinicId: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+  }
+
+  export type RoomDailyRollupUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomDailyRollupUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type AuditLogCreateInput = {
     id?: string
     requestId: string
@@ -52403,6 +55930,12 @@ export namespace Prisma {
     none?: UserAlertInboxWhereInput
   }
 
+  export type TemporaryClinicAssignmentOverrideListRelationFilter = {
+    every?: TemporaryClinicAssignmentOverrideWhereInput
+    some?: TemporaryClinicAssignmentOverrideWhereInput
+    none?: TemporaryClinicAssignmentOverrideWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -52421,6 +55954,10 @@ export namespace Prisma {
   }
 
   export type UserAlertInboxOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type TemporaryClinicAssignmentOverrideOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -52607,6 +56144,12 @@ export namespace Prisma {
     none?: IntegrationConnectorWhereInput
   }
 
+  export type RoomDailyRollupListRelationFilter = {
+    every?: RoomDailyRollupWhereInput
+    some?: RoomDailyRollupWhereInput
+    none?: RoomDailyRollupWhereInput
+  }
+
   export type ClinicOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -52640,6 +56183,10 @@ export namespace Prisma {
   }
 
   export type IntegrationConnectorOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type RoomDailyRollupOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -53042,6 +56589,56 @@ export namespace Prisma {
     updatedAt?: SortOrder
   }
 
+  export type FacilityScalarRelationFilter = {
+    is?: FacilityWhereInput
+    isNot?: FacilityWhereInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideCountOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    reason?: SortOrder
+    createdByUserId?: SortOrder
+    createdAt?: SortOrder
+    revokedAt?: SortOrder
+    revokedByUserId?: SortOrder
+  }
+
+  export type TemporaryClinicAssignmentOverrideMaxOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    reason?: SortOrder
+    createdByUserId?: SortOrder
+    createdAt?: SortOrder
+    revokedAt?: SortOrder
+    revokedByUserId?: SortOrder
+  }
+
+  export type TemporaryClinicAssignmentOverrideMinOrderByAggregateInput = {
+    id?: SortOrder
+    userId?: SortOrder
+    role?: SortOrder
+    clinicId?: SortOrder
+    facilityId?: SortOrder
+    startsAt?: SortOrder
+    endsAt?: SortOrder
+    reason?: SortOrder
+    createdByUserId?: SortOrder
+    createdAt?: SortOrder
+    revokedAt?: SortOrder
+    revokedByUserId?: SortOrder
+  }
+
   export type IntFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[] | ListIntFieldRefInput<$PrismaModel>
@@ -53051,11 +56648,6 @@ export namespace Prisma {
     gt?: number | IntFieldRefInput<$PrismaModel>
     gte?: number | IntFieldRefInput<$PrismaModel>
     not?: NestedIntFilter<$PrismaModel> | number
-  }
-
-  export type FacilityScalarRelationFilter = {
-    is?: FacilityWhereInput
-    isNot?: FacilityWhereInput
   }
 
   export type RoomOperationalStateNullableScalarRelationFilter = {
@@ -54658,6 +58250,99 @@ export namespace Prisma {
     providerVisitSamples?: SortOrder
   }
 
+  export type RoomDailyRollupClinicIdDateKeyCompoundUniqueInput = {
+    clinicId: string
+    dateKey: string
+  }
+
+  export type RoomDailyRollupCountOrderByAggregateInput = {
+    id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
+    dateKey?: SortOrder
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+    statusMinutesJson?: SortOrder
+    roomRollupsJson?: SortOrder
+    issueRollupsJson?: SortOrder
+    computedAt?: SortOrder
+  }
+
+  export type RoomDailyRollupAvgOrderByAggregateInput = {
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+  }
+
+  export type RoomDailyRollupMaxOrderByAggregateInput = {
+    id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
+    dateKey?: SortOrder
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+    computedAt?: SortOrder
+  }
+
+  export type RoomDailyRollupMinOrderByAggregateInput = {
+    id?: SortOrder
+    facilityId?: SortOrder
+    clinicId?: SortOrder
+    dateKey?: SortOrder
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+    computedAt?: SortOrder
+  }
+
+  export type RoomDailyRollupSumOrderByAggregateInput = {
+    roomCount?: SortOrder
+    dayStartCompletedCount?: SortOrder
+    dayEndCompletedCount?: SortOrder
+    turnoverCount?: SortOrder
+    holdCount?: SortOrder
+    issueCount?: SortOrder
+    resolvedIssueCount?: SortOrder
+    occupiedTotalMins?: SortOrder
+    occupiedSamples?: SortOrder
+    turnoverTotalMins?: SortOrder
+    turnoverSamples?: SortOrder
+  }
+
   export type AuditLogCountOrderByAggregateInput = {
     id?: SortOrder
     requestId?: SortOrder
@@ -54890,6 +58575,27 @@ export namespace Prisma {
     connect?: UserAlertInboxWhereUniqueInput | UserAlertInboxWhereUniqueInput[]
   }
 
+  export type TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput> | TemporaryClinicAssignmentOverrideCreateWithoutUserInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyUserInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyCreatedByInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyRevokedByInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
   export type UserRoleUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<UserRoleCreateWithoutUserInput, UserRoleUncheckedCreateWithoutUserInput> | UserRoleCreateWithoutUserInput[] | UserRoleUncheckedCreateWithoutUserInput[]
     connectOrCreate?: UserRoleCreateOrConnectWithoutUserInput | UserRoleCreateOrConnectWithoutUserInput[]
@@ -54937,6 +58643,27 @@ export namespace Prisma {
     connectOrCreate?: UserAlertInboxCreateOrConnectWithoutUserInput | UserAlertInboxCreateOrConnectWithoutUserInput[]
     createMany?: UserAlertInboxCreateManyUserInputEnvelope
     connect?: UserAlertInboxWhereUniqueInput | UserAlertInboxWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput> | TemporaryClinicAssignmentOverrideCreateWithoutUserInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyUserInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyCreatedByInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyRevokedByInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -55067,6 +58794,48 @@ export namespace Prisma {
     deleteMany?: UserAlertInboxScalarWhereInput | UserAlertInboxScalarWhereInput[]
   }
 
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput> | TemporaryClinicAssignmentOverrideCreateWithoutUserInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutUserInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyUserInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutUserInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutUserInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutCreatedByInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutCreatedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyCreatedByInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutCreatedByInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutCreatedByInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutCreatedByInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutCreatedByInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutRevokedByInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutRevokedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyRevokedByInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutRevokedByInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutRevokedByInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutRevokedByInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutRevokedByInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
   export type UserRoleUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<UserRoleCreateWithoutUserInput, UserRoleUncheckedCreateWithoutUserInput> | UserRoleCreateWithoutUserInput[] | UserRoleUncheckedCreateWithoutUserInput[]
     connectOrCreate?: UserRoleCreateOrConnectWithoutUserInput | UserRoleCreateOrConnectWithoutUserInput[]
@@ -55165,6 +58934,48 @@ export namespace Prisma {
     deleteMany?: UserAlertInboxScalarWhereInput | UserAlertInboxScalarWhereInput[]
   }
 
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput> | TemporaryClinicAssignmentOverrideCreateWithoutUserInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutUserInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutUserInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyUserInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutUserInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutUserInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutUserInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutUserInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutCreatedByInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutCreatedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyCreatedByInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutCreatedByInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutCreatedByInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutCreatedByInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutCreatedByInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput> | TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutRevokedByInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutRevokedByInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyRevokedByInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutRevokedByInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutRevokedByInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutRevokedByInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutRevokedByInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
   export type ClinicCreateNestedManyWithoutFacilityInput = {
     create?: XOR<ClinicCreateWithoutFacilityInput, ClinicUncheckedCreateWithoutFacilityInput> | ClinicCreateWithoutFacilityInput[] | ClinicUncheckedCreateWithoutFacilityInput[]
     connectOrCreate?: ClinicCreateOrConnectWithoutFacilityInput | ClinicCreateOrConnectWithoutFacilityInput[]
@@ -55242,6 +59053,20 @@ export namespace Prisma {
     connect?: UserAlertInboxWhereUniqueInput | UserAlertInboxWhereUniqueInput[]
   }
 
+  export type TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput> | TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyFacilityInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
+  export type RoomDailyRollupCreateNestedManyWithoutFacilityInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutFacilityInput, RoomDailyRollupUncheckedCreateWithoutFacilityInput> | RoomDailyRollupCreateWithoutFacilityInput[] | RoomDailyRollupUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutFacilityInput | RoomDailyRollupCreateOrConnectWithoutFacilityInput[]
+    createMany?: RoomDailyRollupCreateManyFacilityInputEnvelope
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+  }
+
   export type ClinicUncheckedCreateNestedManyWithoutFacilityInput = {
     create?: XOR<ClinicCreateWithoutFacilityInput, ClinicUncheckedCreateWithoutFacilityInput> | ClinicCreateWithoutFacilityInput[] | ClinicUncheckedCreateWithoutFacilityInput[]
     connectOrCreate?: ClinicCreateOrConnectWithoutFacilityInput | ClinicCreateOrConnectWithoutFacilityInput[]
@@ -55317,6 +59142,20 @@ export namespace Prisma {
     connectOrCreate?: UserAlertInboxCreateOrConnectWithoutFacilityInput | UserAlertInboxCreateOrConnectWithoutFacilityInput[]
     createMany?: UserAlertInboxCreateManyFacilityInputEnvelope
     connect?: UserAlertInboxWhereUniqueInput | UserAlertInboxWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput> | TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyFacilityInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+  }
+
+  export type RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutFacilityInput, RoomDailyRollupUncheckedCreateWithoutFacilityInput> | RoomDailyRollupCreateWithoutFacilityInput[] | RoomDailyRollupUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutFacilityInput | RoomDailyRollupCreateOrConnectWithoutFacilityInput[]
+    createMany?: RoomDailyRollupCreateManyFacilityInputEnvelope
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
   }
 
   export type ClinicUpdateManyWithoutFacilityNestedInput = {
@@ -55473,6 +59312,34 @@ export namespace Prisma {
     deleteMany?: UserAlertInboxScalarWhereInput | UserAlertInboxScalarWhereInput[]
   }
 
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput> | TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutFacilityInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutFacilityInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyFacilityInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutFacilityInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutFacilityInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutFacilityInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutFacilityInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
+  export type RoomDailyRollupUpdateManyWithoutFacilityNestedInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutFacilityInput, RoomDailyRollupUncheckedCreateWithoutFacilityInput> | RoomDailyRollupCreateWithoutFacilityInput[] | RoomDailyRollupUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutFacilityInput | RoomDailyRollupCreateOrConnectWithoutFacilityInput[]
+    upsert?: RoomDailyRollupUpsertWithWhereUniqueWithoutFacilityInput | RoomDailyRollupUpsertWithWhereUniqueWithoutFacilityInput[]
+    createMany?: RoomDailyRollupCreateManyFacilityInputEnvelope
+    set?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    disconnect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    delete?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    update?: RoomDailyRollupUpdateWithWhereUniqueWithoutFacilityInput | RoomDailyRollupUpdateWithWhereUniqueWithoutFacilityInput[]
+    updateMany?: RoomDailyRollupUpdateManyWithWhereWithoutFacilityInput | RoomDailyRollupUpdateManyWithWhereWithoutFacilityInput[]
+    deleteMany?: RoomDailyRollupScalarWhereInput | RoomDailyRollupScalarWhereInput[]
+  }
+
   export type ClinicUncheckedUpdateManyWithoutFacilityNestedInput = {
     create?: XOR<ClinicCreateWithoutFacilityInput, ClinicUncheckedCreateWithoutFacilityInput> | ClinicCreateWithoutFacilityInput[] | ClinicUncheckedCreateWithoutFacilityInput[]
     connectOrCreate?: ClinicCreateOrConnectWithoutFacilityInput | ClinicCreateOrConnectWithoutFacilityInput[]
@@ -55627,6 +59494,34 @@ export namespace Prisma {
     deleteMany?: UserAlertInboxScalarWhereInput | UserAlertInboxScalarWhereInput[]
   }
 
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput> | TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutFacilityInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutFacilityInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyFacilityInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutFacilityInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutFacilityInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutFacilityInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutFacilityInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+  }
+
+  export type RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutFacilityInput, RoomDailyRollupUncheckedCreateWithoutFacilityInput> | RoomDailyRollupCreateWithoutFacilityInput[] | RoomDailyRollupUncheckedCreateWithoutFacilityInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutFacilityInput | RoomDailyRollupCreateOrConnectWithoutFacilityInput[]
+    upsert?: RoomDailyRollupUpsertWithWhereUniqueWithoutFacilityInput | RoomDailyRollupUpsertWithWhereUniqueWithoutFacilityInput[]
+    createMany?: RoomDailyRollupCreateManyFacilityInputEnvelope
+    set?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    disconnect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    delete?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    update?: RoomDailyRollupUpdateWithWhereUniqueWithoutFacilityInput | RoomDailyRollupUpdateWithWhereUniqueWithoutFacilityInput[]
+    updateMany?: RoomDailyRollupUpdateManyWithWhereWithoutFacilityInput | RoomDailyRollupUpdateManyWithWhereWithoutFacilityInput[]
+    deleteMany?: RoomDailyRollupScalarWhereInput | RoomDailyRollupScalarWhereInput[]
+  }
+
   export type FacilityCreateNestedOneWithoutClinicsInput = {
     create?: XOR<FacilityCreateWithoutClinicsInput, FacilityUncheckedCreateWithoutClinicsInput>
     connectOrCreate?: FacilityCreateOrConnectWithoutClinicsInput
@@ -55730,11 +59625,25 @@ export namespace Prisma {
     connect?: OfficeManagerDailyRollupWhereUniqueInput | OfficeManagerDailyRollupWhereUniqueInput[]
   }
 
+  export type RoomDailyRollupCreateNestedManyWithoutClinicInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutClinicInput, RoomDailyRollupUncheckedCreateWithoutClinicInput> | RoomDailyRollupCreateWithoutClinicInput[] | RoomDailyRollupUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutClinicInput | RoomDailyRollupCreateOrConnectWithoutClinicInput[]
+    createMany?: RoomDailyRollupCreateManyClinicInputEnvelope
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+  }
+
   export type UserAlertInboxCreateNestedManyWithoutClinicInput = {
     create?: XOR<UserAlertInboxCreateWithoutClinicInput, UserAlertInboxUncheckedCreateWithoutClinicInput> | UserAlertInboxCreateWithoutClinicInput[] | UserAlertInboxUncheckedCreateWithoutClinicInput[]
     connectOrCreate?: UserAlertInboxCreateOrConnectWithoutClinicInput | UserAlertInboxCreateOrConnectWithoutClinicInput[]
     createMany?: UserAlertInboxCreateManyClinicInputEnvelope
     connect?: UserAlertInboxWhereUniqueInput | UserAlertInboxWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput> | TemporaryClinicAssignmentOverrideCreateWithoutClinicInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyClinicInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
   }
 
   export type ProviderUncheckedCreateNestedManyWithoutClinicInput = {
@@ -55834,11 +59743,25 @@ export namespace Prisma {
     connect?: OfficeManagerDailyRollupWhereUniqueInput | OfficeManagerDailyRollupWhereUniqueInput[]
   }
 
+  export type RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutClinicInput, RoomDailyRollupUncheckedCreateWithoutClinicInput> | RoomDailyRollupCreateWithoutClinicInput[] | RoomDailyRollupUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutClinicInput | RoomDailyRollupCreateOrConnectWithoutClinicInput[]
+    createMany?: RoomDailyRollupCreateManyClinicInputEnvelope
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+  }
+
   export type UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput = {
     create?: XOR<UserAlertInboxCreateWithoutClinicInput, UserAlertInboxUncheckedCreateWithoutClinicInput> | UserAlertInboxCreateWithoutClinicInput[] | UserAlertInboxUncheckedCreateWithoutClinicInput[]
     connectOrCreate?: UserAlertInboxCreateOrConnectWithoutClinicInput | UserAlertInboxCreateOrConnectWithoutClinicInput[]
     createMany?: UserAlertInboxCreateManyClinicInputEnvelope
     connect?: UserAlertInboxWhereUniqueInput | UserAlertInboxWhereUniqueInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput> | TemporaryClinicAssignmentOverrideCreateWithoutClinicInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyClinicInputEnvelope
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
   }
 
   export type BoolFieldUpdateOperationsInput = {
@@ -56047,6 +59970,20 @@ export namespace Prisma {
     deleteMany?: OfficeManagerDailyRollupScalarWhereInput | OfficeManagerDailyRollupScalarWhereInput[]
   }
 
+  export type RoomDailyRollupUpdateManyWithoutClinicNestedInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutClinicInput, RoomDailyRollupUncheckedCreateWithoutClinicInput> | RoomDailyRollupCreateWithoutClinicInput[] | RoomDailyRollupUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutClinicInput | RoomDailyRollupCreateOrConnectWithoutClinicInput[]
+    upsert?: RoomDailyRollupUpsertWithWhereUniqueWithoutClinicInput | RoomDailyRollupUpsertWithWhereUniqueWithoutClinicInput[]
+    createMany?: RoomDailyRollupCreateManyClinicInputEnvelope
+    set?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    disconnect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    delete?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    update?: RoomDailyRollupUpdateWithWhereUniqueWithoutClinicInput | RoomDailyRollupUpdateWithWhereUniqueWithoutClinicInput[]
+    updateMany?: RoomDailyRollupUpdateManyWithWhereWithoutClinicInput | RoomDailyRollupUpdateManyWithWhereWithoutClinicInput[]
+    deleteMany?: RoomDailyRollupScalarWhereInput | RoomDailyRollupScalarWhereInput[]
+  }
+
   export type UserAlertInboxUpdateManyWithoutClinicNestedInput = {
     create?: XOR<UserAlertInboxCreateWithoutClinicInput, UserAlertInboxUncheckedCreateWithoutClinicInput> | UserAlertInboxCreateWithoutClinicInput[] | UserAlertInboxUncheckedCreateWithoutClinicInput[]
     connectOrCreate?: UserAlertInboxCreateOrConnectWithoutClinicInput | UserAlertInboxCreateOrConnectWithoutClinicInput[]
@@ -56059,6 +59996,20 @@ export namespace Prisma {
     update?: UserAlertInboxUpdateWithWhereUniqueWithoutClinicInput | UserAlertInboxUpdateWithWhereUniqueWithoutClinicInput[]
     updateMany?: UserAlertInboxUpdateManyWithWhereWithoutClinicInput | UserAlertInboxUpdateManyWithWhereWithoutClinicInput[]
     deleteMany?: UserAlertInboxScalarWhereInput | UserAlertInboxScalarWhereInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput> | TemporaryClinicAssignmentOverrideCreateWithoutClinicInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutClinicInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutClinicInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyClinicInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutClinicInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutClinicInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutClinicInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutClinicInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
   }
 
   export type ProviderUncheckedUpdateManyWithoutClinicNestedInput = {
@@ -56253,6 +60204,20 @@ export namespace Prisma {
     deleteMany?: OfficeManagerDailyRollupScalarWhereInput | OfficeManagerDailyRollupScalarWhereInput[]
   }
 
+  export type RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput = {
+    create?: XOR<RoomDailyRollupCreateWithoutClinicInput, RoomDailyRollupUncheckedCreateWithoutClinicInput> | RoomDailyRollupCreateWithoutClinicInput[] | RoomDailyRollupUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: RoomDailyRollupCreateOrConnectWithoutClinicInput | RoomDailyRollupCreateOrConnectWithoutClinicInput[]
+    upsert?: RoomDailyRollupUpsertWithWhereUniqueWithoutClinicInput | RoomDailyRollupUpsertWithWhereUniqueWithoutClinicInput[]
+    createMany?: RoomDailyRollupCreateManyClinicInputEnvelope
+    set?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    disconnect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    delete?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    connect?: RoomDailyRollupWhereUniqueInput | RoomDailyRollupWhereUniqueInput[]
+    update?: RoomDailyRollupUpdateWithWhereUniqueWithoutClinicInput | RoomDailyRollupUpdateWithWhereUniqueWithoutClinicInput[]
+    updateMany?: RoomDailyRollupUpdateManyWithWhereWithoutClinicInput | RoomDailyRollupUpdateManyWithWhereWithoutClinicInput[]
+    deleteMany?: RoomDailyRollupScalarWhereInput | RoomDailyRollupScalarWhereInput[]
+  }
+
   export type UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput = {
     create?: XOR<UserAlertInboxCreateWithoutClinicInput, UserAlertInboxUncheckedCreateWithoutClinicInput> | UserAlertInboxCreateWithoutClinicInput[] | UserAlertInboxUncheckedCreateWithoutClinicInput[]
     connectOrCreate?: UserAlertInboxCreateOrConnectWithoutClinicInput | UserAlertInboxCreateOrConnectWithoutClinicInput[]
@@ -56265,6 +60230,20 @@ export namespace Prisma {
     update?: UserAlertInboxUpdateWithWhereUniqueWithoutClinicInput | UserAlertInboxUpdateWithWhereUniqueWithoutClinicInput[]
     updateMany?: UserAlertInboxUpdateManyWithWhereWithoutClinicInput | UserAlertInboxUpdateManyWithWhereWithoutClinicInput[]
     deleteMany?: UserAlertInboxScalarWhereInput | UserAlertInboxScalarWhereInput[]
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput = {
+    create?: XOR<TemporaryClinicAssignmentOverrideCreateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput> | TemporaryClinicAssignmentOverrideCreateWithoutClinicInput[] | TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput[]
+    connectOrCreate?: TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput | TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput[]
+    upsert?: TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutClinicInput | TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutClinicInput[]
+    createMany?: TemporaryClinicAssignmentOverrideCreateManyClinicInputEnvelope
+    set?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    disconnect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    delete?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    connect?: TemporaryClinicAssignmentOverrideWhereUniqueInput | TemporaryClinicAssignmentOverrideWhereUniqueInput[]
+    update?: TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutClinicInput | TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutClinicInput[]
+    updateMany?: TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutClinicInput | TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutClinicInput[]
+    deleteMany?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
   }
 
   export type ClinicCreateNestedOneWithoutProvidersInput = {
@@ -56601,6 +60580,78 @@ export namespace Prisma {
     delete?: UserWhereInput | boolean
     connect?: UserWhereUniqueInput
     update?: XOR<XOR<UserUpdateToOneWithWhereWithoutMaAssignmentsInput, UserUpdateWithoutMaAssignmentsInput>, UserUncheckedUpdateWithoutMaAssignmentsInput>
+  }
+
+  export type UserCreateNestedOneWithoutTemporaryClinicOverridesInput = {
+    create?: XOR<UserCreateWithoutTemporaryClinicOverridesInput, UserUncheckedCreateWithoutTemporaryClinicOverridesInput>
+    connectOrCreate?: UserCreateOrConnectWithoutTemporaryClinicOverridesInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type ClinicCreateNestedOneWithoutTemporaryAssignmentOverridesInput = {
+    create?: XOR<ClinicCreateWithoutTemporaryAssignmentOverridesInput, ClinicUncheckedCreateWithoutTemporaryAssignmentOverridesInput>
+    connectOrCreate?: ClinicCreateOrConnectWithoutTemporaryAssignmentOverridesInput
+    connect?: ClinicWhereUniqueInput
+  }
+
+  export type FacilityCreateNestedOneWithoutTemporaryClinicAssignmentOverridesInput = {
+    create?: XOR<FacilityCreateWithoutTemporaryClinicAssignmentOverridesInput, FacilityUncheckedCreateWithoutTemporaryClinicAssignmentOverridesInput>
+    connectOrCreate?: FacilityCreateOrConnectWithoutTemporaryClinicAssignmentOverridesInput
+    connect?: FacilityWhereUniqueInput
+  }
+
+  export type UserCreateNestedOneWithoutTemporaryOverridesCreatedInput = {
+    create?: XOR<UserCreateWithoutTemporaryOverridesCreatedInput, UserUncheckedCreateWithoutTemporaryOverridesCreatedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutTemporaryOverridesCreatedInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserCreateNestedOneWithoutTemporaryOverridesRevokedInput = {
+    create?: XOR<UserCreateWithoutTemporaryOverridesRevokedInput, UserUncheckedCreateWithoutTemporaryOverridesRevokedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutTemporaryOverridesRevokedInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type UserUpdateOneRequiredWithoutTemporaryClinicOverridesNestedInput = {
+    create?: XOR<UserCreateWithoutTemporaryClinicOverridesInput, UserUncheckedCreateWithoutTemporaryClinicOverridesInput>
+    connectOrCreate?: UserCreateOrConnectWithoutTemporaryClinicOverridesInput
+    upsert?: UserUpsertWithoutTemporaryClinicOverridesInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutTemporaryClinicOverridesInput, UserUpdateWithoutTemporaryClinicOverridesInput>, UserUncheckedUpdateWithoutTemporaryClinicOverridesInput>
+  }
+
+  export type ClinicUpdateOneRequiredWithoutTemporaryAssignmentOverridesNestedInput = {
+    create?: XOR<ClinicCreateWithoutTemporaryAssignmentOverridesInput, ClinicUncheckedCreateWithoutTemporaryAssignmentOverridesInput>
+    connectOrCreate?: ClinicCreateOrConnectWithoutTemporaryAssignmentOverridesInput
+    upsert?: ClinicUpsertWithoutTemporaryAssignmentOverridesInput
+    connect?: ClinicWhereUniqueInput
+    update?: XOR<XOR<ClinicUpdateToOneWithWhereWithoutTemporaryAssignmentOverridesInput, ClinicUpdateWithoutTemporaryAssignmentOverridesInput>, ClinicUncheckedUpdateWithoutTemporaryAssignmentOverridesInput>
+  }
+
+  export type FacilityUpdateOneRequiredWithoutTemporaryClinicAssignmentOverridesNestedInput = {
+    create?: XOR<FacilityCreateWithoutTemporaryClinicAssignmentOverridesInput, FacilityUncheckedCreateWithoutTemporaryClinicAssignmentOverridesInput>
+    connectOrCreate?: FacilityCreateOrConnectWithoutTemporaryClinicAssignmentOverridesInput
+    upsert?: FacilityUpsertWithoutTemporaryClinicAssignmentOverridesInput
+    connect?: FacilityWhereUniqueInput
+    update?: XOR<XOR<FacilityUpdateToOneWithWhereWithoutTemporaryClinicAssignmentOverridesInput, FacilityUpdateWithoutTemporaryClinicAssignmentOverridesInput>, FacilityUncheckedUpdateWithoutTemporaryClinicAssignmentOverridesInput>
+  }
+
+  export type UserUpdateOneRequiredWithoutTemporaryOverridesCreatedNestedInput = {
+    create?: XOR<UserCreateWithoutTemporaryOverridesCreatedInput, UserUncheckedCreateWithoutTemporaryOverridesCreatedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutTemporaryOverridesCreatedInput
+    upsert?: UserUpsertWithoutTemporaryOverridesCreatedInput
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutTemporaryOverridesCreatedInput, UserUpdateWithoutTemporaryOverridesCreatedInput>, UserUncheckedUpdateWithoutTemporaryOverridesCreatedInput>
+  }
+
+  export type UserUpdateOneWithoutTemporaryOverridesRevokedNestedInput = {
+    create?: XOR<UserCreateWithoutTemporaryOverridesRevokedInput, UserUncheckedCreateWithoutTemporaryOverridesRevokedInput>
+    connectOrCreate?: UserCreateOrConnectWithoutTemporaryOverridesRevokedInput
+    upsert?: UserUpsertWithoutTemporaryOverridesRevokedInput
+    disconnect?: UserWhereInput | boolean
+    delete?: UserWhereInput | boolean
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutTemporaryOverridesRevokedInput, UserUpdateWithoutTemporaryOverridesRevokedInput>, UserUncheckedUpdateWithoutTemporaryOverridesRevokedInput>
   }
 
   export type FacilityCreateNestedOneWithoutRoomsInput = {
@@ -58377,6 +62428,34 @@ export namespace Prisma {
     update?: XOR<XOR<ClinicUpdateToOneWithWhereWithoutOfficeManagerDailyRollupsInput, ClinicUpdateWithoutOfficeManagerDailyRollupsInput>, ClinicUncheckedUpdateWithoutOfficeManagerDailyRollupsInput>
   }
 
+  export type FacilityCreateNestedOneWithoutRoomDailyRollupsInput = {
+    create?: XOR<FacilityCreateWithoutRoomDailyRollupsInput, FacilityUncheckedCreateWithoutRoomDailyRollupsInput>
+    connectOrCreate?: FacilityCreateOrConnectWithoutRoomDailyRollupsInput
+    connect?: FacilityWhereUniqueInput
+  }
+
+  export type ClinicCreateNestedOneWithoutRoomDailyRollupsInput = {
+    create?: XOR<ClinicCreateWithoutRoomDailyRollupsInput, ClinicUncheckedCreateWithoutRoomDailyRollupsInput>
+    connectOrCreate?: ClinicCreateOrConnectWithoutRoomDailyRollupsInput
+    connect?: ClinicWhereUniqueInput
+  }
+
+  export type FacilityUpdateOneRequiredWithoutRoomDailyRollupsNestedInput = {
+    create?: XOR<FacilityCreateWithoutRoomDailyRollupsInput, FacilityUncheckedCreateWithoutRoomDailyRollupsInput>
+    connectOrCreate?: FacilityCreateOrConnectWithoutRoomDailyRollupsInput
+    upsert?: FacilityUpsertWithoutRoomDailyRollupsInput
+    connect?: FacilityWhereUniqueInput
+    update?: XOR<XOR<FacilityUpdateToOneWithWhereWithoutRoomDailyRollupsInput, FacilityUpdateWithoutRoomDailyRollupsInput>, FacilityUncheckedUpdateWithoutRoomDailyRollupsInput>
+  }
+
+  export type ClinicUpdateOneRequiredWithoutRoomDailyRollupsNestedInput = {
+    create?: XOR<ClinicCreateWithoutRoomDailyRollupsInput, ClinicUncheckedCreateWithoutRoomDailyRollupsInput>
+    connectOrCreate?: ClinicCreateOrConnectWithoutRoomDailyRollupsInput
+    upsert?: ClinicUpsertWithoutRoomDailyRollupsInput
+    connect?: ClinicWhereUniqueInput
+    update?: XOR<XOR<ClinicUpdateToOneWithWhereWithoutRoomDailyRollupsInput, ClinicUpdateWithoutRoomDailyRollupsInput>, ClinicUncheckedUpdateWithoutRoomDailyRollupsInput>
+  }
+
   export type EnumOutboxStatusFieldUpdateOperationsInput = {
     set?: $Enums.OutboxStatus
   }
@@ -58997,6 +63076,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutActiveForUsersInput = {
@@ -59018,6 +63099,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutActiveForUsersInput = {
@@ -59327,6 +63410,120 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type TemporaryClinicAssignmentOverrideCreateWithoutUserInput = {
+    id?: string
+    role: $Enums.RoleName
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    clinic: ClinicCreateNestedOneWithoutTemporaryAssignmentOverridesInput
+    facility: FacilityCreateNestedOneWithoutTemporaryClinicAssignmentOverridesInput
+    createdBy: UserCreateNestedOneWithoutTemporaryOverridesCreatedInput
+    revokedBy?: UserCreateNestedOneWithoutTemporaryOverridesRevokedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput = {
+    id?: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateOrConnectWithoutUserInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyUserInputEnvelope = {
+    data: TemporaryClinicAssignmentOverrideCreateManyUserInput | TemporaryClinicAssignmentOverrideCreateManyUserInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput = {
+    id?: string
+    role: $Enums.RoleName
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    user: UserCreateNestedOneWithoutTemporaryClinicOverridesInput
+    clinic: ClinicCreateNestedOneWithoutTemporaryAssignmentOverridesInput
+    facility: FacilityCreateNestedOneWithoutTemporaryClinicAssignmentOverridesInput
+    revokedBy?: UserCreateNestedOneWithoutTemporaryOverridesRevokedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateOrConnectWithoutCreatedByInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyCreatedByInputEnvelope = {
+    data: TemporaryClinicAssignmentOverrideCreateManyCreatedByInput | TemporaryClinicAssignmentOverrideCreateManyCreatedByInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput = {
+    id?: string
+    role: $Enums.RoleName
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    user: UserCreateNestedOneWithoutTemporaryClinicOverridesInput
+    clinic: ClinicCreateNestedOneWithoutTemporaryAssignmentOverridesInput
+    facility: FacilityCreateNestedOneWithoutTemporaryClinicAssignmentOverridesInput
+    createdBy: UserCreateNestedOneWithoutTemporaryOverridesCreatedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateOrConnectWithoutRevokedByInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyRevokedByInputEnvelope = {
+    data: TemporaryClinicAssignmentOverrideCreateManyRevokedByInput | TemporaryClinicAssignmentOverrideCreateManyRevokedByInput[]
+    skipDuplicates?: boolean
+  }
+
   export type FacilityUpsertWithoutActiveForUsersInput = {
     update: XOR<FacilityUpdateWithoutActiveForUsersInput, FacilityUncheckedUpdateWithoutActiveForUsersInput>
     create: XOR<FacilityCreateWithoutActiveForUsersInput, FacilityUncheckedCreateWithoutActiveForUsersInput>
@@ -59357,6 +63554,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutActiveForUsersInput = {
@@ -59378,6 +63577,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type UserRoleUpsertWithWhereUniqueWithoutUserInput = {
@@ -59564,6 +63765,72 @@ export namespace Prisma {
     archivedAt?: DateTimeNullableFilter<"UserAlertInbox"> | Date | string | null
   }
 
+  export type TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutUserInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    update: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutUserInput>
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutUserInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutUserInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutUserInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutUserInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutUserInput = {
+    where: TemporaryClinicAssignmentOverrideScalarWhereInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideScalarWhereInput = {
+    AND?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+    OR?: TemporaryClinicAssignmentOverrideScalarWhereInput[]
+    NOT?: TemporaryClinicAssignmentOverrideScalarWhereInput | TemporaryClinicAssignmentOverrideScalarWhereInput[]
+    id?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    userId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    role?: EnumRoleNameFilter<"TemporaryClinicAssignmentOverride"> | $Enums.RoleName
+    clinicId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    facilityId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    startsAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    endsAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    reason?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdByUserId?: StringFilter<"TemporaryClinicAssignmentOverride"> | string
+    createdAt?: DateTimeFilter<"TemporaryClinicAssignmentOverride"> | Date | string
+    revokedAt?: DateTimeNullableFilter<"TemporaryClinicAssignmentOverride"> | Date | string | null
+    revokedByUserId?: StringNullableFilter<"TemporaryClinicAssignmentOverride"> | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutCreatedByInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    update: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutCreatedByInput>
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutCreatedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutCreatedByInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutCreatedByInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutCreatedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutCreatedByInput = {
+    where: TemporaryClinicAssignmentOverrideScalarWhereInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutRevokedByInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    update: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutRevokedByInput>
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutRevokedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutRevokedByInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutRevokedByInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutRevokedByInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutRevokedByInput = {
+    where: TemporaryClinicAssignmentOverrideScalarWhereInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByInput>
+  }
+
   export type ClinicCreateWithoutFacilityInput = {
     id?: string
     name: string
@@ -59589,7 +63856,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutFacilityInput = {
@@ -59617,7 +63886,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutFacilityInput = {
@@ -59801,6 +64072,9 @@ export namespace Prisma {
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutActiveFacilityInput = {
@@ -59826,6 +64100,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutActiveFacilityInput = {
@@ -60033,6 +64310,96 @@ export namespace Prisma {
 
   export type UserAlertInboxCreateManyFacilityInputEnvelope = {
     data: UserAlertInboxCreateManyFacilityInput | UserAlertInboxCreateManyFacilityInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput = {
+    id?: string
+    role: $Enums.RoleName
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    user: UserCreateNestedOneWithoutTemporaryClinicOverridesInput
+    clinic: ClinicCreateNestedOneWithoutTemporaryAssignmentOverridesInput
+    createdBy: UserCreateNestedOneWithoutTemporaryOverridesCreatedInput
+    revokedBy?: UserCreateNestedOneWithoutTemporaryOverridesRevokedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateOrConnectWithoutFacilityInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyFacilityInputEnvelope = {
+    data: TemporaryClinicAssignmentOverrideCreateManyFacilityInput | TemporaryClinicAssignmentOverrideCreateManyFacilityInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type RoomDailyRollupCreateWithoutFacilityInput = {
+    id?: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+    clinic: ClinicCreateNestedOneWithoutRoomDailyRollupsInput
+  }
+
+  export type RoomDailyRollupUncheckedCreateWithoutFacilityInput = {
+    id?: string
+    clinicId: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+  }
+
+  export type RoomDailyRollupCreateOrConnectWithoutFacilityInput = {
+    where: RoomDailyRollupWhereUniqueInput
+    create: XOR<RoomDailyRollupCreateWithoutFacilityInput, RoomDailyRollupUncheckedCreateWithoutFacilityInput>
+  }
+
+  export type RoomDailyRollupCreateManyFacilityInputEnvelope = {
+    data: RoomDailyRollupCreateManyFacilityInput | RoomDailyRollupCreateManyFacilityInput[]
     skipDuplicates?: boolean
   }
 
@@ -60369,6 +64736,63 @@ export namespace Prisma {
     data: XOR<UserAlertInboxUpdateManyMutationInput, UserAlertInboxUncheckedUpdateManyWithoutFacilityInput>
   }
 
+  export type TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutFacilityInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    update: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutFacilityInput>
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutFacilityInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutFacilityInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutFacilityInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutFacilityInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutFacilityInput = {
+    where: TemporaryClinicAssignmentOverrideScalarWhereInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityInput>
+  }
+
+  export type RoomDailyRollupUpsertWithWhereUniqueWithoutFacilityInput = {
+    where: RoomDailyRollupWhereUniqueInput
+    update: XOR<RoomDailyRollupUpdateWithoutFacilityInput, RoomDailyRollupUncheckedUpdateWithoutFacilityInput>
+    create: XOR<RoomDailyRollupCreateWithoutFacilityInput, RoomDailyRollupUncheckedCreateWithoutFacilityInput>
+  }
+
+  export type RoomDailyRollupUpdateWithWhereUniqueWithoutFacilityInput = {
+    where: RoomDailyRollupWhereUniqueInput
+    data: XOR<RoomDailyRollupUpdateWithoutFacilityInput, RoomDailyRollupUncheckedUpdateWithoutFacilityInput>
+  }
+
+  export type RoomDailyRollupUpdateManyWithWhereWithoutFacilityInput = {
+    where: RoomDailyRollupScalarWhereInput
+    data: XOR<RoomDailyRollupUpdateManyMutationInput, RoomDailyRollupUncheckedUpdateManyWithoutFacilityInput>
+  }
+
+  export type RoomDailyRollupScalarWhereInput = {
+    AND?: RoomDailyRollupScalarWhereInput | RoomDailyRollupScalarWhereInput[]
+    OR?: RoomDailyRollupScalarWhereInput[]
+    NOT?: RoomDailyRollupScalarWhereInput | RoomDailyRollupScalarWhereInput[]
+    id?: StringFilter<"RoomDailyRollup"> | string
+    facilityId?: StringFilter<"RoomDailyRollup"> | string
+    clinicId?: StringFilter<"RoomDailyRollup"> | string
+    dateKey?: StringFilter<"RoomDailyRollup"> | string
+    roomCount?: IntFilter<"RoomDailyRollup"> | number
+    dayStartCompletedCount?: IntFilter<"RoomDailyRollup"> | number
+    dayEndCompletedCount?: IntFilter<"RoomDailyRollup"> | number
+    turnoverCount?: IntFilter<"RoomDailyRollup"> | number
+    holdCount?: IntFilter<"RoomDailyRollup"> | number
+    issueCount?: IntFilter<"RoomDailyRollup"> | number
+    resolvedIssueCount?: IntFilter<"RoomDailyRollup"> | number
+    occupiedTotalMins?: IntFilter<"RoomDailyRollup"> | number
+    occupiedSamples?: IntFilter<"RoomDailyRollup"> | number
+    turnoverTotalMins?: IntFilter<"RoomDailyRollup"> | number
+    turnoverSamples?: IntFilter<"RoomDailyRollup"> | number
+    statusMinutesJson?: JsonFilter<"RoomDailyRollup">
+    roomRollupsJson?: JsonFilter<"RoomDailyRollup">
+    issueRollupsJson?: JsonFilter<"RoomDailyRollup">
+    computedAt?: DateTimeFilter<"RoomDailyRollup"> | Date | string
+  }
+
   export type FacilityCreateWithoutClinicsInput = {
     id?: string
     name: string
@@ -60388,6 +64812,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutClinicsInput = {
@@ -60409,6 +64835,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutClinicsInput = {
@@ -60931,6 +65359,58 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type RoomDailyRollupCreateWithoutClinicInput = {
+    id?: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+    facility: FacilityCreateNestedOneWithoutRoomDailyRollupsInput
+  }
+
+  export type RoomDailyRollupUncheckedCreateWithoutClinicInput = {
+    id?: string
+    facilityId: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+  }
+
+  export type RoomDailyRollupCreateOrConnectWithoutClinicInput = {
+    where: RoomDailyRollupWhereUniqueInput
+    create: XOR<RoomDailyRollupCreateWithoutClinicInput, RoomDailyRollupUncheckedCreateWithoutClinicInput>
+  }
+
+  export type RoomDailyRollupCreateManyClinicInputEnvelope = {
+    data: RoomDailyRollupCreateManyClinicInput | RoomDailyRollupCreateManyClinicInput[]
+    skipDuplicates?: boolean
+  }
+
   export type UserAlertInboxCreateWithoutClinicInput = {
     id?: string
     kind: $Enums.AlertInboxKind
@@ -60973,6 +65453,44 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type TemporaryClinicAssignmentOverrideCreateWithoutClinicInput = {
+    id?: string
+    role: $Enums.RoleName
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    user: UserCreateNestedOneWithoutTemporaryClinicOverridesInput
+    facility: FacilityCreateNestedOneWithoutTemporaryClinicAssignmentOverridesInput
+    createdBy: UserCreateNestedOneWithoutTemporaryOverridesCreatedInput
+    revokedBy?: UserCreateNestedOneWithoutTemporaryOverridesRevokedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateOrConnectWithoutClinicInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyClinicInputEnvelope = {
+    data: TemporaryClinicAssignmentOverrideCreateManyClinicInput | TemporaryClinicAssignmentOverrideCreateManyClinicInput[]
+    skipDuplicates?: boolean
+  }
+
   export type FacilityUpsertWithoutClinicsInput = {
     update: XOR<FacilityUpdateWithoutClinicsInput, FacilityUncheckedUpdateWithoutClinicsInput>
     create: XOR<FacilityCreateWithoutClinicsInput, FacilityUncheckedCreateWithoutClinicsInput>
@@ -61003,6 +65521,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutClinicsInput = {
@@ -61024,6 +65544,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ProviderUpsertWithWhereUniqueWithoutClinicInput = {
@@ -61396,6 +65918,22 @@ export namespace Prisma {
     computedAt?: DateTimeFilter<"OfficeManagerDailyRollup"> | Date | string
   }
 
+  export type RoomDailyRollupUpsertWithWhereUniqueWithoutClinicInput = {
+    where: RoomDailyRollupWhereUniqueInput
+    update: XOR<RoomDailyRollupUpdateWithoutClinicInput, RoomDailyRollupUncheckedUpdateWithoutClinicInput>
+    create: XOR<RoomDailyRollupCreateWithoutClinicInput, RoomDailyRollupUncheckedCreateWithoutClinicInput>
+  }
+
+  export type RoomDailyRollupUpdateWithWhereUniqueWithoutClinicInput = {
+    where: RoomDailyRollupWhereUniqueInput
+    data: XOR<RoomDailyRollupUpdateWithoutClinicInput, RoomDailyRollupUncheckedUpdateWithoutClinicInput>
+  }
+
+  export type RoomDailyRollupUpdateManyWithWhereWithoutClinicInput = {
+    where: RoomDailyRollupScalarWhereInput
+    data: XOR<RoomDailyRollupUpdateManyMutationInput, RoomDailyRollupUncheckedUpdateManyWithoutClinicInput>
+  }
+
   export type UserAlertInboxUpsertWithWhereUniqueWithoutClinicInput = {
     where: UserAlertInboxWhereUniqueInput
     update: XOR<UserAlertInboxUpdateWithoutClinicInput, UserAlertInboxUncheckedUpdateWithoutClinicInput>
@@ -61410,6 +65948,22 @@ export namespace Prisma {
   export type UserAlertInboxUpdateManyWithWhereWithoutClinicInput = {
     where: UserAlertInboxScalarWhereInput
     data: XOR<UserAlertInboxUpdateManyMutationInput, UserAlertInboxUncheckedUpdateManyWithoutClinicInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpsertWithWhereUniqueWithoutClinicInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    update: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutClinicInput>
+    create: XOR<TemporaryClinicAssignmentOverrideCreateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedCreateWithoutClinicInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithWhereUniqueWithoutClinicInput = {
+    where: TemporaryClinicAssignmentOverrideWhereUniqueInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateWithoutClinicInput, TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutClinicInput>
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateManyWithWhereWithoutClinicInput = {
+    where: TemporaryClinicAssignmentOverrideScalarWhereInput
+    data: XOR<TemporaryClinicAssignmentOverrideUpdateManyMutationInput, TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicInput>
   }
 
   export type ClinicCreateWithoutProvidersInput = {
@@ -61437,7 +65991,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutProvidersInput = {
@@ -61465,7 +66021,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutProvidersInput = {
@@ -61703,7 +66261,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutProvidersInput = {
@@ -61731,7 +66291,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type MaProviderMapUpsertWithWhereUniqueWithoutProviderInput = {
@@ -61821,6 +66383,9 @@ export namespace Prisma {
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutRolesInput = {
@@ -61846,6 +66411,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutRolesInput = {
@@ -61878,7 +66446,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutRolesInput = {
@@ -61906,7 +66476,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutRolesInput = {
@@ -61933,6 +66505,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutRolesInput = {
@@ -61954,6 +66528,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutRolesInput = {
@@ -61995,6 +66571,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutRolesInput = {
@@ -62020,6 +66599,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type ClinicUpsertWithoutRolesInput = {
@@ -62058,7 +66640,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutRolesInput = {
@@ -62086,7 +66670,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type FacilityUpsertWithoutRolesInput = {
@@ -62119,6 +66705,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutRolesInput = {
@@ -62140,6 +66728,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ProviderCreateWithoutMappingsInput = {
@@ -62192,7 +66782,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutMaProviderMapsInput = {
@@ -62220,7 +66812,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutMaProviderMapsInput = {
@@ -62295,7 +66889,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutMaProviderMapsInput = {
@@ -62323,7 +66919,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicCreateWithoutMaClinicMapsInput = {
@@ -62351,7 +66949,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutMaClinicMapsInput = {
@@ -62379,7 +66979,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutMaClinicMapsInput = {
@@ -62423,7 +67025,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutMaClinicMapsInput = {
@@ -62451,7 +67055,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicCreateWithoutStaffAssignmentInput = {
@@ -62479,7 +67085,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutStaffAssignmentInput = {
@@ -62507,7 +67115,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutStaffAssignmentInput = {
@@ -62538,6 +67148,9 @@ export namespace Prisma {
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutProviderAssignmentsInput = {
@@ -62563,6 +67176,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutProviderAssignmentsInput = {
@@ -62618,6 +67234,9 @@ export namespace Prisma {
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutMaAssignmentsInput = {
@@ -62643,6 +67262,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutMaAssignmentsInput = {
@@ -62686,7 +67308,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutStaffAssignmentInput = {
@@ -62714,7 +67338,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type UserUpsertWithoutProviderAssignmentsInput = {
@@ -62751,6 +67377,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutProviderAssignmentsInput = {
@@ -62776,6 +67405,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type ProviderUpsertWithoutClinicAssignmentsInput = {
@@ -62843,6 +67475,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutMaAssignmentsInput = {
@@ -62868,6 +67503,637 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
+  }
+
+  export type UserCreateWithoutTemporaryClinicOverridesInput = {
+    id?: string
+    email: string
+    name: string
+    status?: string
+    phone?: string | null
+    cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
+    createdAt?: Date | string
+    activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
+    roles?: UserRoleCreateNestedManyWithoutUserInput
+    providerAssignments?: ClinicAssignmentCreateNestedManyWithoutProviderUserInput
+    maAssignments?: ClinicAssignmentCreateNestedManyWithoutMaUserInput
+    tasksCreated?: TaskCreateNestedManyWithoutCreatorInput
+    tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
+    tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
+  }
+
+  export type UserUncheckedCreateWithoutTemporaryClinicOverridesInput = {
+    id?: string
+    email: string
+    name: string
+    status?: string
+    phone?: string | null
+    cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
+    activeFacilityId?: string | null
+    createdAt?: Date | string
+    roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
+    providerAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutProviderUserInput
+    maAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutMaUserInput
+    tasksCreated?: TaskUncheckedCreateNestedManyWithoutCreatorInput
+    tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
+    tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
+  }
+
+  export type UserCreateOrConnectWithoutTemporaryClinicOverridesInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutTemporaryClinicOverridesInput, UserUncheckedCreateWithoutTemporaryClinicOverridesInput>
+  }
+
+  export type ClinicCreateWithoutTemporaryAssignmentOverridesInput = {
+    id?: string
+    name: string
+    shortCode?: string | null
+    timezone: string
+    status?: string
+    maRun?: boolean
+    autoCloseEnabled?: boolean
+    autoCloseTime?: string | null
+    cardColor?: string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    facility?: FacilityCreateNestedOneWithoutClinicsInput
+    providers?: ProviderCreateNestedManyWithoutClinicInput
+    roles?: UserRoleCreateNestedManyWithoutClinicInput
+    reasons?: ReasonForVisitCreateNestedManyWithoutClinicInput
+    reasonAssignments?: ReasonClinicAssignmentCreateNestedManyWithoutClinicInput
+    templates?: TemplateCreateNestedManyWithoutClinicInput
+    roomAssignments?: ClinicRoomAssignmentCreateNestedManyWithoutClinicInput
+    staffAssignment?: ClinicAssignmentCreateNestedOneWithoutClinicInput
+    maProviderMaps?: MaProviderMapCreateNestedManyWithoutClinicInput
+    maClinicMaps?: MaClinicMapCreateNestedManyWithoutClinicInput
+    incomingSchedules?: IncomingScheduleCreateNestedManyWithoutClinicInput
+    importBatches?: IncomingImportBatchCreateNestedManyWithoutClinicInput
+    incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
+    encounters?: EncounterCreateNestedManyWithoutClinicInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+  }
+
+  export type ClinicUncheckedCreateWithoutTemporaryAssignmentOverridesInput = {
+    id?: string
+    facilityId?: string | null
+    name: string
+    shortCode?: string | null
+    timezone: string
+    status?: string
+    maRun?: boolean
+    autoCloseEnabled?: boolean
+    autoCloseTime?: string | null
+    cardColor?: string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    providers?: ProviderUncheckedCreateNestedManyWithoutClinicInput
+    roles?: UserRoleUncheckedCreateNestedManyWithoutClinicInput
+    reasons?: ReasonForVisitUncheckedCreateNestedManyWithoutClinicInput
+    reasonAssignments?: ReasonClinicAssignmentUncheckedCreateNestedManyWithoutClinicInput
+    templates?: TemplateUncheckedCreateNestedManyWithoutClinicInput
+    roomAssignments?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutClinicInput
+    staffAssignment?: ClinicAssignmentUncheckedCreateNestedOneWithoutClinicInput
+    maProviderMaps?: MaProviderMapUncheckedCreateNestedManyWithoutClinicInput
+    maClinicMaps?: MaClinicMapUncheckedCreateNestedManyWithoutClinicInput
+    incomingSchedules?: IncomingScheduleUncheckedCreateNestedManyWithoutClinicInput
+    importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutClinicInput
+    incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+  }
+
+  export type ClinicCreateOrConnectWithoutTemporaryAssignmentOverridesInput = {
+    where: ClinicWhereUniqueInput
+    create: XOR<ClinicCreateWithoutTemporaryAssignmentOverridesInput, ClinicUncheckedCreateWithoutTemporaryAssignmentOverridesInput>
+  }
+
+  export type FacilityCreateWithoutTemporaryClinicAssignmentOverridesInput = {
+    id?: string
+    name: string
+    shortCode?: string | null
+    address?: string | null
+    phone?: string | null
+    timezone?: string
+    status?: string
+    createdAt?: Date | string
+    clinics?: ClinicCreateNestedManyWithoutFacilityInput
+    roles?: UserRoleCreateNestedManyWithoutFacilityInput
+    reasons?: ReasonForVisitCreateNestedManyWithoutFacilityInput
+    templates?: TemplateCreateNestedManyWithoutFacilityInput
+    rooms?: ClinicRoomCreateNestedManyWithoutFacilityInput
+    activeForUsers?: UserCreateNestedManyWithoutActiveFacilityInput
+    alertThresholds?: AlertThresholdCreateNestedManyWithoutFacilityInput
+    importBatches?: IncomingImportBatchCreateNestedManyWithoutFacilityInput
+    incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
+    connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
+  }
+
+  export type FacilityUncheckedCreateWithoutTemporaryClinicAssignmentOverridesInput = {
+    id?: string
+    name: string
+    shortCode?: string | null
+    address?: string | null
+    phone?: string | null
+    timezone?: string
+    status?: string
+    createdAt?: Date | string
+    clinics?: ClinicUncheckedCreateNestedManyWithoutFacilityInput
+    roles?: UserRoleUncheckedCreateNestedManyWithoutFacilityInput
+    reasons?: ReasonForVisitUncheckedCreateNestedManyWithoutFacilityInput
+    templates?: TemplateUncheckedCreateNestedManyWithoutFacilityInput
+    rooms?: ClinicRoomUncheckedCreateNestedManyWithoutFacilityInput
+    activeForUsers?: UserUncheckedCreateNestedManyWithoutActiveFacilityInput
+    alertThresholds?: AlertThresholdUncheckedCreateNestedManyWithoutFacilityInput
+    importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutFacilityInput
+    incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
+    connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
+  }
+
+  export type FacilityCreateOrConnectWithoutTemporaryClinicAssignmentOverridesInput = {
+    where: FacilityWhereUniqueInput
+    create: XOR<FacilityCreateWithoutTemporaryClinicAssignmentOverridesInput, FacilityUncheckedCreateWithoutTemporaryClinicAssignmentOverridesInput>
+  }
+
+  export type UserCreateWithoutTemporaryOverridesCreatedInput = {
+    id?: string
+    email: string
+    name: string
+    status?: string
+    phone?: string | null
+    cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
+    createdAt?: Date | string
+    activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
+    roles?: UserRoleCreateNestedManyWithoutUserInput
+    providerAssignments?: ClinicAssignmentCreateNestedManyWithoutProviderUserInput
+    maAssignments?: ClinicAssignmentCreateNestedManyWithoutMaUserInput
+    tasksCreated?: TaskCreateNestedManyWithoutCreatorInput
+    tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
+    tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
+  }
+
+  export type UserUncheckedCreateWithoutTemporaryOverridesCreatedInput = {
+    id?: string
+    email: string
+    name: string
+    status?: string
+    phone?: string | null
+    cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
+    activeFacilityId?: string | null
+    createdAt?: Date | string
+    roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
+    providerAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutProviderUserInput
+    maAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutMaUserInput
+    tasksCreated?: TaskUncheckedCreateNestedManyWithoutCreatorInput
+    tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
+    tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
+  }
+
+  export type UserCreateOrConnectWithoutTemporaryOverridesCreatedInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutTemporaryOverridesCreatedInput, UserUncheckedCreateWithoutTemporaryOverridesCreatedInput>
+  }
+
+  export type UserCreateWithoutTemporaryOverridesRevokedInput = {
+    id?: string
+    email: string
+    name: string
+    status?: string
+    phone?: string | null
+    cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
+    createdAt?: Date | string
+    activeFacility?: FacilityCreateNestedOneWithoutActiveForUsersInput
+    roles?: UserRoleCreateNestedManyWithoutUserInput
+    providerAssignments?: ClinicAssignmentCreateNestedManyWithoutProviderUserInput
+    maAssignments?: ClinicAssignmentCreateNestedManyWithoutMaUserInput
+    tasksCreated?: TaskCreateNestedManyWithoutCreatorInput
+    tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
+    tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+  }
+
+  export type UserUncheckedCreateWithoutTemporaryOverridesRevokedInput = {
+    id?: string
+    email: string
+    name: string
+    status?: string
+    phone?: string | null
+    cognitoSub?: string | null
+    entraObjectId?: string | null
+    entraTenantId?: string | null
+    entraUserPrincipalName?: string | null
+    identityProvider?: string | null
+    directoryStatus?: string | null
+    directoryUserType?: string | null
+    directoryAccountEnabled?: boolean | null
+    lastDirectorySyncAt?: Date | string | null
+    activeFacilityId?: string | null
+    createdAt?: Date | string
+    roles?: UserRoleUncheckedCreateNestedManyWithoutUserInput
+    providerAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutProviderUserInput
+    maAssignments?: ClinicAssignmentUncheckedCreateNestedManyWithoutMaUserInput
+    tasksCreated?: TaskUncheckedCreateNestedManyWithoutCreatorInput
+    tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
+    tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+  }
+
+  export type UserCreateOrConnectWithoutTemporaryOverridesRevokedInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutTemporaryOverridesRevokedInput, UserUncheckedCreateWithoutTemporaryOverridesRevokedInput>
+  }
+
+  export type UserUpsertWithoutTemporaryClinicOverridesInput = {
+    update: XOR<UserUpdateWithoutTemporaryClinicOverridesInput, UserUncheckedUpdateWithoutTemporaryClinicOverridesInput>
+    create: XOR<UserCreateWithoutTemporaryClinicOverridesInput, UserUncheckedCreateWithoutTemporaryClinicOverridesInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutTemporaryClinicOverridesInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutTemporaryClinicOverridesInput, UserUncheckedUpdateWithoutTemporaryClinicOverridesInput>
+  }
+
+  export type UserUpdateWithoutTemporaryClinicOverridesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
+    roles?: UserRoleUpdateManyWithoutUserNestedInput
+    providerAssignments?: ClinicAssignmentUpdateManyWithoutProviderUserNestedInput
+    maAssignments?: ClinicAssignmentUpdateManyWithoutMaUserNestedInput
+    tasksCreated?: TaskUpdateManyWithoutCreatorNestedInput
+    tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
+    tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutTemporaryClinicOverridesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
+    providerAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutProviderUserNestedInput
+    maAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutMaUserNestedInput
+    tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
+    tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
+    tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
+  }
+
+  export type ClinicUpsertWithoutTemporaryAssignmentOverridesInput = {
+    update: XOR<ClinicUpdateWithoutTemporaryAssignmentOverridesInput, ClinicUncheckedUpdateWithoutTemporaryAssignmentOverridesInput>
+    create: XOR<ClinicCreateWithoutTemporaryAssignmentOverridesInput, ClinicUncheckedCreateWithoutTemporaryAssignmentOverridesInput>
+    where?: ClinicWhereInput
+  }
+
+  export type ClinicUpdateToOneWithWhereWithoutTemporaryAssignmentOverridesInput = {
+    where?: ClinicWhereInput
+    data: XOR<ClinicUpdateWithoutTemporaryAssignmentOverridesInput, ClinicUncheckedUpdateWithoutTemporaryAssignmentOverridesInput>
+  }
+
+  export type ClinicUpdateWithoutTemporaryAssignmentOverridesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    maRun?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseEnabled?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseTime?: NullableStringFieldUpdateOperationsInput | string | null
+    cardColor?: NullableStringFieldUpdateOperationsInput | string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    facility?: FacilityUpdateOneWithoutClinicsNestedInput
+    providers?: ProviderUpdateManyWithoutClinicNestedInput
+    roles?: UserRoleUpdateManyWithoutClinicNestedInput
+    reasons?: ReasonForVisitUpdateManyWithoutClinicNestedInput
+    reasonAssignments?: ReasonClinicAssignmentUpdateManyWithoutClinicNestedInput
+    templates?: TemplateUpdateManyWithoutClinicNestedInput
+    roomAssignments?: ClinicRoomAssignmentUpdateManyWithoutClinicNestedInput
+    staffAssignment?: ClinicAssignmentUpdateOneWithoutClinicNestedInput
+    maProviderMaps?: MaProviderMapUpdateManyWithoutClinicNestedInput
+    maClinicMaps?: MaClinicMapUpdateManyWithoutClinicNestedInput
+    incomingSchedules?: IncomingScheduleUpdateManyWithoutClinicNestedInput
+    importBatches?: IncomingImportBatchUpdateManyWithoutClinicNestedInput
+    incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
+    encounters?: EncounterUpdateManyWithoutClinicNestedInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+  }
+
+  export type ClinicUncheckedUpdateWithoutTemporaryAssignmentOverridesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    maRun?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseEnabled?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseTime?: NullableStringFieldUpdateOperationsInput | string | null
+    cardColor?: NullableStringFieldUpdateOperationsInput | string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    providers?: ProviderUncheckedUpdateManyWithoutClinicNestedInput
+    roles?: UserRoleUncheckedUpdateManyWithoutClinicNestedInput
+    reasons?: ReasonForVisitUncheckedUpdateManyWithoutClinicNestedInput
+    reasonAssignments?: ReasonClinicAssignmentUncheckedUpdateManyWithoutClinicNestedInput
+    templates?: TemplateUncheckedUpdateManyWithoutClinicNestedInput
+    roomAssignments?: ClinicRoomAssignmentUncheckedUpdateManyWithoutClinicNestedInput
+    staffAssignment?: ClinicAssignmentUncheckedUpdateOneWithoutClinicNestedInput
+    maProviderMaps?: MaProviderMapUncheckedUpdateManyWithoutClinicNestedInput
+    maClinicMaps?: MaClinicMapUncheckedUpdateManyWithoutClinicNestedInput
+    incomingSchedules?: IncomingScheduleUncheckedUpdateManyWithoutClinicNestedInput
+    importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutClinicNestedInput
+    incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+  }
+
+  export type FacilityUpsertWithoutTemporaryClinicAssignmentOverridesInput = {
+    update: XOR<FacilityUpdateWithoutTemporaryClinicAssignmentOverridesInput, FacilityUncheckedUpdateWithoutTemporaryClinicAssignmentOverridesInput>
+    create: XOR<FacilityCreateWithoutTemporaryClinicAssignmentOverridesInput, FacilityUncheckedCreateWithoutTemporaryClinicAssignmentOverridesInput>
+    where?: FacilityWhereInput
+  }
+
+  export type FacilityUpdateToOneWithWhereWithoutTemporaryClinicAssignmentOverridesInput = {
+    where?: FacilityWhereInput
+    data: XOR<FacilityUpdateWithoutTemporaryClinicAssignmentOverridesInput, FacilityUncheckedUpdateWithoutTemporaryClinicAssignmentOverridesInput>
+  }
+
+  export type FacilityUpdateWithoutTemporaryClinicAssignmentOverridesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clinics?: ClinicUpdateManyWithoutFacilityNestedInput
+    roles?: UserRoleUpdateManyWithoutFacilityNestedInput
+    reasons?: ReasonForVisitUpdateManyWithoutFacilityNestedInput
+    templates?: TemplateUpdateManyWithoutFacilityNestedInput
+    rooms?: ClinicRoomUpdateManyWithoutFacilityNestedInput
+    activeForUsers?: UserUpdateManyWithoutActiveFacilityNestedInput
+    alertThresholds?: AlertThresholdUpdateManyWithoutFacilityNestedInput
+    importBatches?: IncomingImportBatchUpdateManyWithoutFacilityNestedInput
+    incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
+    connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
+  }
+
+  export type FacilityUncheckedUpdateWithoutTemporaryClinicAssignmentOverridesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clinics?: ClinicUncheckedUpdateManyWithoutFacilityNestedInput
+    roles?: UserRoleUncheckedUpdateManyWithoutFacilityNestedInput
+    reasons?: ReasonForVisitUncheckedUpdateManyWithoutFacilityNestedInput
+    templates?: TemplateUncheckedUpdateManyWithoutFacilityNestedInput
+    rooms?: ClinicRoomUncheckedUpdateManyWithoutFacilityNestedInput
+    activeForUsers?: UserUncheckedUpdateManyWithoutActiveFacilityNestedInput
+    alertThresholds?: AlertThresholdUncheckedUpdateManyWithoutFacilityNestedInput
+    importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutFacilityNestedInput
+    incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
+    connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
+  }
+
+  export type UserUpsertWithoutTemporaryOverridesCreatedInput = {
+    update: XOR<UserUpdateWithoutTemporaryOverridesCreatedInput, UserUncheckedUpdateWithoutTemporaryOverridesCreatedInput>
+    create: XOR<UserCreateWithoutTemporaryOverridesCreatedInput, UserUncheckedCreateWithoutTemporaryOverridesCreatedInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutTemporaryOverridesCreatedInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutTemporaryOverridesCreatedInput, UserUncheckedUpdateWithoutTemporaryOverridesCreatedInput>
+  }
+
+  export type UserUpdateWithoutTemporaryOverridesCreatedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
+    roles?: UserRoleUpdateManyWithoutUserNestedInput
+    providerAssignments?: ClinicAssignmentUpdateManyWithoutProviderUserNestedInput
+    maAssignments?: ClinicAssignmentUpdateManyWithoutMaUserNestedInput
+    tasksCreated?: TaskUpdateManyWithoutCreatorNestedInput
+    tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
+    tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutTemporaryOverridesCreatedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
+    providerAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutProviderUserNestedInput
+    maAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutMaUserNestedInput
+    tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
+    tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
+    tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
+  }
+
+  export type UserUpsertWithoutTemporaryOverridesRevokedInput = {
+    update: XOR<UserUpdateWithoutTemporaryOverridesRevokedInput, UserUncheckedUpdateWithoutTemporaryOverridesRevokedInput>
+    create: XOR<UserCreateWithoutTemporaryOverridesRevokedInput, UserUncheckedCreateWithoutTemporaryOverridesRevokedInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutTemporaryOverridesRevokedInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutTemporaryOverridesRevokedInput, UserUncheckedUpdateWithoutTemporaryOverridesRevokedInput>
+  }
+
+  export type UserUpdateWithoutTemporaryOverridesRevokedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    activeFacility?: FacilityUpdateOneWithoutActiveForUsersNestedInput
+    roles?: UserRoleUpdateManyWithoutUserNestedInput
+    providerAssignments?: ClinicAssignmentUpdateManyWithoutProviderUserNestedInput
+    maAssignments?: ClinicAssignmentUpdateManyWithoutMaUserNestedInput
+    tasksCreated?: TaskUpdateManyWithoutCreatorNestedInput
+    tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
+    tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutTemporaryOverridesRevokedInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    cognitoSub?: NullableStringFieldUpdateOperationsInput | string | null
+    entraObjectId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraTenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    entraUserPrincipalName?: NullableStringFieldUpdateOperationsInput | string | null
+    identityProvider?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryStatus?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryUserType?: NullableStringFieldUpdateOperationsInput | string | null
+    directoryAccountEnabled?: NullableBoolFieldUpdateOperationsInput | boolean | null
+    lastDirectorySyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    activeFacilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    roles?: UserRoleUncheckedUpdateManyWithoutUserNestedInput
+    providerAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutProviderUserNestedInput
+    maAssignments?: ClinicAssignmentUncheckedUpdateManyWithoutMaUserNestedInput
+    tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
+    tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
+    tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
   }
 
   export type FacilityCreateWithoutRoomsInput = {
@@ -62889,6 +68155,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutRoomsInput = {
@@ -62910,6 +68178,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutRoomsInput = {
@@ -63270,6 +68540,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutRoomsInput = {
@@ -63291,6 +68563,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ClinicRoomAssignmentUpsertWithWhereUniqueWithoutRoomInput = {
@@ -63512,7 +68786,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutRoomAssignmentsInput = {
@@ -63540,7 +68816,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutRoomAssignmentsInput = {
@@ -63621,7 +68899,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutRoomAssignmentsInput = {
@@ -63649,7 +68929,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicRoomUpsertWithoutClinicLinksInput = {
@@ -63720,7 +69002,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutReasonsInput = {
@@ -63748,7 +69032,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutReasonsInput = {
@@ -63775,6 +69061,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutReasonsInput = {
@@ -63796,6 +69084,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutReasonsInput = {
@@ -64071,7 +69361,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutReasonsInput = {
@@ -64099,7 +69391,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type FacilityUpsertWithoutReasonsInput = {
@@ -64132,6 +69426,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutReasonsInput = {
@@ -64153,6 +69449,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type TemplateUpsertWithWhereUniqueWithoutReasonInput = {
@@ -64264,6 +69562,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutTemplatesInput = {
@@ -64285,6 +69585,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutTemplatesInput = {
@@ -64317,7 +69619,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutTemplatesInput = {
@@ -64345,7 +69649,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutTemplatesInput = {
@@ -64438,6 +69744,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutTemplatesInput = {
@@ -64459,6 +69767,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ClinicUpsertWithoutTemplatesInput = {
@@ -64497,7 +69807,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutTemplatesInput = {
@@ -64525,7 +69837,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ReasonForVisitUpsertWithoutTemplatesInput = {
@@ -64641,7 +69955,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutReasonAssignmentsInput = {
@@ -64669,7 +69985,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutReasonAssignmentsInput = {
@@ -64752,7 +70070,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutReasonAssignmentsInput = {
@@ -64780,7 +70100,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type TemplateCreateWithoutReasonAssignmentsInput = {
@@ -64958,6 +70280,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutImportBatchesInput = {
@@ -64979,6 +70303,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutImportBatchesInput = {
@@ -65011,7 +70337,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutImportBatchesInput = {
@@ -65039,7 +70367,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutImportBatchesInput = {
@@ -65181,6 +70511,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutImportBatchesInput = {
@@ -65202,6 +70534,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ClinicUpsertWithoutImportBatchesInput = {
@@ -65240,7 +70574,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutImportBatchesInput = {
@@ -65268,7 +70604,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type IncomingScheduleUpsertWithWhereUniqueWithoutImportBatchInput = {
@@ -65328,7 +70666,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutIncomingSchedulesInput = {
@@ -65356,7 +70696,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutIncomingSchedulesInput = {
@@ -65533,7 +70875,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutIncomingSchedulesInput = {
@@ -65561,7 +70905,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ProviderUpsertWithoutIncomingSchedulesInput = {
@@ -65745,6 +71091,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutIncomingIssuesInput = {
@@ -65766,6 +71114,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutIncomingIssuesInput = {
@@ -65798,7 +71148,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutIncomingIssuesInput = {
@@ -65826,7 +71178,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutIncomingIssuesInput = {
@@ -65964,6 +71318,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutIncomingIssuesInput = {
@@ -65985,6 +71341,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ClinicUpsertWithoutIncomingIssuesInput = {
@@ -66023,7 +71381,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutIncomingIssuesInput = {
@@ -66051,7 +71411,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type IncomingScheduleUpsertWithoutResolvedIssuesInput = {
@@ -66144,7 +71506,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchCreateNestedManyWithoutClinicInput
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutEncountersInput = {
@@ -66172,7 +71536,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutClinicInput
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutEncountersInput = {
@@ -66578,7 +71944,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUpdateManyWithoutClinicNestedInput
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutEncountersInput = {
@@ -66606,7 +71974,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutClinicNestedInput
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ProviderUpsertWithoutEncountersInput = {
@@ -67338,6 +72708,9 @@ export namespace Prisma {
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutTasksCreatedInput = {
@@ -67363,6 +72736,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutTasksCreatedInput = {
@@ -67393,6 +72769,9 @@ export namespace Prisma {
     tasksCreated?: TaskCreateNestedManyWithoutCreatorInput
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutTasksAcknowledgedInput = {
@@ -67418,6 +72797,9 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedCreateNestedManyWithoutCreatorInput
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutTasksAcknowledgedInput = {
@@ -67448,6 +72830,9 @@ export namespace Prisma {
     tasksCreated?: TaskCreateNestedManyWithoutCreatorInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutTasksCompletedInput = {
@@ -67473,6 +72858,9 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedCreateNestedManyWithoutCreatorInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutUserInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutTasksCompletedInput = {
@@ -67690,6 +73078,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutTasksCreatedInput = {
@@ -67715,6 +73106,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUpsertWithoutTasksAcknowledgedInput = {
@@ -67751,6 +73145,9 @@ export namespace Prisma {
     tasksCreated?: TaskUpdateManyWithoutCreatorNestedInput
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutTasksAcknowledgedInput = {
@@ -67776,6 +73173,9 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUpsertWithoutTasksCompletedInput = {
@@ -67812,6 +73212,9 @@ export namespace Prisma {
     tasksCreated?: TaskUpdateManyWithoutCreatorNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutTasksCompletedInput = {
@@ -67837,6 +73240,9 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type RoomIssueUpsertWithWhereUniqueWithoutTaskInput = {
@@ -68782,6 +74188,9 @@ export namespace Prisma {
     tasksCreated?: TaskCreateNestedManyWithoutCreatorInput
     tasksCompleted?: TaskCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskCreateNestedManyWithoutAcknowledgerInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserUncheckedCreateWithoutAlertInboxInput = {
@@ -68807,6 +74216,9 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedCreateNestedManyWithoutCreatorInput
     tasksCompleted?: TaskUncheckedCreateNestedManyWithoutCompleterInput
     tasksAcknowledged?: TaskUncheckedCreateNestedManyWithoutAcknowledgerInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutUserInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutCreatedByInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutRevokedByInput
   }
 
   export type UserCreateOrConnectWithoutAlertInboxInput = {
@@ -68833,6 +74245,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchCreateNestedManyWithoutFacilityInput
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutAlertInboxInput = {
@@ -68854,6 +74268,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutFacilityInput
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutAlertInboxInput = {
@@ -68887,6 +74303,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutAlertInboxInput = {
@@ -68915,6 +74333,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutAlertInboxInput = {
@@ -68956,6 +74376,9 @@ export namespace Prisma {
     tasksCreated?: TaskUpdateManyWithoutCreatorNestedInput
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutAlertInboxInput = {
@@ -68981,6 +74404,9 @@ export namespace Prisma {
     tasksCreated?: TaskUncheckedUpdateManyWithoutCreatorNestedInput
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type FacilityUpsertWithoutAlertInboxInput = {
@@ -69013,6 +74439,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUpdateManyWithoutFacilityNestedInput
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutAlertInboxInput = {
@@ -69034,6 +74462,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutFacilityNestedInput
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ClinicUpsertWithoutAlertInboxInput = {
@@ -69073,6 +74503,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutAlertInboxInput = {
@@ -69101,6 +74533,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type EncounterCreateWithoutSafetyEventsInput = {
@@ -69278,6 +74712,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutAlertThresholdsInput = {
@@ -69299,6 +74735,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutAlertThresholdsInput = {
@@ -69336,6 +74774,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutAlertThresholdsInput = {
@@ -69357,6 +74797,8 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type ClinicCreateWithoutOfficeManagerDailyRollupsInput = {
@@ -69384,7 +74826,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchCreateNestedManyWithoutClinicInput
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
     encounters?: EncounterCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicUncheckedCreateWithoutOfficeManagerDailyRollupsInput = {
@@ -69412,7 +74856,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutClinicInput
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
     encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutClinicInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
   }
 
   export type ClinicCreateOrConnectWithoutOfficeManagerDailyRollupsInput = {
@@ -69456,7 +74902,9 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUpdateManyWithoutClinicNestedInput
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutOfficeManagerDailyRollupsInput = {
@@ -69484,7 +74932,253 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutClinicNestedInput
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
+  }
+
+  export type FacilityCreateWithoutRoomDailyRollupsInput = {
+    id?: string
+    name: string
+    shortCode?: string | null
+    address?: string | null
+    phone?: string | null
+    timezone?: string
+    status?: string
+    createdAt?: Date | string
+    clinics?: ClinicCreateNestedManyWithoutFacilityInput
+    roles?: UserRoleCreateNestedManyWithoutFacilityInput
+    reasons?: ReasonForVisitCreateNestedManyWithoutFacilityInput
+    templates?: TemplateCreateNestedManyWithoutFacilityInput
+    rooms?: ClinicRoomCreateNestedManyWithoutFacilityInput
+    activeForUsers?: UserCreateNestedManyWithoutActiveFacilityInput
+    alertThresholds?: AlertThresholdCreateNestedManyWithoutFacilityInput
+    importBatches?: IncomingImportBatchCreateNestedManyWithoutFacilityInput
+    incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
+    connectors?: IntegrationConnectorCreateNestedManyWithoutFacilityInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+  }
+
+  export type FacilityUncheckedCreateWithoutRoomDailyRollupsInput = {
+    id?: string
+    name: string
+    shortCode?: string | null
+    address?: string | null
+    phone?: string | null
+    timezone?: string
+    status?: string
+    createdAt?: Date | string
+    clinics?: ClinicUncheckedCreateNestedManyWithoutFacilityInput
+    roles?: UserRoleUncheckedCreateNestedManyWithoutFacilityInput
+    reasons?: ReasonForVisitUncheckedCreateNestedManyWithoutFacilityInput
+    templates?: TemplateUncheckedCreateNestedManyWithoutFacilityInput
+    rooms?: ClinicRoomUncheckedCreateNestedManyWithoutFacilityInput
+    activeForUsers?: UserUncheckedCreateNestedManyWithoutActiveFacilityInput
+    alertThresholds?: AlertThresholdUncheckedCreateNestedManyWithoutFacilityInput
+    importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutFacilityInput
+    incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
+    connectors?: IntegrationConnectorUncheckedCreateNestedManyWithoutFacilityInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+  }
+
+  export type FacilityCreateOrConnectWithoutRoomDailyRollupsInput = {
+    where: FacilityWhereUniqueInput
+    create: XOR<FacilityCreateWithoutRoomDailyRollupsInput, FacilityUncheckedCreateWithoutRoomDailyRollupsInput>
+  }
+
+  export type ClinicCreateWithoutRoomDailyRollupsInput = {
+    id?: string
+    name: string
+    shortCode?: string | null
+    timezone: string
+    status?: string
+    maRun?: boolean
+    autoCloseEnabled?: boolean
+    autoCloseTime?: string | null
+    cardColor?: string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    facility?: FacilityCreateNestedOneWithoutClinicsInput
+    providers?: ProviderCreateNestedManyWithoutClinicInput
+    roles?: UserRoleCreateNestedManyWithoutClinicInput
+    reasons?: ReasonForVisitCreateNestedManyWithoutClinicInput
+    reasonAssignments?: ReasonClinicAssignmentCreateNestedManyWithoutClinicInput
+    templates?: TemplateCreateNestedManyWithoutClinicInput
+    roomAssignments?: ClinicRoomAssignmentCreateNestedManyWithoutClinicInput
+    staffAssignment?: ClinicAssignmentCreateNestedOneWithoutClinicInput
+    maProviderMaps?: MaProviderMapCreateNestedManyWithoutClinicInput
+    maClinicMaps?: MaClinicMapCreateNestedManyWithoutClinicInput
+    incomingSchedules?: IncomingScheduleCreateNestedManyWithoutClinicInput
+    importBatches?: IncomingImportBatchCreateNestedManyWithoutClinicInput
+    incomingIssues?: IncomingImportIssueCreateNestedManyWithoutClinicInput
+    encounters?: EncounterCreateNestedManyWithoutClinicInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupCreateNestedManyWithoutClinicInput
+    alertInbox?: UserAlertInboxCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutClinicInput
+  }
+
+  export type ClinicUncheckedCreateWithoutRoomDailyRollupsInput = {
+    id?: string
+    facilityId?: string | null
+    name: string
+    shortCode?: string | null
+    timezone: string
+    status?: string
+    maRun?: boolean
+    autoCloseEnabled?: boolean
+    autoCloseTime?: string | null
+    cardColor?: string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    providers?: ProviderUncheckedCreateNestedManyWithoutClinicInput
+    roles?: UserRoleUncheckedCreateNestedManyWithoutClinicInput
+    reasons?: ReasonForVisitUncheckedCreateNestedManyWithoutClinicInput
+    reasonAssignments?: ReasonClinicAssignmentUncheckedCreateNestedManyWithoutClinicInput
+    templates?: TemplateUncheckedCreateNestedManyWithoutClinicInput
+    roomAssignments?: ClinicRoomAssignmentUncheckedCreateNestedManyWithoutClinicInput
+    staffAssignment?: ClinicAssignmentUncheckedCreateNestedOneWithoutClinicInput
+    maProviderMaps?: MaProviderMapUncheckedCreateNestedManyWithoutClinicInput
+    maClinicMaps?: MaClinicMapUncheckedCreateNestedManyWithoutClinicInput
+    incomingSchedules?: IncomingScheduleUncheckedCreateNestedManyWithoutClinicInput
+    importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutClinicInput
+    incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutClinicInput
+    encounters?: EncounterUncheckedCreateNestedManyWithoutClinicInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedCreateNestedManyWithoutClinicInput
+    alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutClinicInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutClinicInput
+  }
+
+  export type ClinicCreateOrConnectWithoutRoomDailyRollupsInput = {
+    where: ClinicWhereUniqueInput
+    create: XOR<ClinicCreateWithoutRoomDailyRollupsInput, ClinicUncheckedCreateWithoutRoomDailyRollupsInput>
+  }
+
+  export type FacilityUpsertWithoutRoomDailyRollupsInput = {
+    update: XOR<FacilityUpdateWithoutRoomDailyRollupsInput, FacilityUncheckedUpdateWithoutRoomDailyRollupsInput>
+    create: XOR<FacilityCreateWithoutRoomDailyRollupsInput, FacilityUncheckedCreateWithoutRoomDailyRollupsInput>
+    where?: FacilityWhereInput
+  }
+
+  export type FacilityUpdateToOneWithWhereWithoutRoomDailyRollupsInput = {
+    where?: FacilityWhereInput
+    data: XOR<FacilityUpdateWithoutRoomDailyRollupsInput, FacilityUncheckedUpdateWithoutRoomDailyRollupsInput>
+  }
+
+  export type FacilityUpdateWithoutRoomDailyRollupsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clinics?: ClinicUpdateManyWithoutFacilityNestedInput
+    roles?: UserRoleUpdateManyWithoutFacilityNestedInput
+    reasons?: ReasonForVisitUpdateManyWithoutFacilityNestedInput
+    templates?: TemplateUpdateManyWithoutFacilityNestedInput
+    rooms?: ClinicRoomUpdateManyWithoutFacilityNestedInput
+    activeForUsers?: UserUpdateManyWithoutActiveFacilityNestedInput
+    alertThresholds?: AlertThresholdUpdateManyWithoutFacilityNestedInput
+    importBatches?: IncomingImportBatchUpdateManyWithoutFacilityNestedInput
+    incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
+    connectors?: IntegrationConnectorUpdateManyWithoutFacilityNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+  }
+
+  export type FacilityUncheckedUpdateWithoutRoomDailyRollupsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clinics?: ClinicUncheckedUpdateManyWithoutFacilityNestedInput
+    roles?: UserRoleUncheckedUpdateManyWithoutFacilityNestedInput
+    reasons?: ReasonForVisitUncheckedUpdateManyWithoutFacilityNestedInput
+    templates?: TemplateUncheckedUpdateManyWithoutFacilityNestedInput
+    rooms?: ClinicRoomUncheckedUpdateManyWithoutFacilityNestedInput
+    activeForUsers?: UserUncheckedUpdateManyWithoutActiveFacilityNestedInput
+    alertThresholds?: AlertThresholdUncheckedUpdateManyWithoutFacilityNestedInput
+    importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutFacilityNestedInput
+    incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
+    connectors?: IntegrationConnectorUncheckedUpdateManyWithoutFacilityNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+  }
+
+  export type ClinicUpsertWithoutRoomDailyRollupsInput = {
+    update: XOR<ClinicUpdateWithoutRoomDailyRollupsInput, ClinicUncheckedUpdateWithoutRoomDailyRollupsInput>
+    create: XOR<ClinicCreateWithoutRoomDailyRollupsInput, ClinicUncheckedCreateWithoutRoomDailyRollupsInput>
+    where?: ClinicWhereInput
+  }
+
+  export type ClinicUpdateToOneWithWhereWithoutRoomDailyRollupsInput = {
+    where?: ClinicWhereInput
+    data: XOR<ClinicUpdateWithoutRoomDailyRollupsInput, ClinicUncheckedUpdateWithoutRoomDailyRollupsInput>
+  }
+
+  export type ClinicUpdateWithoutRoomDailyRollupsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    maRun?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseEnabled?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseTime?: NullableStringFieldUpdateOperationsInput | string | null
+    cardColor?: NullableStringFieldUpdateOperationsInput | string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    facility?: FacilityUpdateOneWithoutClinicsNestedInput
+    providers?: ProviderUpdateManyWithoutClinicNestedInput
+    roles?: UserRoleUpdateManyWithoutClinicNestedInput
+    reasons?: ReasonForVisitUpdateManyWithoutClinicNestedInput
+    reasonAssignments?: ReasonClinicAssignmentUpdateManyWithoutClinicNestedInput
+    templates?: TemplateUpdateManyWithoutClinicNestedInput
+    roomAssignments?: ClinicRoomAssignmentUpdateManyWithoutClinicNestedInput
+    staffAssignment?: ClinicAssignmentUpdateOneWithoutClinicNestedInput
+    maProviderMaps?: MaProviderMapUpdateManyWithoutClinicNestedInput
+    maClinicMaps?: MaClinicMapUpdateManyWithoutClinicNestedInput
+    incomingSchedules?: IncomingScheduleUpdateManyWithoutClinicNestedInput
+    importBatches?: IncomingImportBatchUpdateManyWithoutClinicNestedInput
+    incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
+    encounters?: EncounterUpdateManyWithoutClinicNestedInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
+  }
+
+  export type ClinicUncheckedUpdateWithoutRoomDailyRollupsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: NullableStringFieldUpdateOperationsInput | string | null
+    name?: StringFieldUpdateOperationsInput | string
+    shortCode?: NullableStringFieldUpdateOperationsInput | string | null
+    timezone?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    maRun?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseEnabled?: BoolFieldUpdateOperationsInput | boolean
+    autoCloseTime?: NullableStringFieldUpdateOperationsInput | string | null
+    cardColor?: NullableStringFieldUpdateOperationsInput | string | null
+    cardTags?: NullableJsonNullValueInput | InputJsonValue
+    providers?: ProviderUncheckedUpdateManyWithoutClinicNestedInput
+    roles?: UserRoleUncheckedUpdateManyWithoutClinicNestedInput
+    reasons?: ReasonForVisitUncheckedUpdateManyWithoutClinicNestedInput
+    reasonAssignments?: ReasonClinicAssignmentUncheckedUpdateManyWithoutClinicNestedInput
+    templates?: TemplateUncheckedUpdateManyWithoutClinicNestedInput
+    roomAssignments?: ClinicRoomAssignmentUncheckedUpdateManyWithoutClinicNestedInput
+    staffAssignment?: ClinicAssignmentUncheckedUpdateOneWithoutClinicNestedInput
+    maProviderMaps?: MaProviderMapUncheckedUpdateManyWithoutClinicNestedInput
+    maClinicMaps?: MaClinicMapUncheckedUpdateManyWithoutClinicNestedInput
+    incomingSchedules?: IncomingScheduleUncheckedUpdateManyWithoutClinicNestedInput
+    importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutClinicNestedInput
+    incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
+    encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
+    officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type FacilityCreateWithoutConnectorsInput = {
@@ -69506,6 +75200,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchCreateNestedManyWithoutFacilityInput
     incomingIssues?: IncomingImportIssueCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityUncheckedCreateWithoutConnectorsInput = {
@@ -69527,6 +75223,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedCreateNestedManyWithoutFacilityInput
     incomingIssues?: IncomingImportIssueUncheckedCreateNestedManyWithoutFacilityInput
     alertInbox?: UserAlertInboxUncheckedCreateNestedManyWithoutFacilityInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedCreateNestedManyWithoutFacilityInput
+    roomDailyRollups?: RoomDailyRollupUncheckedCreateNestedManyWithoutFacilityInput
   }
 
   export type FacilityCreateOrConnectWithoutConnectorsInput = {
@@ -69564,6 +75262,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUpdateManyWithoutFacilityNestedInput
     incomingIssues?: IncomingImportIssueUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutFacilityNestedInput
   }
 
   export type FacilityUncheckedUpdateWithoutConnectorsInput = {
@@ -69585,6 +75285,8 @@ export namespace Prisma {
     importBatches?: IncomingImportBatchUncheckedUpdateManyWithoutFacilityNestedInput
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutFacilityNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutFacilityNestedInput
+    temporaryClinicAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutFacilityNestedInput
   }
 
   export type UserRoleCreateManyUserInput = {
@@ -69698,6 +75400,48 @@ export namespace Prisma {
     createdAt?: Date | string
     acknowledgedAt?: Date | string | null
     archivedAt?: Date | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyUserInput = {
+    id?: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyCreatedByInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyRevokedByInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
   }
 
   export type UserRoleUpdateWithoutUserInput = {
@@ -70045,6 +75789,132 @@ export namespace Prisma {
     archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
+  export type TemporaryClinicAssignmentOverrideUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    clinic?: ClinicUpdateOneRequiredWithoutTemporaryAssignmentOverridesNestedInput
+    facility?: FacilityUpdateOneRequiredWithoutTemporaryClinicAssignmentOverridesNestedInput
+    createdBy?: UserUpdateOneRequiredWithoutTemporaryOverridesCreatedNestedInput
+    revokedBy?: UserUpdateOneWithoutTemporaryOverridesRevokedNestedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithoutCreatedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    user?: UserUpdateOneRequiredWithoutTemporaryClinicOverridesNestedInput
+    clinic?: ClinicUpdateOneRequiredWithoutTemporaryAssignmentOverridesNestedInput
+    facility?: FacilityUpdateOneRequiredWithoutTemporaryClinicAssignmentOverridesNestedInput
+    revokedBy?: UserUpdateOneWithoutTemporaryOverridesRevokedNestedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutCreatedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithoutRevokedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    user?: UserUpdateOneRequiredWithoutTemporaryClinicOverridesNestedInput
+    clinic?: ClinicUpdateOneRequiredWithoutTemporaryAssignmentOverridesNestedInput
+    facility?: FacilityUpdateOneRequiredWithoutTemporaryClinicAssignmentOverridesNestedInput
+    createdBy?: UserUpdateOneRequiredWithoutTemporaryOverridesCreatedNestedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutRevokedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
   export type ClinicCreateManyFacilityInput = {
     id?: string
     name: string
@@ -70189,6 +76059,41 @@ export namespace Prisma {
     archivedAt?: Date | string | null
   }
 
+  export type TemporaryClinicAssignmentOverrideCreateManyFacilityInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    clinicId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
+  }
+
+  export type RoomDailyRollupCreateManyFacilityInput = {
+    id?: string
+    clinicId: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+  }
+
   export type ClinicUpdateWithoutFacilityInput = {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
@@ -70214,7 +76119,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateWithoutFacilityInput = {
@@ -70242,7 +76149,9 @@ export namespace Prisma {
     incomingIssues?: IncomingImportIssueUncheckedUpdateManyWithoutClinicNestedInput
     encounters?: EncounterUncheckedUpdateManyWithoutClinicNestedInput
     officeManagerDailyRollups?: OfficeManagerDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
+    roomDailyRollups?: RoomDailyRollupUncheckedUpdateManyWithoutClinicNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutClinicNestedInput
+    temporaryAssignmentOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicNestedInput
   }
 
   export type ClinicUncheckedUpdateManyWithoutFacilityInput = {
@@ -70430,6 +76339,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutActiveFacilityInput = {
@@ -70455,6 +76367,9 @@ export namespace Prisma {
     tasksCompleted?: TaskUncheckedUpdateManyWithoutCompleterNestedInput
     tasksAcknowledged?: TaskUncheckedUpdateManyWithoutAcknowledgerNestedInput
     alertInbox?: UserAlertInboxUncheckedUpdateManyWithoutUserNestedInput
+    temporaryClinicOverrides?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutUserNestedInput
+    temporaryOverridesCreated?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutCreatedByNestedInput
+    temporaryOverridesRevoked?: TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutRevokedByNestedInput
   }
 
   export type UserUncheckedUpdateManyWithoutActiveFacilityInput = {
@@ -70695,6 +76610,111 @@ export namespace Prisma {
     archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
+  export type TemporaryClinicAssignmentOverrideUpdateWithoutFacilityInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    user?: UserUpdateOneRequiredWithoutTemporaryClinicOverridesNestedInput
+    clinic?: ClinicUpdateOneRequiredWithoutTemporaryAssignmentOverridesNestedInput
+    createdBy?: UserUpdateOneRequiredWithoutTemporaryOverridesCreatedNestedInput
+    revokedBy?: UserUpdateOneWithoutTemporaryOverridesRevokedNestedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutFacilityInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutFacilityInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    clinicId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type RoomDailyRollupUpdateWithoutFacilityInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    clinic?: ClinicUpdateOneRequiredWithoutRoomDailyRollupsNestedInput
+  }
+
+  export type RoomDailyRollupUncheckedUpdateWithoutFacilityInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomDailyRollupUncheckedUpdateManyWithoutFacilityInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clinicId?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type ProviderCreateManyClinicInput = {
     id?: string
     name: string
@@ -70856,6 +76876,27 @@ export namespace Prisma {
     computedAt?: Date | string
   }
 
+  export type RoomDailyRollupCreateManyClinicInput = {
+    id?: string
+    facilityId: string
+    dateKey: string
+    roomCount?: number
+    dayStartCompletedCount?: number
+    dayEndCompletedCount?: number
+    turnoverCount?: number
+    holdCount?: number
+    issueCount?: number
+    resolvedIssueCount?: number
+    occupiedTotalMins?: number
+    occupiedSamples?: number
+    turnoverTotalMins?: number
+    turnoverSamples?: number
+    statusMinutesJson: JsonNullValueInput | InputJsonValue
+    roomRollupsJson: JsonNullValueInput | InputJsonValue
+    issueRollupsJson: JsonNullValueInput | InputJsonValue
+    computedAt?: Date | string
+  }
+
   export type UserAlertInboxCreateManyClinicInput = {
     id?: string
     userId: string
@@ -70870,6 +76911,20 @@ export namespace Prisma {
     createdAt?: Date | string
     acknowledgedAt?: Date | string | null
     archivedAt?: Date | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideCreateManyClinicInput = {
+    id?: string
+    userId: string
+    role: $Enums.RoleName
+    facilityId: string
+    startsAt: Date | string
+    endsAt: Date | string
+    reason: string
+    createdByUserId: string
+    createdAt?: Date | string
+    revokedAt?: Date | string | null
+    revokedByUserId?: string | null
   }
 
   export type ProviderUpdateWithoutClinicInput = {
@@ -71395,6 +77450,69 @@ export namespace Prisma {
     computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type RoomDailyRollupUpdateWithoutClinicInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    facility?: FacilityUpdateOneRequiredWithoutRoomDailyRollupsNestedInput
+  }
+
+  export type RoomDailyRollupUncheckedUpdateWithoutClinicInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RoomDailyRollupUncheckedUpdateManyWithoutClinicInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    facilityId?: StringFieldUpdateOperationsInput | string
+    dateKey?: StringFieldUpdateOperationsInput | string
+    roomCount?: IntFieldUpdateOperationsInput | number
+    dayStartCompletedCount?: IntFieldUpdateOperationsInput | number
+    dayEndCompletedCount?: IntFieldUpdateOperationsInput | number
+    turnoverCount?: IntFieldUpdateOperationsInput | number
+    holdCount?: IntFieldUpdateOperationsInput | number
+    issueCount?: IntFieldUpdateOperationsInput | number
+    resolvedIssueCount?: IntFieldUpdateOperationsInput | number
+    occupiedTotalMins?: IntFieldUpdateOperationsInput | number
+    occupiedSamples?: IntFieldUpdateOperationsInput | number
+    turnoverTotalMins?: IntFieldUpdateOperationsInput | number
+    turnoverSamples?: IntFieldUpdateOperationsInput | number
+    statusMinutesJson?: JsonNullValueInput | InputJsonValue
+    roomRollupsJson?: JsonNullValueInput | InputJsonValue
+    issueRollupsJson?: JsonNullValueInput | InputJsonValue
+    computedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type UserAlertInboxUpdateWithoutClinicInput = {
     id?: StringFieldUpdateOperationsInput | string
     kind?: EnumAlertInboxKindFieldUpdateOperationsInput | $Enums.AlertInboxKind
@@ -71441,6 +77559,48 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     acknowledgedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     archivedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUpdateWithoutClinicInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    user?: UserUpdateOneRequiredWithoutTemporaryClinicOverridesNestedInput
+    facility?: FacilityUpdateOneRequiredWithoutTemporaryClinicAssignmentOverridesNestedInput
+    createdBy?: UserUpdateOneRequiredWithoutTemporaryOverridesCreatedNestedInput
+    revokedBy?: UserUpdateOneWithoutTemporaryOverridesRevokedNestedInput
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateWithoutClinicInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type TemporaryClinicAssignmentOverrideUncheckedUpdateManyWithoutClinicInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+    role?: EnumRoleNameFieldUpdateOperationsInput | $Enums.RoleName
+    facilityId?: StringFieldUpdateOperationsInput | string
+    startsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    endsAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    reason?: StringFieldUpdateOperationsInput | string
+    createdByUserId?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    revokedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    revokedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type MaProviderMapCreateManyProviderInput = {

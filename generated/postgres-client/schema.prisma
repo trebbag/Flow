@@ -78,16 +78,15 @@ enum TaskSourceType {
 
 enum RoomOperationalStatus {
   Ready
+  NotReady
   Occupied
   NeedsTurnover
-  Cleaning
   Hold
 }
 
 enum RoomEventType {
   AssignedToEncounter
   PatientLeftForCheckout
-  CleaningStarted
   MarkedReady
   HoldPlaced
   HoldCleared
@@ -127,30 +126,33 @@ enum RoomChecklistKind {
 }
 
 model User {
-  id                      String             @id @default(uuid())
-  email                   String             @unique
-  name                    String
-  status                  String             @default("active")
-  phone                   String?
-  cognitoSub              String?            @unique
-  entraObjectId           String?            @unique
-  entraTenantId           String?
-  entraUserPrincipalName  String?
-  identityProvider        String?
-  directoryStatus         String?
-  directoryUserType       String?
-  directoryAccountEnabled Boolean?
-  lastDirectorySyncAt     DateTime?
-  activeFacilityId        String?
-  createdAt               DateTime           @default(now())
-  activeFacility          Facility?          @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
-  roles                   UserRole[]
-  providerAssignments     ClinicAssignment[] @relation("ClinicAssignmentProviderUser")
-  maAssignments           ClinicAssignment[] @relation("ClinicAssignmentMaUser")
-  tasksCreated            Task[]             @relation("TaskCreatedBy")
-  tasksCompleted          Task[]             @relation("TaskCompletedBy")
-  tasksAcknowledged       Task[]             @relation("TaskAcknowledgedBy")
-  alertInbox              UserAlertInbox[]
+  id                        String                              @id @default(uuid())
+  email                     String                              @unique
+  name                      String
+  status                    String                              @default("active")
+  phone                     String?
+  cognitoSub                String?                             @unique
+  entraObjectId             String?                             @unique
+  entraTenantId             String?
+  entraUserPrincipalName    String?
+  identityProvider          String?
+  directoryStatus           String?
+  directoryUserType         String?
+  directoryAccountEnabled   Boolean?
+  lastDirectorySyncAt       DateTime?
+  activeFacilityId          String?
+  createdAt                 DateTime                            @default(now())
+  activeFacility            Facility?                           @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
+  roles                     UserRole[]
+  providerAssignments       ClinicAssignment[]                  @relation("ClinicAssignmentProviderUser")
+  maAssignments             ClinicAssignment[]                  @relation("ClinicAssignmentMaUser")
+  tasksCreated              Task[]                              @relation("TaskCreatedBy")
+  tasksCompleted            Task[]                              @relation("TaskCompletedBy")
+  tasksAcknowledged         Task[]                              @relation("TaskAcknowledgedBy")
+  alertInbox                UserAlertInbox[]
+  temporaryClinicOverrides  TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentUser")
+  temporaryOverridesCreated TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentCreatedBy")
+  temporaryOverridesRevoked TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentRevokedBy")
 
   @@index([activeFacilityId])
   @@index([entraTenantId])
@@ -167,17 +169,19 @@ model Facility {
   status    String   @default("active")
   createdAt DateTime @default(now())
 
-  clinics         Clinic[]
-  roles           UserRole[]
-  reasons         ReasonForVisit[]
-  templates       Template[]
-  rooms           ClinicRoom[]
-  activeForUsers  User[]                 @relation("UserActiveFacility")
-  alertThresholds AlertThreshold[]
-  importBatches   IncomingImportBatch[]
-  incomingIssues  IncomingImportIssue[]
-  connectors      IntegrationConnector[]
-  alertInbox      UserAlertInbox[]
+  clinics                            Clinic[]
+  roles                              UserRole[]
+  reasons                            ReasonForVisit[]
+  templates                          Template[]
+  rooms                              ClinicRoom[]
+  activeForUsers                     User[]                              @relation("UserActiveFacility")
+  alertThresholds                    AlertThreshold[]
+  importBatches                      IncomingImportBatch[]
+  incomingIssues                     IncomingImportIssue[]
+  connectors                         IntegrationConnector[]
+  alertInbox                         UserAlertInbox[]
+  temporaryClinicAssignmentOverrides TemporaryClinicAssignmentOverride[]
+  roomDailyRollups                   RoomDailyRollup[]
 }
 
 model Clinic {
@@ -193,22 +197,24 @@ model Clinic {
   cardColor        String?
   cardTags         Json?
 
-  facility                  Facility?                  @relation(fields: [facilityId], references: [id])
-  providers                 Provider[]
-  roles                     UserRole[]
-  reasons                   ReasonForVisit[]
-  reasonAssignments         ReasonClinicAssignment[]
-  templates                 Template[]
-  roomAssignments           ClinicRoomAssignment[]
-  staffAssignment           ClinicAssignment?
-  maProviderMaps            MaProviderMap[]
-  maClinicMaps              MaClinicMap[]
-  incomingSchedules         IncomingSchedule[]
-  importBatches             IncomingImportBatch[]
-  incomingIssues            IncomingImportIssue[]
-  encounters                Encounter[]
-  officeManagerDailyRollups OfficeManagerDailyRollup[]
-  alertInbox                UserAlertInbox[]
+  facility                     Facility?                           @relation(fields: [facilityId], references: [id])
+  providers                    Provider[]
+  roles                        UserRole[]
+  reasons                      ReasonForVisit[]
+  reasonAssignments            ReasonClinicAssignment[]
+  templates                    Template[]
+  roomAssignments              ClinicRoomAssignment[]
+  staffAssignment              ClinicAssignment?
+  maProviderMaps               MaProviderMap[]
+  maClinicMaps                 MaClinicMap[]
+  incomingSchedules            IncomingSchedule[]
+  importBatches                IncomingImportBatch[]
+  incomingIssues               IncomingImportIssue[]
+  encounters                   Encounter[]
+  officeManagerDailyRollups    OfficeManagerDailyRollup[]
+  roomDailyRollups             RoomDailyRollup[]
+  alertInbox                   UserAlertInbox[]
+  temporaryAssignmentOverrides TemporaryClinicAssignmentOverride[]
 
   @@index([facilityId])
 }
@@ -286,6 +292,32 @@ model ClinicAssignment {
   @@index([providerUserId])
   @@index([providerId])
   @@index([maUserId])
+}
+
+model TemporaryClinicAssignmentOverride {
+  id              String    @id @default(uuid())
+  userId          String
+  role            RoleName
+  clinicId        String
+  facilityId      String
+  startsAt        DateTime
+  endsAt          DateTime
+  reason          String
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  revokedByUserId String?
+
+  user      User     @relation("TemporaryClinicAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  clinic    Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  facility  Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("TemporaryClinicAssignmentCreatedBy", fields: [createdByUserId], references: [id])
+  revokedBy User?    @relation("TemporaryClinicAssignmentRevokedBy", fields: [revokedByUserId], references: [id])
+
+  @@index([userId, role, startsAt, endsAt])
+  @@index([clinicId, startsAt, endsAt])
+  @@index([facilityId, startsAt, endsAt])
+  @@index([revokedAt])
 }
 
 model ClinicRoom {
@@ -775,6 +807,36 @@ model OfficeManagerDailyRollup {
   clinic Clinic @relation(fields: [clinicId], references: [id])
 
   @@unique([clinicId, dateKey])
+  @@index([dateKey])
+  @@index([clinicId, dateKey])
+}
+
+model RoomDailyRollup {
+  id                     String   @id @default(uuid())
+  facilityId             String
+  clinicId               String
+  dateKey                String
+  roomCount              Int      @default(0)
+  dayStartCompletedCount Int      @default(0)
+  dayEndCompletedCount   Int      @default(0)
+  turnoverCount          Int      @default(0)
+  holdCount              Int      @default(0)
+  issueCount             Int      @default(0)
+  resolvedIssueCount     Int      @default(0)
+  occupiedTotalMins      Int      @default(0)
+  occupiedSamples        Int      @default(0)
+  turnoverTotalMins      Int      @default(0)
+  turnoverSamples        Int      @default(0)
+  statusMinutesJson      Json
+  roomRollupsJson        Json
+  issueRollupsJson       Json
+  computedAt             DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+
+  @@unique([clinicId, dateKey])
+  @@index([facilityId, dateKey])
   @@index([dateKey])
   @@index([clinicId, dateKey])
 }

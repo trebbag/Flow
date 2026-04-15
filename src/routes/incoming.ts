@@ -105,20 +105,24 @@ const providerCredentialSuffixes = new Set([
   "mph",
   "phd",
   "dds",
-  "dmd"
+  "dmd",
+  "fnpc",
+  "pac"
 ]);
 
 function stripProviderCredentials(value?: string | null) {
   const parts = String(value || "")
     .trim()
+    .replace(/[,/]+/g, " ")
     .split(/\s+/)
+    .map((part) => part.trim())
     .filter(Boolean);
   while (parts.length > 1) {
     const suffix = parts[parts.length - 1]?.replace(/[^a-z0-9]/gi, "").toLowerCase();
     if (!suffix || !providerCredentialSuffixes.has(suffix)) break;
     parts.pop();
   }
-  return parts.join(" ").trim();
+  return parts.join(" ").replace(/[,\s]+$/g, "").trim();
 }
 
 function normalizeCsvHeaderKey(value?: string | null) {
@@ -154,11 +158,18 @@ function providerLastName(value?: string | null) {
   const raw = stripProviderCredentials(value);
   if (!raw) return "";
   const parts = raw.split(/\s+/).filter(Boolean);
-  return normalizeName(parts[parts.length - 1] || raw);
+  return normalizeName((parts[parts.length - 1] || raw).replace(/[,\s]+$/g, ""));
 }
 
 function providerFullName(value?: string | null) {
   return normalizeName(stripProviderCredentials(value));
+}
+
+function providerDisplayLastName(value?: string | null) {
+  const raw = stripProviderCredentials(value);
+  if (!raw) return "";
+  const parts = raw.split(/\s+/).filter(Boolean);
+  return (parts[parts.length - 1] || raw).replace(/[,\s]+$/g, "").trim();
 }
 
 function clinicAliasVariants(input: { name?: string | null; shortCode?: string | null; id?: string | null }) {
@@ -380,6 +391,13 @@ function validateIncomingRow(
     ? parseAppointmentAt(appointmentTimeRaw, dateOfService.date, maps.clinicTimezone)
     : { appointmentTime: appointmentTimeRaw || null, appointmentAt: null, error: null };
   if (appointment.error) errors.push(appointment.error);
+  if (appointment.appointmentAt) {
+    const appointmentAt = DateTime.fromJSDate(appointment.appointmentAt).setZone(maps.clinicTimezone);
+    const now = DateTime.now().setZone(maps.clinicTimezone);
+    if (appointmentAt <= now) {
+      errors.push("Appointment date and time must be in the future");
+    }
+  }
 
   const normalizedProviderLastName = providerLastName(providerLastNameRaw);
   const normalizedProviderName = providerFullName(providerLastNameRaw);
@@ -415,7 +433,7 @@ function validateIncomingRow(
     dateOfService: dateOfService.date,
     dateOfServiceIso: dateOfService.isoDate,
     patientId,
-    providerLastName: providerLastNameRaw || null,
+    providerLastName: providerDisplayLastName(providerLastNameRaw) || providerLastNameRaw || null,
     reasonText: reasonTextRaw || null,
     providerId: providerId || null,
     reasonForVisitId: reasonForVisitId || null,
@@ -664,13 +682,6 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
       clinicId: query.clinicId || null,
       requiredHeaders: [
         {
-          key: "appointmentDate",
-          label: "Appointment Date",
-          required: false,
-          format: "YYYY-MM-DD (required if batch date is not provided)",
-          aliases: ["date", "apptDate", "serviceDate", "dos"],
-        },
-        {
           key: "clinic",
           label: "Clinic",
           required: !query.clinicId,
@@ -683,6 +694,13 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
           required: true,
           format: "String identifier from schedule/EHR",
           aliases: ["patient_id", "mrn"]
+        },
+        {
+          key: "appointmentDate",
+          label: "Appointment Date",
+          required: false,
+          format: "YYYY-MM-DD (required if batch date is not provided)",
+          aliases: ["date", "apptDate", "serviceDate", "dos"],
         },
         {
           key: "appointmentTime",
@@ -922,6 +940,9 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
       skip_empty_lines: true,
       trim: true
     }) as Array<Record<string, string>>;
+    if (records.length === 0) {
+      throw new ApiError(400, "No schedule data rows were found. Include the header row and at least one appointment row.");
+    }
 
     const clinics = await prisma.clinic.findMany({
       where: {
@@ -1094,6 +1115,10 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         });
         pendingIssues.push(createdIssue);
       }
+    }
+
+    if (createdRows.length === 0 && pendingIssues.length === 0) {
+      throw new ApiError(400, "No importable schedule rows were found. Check the expected column order and row values.");
     }
 
     return {

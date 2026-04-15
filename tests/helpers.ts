@@ -13,6 +13,7 @@ export const prisma = new PrismaClient({
 export async function resetDb() {
   await prisma.auditLog.deleteMany();
   await prisma.eventOutbox.deleteMany();
+  await prisma.roomDailyRollup.deleteMany();
   await prisma.officeManagerDailyRollup.deleteMany();
   await prisma.safetyEvent.deleteMany();
   await prisma.roomChecklistRun.deleteMany();
@@ -35,6 +36,7 @@ export async function resetDb() {
   await prisma.clinicAssignment.deleteMany();
   await prisma.maProviderMap.deleteMany();
   await prisma.maClinicMap.deleteMany();
+  await prisma.temporaryClinicAssignmentOverride.deleteMany();
   await prisma.provider.deleteMany();
   await prisma.userRole.deleteMany();
   await prisma.user.deleteMany();
@@ -273,6 +275,34 @@ export async function bootstrapCore() {
   });
 
   const day = normalizeDate(DateTime.now().setZone("America/New_York").toISODate()!, "America/New_York");
+  const dateKey = DateTime.now().setZone("America/New_York").toISODate()!;
+
+  await prisma.roomChecklistRun.createMany({
+    data: [
+      {
+        roomId: clinicRoomA.id,
+        clinicId: clinic.id,
+        facilityId: facility.id,
+        kind: "DayStart",
+        dateKey,
+        itemsJson: [{ key: "test", label: "Test Day Start", completed: true }],
+        completed: true,
+        completedAt: new Date(),
+        completedByUserId: admin.id
+      },
+      {
+        roomId: clinicRoomB.id,
+        clinicId: maRunClinic.id,
+        facilityId: facility.id,
+        kind: "DayStart",
+        dateKey,
+        itemsJson: [{ key: "test", label: "Test Day Start", completed: true }],
+        completed: true,
+        completedAt: new Date(),
+        completedByUserId: admin.id
+      }
+    ]
+  });
 
   const incomingBatch = await prisma.incomingImportBatch.create({
     data: {

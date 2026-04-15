@@ -7,6 +7,7 @@ import { ApiError } from "../lib/errors.js";
 import { normalizeDate } from "../lib/dates.js";
 import { requireRoles } from "../lib/auth.js";
 import { getDailyHistoryRollups, listDateKeys } from "../lib/office-manager-rollups.js";
+import { getRoomDailyHistoryRollups } from "../lib/room-rollups.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 
 const dashboardQuerySchema = z.object({
@@ -20,7 +21,7 @@ const dashboardHistoryQuerySchema = z.object({
   to: z.string().optional()
 });
 
-type ScopedClinic = { id: string; timezone: string };
+type ScopedClinic = { id: string; timezone: string; facilityId?: string | null };
 
 async function resolveClinicsInScope(user: { clinicId: string | null; facilityId: string | null }, requestedClinicId?: string) {
   if (requestedClinicId) {
@@ -47,7 +48,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
   if (user.clinicId) {
     const clinic = await prisma.clinic.findUnique({
       where: { id: user.clinicId },
-      select: { id: true, timezone: true }
+      select: { id: true, timezone: true, facilityId: true }
     });
     if (!clinic) {
       throw new ApiError(404, "Assigned clinic not found");
@@ -59,7 +60,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
     where: {
       facilityId: user.facilityId || undefined
     },
-    select: { id: true, timezone: true },
+    select: { id: true, timezone: true, facilityId: true },
     orderBy: { id: "asc" }
   });
 
@@ -218,6 +219,42 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
     }
 
     const daily = await getDailyHistoryRollups(prisma, clinics, dateKeys, {
+      persist: true,
+      forceRecompute: true
+    });
+
+    return {
+      scope: {
+        clinicId: query.clinicId || request.user!.clinicId,
+        from: effectiveFrom,
+        to: effectiveTo
+      },
+      daily
+    };
+  });
+
+  app.get("/dashboard/rooms/history", { preHandler: officeGuard }, async (request) => {
+    const query = dashboardHistoryQuerySchema.parse(request.query);
+    const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
+    const effectiveTo = (query.to || DateTime.now().toISODate() || "").trim();
+    if (!effectiveTo) {
+      throw new ApiError(400, "to is required");
+    }
+    const effectiveFrom = (
+      query.from || DateTime.fromISO(effectiveTo).minus({ days: 4 }).toISODate() || ""
+    ).trim();
+    if (!effectiveFrom) {
+      throw new ApiError(400, "from is required");
+    }
+
+    let dateKeys: string[];
+    try {
+      dateKeys = listDateKeys(effectiveFrom, effectiveTo);
+    } catch (error) {
+      throw new ApiError(400, error instanceof Error ? error.message : "Invalid date range");
+    }
+
+    const daily = await getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
       persist: true,
       forceRecompute: true
     });

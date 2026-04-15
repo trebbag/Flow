@@ -108,7 +108,12 @@ function buildRequiredData(templates, { type, clinicId }) {
 }
 
 function isoDateToday() {
+  return isoDateDaysFromNow(0);
+}
+
+function isoDateDaysFromNow(days) {
   const now = new Date();
+  now.setDate(now.getDate() + days);
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
@@ -304,13 +309,14 @@ async function main() {
   })();
 
   const pendingPatientPrefix = `PT-E2E-PENDING-${Date.now()}`;
+  const importDate = isoDateDaysFromNow(1);
   const pendingImport = await request("/incoming/import", {
     method: "POST",
     auth: checkinAuth,
     body: {
       facilityId: originalFacilityId,
       clinicId: clinic.id,
-      dateOfService: isoDateToday(),
+      dateOfService: importDate,
       source: "csv",
       csvText: [
         "patientId,appointmentTime,providerLastName,reasonForVisit",
@@ -323,7 +329,7 @@ async function main() {
   assert.ok(pendingImport.pendingCount >= 1, "expected one pending row for retry");
 
   const pendingRows = await request(
-    `/incoming/pending?facilityId=${originalFacilityId}&clinicId=${clinic.id}&date=${isoDateToday()}`,
+    `/incoming/pending?facilityId=${originalFacilityId}&clinicId=${clinic.id}&date=${importDate}`,
     { auth: checkinAuth },
   );
   const pendingRow = pendingRows.find((row) => {
@@ -338,6 +344,7 @@ async function main() {
     body: {
       clinicId: clinic.id,
       patientId: `${pendingPatientPrefix}-FIX`,
+      dateOfService: importDate,
       appointmentTime: "09:15",
       providerLastName,
       reasonText: reason.name,

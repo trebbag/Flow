@@ -111,10 +111,26 @@ const defaultTemplateSections: TemplateSectionStyle[] = [
   { id: createSectionId(), name: "Notes", icon: "Notes", color: "#64748b" },
 ];
 
-const templateFieldTypeLabel: Record<
-  "text" | "textarea" | "number" | "checkbox" | "select" | "radio" | "date" | "time",
-  string
-> = {
+type TemplateInputType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "checkbox"
+  | "select"
+  | "radio"
+  | "date"
+  | "time"
+  | "bloodPressure"
+  | "temperature"
+  | "pulse"
+  | "respirations"
+  | "oxygenSaturation"
+  | "height"
+  | "weight"
+  | "painScore"
+  | "yesNo";
+
+const templateFieldTypeLabel: Record<TemplateInputType, string> = {
   text: "Short Text",
   textarea: "Long Text",
   number: "Number",
@@ -123,6 +139,15 @@ const templateFieldTypeLabel: Record<
   radio: "Single Choice",
   date: "Date",
   time: "Time",
+  bloodPressure: "Blood Pressure",
+  temperature: "Temperature",
+  pulse: "Pulse",
+  respirations: "Respirations",
+  oxygenSaturation: "Oxygen Saturation",
+  height: "Height",
+  weight: "Weight",
+  painScore: "Pain Score",
+  yesNo: "Yes / No",
 };
 
 const templateTypeOptions: Array<{
@@ -908,7 +933,7 @@ export function AddTemplateModal({
       id?: string;
       key: string;
       label: string;
-      type: "text" | "textarea" | "number" | "checkbox" | "select" | "radio" | "date" | "time";
+      type: TemplateInputType;
       required?: boolean;
       options?: string[];
       group?: string;
@@ -928,7 +953,7 @@ export function AddTemplateModal({
       id?: string;
       key: string;
       label: string;
-      type: "text" | "textarea" | "number" | "checkbox" | "select" | "radio" | "date" | "time";
+      type: TemplateInputType;
       required?: boolean;
       options?: string[];
       group?: string;
@@ -946,7 +971,7 @@ export function AddTemplateModal({
       id?: string;
       key: string;
       label: string;
-      type: "text" | "textarea" | "number" | "checkbox" | "select" | "radio" | "date" | "time";
+      type: TemplateInputType;
       required?: boolean;
       options?: string[];
       group?: string;
@@ -1300,6 +1325,36 @@ export function AddTemplateModal({
               </div>
             )}
           </FormField>
+          {normalizedType === "rooming" && (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
+              <div className="text-[12px] text-emerald-800" style={{ fontWeight: 700 }}>
+                Standard MA Rooming fields are always collected outside this template
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                {[
+                  "Allergies changed",
+                  "Medication reconciliation changed",
+                  "Lab changed",
+                  "Pharmacy changed",
+                  "Blood pressure",
+                  "Temperature",
+                  "Pulse",
+                  "Respirations",
+                  "Oxygen saturation",
+                  "Height",
+                  "Weight",
+                  "Pain score",
+                ].map((label) => (
+                  <div key={label} className="rounded-md bg-white border border-emerald-100 px-2.5 py-1.5 text-[11px] text-emerald-900">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-emerald-700 mt-2">
+                Use template fields only for visit-reason-specific questions. Structured vital input types are available for additional clinical fields when needed.
+              </p>
+            </div>
+          )}
           <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-[12px]" style={{ fontWeight: 600 }}>Sections & Presentation</div>

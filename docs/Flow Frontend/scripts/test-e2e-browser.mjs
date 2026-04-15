@@ -24,6 +24,15 @@ const hasBearerToken = bearerToken.trim().length > 0;
 const previewPort = Number(process.env.FRONTEND_E2E_PORT || 4173);
 const frontendBaseUrl = process.env.FRONTEND_BASE_URL || `http://localhost:${previewPort}`;
 
+function isoDateDaysFromNow(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function authHeaders() {
   if (hasBearerToken) {
     return {
@@ -197,7 +206,7 @@ async function main() {
   const reason = reasons.find((entry) => entry.status === "active" || entry.active !== false) || null;
   assert.ok(reason, "expected at least one active reason for selected clinic");
 
-  const today = new Date().toISOString().slice(0, 10);
+  const importDate = isoDateDaysFromNow(1);
   const incomingPatientId = `PT-E2E-INCOMING-${Date.now()}`;
   const pendingPatientId = `PT-E2E-PENDING-${Date.now()}`;
   const editedIncomingPatientId = `${incomingPatientId}-ED`;
@@ -216,7 +225,7 @@ async function main() {
     body: {
       clinicId: clinic.id,
       facilityId: originalFacilityId,
-      dateOfService: today,
+      dateOfService: importDate,
       source: "manual",
       csvText: [
         "patientId,appointmentTime,providerLastName,reasonForVisit",
@@ -293,6 +302,13 @@ async function main() {
     await page.getByRole("heading", { name: "Admin Console" }).waitFor({ timeout: 10_000 });
 
     await page.getByRole("tab", { name: /Incoming Uploads/i }).click();
+    const dateInput = page
+      .locator('label:has-text("Date of Service")')
+      .locator("xpath=following-sibling::input")
+      .first();
+    if ((await dateInput.count()) > 0) {
+      await dateInput.fill(importDate);
+    }
     const clinicScopeSelect = page
       .locator('label:has-text("Clinic Scope")')
       .locator("xpath=following-sibling::select")

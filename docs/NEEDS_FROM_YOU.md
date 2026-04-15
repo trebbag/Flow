@@ -109,6 +109,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
    - For full local browser verification, start the backend with a high local-only rate limit, for example `RATE_LIMIT_MAX=10000`, so Playwright prefetch/browser flows do not trigger rate limiting while they deliberately exercise many routes quickly.
 8. Rooms MVP staging setup:
    - Figma design file created for the Rooms MVP: [Flow Rooms MVP](https://www.figma.com/design/0WCFA2eqweqfW5I0ErsqqC).
+   - Figma usability-pass draft created on April 15, 2026 because the source baseline is a Figma Make file that cannot be edited through `use_figma`: [Flow Rooms MVP Usability Pass](https://www.figma.com/design/Zlp46aJG8Yk3h4gJwn3PTx).
    - Assign at least one pilot Entra member the new `OfficeManager` Flow role before role-by-role staging proof.
    - After deploying the Rooms schema/code to staging, run the staging database migration/push path and confirm `RoomOperationalState` exists for every active room.
    - Confirm MA clinic-to-room scope in staging through `MaClinicMap`, `ClinicAssignment.maUserId`, and `ClinicRoomAssignment`; the Rooms MVP derives "my rooms" from those links.

@@ -56,7 +56,7 @@ import {
   type Room as RoomCensusRow,
 } from "./mock-data";
 import { useEncounters } from "./encounter-context";
-import { admin } from "./api-client";
+import { admin, dashboards, rooms as roomsApi, type RoomDailyHistoryRollup, type RoomLiveCard } from "./api-client";
 import { loadSession } from "./auth-session";
 import { labelClinicName, labelProviderName, labelRoomName, labelUserName } from "./display-names";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT } from "./app-events";
@@ -182,6 +182,119 @@ function KpiCard({ icon: Icon, label, value, subtext, trend, trendDir, color }: 
             <span style={{ fontWeight: 500 }}>{trend}</span>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RoomAnalyticsSnapshot({ daily }: { daily: RoomDailyHistoryRollup[] }) {
+  const latest = daily[daily.length - 1];
+  const issueTypes = latest?.issueRollups
+    .filter((issue) => issue.count > 0 || issue.openCount > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3) || [];
+  const attentionRooms = latest?.roomRollups
+    .filter((room) => room.turnoverCount > 0 || room.issueCount > 0 || room.holdCount > 0)
+    .slice(0, 4) || [];
+
+  if (!latest) {
+    return (
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-slate-500" />
+            <h2 className="text-[14px]" style={{ fontWeight: 700 }}>Room Analytics</h2>
+          </div>
+          <p className="text-[12px] text-muted-foreground mt-2">
+            Daily room rollups will appear after room events accumulate.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const dayStartPct = latest.roomCount > 0
+    ? Math.round((latest.dayStartCompletedCount / latest.roomCount) * 100)
+    : 0;
+  const dayEndPct = latest.roomCount > 0
+    ? Math.round((latest.dayEndCompletedCount / latest.roomCount) * 100)
+    : 0;
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2 pt-5 px-5">
+        <CardTitle className="text-[14px] flex items-center gap-2">
+          <Activity className="w-4 h-4 text-cyan-600" />
+          Room Analytics
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-5 pb-5 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          {[
+            { label: "Day Start", value: `${dayStartPct}%`, subtext: `${latest.dayStartCompletedCount}/${latest.roomCount}` },
+            { label: "Day End", value: `${dayEndPct}%`, subtext: `${latest.dayEndCompletedCount}/${latest.roomCount}` },
+            { label: "Turnovers", value: latest.turnoverCount, subtext: `${latest.avgTurnoverMins}m avg` },
+            { label: "Holds", value: latest.holdCount, subtext: "placed today" },
+            { label: "Issues", value: latest.issueCount, subtext: `${latest.resolvedIssueCount} resolved` },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-gray-100 bg-white px-3 py-2">
+              <div className="text-[18px]" style={{ fontWeight: 800 }}>{item.value}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{item.label}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">{item.subtext}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">5-day turnover trend</div>
+            <div className="space-y-2">
+              {daily.map((day) => {
+                const maxTurnovers = Math.max(1, ...daily.map((row) => row.turnoverCount));
+                const width = Math.max(4, Math.round((day.turnoverCount / maxTurnovers) * 100));
+                return (
+                  <div key={day.date} className="grid grid-cols-[72px_1fr_40px] items-center gap-2 text-[11px]">
+                    <span className="text-muted-foreground">{day.date.slice(5)}</span>
+                    <div className="h-2 rounded-full bg-white overflow-hidden">
+                      <div className="h-full rounded-full bg-cyan-500" style={{ width: `${width}%` }} />
+                    </div>
+                    <span className="text-right" style={{ fontWeight: 700 }}>{day.turnoverCount}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">Room attention</div>
+            {attentionRooms.length === 0 ? (
+              <p className="text-[12px] text-muted-foreground">No room-level issue, hold, or turnover hotspots today.</p>
+            ) : (
+              <div className="space-y-2">
+                {attentionRooms.map((room) => (
+                  <div key={room.roomId} className="flex items-center justify-between gap-3 text-[12px]">
+                    <span style={{ fontWeight: 700 }}>{room.roomName}</span>
+                    <span className="text-muted-foreground">
+                      {room.turnoverCount} turnover · {room.issueCount} issue · {room.holdCount} hold
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {issueTypes.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">Issue mix</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {issueTypes.map((issue) => (
+                    <Badge key={issue.issueType} variant="secondary" className="text-[10px]">
+                      {issue.issueType}: {issue.count}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -504,6 +617,56 @@ function stageIndex(s: EncounterStatus) {
   return statusFlowOrder.indexOf(s);
 }
 
+function formatDuration(totalSeconds: number) {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function parseIsoMs(value?: string | null) {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stageDurationSeconds(encounter: Encounter, status: EncounterStatus, nowMs: number) {
+  if (status === "Incoming" || status === "Optimized") return null;
+
+  const events = [...(encounter.statusEvents || [])]
+    .flatMap((event) => {
+      const atMs = parseIsoMs(event.changedAt);
+      return atMs === null ? [] : [{ ...event, atMs }];
+    })
+    .sort((a, b) => a.atMs - b.atMs);
+
+  const entryEvent = events.find((event) => event.toStatus === status);
+  const fallbackStart =
+    status === "Lobby"
+      ? parseIsoMs(encounter.checkInAtIso)
+      : status === encounter.status
+        ? parseIsoMs(encounter.currentStageStartAtIso)
+        : null;
+  const startMs = entryEvent?.atMs ?? fallbackStart;
+  if (startMs === null) return null;
+
+  const statusIdx = statusFlowOrder.indexOf(status);
+  const currentIdx = statusFlowOrder.indexOf(encounter.status);
+  const exitEvent = events.find(
+    (event) =>
+      event.atMs > startMs &&
+      (event.fromStatus === status || statusFlowOrder.indexOf(event.toStatus) > statusIdx),
+  );
+  const endMs =
+    status === encounter.status
+      ? nowMs
+      : exitEvent?.atMs ?? (statusIdx < currentIdx ? parseIsoMs(encounter.completedAtIso) : null);
+  if (endMs === null || endMs <= startMs) return null;
+
+  return Math.max(0, Math.floor((endMs - startMs) / 1000));
+}
+
 function getMockIncomingData(e: Encounter) {
   return {
     patientId: e.patientId,
@@ -737,6 +900,12 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
   const currentStageIdx = stageIndex(e.status);
   const { getCheckoutData } = useEncounters();
   const checkoutData = getCheckoutData(e.id);
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowMs(Date.now()), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Build which stages to show: all completed + current in-progress
   const stagesToShow = statusFlowOrder.filter((s) => {
@@ -754,6 +923,10 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
   // Progress bar
   const totalStages = 6; // Incoming through CheckOut
   const progress = Math.round(((currentStageIdx + 1) / totalStages) * 100);
+  const durationForStage = (stage: EncounterStatus) => {
+    const seconds = stageDurationSeconds(e, stage, nowMs);
+    return seconds === null ? null : formatDuration(seconds);
+  };
 
   return (
     <Card className="border-0 shadow-sm overflow-hidden">
@@ -849,6 +1022,7 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
             stage="Lobby"
             isCurrent={e.status === "Lobby"}
             isCompleted={currentStageIdx > stageIndex("Lobby")}
+            durationLabel={durationForStage("Lobby")}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2.5">
               <DataField label="Demographics Confirmed" value={checkin.demographicsConfirmed ? "Yes" : "No"} ok={checkin.demographicsConfirmed} />
@@ -879,6 +1053,7 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
             stage="Rooming"
             isCurrent={e.status === "Rooming"}
             isCompleted={currentStageIdx > stageIndex("Rooming")}
+            durationLabel={durationForStage("Rooming")}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2.5 mb-3">
               <DataField label="Room" value={rooming.roomAssigned} />
@@ -918,6 +1093,7 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
             stage="ReadyForProvider"
             isCurrent={e.status === "ReadyForProvider"}
             isCompleted={currentStageIdx > stageIndex("ReadyForProvider")}
+            durationLabel={durationForStage("ReadyForProvider")}
           >
             <div className="rounded-lg bg-amber-50/50 border border-amber-100 p-3.5">
               <div className="flex items-center gap-2 mb-2">
@@ -943,6 +1119,7 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
             stage="Optimizing"
             isCurrent={e.status === "Optimizing"}
             isCompleted={currentStageIdx > stageIndex("Optimizing")}
+            durationLabel={durationForStage("Optimizing")}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2.5">
               <DataField label="Visit Started" value={provider.visitStarted} />
@@ -970,6 +1147,7 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
             stage="CheckOut"
             isCurrent={e.status === "CheckOut"}
             isCompleted={false}
+            durationLabel={durationForStage("CheckOut")}
           >
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-5 gap-y-2.5">
               <DataField label="Follow-Up Scheduled" value={checkout.followUpScheduled ? checkout.followUpInterval : "No"} ok={checkout.followUpScheduled} />
@@ -1005,10 +1183,11 @@ function EncounterWorkflowPanel({ encounter: e, onClose }: {
 
 // ── Workflow Section wrapper ──
 
-function WorkflowSection({ stage, isCurrent, isCompleted, children }: {
+function WorkflowSection({ stage, isCurrent, isCompleted, durationLabel, children }: {
   stage: EncounterStatus;
   isCurrent: boolean;
   isCompleted: boolean;
+  durationLabel?: string | null;
   children: React.ReactNode;
 }) {
   const config = stageConfig[stage];
@@ -1033,6 +1212,11 @@ function WorkflowSection({ stage, isCurrent, isCompleted, children }: {
           <StIcon className="w-3.5 h-3.5" style={{ color: config.color }} />
         </div>
         <span className="text-[13px]" style={{ fontWeight: 600 }}>{config.label}</span>
+        {durationLabel && (
+          <Badge className="bg-gray-100 text-gray-600 border-0 text-[9px] h-4 px-1.5">
+            {durationLabel}
+          </Badge>
+        )}
         {isCompleted && (
           <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[9px] h-4 px-1.5 ml-auto">
             <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Complete
@@ -1140,6 +1324,8 @@ export function OfficeManagerDashboard() {
   const [clinics, setClinics] = useState<Array<{ id: string; name: string; shortCode?: string; color: string }>>([]);
   const [providers, setProviders] = useState<Array<{ id: string; name: string; specialty?: string; clinicId?: string; active: boolean }>>([]);
   const [rooms, setRooms] = useState<Array<{ id: string; clinicIds: string[]; name: string; active: boolean; sortOrder?: number }>>([]);
+  const [liveRooms, setLiveRooms] = useState<RoomLiveCard[]>([]);
+  const [roomHistory, setRoomHistory] = useState<RoomDailyHistoryRollup[]>([]);
   const [thresholdRows, setThresholdRows] = useState<Array<{
     clinicId?: string | null;
     metric?: string;
@@ -1154,11 +1340,19 @@ export function OfficeManagerDashboard() {
     const load = async () => {
       try {
         const facilityId = loadSession()?.facilityId;
-        const [clinicRows, assignmentRows, roomRows, thresholdApiRows] = await Promise.all([
+        const historyTo = new Date().toISOString().slice(0, 10);
+        const historyFrom = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const [clinicRows, assignmentRows, roomRows, thresholdApiRows, liveRoomRows, roomHistoryPayload] = await Promise.all([
           admin.listClinics({ facilityId }),
           admin.listAssignments(facilityId),
           admin.listRooms({ facilityId }),
           admin.listThresholds(facilityId),
+          roomsApi.live({ mine: true, clinicId: selectedClinic === "all" ? undefined : selectedClinic }),
+          dashboards.roomHistory({
+            clinicId: selectedClinic === "all" ? undefined : selectedClinic,
+            from: historyFrom,
+            to: historyTo,
+          }),
         ]);
         if (!active) return;
 
@@ -1199,6 +1393,8 @@ export function OfficeManagerDashboard() {
             sortOrder: room.roomNumber ?? room.sortOrder ?? 0,
           })),
         );
+        setLiveRooms(Array.isArray(liveRoomRows) ? liveRoomRows : []);
+        setRoomHistory(Array.isArray(roomHistoryPayload.daily) ? roomHistoryPayload.daily : []);
         setThresholdRows(Array.isArray(thresholdApiRows) ? (thresholdApiRows as any[]) : []);
         setLastSync(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
       } catch {
@@ -1226,7 +1422,7 @@ export function OfficeManagerDashboard() {
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onRefresh);
       }
     };
-  }, []);
+  }, [selectedClinic]);
 
   useEffect(() => {
     const interval = setInterval(() => setNowMs(Date.now()), 15000);
@@ -1256,6 +1452,29 @@ export function OfficeManagerDashboard() {
         : encounters.filter((encounter) => encounter.clinicId === selectedClinic),
     [encounters, selectedClinic],
   );
+  const scopedLiveRooms = useMemo(
+    () => (selectedClinic === "all" ? liveRooms : liveRooms.filter((room) => room.clinicId === selectedClinic)),
+    [liveRooms, selectedClinic],
+  );
+  const roomOpsSummary = useMemo(() => {
+    const summary = {
+      ready: 0,
+      notReady: 0,
+      turnover: 0,
+      holds: 0,
+      occupied: 0,
+      issues: 0,
+    };
+    scopedLiveRooms.forEach((room) => {
+      if (room.operationalStatus === "Ready") summary.ready += 1;
+      if (room.operationalStatus === "NotReady") summary.notReady += 1;
+      if (room.operationalStatus === "NeedsTurnover") summary.turnover += 1;
+      if (room.operationalStatus === "Hold") summary.holds += 1;
+      if (room.operationalStatus === "Occupied") summary.occupied += 1;
+      summary.issues += room.issueCount || 0;
+    });
+    return summary;
+  }, [scopedLiveRooms]);
 
   const timedScopedEncounters = useMemo(
     () =>
@@ -1539,6 +1758,58 @@ export function OfficeManagerDashboard() {
         <KpiCard icon={Clock} label="Avg Cycle Time" value={`${avgCycleTime}m`} subtext="target: 50m" trend="4m faster than avg" trendDir="up" color="#8b5cf6" />
         <KpiCard icon={AlertTriangle} label="Active Alerts" value={yellowAlerts + redAlerts} subtext={`${redAlerts} critical, ${yellowAlerts} warning`} trend={redAlerts > 0 ? "Requires attention" : "All under control"} trendDir={redAlerts > 0 ? "down" : "up"} color={redAlerts > 0 ? "#ef4444" : "#f59e0b"} />
       </div>
+
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-amber-500 via-slate-700 to-emerald-500" />
+        <CardContent className="p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <DoorOpen className="w-4 h-4 text-amber-600" />
+                <h2 className="text-[14px]" style={{ fontWeight: 700 }}>Room Operations</h2>
+              </div>
+              <p className="text-[12px] text-muted-foreground mt-1">
+                Turnover, holds, not-ready rooms, and open room issues across the selected clinic scope.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => { window.location.href = "/rooms"; }} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-[11px]">Rooms Live</button>
+              <button onClick={() => { window.location.href = "/rooms?tab=open-close"; }} className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700">Open / Close</button>
+              <button onClick={() => { window.location.href = "/rooms?tab=issues"; }} className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700">Issues</button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-4">
+            {[
+              { label: "Ready", value: roomOpsSummary.ready, color: "bg-emerald-50 text-emerald-700" },
+              { label: "Not Ready", value: roomOpsSummary.notReady, color: "bg-slate-100 text-slate-700" },
+              { label: "Turnover", value: roomOpsSummary.turnover, color: "bg-amber-50 text-amber-700" },
+              { label: "Occupied", value: roomOpsSummary.occupied, color: "bg-blue-50 text-blue-700" },
+              { label: "Holds", value: roomOpsSummary.holds, color: "bg-rose-50 text-rose-700" },
+              { label: "Open Issues", value: roomOpsSummary.issues, color: "bg-orange-50 text-orange-700" },
+            ].map((item) => (
+              <div key={item.label} className={`rounded-xl px-3 py-2 ${item.color}`}>
+                <div className="text-[18px]" style={{ fontWeight: 800 }}>{item.value}</div>
+                <div className="text-[10px] uppercase tracking-wider">{item.label}</div>
+              </div>
+            ))}
+          </div>
+          {scopedLiveRooms.some((room) => room.operationalStatus === "NeedsTurnover" || room.operationalStatus === "Hold" || room.operationalStatus === "NotReady") && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+              {scopedLiveRooms
+                .filter((room) => room.operationalStatus === "NeedsTurnover" || room.operationalStatus === "Hold" || room.operationalStatus === "NotReady")
+                .slice(0, 6)
+                .map((room) => (
+                  <div key={room.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="text-[12px]" style={{ fontWeight: 700 }}>{room.name}</div>
+                    <div className="text-[11px] text-muted-foreground">{room.clinicName} · {room.operationalStatus} · {room.timerLabel}</div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <RoomAnalyticsSnapshot daily={roomHistory} />
 
       {/* Pipeline */}
           <FlowPipeline encounters={timedScopedEncounters} />

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
 import {
   Moon,
@@ -58,6 +58,8 @@ import {
 } from "./mock-data";
 import { useEncounters } from "./encounter-context";
 import { compactClinicBadgeLabel } from "./display-names";
+import { rooms as roomsApi, type RoomLiveCard } from "./api-client";
+import { dispatchAdminRefresh } from "./app-events";
 
 function msToMinutes(ms: number): number {
   return Math.round(ms / 60000);
@@ -108,6 +110,9 @@ function downloadCsv(filename: string, rows: string[][]) {
 
 export function CloseoutView() {
   const { encounters } = useEncounters();
+  const [roomCards, setRoomCards] = useState<RoomLiveCard[]>([]);
+  const [roomLoading, setRoomLoading] = useState(false);
+  const [roomBusyId, setRoomBusyId] = useState<string | null>(null);
 
   const activeEncounters = encounters.filter(
     (e) => e.status !== "Optimized" && e.status !== "Incoming"
@@ -144,6 +149,50 @@ export function CloseoutView() {
   const [alertFilter, setAlertFilter] = useState("all");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [forceCloseDialog, setForceCloseDialog] = useState<string | null>(null);
+
+  const loadRooms = async () => {
+    setRoomLoading(true);
+    try {
+      setRoomCards(await roomsApi.live({ mine: true }));
+    } catch {
+      setRoomCards([]);
+    } finally {
+      setRoomLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRooms().catch(() => undefined);
+  }, []);
+
+  const dayEndIncompleteRooms = roomCards.filter((room) => !room.dayEndCompleted);
+  const unresolvedRoomStateRooms = roomCards.filter((room) =>
+    ["NeedsTurnover", "Occupied", "Hold", "NotReady"].includes(room.operationalStatus)
+  );
+
+  async function completeRoomDayEnd(room: RoomLiveCard) {
+    setRoomBusyId(room.id);
+    try {
+      await roomsApi.submitChecklist("DayEnd", {
+        roomId: room.roomId,
+        clinicId: room.clinicId,
+        completed: true,
+        items: [
+          { key: "no_turnover", label: "No room left in turnover or occupied", completed: true },
+          { key: "issues_handled", label: "Open issues acknowledged or placed on hold", completed: true },
+          { key: "tasks_created", label: "Office manager follow-up tasks created", completed: true },
+          { key: "reset", label: "Room reset for tomorrow", completed: true },
+        ],
+      });
+      toast.success(`Day End completed for ${room.name}`);
+      dispatchAdminRefresh();
+      await loadRooms();
+    } catch (error) {
+      toast.error("Room Day End failed", { description: (error as Error).message });
+    } finally {
+      setRoomBusyId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     return extendedCloseoutRows
@@ -268,16 +317,16 @@ export function CloseoutView() {
             </button>
             <button
               onClick={() => {
-                if (stats.total === 0) {
+                if (stats.total === 0 && dayEndIncompleteRooms.length === 0 && unresolvedRoomStateRooms.length === 0) {
                   toast.success("Day closed successfully!");
                 } else {
-                  toast.warning(
-                    `${stats.total} encounters still open. Resolve before closing.`
-                  );
+                  toast.warning("Closeout blockers remain", {
+                    description: `${stats.total} encounters open, ${dayEndIncompleteRooms.length} room Day End incomplete, ${unresolvedRoomStateRooms.length} room state issue${unresolvedRoomStateRooms.length === 1 ? "" : "s"}.`,
+                  });
                 }
               }}
               className={`h-9 px-4 rounded-lg text-[12px] transition-colors flex items-center gap-1.5 ${
-                stats.total === 0
+                stats.total === 0 && dayEndIncompleteRooms.length === 0 && unresolvedRoomStateRooms.length === 0
                   ? "bg-emerald-600 text-white hover:bg-emerald-700"
                   : "bg-slate-700 text-white hover:bg-slate-800"
               }`}
@@ -422,6 +471,63 @@ export function CloseoutView() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-amber-500 to-emerald-500" />
+          <CardContent className="p-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <DoorOpen className="w-4 h-4 text-amber-600" />
+                <span className="text-[13px]" style={{ fontWeight: 700 }}>Room Day End</span>
+                <Badge className="border-0 bg-amber-100 text-amber-700 text-[10px] h-5">
+                  {dayEndIncompleteRooms.length} incomplete
+                </Badge>
+              </div>
+              <button
+                onClick={() => loadRooms().catch(() => undefined)}
+                className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50"
+              >
+                Refresh rooms
+              </button>
+            </div>
+            {roomLoading ? (
+              <div className="text-[12px] text-muted-foreground">Loading rooms...</div>
+            ) : roomCards.length === 0 ? (
+              <div className="text-[12px] text-muted-foreground">No rooms are available in your scope.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {roomCards.map((room) => {
+                  const stateBlocked = ["NeedsTurnover", "Occupied", "Hold", "NotReady"].includes(room.operationalStatus);
+                  return (
+                    <div key={room.id} className="rounded-xl border border-gray-100 p-3 bg-white">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-[13px]" style={{ fontWeight: 700 }}>{room.name}</div>
+                          <div className="text-[11px] text-muted-foreground">{room.clinicName}</div>
+                        </div>
+                        <Badge className={`border-0 text-[10px] h-5 ${room.dayEndCompleted ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                          {room.dayEndCompleted ? "Day End done" : "Day End open"}
+                        </Badge>
+                      </div>
+                      {stateBlocked && (
+                        <div className="mt-2 rounded-lg bg-rose-50 border border-rose-100 px-2.5 py-1.5 text-[11px] text-rose-700">
+                          Resolve room status before close: {room.operationalStatus}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => completeRoomDayEnd(room).catch(() => undefined)}
+                        disabled={room.dayEndCompleted || roomBusyId === room.id}
+                        className="mt-3 h-8 px-3 rounded-lg bg-slate-800 text-white text-[11px] disabled:opacity-50"
+                      >
+                        {roomBusyId === room.id ? "Completing..." : "Complete Day End"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 

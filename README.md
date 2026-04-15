@@ -24,7 +24,7 @@ The API surface is aligned to the Figma `api-client.ts` contract so the frontend
 - Initialize schema: `pnpm db:push`
 - Push PostgreSQL schema from `POSTGRES_DATABASE_URL`: `pnpm db:push:postgres`
 - Seed sample data: `pnpm db:seed`
-- Recompute persisted office-manager history rollups: `pnpm rollup:daily --date=YYYY-MM-DD` (or `--from=YYYY-MM-DD --to=YYYY-MM-DD`)
+- Recompute persisted office-manager and room history rollups: `pnpm rollup:daily --date=YYYY-MM-DD` (or `--from=YYYY-MM-DD --to=YYYY-MM-DD`)
 - Export SQLite snapshot: `pnpm db:export:snapshot`
 - PostgreSQL preflight: `pnpm db:preflight:postgres` (requires `POSTGRES_DATABASE_URL`)
 - Import snapshot to PostgreSQL: `pnpm db:import:postgres artifacts/sqlite-snapshot.json`

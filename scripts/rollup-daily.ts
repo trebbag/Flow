@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import { prisma } from "../src/lib/prisma.js";
 import { getDailyHistoryRollups, listDateKeys } from "../src/lib/office-manager-rollups.js";
+import { getRoomDailyHistoryRollups } from "../src/lib/room-rollups.js";
 
 function parseArgs(argv: string[]) {
   const parsed: Record<string, string> = {};
@@ -36,7 +37,7 @@ async function main() {
       : {
           status: "active"
         },
-    select: { id: true, timezone: true },
+    select: { id: true, timezone: true, facilityId: true },
     orderBy: { id: "asc" }
   });
 
@@ -47,16 +48,22 @@ async function main() {
     throw new Error("No active clinics found to roll up.");
   }
 
-  const daily = await getDailyHistoryRollups(prisma, clinics, dateKeys, {
-    persist: true,
-    forceRecompute: true
-  });
+  await Promise.all([
+    getDailyHistoryRollups(prisma, clinics, dateKeys, {
+      persist: true,
+      forceRecompute: true
+    }),
+    getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
+      persist: true,
+      forceRecompute: true
+    })
+  ]);
 
-  const totalDays = daily.length;
+  const totalDays = dateKeys.length;
   const totalClinics = clinics.length;
   const totalRows = totalDays * totalClinics;
   console.info(
-    `Office-manager rollups computed for ${totalRows} clinic-day rows (${totalClinics} clinics x ${totalDays} day(s)).`
+    `Office-manager and room rollups computed for ${totalRows} clinic-day rows (${totalClinics} clinics x ${totalDays} day(s)).`
   );
   console.info(`Range: ${dateKeys[0]} -> ${dateKeys[dateKeys.length - 1]}`);
 }

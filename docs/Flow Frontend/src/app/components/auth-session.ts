@@ -12,6 +12,9 @@ export type AuthSession = {
   accountHomeId?: string;
   username?: string;
   name?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
 };
 
 const STORAGE_KEY = "flow_auth_session";

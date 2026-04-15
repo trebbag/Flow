@@ -11,17 +11,28 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   });
 
   async function buildAuthContext(user: RequestUser) {
-    const facilities =
+    const [facilities, persistedUser] = await Promise.all([
       user.availableFacilityIds.length > 0
-        ? await prisma.facility.findMany({
+        ? prisma.facility.findMany({
             where: { id: { in: user.availableFacilityIds } },
             select: { id: true, name: true, shortCode: true, timezone: true, status: true },
             orderBy: { name: "asc" }
           })
-        : [];
+        : Promise.resolve([]),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { name: true, email: true, entraUserPrincipalName: true }
+      })
+    ]);
+    const displayName = persistedUser?.name?.trim() || persistedUser?.entraUserPrincipalName || persistedUser?.email || null;
+    const nameParts = (displayName || "").split(/\s+/).filter(Boolean);
 
     return {
       userId: user.id,
+      name: displayName,
+      email: persistedUser?.email || persistedUser?.entraUserPrincipalName || null,
+      firstName: nameParts[0] || null,
+      lastName: nameParts.length > 1 ? nameParts[nameParts.length - 1] || null : null,
       role: user.role,
       roles: user.roles,
       clinicId: user.clinicId,

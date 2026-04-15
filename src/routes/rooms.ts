@@ -21,6 +21,7 @@ import {
   getRoomDetail,
   getRoomScopeClinicIds,
   listRoomCards,
+  currentRoomDateKey,
   resolveRoomActionContext,
   transitionRoomOperationalState,
   transitionRoomOperationalStateInTx
@@ -98,10 +99,6 @@ const checklistQuerySchema = z.object({
   dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   kind: z.enum(["DayStart", "DayEnd"]).optional()
 });
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 async function createOfficeManagerTaskAlert(params: {
   taskId: string;
@@ -186,26 +183,28 @@ export async function registerRoomRoutes(app: FastifyInstance) {
     return getRoomDetail({ roomId, user: request.user!, clinicId: query.clinicId || null });
   });
 
-  app.post("/rooms/:id/actions/start-cleaning", { preHandler: guard }, async (request) => {
-    const roomId = (request.params as { id: string }).id;
-    const dto = actionClinicSchema.parse(request.body || {});
-    const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
-    return transitionRoomOperationalState({
-      roomId,
-      clinicId: context.clinic.id,
-      facilityId: context.facilityId,
-      toStatus: RoomOperationalStatus.Cleaning,
-      eventType: RoomEventType.CleaningStarted,
-      createdByUserId: request.user!.id,
-      note: dto.note || null,
-      allowedFrom: [RoomOperationalStatus.NeedsTurnover]
-    });
+  app.post("/rooms/:id/actions/start-cleaning", { preHandler: guard }, async () => {
+    throw new ApiError(410, "Cleaning status has been removed. Use Mark ready after turnover is complete.");
   });
 
   app.post("/rooms/:id/actions/mark-ready", { preHandler: guard }, async (request) => {
     const roomId = (request.params as { id: string }).id;
     const dto = actionClinicSchema.parse(request.body || {});
     const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
+    const dateKey = currentRoomDateKey(context.clinic.timezone);
+    const dayStart = await prisma.roomChecklistRun.findUnique({
+      where: {
+        roomId_kind_dateKey: {
+          roomId,
+          kind: RoomChecklistKind.DayStart,
+          dateKey
+        }
+      },
+      select: { completed: true }
+    });
+    if (!dayStart?.completed) {
+      throw new ApiError(409, "Complete the Day Start checklist before marking this room ready.");
+    }
     return transitionRoomOperationalState({
       roomId,
       clinicId: context.clinic.id,
@@ -214,7 +213,7 @@ export async function registerRoomRoutes(app: FastifyInstance) {
       eventType: RoomEventType.MarkedReady,
       createdByUserId: request.user!.id,
       note: dto.note || null,
-      allowedFrom: [RoomOperationalStatus.Cleaning, RoomOperationalStatus.NeedsTurnover]
+      allowedFrom: [RoomOperationalStatus.NeedsTurnover, RoomOperationalStatus.NotReady, RoomOperationalStatus.Ready]
     });
   });
 
@@ -397,7 +396,7 @@ export async function registerRoomRoutes(app: FastifyInstance) {
   async function upsertChecklist(kind: RoomChecklistKind, request: FastifyRequest) {
     const dto = checklistRunSchema.parse(request.body || {});
     const context = await resolveRoomActionContext({ roomId: dto.roomId, user: request.user!, clinicId: dto.clinicId || null });
-    const dateKey = dto.dateKey || todayKey();
+    const dateKey = dto.dateKey || currentRoomDateKey(context.clinic.timezone);
     const eventType = kind === "DayStart" ? RoomEventType.DayStartCompleted : RoomEventType.DayEndCompleted;
     return prisma.$transaction(async (tx) => {
       const run = await tx.roomChecklistRun.upsert({
@@ -429,19 +428,37 @@ export async function registerRoomRoutes(app: FastifyInstance) {
         }
       });
       if (dto.completed) {
-        await tx.roomOperationalEvent.create({
-          data: {
-          roomId: dto.roomId,
-          clinicId: context.clinic.id,
-          facilityId: context.facilityId,
-          eventType,
-          fromStatus: context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready,
-          toStatus: context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready,
-          createdByUserId: request.user!.id,
-          note: dto.note || null,
-          metadataJson: { checklistRunId: run.id, kind, dateKey } as Prisma.InputJsonValue
-          }
-        });
+        const currentStatus = context.room.operationalState?.currentStatus || RoomOperationalStatus.Ready;
+        if (
+          kind === RoomChecklistKind.DayStart &&
+          currentStatus !== RoomOperationalStatus.Hold &&
+          currentStatus !== RoomOperationalStatus.Occupied
+        ) {
+          await transitionRoomOperationalStateInTx(tx, {
+            roomId: dto.roomId,
+            clinicId: context.clinic.id,
+            facilityId: context.facilityId,
+            toStatus: RoomOperationalStatus.Ready,
+            eventType,
+            createdByUserId: request.user!.id,
+            note: dto.note || null,
+            metadata: { checklistRunId: run.id, kind, dateKey }
+          });
+        } else {
+          await tx.roomOperationalEvent.create({
+            data: {
+              roomId: dto.roomId,
+              clinicId: context.clinic.id,
+              facilityId: context.facilityId,
+              eventType,
+              fromStatus: currentStatus,
+              toStatus: currentStatus,
+              createdByUserId: request.user!.id,
+              note: dto.note || null,
+              metadataJson: { checklistRunId: run.id, kind, dateKey } as Prisma.InputJsonValue
+            }
+          });
+        }
       }
       return run;
     });
