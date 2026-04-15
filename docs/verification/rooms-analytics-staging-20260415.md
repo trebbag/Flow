@@ -24,5 +24,13 @@
 - Ran `pnpm rollup:daily --from=2026-04-08 --to=2026-04-15`: 48 clinic-day rows computed across 6 clinics and 8 days.
 - Removed the temporary Azure PostgreSQL firewall rule after completion.
 
-## Remaining Deployment Step
-- Backend and frontend GitHub Actions staging workflows still need to run against the pushed branch so Azure App Service and Static Web Apps serve the new code/UI.
+## Staging App Deployment
+- Pushed branch `codex/rooms-mvp` at commit `8c302813`.
+- Backend deploy succeeded: Azure App Service Staging Deploy run `24483198684`.
+- Frontend deploy succeeded: Azure Static Web Apps Staging Deploy run `24483198699`.
+- CI succeeded: run `24483195557`.
+- Backend health check passed: `https://flow-staging-api-esgxesfjhnenabg7.centralus-01.azurewebsites.net/health` returned `{\"status\":\"ok\"}`.
+- Frontend host check passed: `https://orange-beach-0851cdc0f.6.azurestaticapps.net/` returned HTTP 200.
+
+## Remaining Validation Step
+- Run authenticated role-by-role staging proof with real Entra users. The deploy path and unauthenticated health checks are complete, but role-specific UI/API proof still needs real signed-in sessions.
