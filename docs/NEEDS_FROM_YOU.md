@@ -117,6 +117,16 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 
 ## Latest Blocker Snapshot
 
+- Archived encounter recovery deploy and staging smoke were re-run on **April 16, 2026**.
+  - Backend staging deploy: success (`Azure App Service Staging Deploy`, run `24514905927`)
+  - Frontend staging deploy: success (`Azure Static Web Apps Staging Deploy`, run `24514907187`)
+  - Live host checks:
+    - `https://flow-staging-api-esgxesfjhnenabg7.centralus-01.azurewebsites.net/health` returned `{"status":"ok"}`
+    - `https://orange-beach-0851cdc0f.6.azurestaticapps.net/` returned HTTP `200`
+  - The authenticated staging verifier was re-run and is now blocked only by a missing GitHub Actions auth secret, not by the base URL:
+    - `Staging Frontend Live Verify`, run `24515125066`
+    - failure: `Missing auth credentials. Set secrets.STAGING_FRONTEND_BEARER_TOKEN (preferred) or secrets.STAGING_VITE_DEV_USER_ID.`
+  - `vars.STAGING_FRONTEND_API_BASE_URL` is present and working. The remaining missing input for automated staging auth proof is `secrets.STAGING_FRONTEND_BEARER_TOKEN` (preferred) or the dev-header fallback `secrets.STAGING_VITE_DEV_USER_ID`.
 - Local Entra pilot mapping, local bearer verification, browser redirect proof, and local threshold-alert evidence were re-run on **April 9, 2026**.
 - Azure PostgreSQL staging target is now known as of **April 10, 2026**, and both schema push and preflight have succeeded.
 - The remaining Azure database blocker is no longer connectivity, schema creation, runtime code support, or snapshot import; it is:
