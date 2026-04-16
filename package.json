@@ -28,6 +28,7 @@
     "pilot:preflight": "tsx scripts/pilot-preflight.ts",
     "frontend:verify-live": "tsx scripts/frontend-live-verify.ts",
     "pilot:validate:staging": "tsx scripts/staging-validation.ts",
+    "staging:auth:refresh": "tsx scripts/refresh-staging-bearer-token.ts",
     "staging:proof:facility-switch": "tsx scripts/staging-facility-switch-proof.ts",
     "staging:proof:threshold-alerts": "tsx scripts/staging-threshold-evidence.ts"
   },

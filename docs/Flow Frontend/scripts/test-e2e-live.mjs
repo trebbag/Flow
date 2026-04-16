@@ -138,6 +138,42 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const providerCredentialSuffixes = new Set([
+  "md",
+  "do",
+  "np",
+  "pa",
+  "rn",
+  "fnp",
+  "fnpbc",
+  "aprn",
+  "arnp",
+  "cnp",
+  "dnp",
+  "msn",
+  "mph",
+  "phd",
+  "dds",
+  "dmd",
+  "fnpc",
+  "pac",
+]);
+
+function fallbackProviderLastName(displayName) {
+  const tokens = String(displayName || "")
+    .trim()
+    .replace(/[,/]+/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  while (tokens.length > 1) {
+    const suffix = (tokens[tokens.length - 1] || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (!suffix || !providerCredentialSuffixes.has(suffix)) break;
+    tokens.pop();
+  }
+  return tokens[tokens.length - 1] || "Provider";
+}
+
 function actorForRole(user, role, adminAuth, facilityId) {
   if (user?.id) {
     return { userId: user.id, role, facilityId };
@@ -281,6 +317,13 @@ async function main() {
   const reason = reasons.find((row) => row.active !== false);
   assert.ok(reason, "expected at least one active visit reason for selected clinic");
 
+  const incomingReference = await request(
+    `/incoming/reference?facilityId=${originalFacilityId}&clinicId=${clinic.id}`,
+    {
+      auth: { ...adminAuth, facilityId: originalFacilityId },
+    },
+  );
+
   const templates = await request(
     `/admin/templates?facilityId=${originalFacilityId}&clinicId=${clinic.id}&reasonForVisitId=${reason.id}`,
     {
@@ -301,12 +344,10 @@ async function main() {
     : null;
   assert.ok(room, "expected at least one operationally Ready room for selected clinic");
 
-  const providerLastName = (() => {
-    const displayName = String(targetAssignment.providerUserName || targetAssignment.providerName || "").trim();
-    if (!displayName) return "Provider";
-    const tokens = displayName.split(/\\s+/).filter(Boolean);
-    return tokens[tokens.length - 1] || displayName;
-  })();
+  const providerLastName =
+    (Array.isArray(incomingReference?.samples?.providerLastNames) &&
+      incomingReference.samples.providerLastNames.find((value) => String(value || "").trim())) ||
+    fallbackProviderLastName(targetAssignment.providerUserName || targetAssignment.providerName);
 
   const pendingPatientPrefix = `PT-E2E-PENDING-${Date.now()}`;
   const importDate = isoDateDaysFromNow(1);
