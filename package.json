@@ -3,7 +3,7 @@
   "description": "Backend services, operational tooling, and pilot workflows for the Flow clinical operations platform.",
   "version": "0.1.0",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "pnpm db:push && tsx watch src/server.ts",
