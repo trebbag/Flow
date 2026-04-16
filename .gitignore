@@ -1,3 +1,27 @@
 node_modules/
-.azure/
+dist/
+artifacts/
+coverage/
+*.log
+*.tsbuildinfo
+
 .DS_Store
+docs/.DS_Store
+
+.env
+.env.*
+!.env.example
+
+docs/Flow Frontend/node_modules/
+docs/Flow Frontend/dist/
+docs/Flow Frontend/package-lock.json
+docs/Flow Frontend/.env
+docs/Flow Frontend/.env.*
+!docs/Flow Frontend/.env.example
+docs/verification/bearer-proof-env.*
+
+prisma/dev.db
+
+.azure/
+.idea/
+.vscode/

@@ -1,163 +1,136 @@
-# Flow Backend (ClinOps-Aligned)
+# Flow
 
-This repository implements backend functionality for the Flow Figma project while preserving the core ClinOps data relationships:
+Flow is a clinical operations workflow application for ambulatory care teams. It supports front desk intake, MA rooming, clinician workflow, checkout, room readiness, task routing, reporting, and Entra-backed authentication for staged pilot environments.
 
-- Imported schedule rows (`IncomingSchedule`) -> encounter check-in/disposition
-- Encounter card lifecycle (`Lobby` -> `Rooming` -> `ReadyForProvider` -> `Optimizing` -> `CheckOut` -> `Optimized`)
-- Role and scope relationships (users, user roles, clinics, facilities)
-- Visit reasons and templates (clinic-specific + global definitions)
+This repository contains:
 
-The API surface is aligned to the Figma `api-client.ts` contract so the frontend can be wired without changing design/UI markup.
+- A Fastify + Prisma backend
+- A React + Vite frontend in [`docs/Flow Frontend`](docs/Flow%20Frontend)
+- SQLite-first local development with PostgreSQL staging support
+- Deployment, pilot, and security runbooks under [`docs`](docs)
 
-## Stack
+## Highlights
 
-- Fastify + TypeScript
-- Prisma ORM
-- SQLite (local default)
-- Zod validation
-- Vitest integration tests
+- Encounter lifecycle: `Incoming -> Lobby -> Rooming -> ReadyForProvider -> Optimizing -> CheckOut -> Optimized`
+- Room operations: Day Start / Day End, readiness gating, turnover, holds, room issues, room analytics
+- Role-based workflows: Front Desk Check-In, MA, Clinician, Front Desk Check-Out, Office Manager, Revenue Cycle, Admin
+- Admin tooling: facilities, clinics, reasons, templates, assignments, temporary coverage, archived encounter recovery
+- Microsoft Entra-first auth for staging and pilot hardening
 
-## Commands
+## Tech Stack
 
-- Install: `pnpm install`
-- Generate Prisma client: `pnpm db:generate`
-- Initialize schema: `pnpm db:push`
-- Push PostgreSQL schema from `POSTGRES_DATABASE_URL`: `pnpm db:push:postgres`
-- Seed sample data: `pnpm db:seed`
-- Recompute persisted office-manager and room history rollups: `pnpm rollup:daily --date=YYYY-MM-DD` (or `--from=YYYY-MM-DD --to=YYYY-MM-DD`)
-- Export SQLite snapshot: `pnpm db:export:snapshot`
-- PostgreSQL preflight: `pnpm db:preflight:postgres` (requires `POSTGRES_DATABASE_URL`)
-- Import snapshot to PostgreSQL: `pnpm db:import:postgres artifacts/sqlite-snapshot.json`
-- Pilot preflight: `pnpm pilot:preflight`
-- Frontend live verification hook: `pnpm frontend:verify-live`
-- Dev server: `pnpm dev`
-- Dev backend + frontend together: `pnpm dev:all`
-- Quick launch alias for the same combined startup: `pnpm start:all`
-- Build: `pnpm build`
-- Start compiled server: `pnpm start`
-- Lint: `pnpm lint`
-- Typecheck: `pnpm typecheck`
-- Tests: `pnpm test`
+- Backend: Fastify, TypeScript, Prisma, Zod
+- Frontend: React, Vite, TypeScript, Radix UI, MUI
+- Data: SQLite for local development, PostgreSQL for staging/pilot readiness
+- Testing: Vitest, browser/live verification scripts, staging GitHub Actions workflows
+
+## Repository Structure
+
+- [`src`](src): backend application source
+- [`tests`](tests): backend tests
+- [`scripts`](scripts): operational scripts and verification tooling
+- [`prisma`](prisma): Prisma schemas and seed data
+- [`docs/Flow Frontend`](docs/Flow%20Frontend): frontend application
+- [`docs`](docs): deployment, security, migration, and pilot documentation
 
 ## Quick Start
 
-1. Copy env file:
-   - `cp .env.example .env`
-2. Install dependencies:
-   - `pnpm install`
-3. Prepare DB + seed:
-   - `pnpm db:push`
-   - `pnpm db:seed`
-4. Run API:
-   - `pnpm dev`
+### 1. Install dependencies
 
-Default API URL: `http://localhost:4000`
+```bash
+pnpm install
+pnpm -C "docs/Flow Frontend" install
+```
 
-## Auth in Development
+### 2. Configure local environment
 
-Default `AUTH_MODE` is `hybrid` in development/test:
+```bash
+cp .env.example .env
+cp "docs/Flow Frontend/.env.example" "docs/Flow Frontend/.env"
+```
 
-- JWT Bearer tokens are accepted.
-- Dev headers are accepted when `AUTH_ALLOW_DEV_HEADERS=true`.
+### 3. Prepare the database
 
-Dev header format:
+```bash
+pnpm db:push
+pnpm db:seed
+```
 
-- `x-dev-user-id: <user-uuid>`
-- `x-dev-role: Admin|FrontDeskCheckIn|MA|Clinician|FrontDeskCheckOut|RevenueCycle`
+### 4. Run the app
 
-The seed script prints usable user IDs.
+Backend only:
 
-## Auth for Pilot/Production
+```bash
+pnpm dev
+```
 
-Set:
+Backend + frontend:
 
-- `AUTH_MODE=jwt`
-- `AUTH_ALLOW_DEV_HEADERS=false`
-- `AUTH_ALLOW_IMPLICIT_ADMIN=false`
-- `JWT_SECRET` (HS256) **or** `JWT_JWKS_URI` (RS256/JWKS)
-- `JWT_ISSUER`
-- `JWT_AUDIENCE`
-- `JWT_SUBJECT_CLAIMS` (defaults to `sub,oid,objectidentifier`)
+```bash
+pnpm dev:all
+```
 
-Token subjects map to users by `User.id`, `User.entraObjectId`, transitional `User.cognitoSub`, or email claim (`email`, `upn`, `preferred_username`). Roles are resolved from DB-scoped `UserRole` assignments.
+Default backend URL: `http://localhost:4000`
 
-### Microsoft Entra ID
-
-Flow can use Microsoft Entra ID as the identity provider for real pilot logins.
+## Common Commands
 
 Backend:
 
-- `AUTH_MODE=jwt`
-- `JWT_JWKS_URI=https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys`
-- `JWT_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0`
-- `JWT_AUDIENCE=api://<backend-api-app-id>` (or your exposed API audience)
-- `JWT_SUBJECT_CLAIMS=sub,oid,objectidentifier`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- `pnpm db:push`
+- `pnpm db:seed`
+- `pnpm frontend:verify-live`
 
-Frontend (`docs/Flow Frontend/.env`):
+Frontend:
 
-- `VITE_ENTRA_TENANT_ID=<tenant-id>` or `VITE_ENTRA_AUTHORITY=<full-authority-url>`
-- `VITE_ENTRA_CLIENT_ID=<spa-app-registration-client-id>`
-- `VITE_ENTRA_API_SCOPE=api://<backend-api-app-id>/<scope-name>`
-- `VITE_DEFAULT_AUTH_MODE=microsoft`
+- `pnpm -C "docs/Flow Frontend" dev`
+- `pnpm -C "docs/Flow Frontend" build`
+- `pnpm -C "docs/Flow Frontend" test:contract`
+- `pnpm -C "docs/Flow Frontend" test:e2e-live`
+- `pnpm -C "docs/Flow Frontend" test:e2e-browser`
 
-For Entra-first deployments, Flow should provision users with explicit Entra identity metadata on `User`:
+## Authentication
 
-- `entraObjectId`
-- `entraTenantId`
-- `entraUserPrincipalName`
-- `identityProvider=entra`
+Local development supports explicit dev-header auth and JWT-backed auth depending on environment configuration.
 
-Transitional compatibility with `User.cognitoSub` remains only for backfill and legacy pilot records.
+Staging and pilot direction is Entra-first:
 
-## API Security Controls
+- backend auth mode: JWT
+- frontend sign-in: Microsoft redirect flow
+- authorization: Flow database roles and scope
 
-- Global rate limiting via `@fastify/rate-limit`:
-  - `RATE_LIMIT_MAX`
-  - `RATE_LIMIT_WINDOW`
-- Strict CORS allowlist from `CORS_ORIGINS` (or `CORS_ORIGIN` fallback)
-- Correlation ID propagation:
-  - accepts `x-correlation-id` inbound header
-  - returns `x-correlation-id` on responses
+See:
 
-## Core Endpoint Groups
+- [`docs/ENTRA_LOGIN_SETUP.md`](docs/ENTRA_LOGIN_SETUP.md)
+- [`docs/AZURE_STAGING_SETUP.md`](docs/AZURE_STAGING_SETUP.md)
+- [`docs/PILOT_DATA_GOVERNANCE.md`](docs/PILOT_DATA_GOVERNANCE.md)
 
-- `GET /auth/context`
-- `POST /auth/context/facility`
-- `GET|POST /admin/*` (facilities, clinics, reasons, rooms, templates, users, assignments)
-- `GET|POST /incoming/*` (import, update, disposition, intake)
-- `GET|POST|PATCH /encounters/*` (check-in, status transitions, assign, visits, checkout, cancel)
-- `GET|POST /safety/*`
-- `GET|POST|PATCH|DELETE /tasks/*`
+## Deployment and Operations
 
-Deprecated admin endpoints removed:
+Key runbooks:
 
-- `/admin/providers`
-- `/admin/ma-mappings`
-- `/admin/ma-clinic-mappings`
-
-Use `/admin/assignments` instead.
+- [`docs/DEPLOYMENT_RUNBOOK.md`](docs/DEPLOYMENT_RUNBOOK.md)
+- [`docs/POSTGRES_MIGRATION.md`](docs/POSTGRES_MIGRATION.md)
+- [`docs/AZURE_STAGING_RECOVERY_GUIDE.md`](docs/AZURE_STAGING_RECOVERY_GUIDE.md)
+- [`docs/ATHENAONE_STAGING_RUNBOOK.md`](docs/ATHENAONE_STAGING_RUNBOOK.md)
 
 ## Verification
 
-Run:
+Baseline verification for this repo:
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm -C "docs/Flow Frontend" build
 ```
 
-All four commands were used as the project verification gate.
+## Security Note
 
-## Relationship Notes
-
-See:
-
-- `docs/CLINOPS_REFERENCE_ANALYSIS.md`
-- `docs/MVP_STATUS.md`
-- `docs/NEEDS_FROM_YOU.md`
-- `docs/POSTGRES_MIGRATION.md`
-- `docs/DEPLOYMENT_RUNBOOK.md`
-- `docs/PILOT_DATA_GOVERNANCE.md`
-- `docs/FRONTEND_LIVE_WIRING.md`
+- Do not commit local `.env` files, generated build artifacts, local database files, or verification tokens.
+- If you are preparing the repository for broader sharing, review [`docs/NEEDS_FROM_YOU.md`](docs/NEEDS_FROM_YOU.md) for any follow-up secret rotation or environment actions.
+- Reporting guidance and setup expectations are also documented in [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).

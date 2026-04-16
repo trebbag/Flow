@@ -1,26 +1,61 @@
+# Flow Frontend
 
-  # Design User Interface for ClinOps
+This directory contains the React frontend for Flow.
 
-  This is a code bundle for Design User Interface for ClinOps. The original project is available at https://www.figma.com/design/mkzq9tLHEgIDcJB0tRCGwp/Design-User-Interface-for-ClinOps.
+## What It Covers
 
-  ## Running the code
+- Front desk intake and incoming schedule handling
+- MA board and rooming workflow
+- Clinician workflow
+- Checkout and closeout flows
+- Admin console, room operations, analytics, alerts, and tasks
+- Microsoft Entra redirect-based sign-in for staging-ready environments
 
-  Copy env values if needed:
+## Development
 
-  `cp .env.example .env`
+Install dependencies:
 
-  Configure:
-  - `VITE_API_BASE_URL` (backend URL, default `http://localhost:4000`)
-  - `VITE_DEV_USER_ID` + `VITE_DEV_ROLE` for backend dev-header auth mode
+```bash
+pnpm install
+```
 
-  Run `npm i` to install the dependencies.
+Create a local environment file:
 
-  Run `npm run dev` to start the development server.
+```bash
+cp .env.example .env
+```
 
-  Run `npm run build` for a production build verification.
+Run the frontend:
 
-  Verification scripts:
-  - `npm run test:contract` (API contract smoke checks)
-  - `npm run test:visual` (build + artifact checks)
-  - `npm run test:e2e-live` (live encounter flow smoke test)
-  
+```bash
+pnpm dev
+```
+
+Build for production:
+
+```bash
+pnpm build
+```
+
+## Useful Scripts
+
+- `pnpm build`
+- `pnpm test:contract`
+- `pnpm test:visual`
+- `pnpm test:e2e-live`
+- `pnpm test:e2e-browser`
+- `pnpm test:bundle-budget`
+
+## Environment
+
+Common variables:
+
+- `VITE_API_BASE_URL`
+- `VITE_DEV_USER_ID`
+- `VITE_DEV_ROLE`
+- `VITE_ENTRA_TENANT_ID`
+- `VITE_ENTRA_CLIENT_ID`
+- `VITE_ENTRA_API_SCOPE`
+- `VITE_DEFAULT_AUTH_MODE`
+
+Keep local `.env` files out of version control. Use `.env.example` as the template.

@@ -1,7 +1,8 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "flow-frontend",
   "private": true,
   "version": "0.0.1",
+  "description": "React frontend for the Flow clinical operations application.",
   "type": "module",
   "scripts": {
     "build": "vite build",

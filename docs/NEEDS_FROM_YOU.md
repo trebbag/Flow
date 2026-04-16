@@ -186,3 +186,12 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 - Add all pilot users to the `Flow Pilot Users` Entra group.
 - Decide whether to upgrade tenant licensing for Conditional Access or to use Microsoft Security Defaults / per-user MFA as the temporary pilot fallback.
 - If you stay on the Security Defaults / per-user MFA path, verify it directly in the Entra portal. The current Azure CLI session does not have enough Microsoft Graph policy-read scope to confirm tenant-wide Security Defaults state programmatically.
+
+## Repository Hygiene Follow-Up (2026-04-16)
+- Local `.env` files and bearer-proof verification token files were removed from source control as part of repository cleanup.
+- Because those values existed in Git history, rotate any secrets or reusable credentials that may have been stored in:
+  - root `.env`
+  - `docs/Flow Frontend/.env`
+  - `docs/verification/bearer-proof-env.sh`
+  - `docs/verification/bearer-proof-env.json`
+- Keep using `.env.example` files as templates for future setup.
