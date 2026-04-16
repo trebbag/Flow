@@ -72,18 +72,22 @@ import {
   AddThresholdModal,
   AddNotificationPolicyModal,
 } from "./admin-modals";
+import { useNavigate } from "react-router";
 import {
   admin,
   auth,
+  encounters as encounterApi,
   events,
   incoming as incomingApi,
   incomingDispositionReasons,
   type IncomingDispositionReason,
+  type AdminEncounterRecoveryRow,
   type TemporaryClinicAssignmentOverride,
 } from "./api-client";
 import { useEncounters } from "./encounter-context";
 import { applySession, loadSession, saveSession } from "./auth-session";
 import { labelUserName } from "./display-names";
+import type { EncounterStatus } from "./types";
 import {
   ADMIN_REFRESH_EVENT,
   FACILITY_CONTEXT_CHANGED_EVENT,
@@ -2679,6 +2683,301 @@ function AssignmentsTab() {
   );
 }
 
+function ArchivedEncountersTab() {
+  const navigate = useNavigate();
+  const encounterContext = useEncounters();
+  const { facility, clinics: mockClinics } = useAdminConsoleData();
+  const [loading, setLoading] = useState(false);
+  const [rowActionKey, setRowActionKey] = useState<string | null>(null);
+  const [rows, setRows] = useState<AdminEncounterRecoveryRow[]>([]);
+  const [filters, setFilters] = useState(() => {
+    const today = new Date();
+    const to = new Date(today);
+    to.setDate(to.getDate() - 1);
+    const from = new Date(today);
+    from.setDate(from.getDate() - 14);
+    return {
+      clinicId: "",
+      status: "",
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+      unresolvedOnly: true,
+      search: "",
+    };
+  });
+
+  const loadArchivedEncounters = useCallback(async () => {
+    setLoading(true);
+    try {
+      const payload = await admin.listArchivedEncounters({
+        facilityId: facility.id,
+        clinicId: filters.clinicId || undefined,
+        status: (filters.status || undefined) as EncounterStatus | undefined,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        unresolvedOnly: filters.unresolvedOnly,
+        search: filters.search || undefined,
+      });
+      setRows(payload || []);
+    } catch (error) {
+      toast.error("Unable to load archived encounters", {
+        description: (error as Error).message || "Encounter recovery rows could not be loaded.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [facility.id, filters.clinicId, filters.from, filters.search, filters.status, filters.to, filters.unresolvedOnly]);
+
+  useEffect(() => {
+    loadArchivedEncounters().catch(() => undefined);
+  }, [loadArchivedEncounters]);
+
+  const runEncounterRowAction = useCallback(
+    async (row: AdminEncounterRecoveryRow, action: string, callback: () => Promise<unknown>) => {
+      const actionKey = `${row.id}:${action}`;
+      setRowActionKey(actionKey);
+      try {
+        await callback();
+        await Promise.allSettled([
+          loadArchivedEncounters(),
+          encounterContext.refreshData(),
+          encounterContext.fetchEncounter(row.id, { force: true }),
+        ]);
+        toast.success(action, {
+          description: `${row.patientId} was updated successfully.`,
+        });
+      } catch (error) {
+        toast.error(action, {
+          description: (error as Error).message || "The encounter could not be updated.",
+        });
+      } finally {
+        setRowActionKey((current) => (current === actionKey ? null : current));
+      }
+    },
+    [encounterContext, loadArchivedEncounters],
+  );
+
+  const needsRecoveryCount = rows.filter((row) => row.needsRecovery).length;
+  const roomLockedCount = rows.filter((row) => row.roomName && row.currentStatus !== "Optimized").length;
+  const optimizedCount = rows.filter((row) => row.currentStatus === "Optimized").length;
+
+  return (
+    <TabPanel accentColor="bg-indigo-500">
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Archived Rows" value={rows.length} icon={History} color="bg-indigo-500" />
+          <StatCard label="Needs Recovery" value={needsRecoveryCount} icon={AlertTriangle} color="bg-amber-500" />
+          <StatCard label="Still In Room" value={roomLockedCount} icon={DoorOpen} color="bg-rose-500" />
+          <StatCard label="Optimized" value={optimizedCount} icon={Check} color="bg-emerald-500" />
+        </div>
+
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 to-blue-400" />
+          <CardContent className="p-5">
+            <SectionHeader
+              icon={History}
+              title="Archived Encounter Recovery"
+              count={rows.length}
+              iconColor="text-indigo-500"
+              secondaryAction={(
+                <button
+                  onClick={() => loadArchivedEncounters().catch(() => undefined)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] text-gray-700 hover:bg-gray-50"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Refresh
+                </button>
+              )}
+            />
+            <p className="text-[12px] text-muted-foreground mb-4">
+              Review prior-day encounters here when they carried over and no longer appear on the active workflow boards. Use the quick actions for the common fixes, or open the encounter when you need a deeper recovery edit.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 mb-4">
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Clinic</label>
+                <select
+                  value={filters.clinicId}
+                  onChange={(event) => setFilters((current) => ({ ...current, clinicId: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                >
+                  <option value="">All clinics</option>
+                  {mockClinics
+                    .filter((clinic) => clinic.status !== "archived")
+                    .map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>{clinic.name}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Status</label>
+                <select
+                  value={filters.status}
+                  onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                >
+                  <option value="">All statuses</option>
+                  {["Lobby", "Rooming", "ReadyForProvider", "Optimizing", "CheckOut", "Optimized"].map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">From</label>
+                <input
+                  type="date"
+                  value={filters.from}
+                  onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">To</label>
+                <input
+                  type="date"
+                  value={filters.to}
+                  onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Search</label>
+                <input
+                  value={filters.search}
+                  onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+                  className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
+                  placeholder="Patient ID or encounter ID"
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="inline-flex items-center gap-2 text-[12px] text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={filters.unresolvedOnly}
+                    onChange={(event) => setFilters((current) => ({ ...current, unresolvedOnly: event.target.checked }))}
+                    className="rounded border-gray-300"
+                  />
+                  Open only
+                </label>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {loading ? (
+                <div className="text-[12px] text-muted-foreground">Loading archived encounters...</div>
+              ) : rows.length === 0 ? (
+                <EmptyState icon={History} message="No archived encounters matched the current filters." />
+              ) : (
+                rows.map((row) => (
+                  <div key={row.id} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    {(() => {
+                      const releaseActionKey = `${row.id}:Release room`;
+                      const checkoutActionKey = `${row.id}:Complete checkout`;
+                      const advanceActionKey = `${row.id}:Move to Check-Out`;
+                      const releaseBusy = rowActionKey === releaseActionKey;
+                      const checkoutBusy = rowActionKey === checkoutActionKey;
+                      const advanceBusy = rowActionKey === advanceActionKey;
+
+                      return (
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[14px]" style={{ fontWeight: 700 }}>{row.patientId}</span>
+                          <Badge className="border-0 bg-slate-100 text-slate-700 text-[10px] h-5">{row.currentStatus}</Badge>
+                          {row.needsRecovery && (
+                            <Badge className="border-0 bg-amber-100 text-amber-700 text-[10px] h-5">Needs recovery</Badge>
+                          )}
+                          {row.roomName && row.currentStatus !== "Optimized" && (
+                            <Badge className="border-0 bg-rose-100 text-rose-700 text-[10px] h-5">Room assigned</Badge>
+                          )}
+                        </div>
+                        <div className="mt-1 text-[12px] text-muted-foreground">
+                          {row.id} · {row.dateOfService} · {row.clinicName}
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-[12px] text-gray-700">
+                          <div>Provider: {row.providerName || "Unassigned"}</div>
+                          <div>Visit reason: {row.reasonForVisit || "Unknown"}</div>
+                          <div>Assigned MA: {row.assignedMaName || "Unassigned"}</div>
+                          <div>Room: {row.roomName || "No room assigned"}</div>
+                          <div>Checked in: {formatDateTime(row.checkInAt)}</div>
+                          <div>Rooming started: {formatDateTime(row.roomingStartAt)}</div>
+                          <div>Provider started: {formatDateTime(row.providerStartAt)}</div>
+                          <div>Checkout complete: {formatDateTime(row.checkoutCompleteAt)}</div>
+                          {row.closureType && <div>Closure: {row.closureType}</div>}
+                          {row.closedAt && <div>Closed: {formatDateTime(row.closedAt)}</div>}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {row.roomId && row.currentStatus !== "Optimized" && (
+                          <button
+                            onClick={() =>
+                              runEncounterRowAction(row, "Release room", () =>
+                                encounterApi.updateRooming(row.id, { roomId: null }),
+                              ).catch(() => undefined)
+                            }
+                            disabled={releaseBusy || !!rowActionKey}
+                            className="h-9 px-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-[12px] hover:bg-amber-100 transition-colors disabled:opacity-50"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {releaseBusy ? "Releasing..." : "Release room"}
+                          </button>
+                        )}
+                        {row.currentStatus === "Optimizing" && (
+                          <button
+                            onClick={() =>
+                              runEncounterRowAction(row, "Move to Check-Out", () =>
+                                encounterApi.updateStatus(row.id, {
+                                  toStatus: "CheckOut",
+                                  version: row.version,
+                                }),
+                              ).catch(() => undefined)
+                            }
+                            disabled={advanceBusy || !!rowActionKey}
+                            className="h-9 px-4 rounded-lg border border-sky-200 bg-sky-50 text-sky-700 text-[12px] hover:bg-sky-100 transition-colors disabled:opacity-50"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {advanceBusy ? "Moving..." : "Move to Check-Out"}
+                          </button>
+                        )}
+                        {row.currentStatus === "CheckOut" && (
+                          <button
+                            onClick={() =>
+                              runEncounterRowAction(row, "Complete checkout", () =>
+                                encounterApi.completeCheckout(row.id, {
+                                  version: row.version,
+                                  checkoutData: {},
+                                }),
+                              ).catch(() => undefined)
+                            }
+                            disabled={checkoutBusy || !!rowActionKey}
+                            className="h-9 px-4 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-[12px] hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {checkoutBusy ? "Closing..." : "Complete checkout"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => navigate(`/encounter/${row.id}?adminRecovery=true`)}
+                          className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[12px] hover:bg-indigo-700 transition-colors"
+                          style={{ fontWeight: 600 }}
+                        >
+                          Review / Edit
+                        </button>
+                      </div>
+                    </div>
+                      );
+                    })()}
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </TabPanel>
+  );
+}
+
 function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: string }) {
   const { clinics: mockClinics } = useAdminConsoleData();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -4898,6 +5197,7 @@ export function AdminConsole() {
             <TabsTrigger value="clinics" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-emerald-200 transition-all"><Building2 className="w-3.5 h-3.5 mr-1.5" /> Clinics</TabsTrigger>
             <TabsTrigger value="users" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-200 transition-all"><Users className="w-3.5 h-3.5 mr-1.5" /> Users & Roles</TabsTrigger>
             <TabsTrigger value="assignments" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-cyan-200 transition-all"><Link2 className="w-3.5 h-3.5 mr-1.5" /> Assignments</TabsTrigger>
+            <TabsTrigger value="encounters" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-indigo-200 transition-all"><History className="w-3.5 h-3.5 mr-1.5" /> Archived Encounters</TabsTrigger>
             <TabsTrigger value="incoming" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-sky-50 data-[state=active]:text-sky-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-sky-200 transition-all"><Upload className="w-3.5 h-3.5 mr-1.5" /> Incoming Uploads</TabsTrigger>
             <TabsTrigger value="templates" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-violet-200 transition-all"><LayoutTemplate className="w-3.5 h-3.5 mr-1.5" /> Reasons & Templates</TabsTrigger>
             <TabsTrigger value="thresholds" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-orange-200 transition-all"><Clock className="w-3.5 h-3.5 mr-1.5" /> Thresholds</TabsTrigger>
@@ -4946,6 +5246,7 @@ export function AdminConsole() {
               />
             </TabsContent>
             <TabsContent value="assignments"><AssignmentsTab /></TabsContent>
+            <TabsContent value="encounters"><ArchivedEncountersTab /></TabsContent>
             <TabsContent value="incoming">
               <IncomingIntegrationsTab selectedFacilityId={activeFacilityId || facility.id} />
             </TabsContent>

@@ -347,6 +347,32 @@ export interface ClinicAssignment {
   isOperational: boolean;
 }
 
+export interface AdminEncounterRecoveryRow {
+  id: string;
+  version: number;
+  patientId: string;
+  clinicId: string;
+  clinicName: string;
+  dateOfService: string;
+  currentStatus: EncounterStatus;
+  providerName: string | null;
+  reasonForVisit: string | null;
+  roomId: string | null;
+  roomName: string | null;
+  assignedMaUserId: string | null;
+  assignedMaName: string | null;
+  checkInAt: string | null;
+  roomingStartAt: string | null;
+  roomingCompleteAt: string | null;
+  providerStartAt: string | null;
+  providerEndAt: string | null;
+  checkoutCompleteAt: string | null;
+  closedAt: string | null;
+  closureType: string | null;
+  archivedForOperations: boolean;
+  needsRecovery: boolean;
+}
+
 // ── View-model types (enriched for UI display) ───────────────────────
 
 /**
@@ -499,7 +525,7 @@ export interface UpdateStatusRequest {
 }
 
 export interface UpdateRoomingRequest {
-  roomId?: string;
+  roomId?: string | null;
   data?: Record<string, unknown>;
 }
 

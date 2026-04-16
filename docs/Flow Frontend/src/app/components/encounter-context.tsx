@@ -69,6 +69,7 @@ type LiveRoom = {
 interface EncounterContextType {
   encounters: Encounter[];
   getEncounter: (id: string) => Encounter | undefined;
+  fetchEncounter: (id: string, options?: { force?: boolean }) => Promise<Encounter | undefined>;
   getAvailableRoomsForClinic: (clinicId: string) => Array<{ id: string; name: string }>;
   advanceStatus: (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => void;
   updateEncounter: (id: string, overrides: Partial<Encounter>) => void;
@@ -188,6 +189,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
   const [completedCheckouts, setCompletedCheckouts] = useState<CompletedCheckout[]>([]);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [encounterCacheVersion, setEncounterCacheVersion] = useState(0);
 
   const clinicsRef = useRef<Record<string, LiveClinic>>({});
   const reasonsRef = useRef<Record<string, LiveReason>>({});
@@ -196,6 +198,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
   const usersByIdRef = useRef<Record<string, LiveUser>>({});
   const usersByNameRef = useRef<Record<string, LiveUser>>({});
   const encountersRef = useRef<Encounter[]>([]);
+  const encounterCacheRef = useRef<Record<string, Encounter>>({});
 
   useEffect(() => {
     encountersRef.current = encounters;
@@ -279,6 +282,14 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       closureType: raw.closureType || undefined,
       cardTags: Array.isArray(clinic?.cardTags) ? clinic.cardTags : undefined,
     };
+  }, []);
+
+  const setEncounterCacheEntry = useCallback((encounter: Encounter) => {
+    encounterCacheRef.current = {
+      ...encounterCacheRef.current,
+      [encounter.id]: encounter,
+    };
+    setEncounterCacheVersion((value) => value + 1);
   }, []);
 
   const mapIncomingRow = useCallback((row: IncomingRow): Encounter => {
@@ -441,6 +452,21 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       const allEncounterRows = [...mappedEncounters, ...mappedIncoming];
       setEncounters(allEncounterRows);
       encountersRef.current = allEncounterRows;
+      const cacheEntries = Object.entries(encounterCacheRef.current);
+      if (cacheEntries.length > 0) {
+        let changed = false;
+        const nextCache = { ...encounterCacheRef.current };
+        for (const row of allEncounterRows) {
+          if (nextCache[row.id]) {
+            nextCache[row.id] = row;
+            changed = true;
+          }
+        }
+        if (changed) {
+          encounterCacheRef.current = nextCache;
+          setEncounterCacheVersion((value) => value + 1);
+        }
+      }
     }
     if (encounterRowsResult.status === "rejected") {
       errors.push(`Encounters: ${encounterRowsResult.reason instanceof Error ? encounterRowsResult.reason.message : "failed to load"}`);
@@ -504,9 +530,25 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshData]);
 
+  const fetchEncounter = useCallback(
+    async (id: string, options?: { force?: boolean }) => {
+      const existing =
+        encountersRef.current.find((entry) => entry.id === id) ||
+        encounterCacheRef.current[id];
+      if (existing && !options?.force) {
+        return existing;
+      }
+      const raw = await encounterApi.get(id);
+      const mapped = mapBackendEncounter(raw as any);
+      setEncounterCacheEntry(mapped);
+      return mapped;
+    },
+    [mapBackendEncounter, setEncounterCacheEntry],
+  );
+
   const getEncounter = useCallback(
-    (id: string) => encounters.find((entry) => entry.id === id),
-    [encounters],
+    (id: string) => encounters.find((entry) => entry.id === id) || encounterCacheRef.current[id],
+    [encounters, encounterCacheVersion],
   );
 
   const getAvailableRoomsForClinic = useCallback((clinicId: string) => {
@@ -515,30 +557,32 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
 
   const advanceStatus = useCallback(
     (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => {
-      const current = encountersRef.current.find((entry) => entry.id === id);
+      const current = encountersRef.current.find((entry) => entry.id === id) || encounterCacheRef.current[id];
       if (!current) return;
       const changedAt = new Date().toISOString();
+      const optimisticEncounter = {
+        ...current,
+        ...extras,
+        status: newStatus,
+        version: current.version + 1,
+        currentStageStart: timeFromIso(new Date().toISOString()),
+        currentStageStartAtIso: changedAt,
+        completedAtIso: newStatus === "Optimized" ? changedAt : current.completedAtIso,
+        minutesInStage: 0,
+        statusEvents: [
+          ...(current.statusEvents || []),
+          { fromStatus: current.status, toStatus: newStatus, changedAt },
+        ],
+      };
 
       setEncounters((prev) =>
         prev.map((entry) =>
           entry.id === id
-            ? {
-                ...entry,
-                ...extras,
-                status: newStatus,
-                version: entry.version + 1,
-                currentStageStart: timeFromIso(new Date().toISOString()),
-                currentStageStartAtIso: changedAt,
-                completedAtIso: newStatus === "Optimized" ? changedAt : entry.completedAtIso,
-                minutesInStage: 0,
-                statusEvents: [
-                  ...(entry.statusEvents || []),
-                  { fromStatus: entry.status, toStatus: newStatus, changedAt },
-                ],
-              }
+            ? optimisticEncounter
             : entry,
         ),
       );
+      setEncounterCacheEntry(optimisticEncounter);
 
       const roomId = extras?.roomNumber
         ? (roomsByClinicRef.current[current.clinicId] || []).find((room) => room.name === extras.roomNumber)?.id
@@ -561,20 +605,22 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
           });
           const mapped = mapBackendEncounter(updated as any);
           setEncounters((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
+          setEncounterCacheEntry(mapped);
         } catch {
           refreshData().catch(() => undefined);
         }
       })();
     },
-    [mapBackendEncounter, refreshData],
+    [mapBackendEncounter, refreshData, setEncounterCacheEntry],
   );
 
   const updateEncounter = useCallback(
     (id: string, overrides: Partial<Encounter>) => {
-      const current = encountersRef.current.find((entry) => entry.id === id);
+      const current = encountersRef.current.find((entry) => entry.id === id) || encounterCacheRef.current[id];
       if (!current) return;
 
       setEncounters((prev) => prev.map((entry) => (entry.id === id ? { ...entry, ...overrides } : entry)));
+      setEncounterCacheEntry({ ...current, ...overrides });
 
       (async () => {
         try {
@@ -604,7 +650,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         }
       })();
     },
-    [refreshData],
+    [refreshData, setEncounterCacheEntry],
   );
 
   const addTask = useCallback(
@@ -685,8 +731,23 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
             : entry,
         ),
       );
+      const cachedEncounter =
+        encountersRef.current.find((entry) => entry.id === data.encounterId) ||
+        encounterCacheRef.current[data.encounterId];
+      if (cachedEncounter) {
+        setEncounterCacheEntry({
+          ...cachedEncounter,
+          status: "Optimized",
+          currentStageStart: timeFromIso(completedAtIso),
+          currentStageStartAtIso: completedAtIso,
+          completedAtIso,
+          minutesInStage: 0,
+        });
+      }
 
-      const current = encountersRef.current.find((entry) => entry.id === data.encounterId);
+      const current =
+        encountersRef.current.find((entry) => entry.id === data.encounterId) ||
+        encounterCacheRef.current[data.encounterId];
       if (!current) return;
 
       (async () => {
@@ -697,13 +758,14 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
           });
           const mapped = mapBackendEncounter(updated as any);
           setEncounters((prev) => prev.map((entry) => (entry.id === data.encounterId ? mapped : entry)));
+          setEncounterCacheEntry(mapped);
           await refreshData();
         } catch {
           refreshData().catch(() => undefined);
         }
       })();
     },
-    [mapBackendEncounter, refreshData],
+    [mapBackendEncounter, refreshData, setEncounterCacheEntry],
   );
 
   const getCheckoutData = useCallback(
@@ -748,7 +810,9 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
 
   const activateSafety = useCallback(
     async (input: { encounterId: string; confirmationWord: string; location?: string }) => {
-      const previous = encountersRef.current.find((entry) => entry.id === input.encounterId);
+      const previous =
+        encountersRef.current.find((entry) => entry.id === input.encounterId) ||
+        encounterCacheRef.current[input.encounterId];
       if (!previous) return;
       setEncounters((prev) =>
         prev.map((entry) =>
@@ -761,6 +825,11 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
             : entry,
         ),
       );
+      setEncounterCacheEntry({
+        ...previous,
+        safetyActive: true,
+        alertLevel: "Red",
+      });
       try {
         await safetyApi.activate(input.encounterId, {
           confirmationWord: input.confirmationWord,
@@ -772,12 +841,14 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [refreshData],
+    [refreshData, setEncounterCacheEntry],
   );
 
   const resolveSafety = useCallback(
     async (input: { encounterId: string; confirmationWord: string; resolutionNote?: string }) => {
-      const previous = encountersRef.current.find((entry) => entry.id === input.encounterId);
+      const previous =
+        encountersRef.current.find((entry) => entry.id === input.encounterId) ||
+        encounterCacheRef.current[input.encounterId];
       if (!previous) return;
       setEncounters((prev) =>
         prev.map((entry) =>
@@ -789,6 +860,10 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
             : entry,
         ),
       );
+      setEncounterCacheEntry({
+        ...previous,
+        safetyActive: false,
+      });
       try {
         await safetyApi.resolve(input.encounterId, {
           confirmationWord: input.confirmationWord,
@@ -800,13 +875,14 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [refreshData],
+    [refreshData, setEncounterCacheEntry],
   );
 
   const value = useMemo<EncounterContextType>(
     () => ({
       encounters,
       getEncounter,
+      fetchEncounter,
       getAvailableRoomsForClinic,
       advanceStatus,
       updateEncounter,
@@ -828,6 +904,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     [
       encounters,
       getEncounter,
+      fetchEncounter,
       getAvailableRoomsForClinic,
       advanceStatus,
       updateEncounter,

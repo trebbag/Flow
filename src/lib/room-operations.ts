@@ -377,12 +377,12 @@ export async function markEncounterRoomOccupiedInTx(tx: RoomOpsTx, params: {
   });
 }
 
-export async function markEncounterRoomNeedsTurnover(params: {
+export async function markEncounterRoomNeedsTurnoverInTx(tx: RoomOpsTx, params: {
   encounter: EncounterRoomCandidate;
   userId?: string | null;
 }) {
   if (!params.encounter.roomId) return null;
-  const assignment = await prisma.clinicRoomAssignment.findFirst({
+  const assignment = await tx.clinicRoomAssignment.findFirst({
     where: {
       roomId: params.encounter.roomId,
       clinicId: params.encounter.clinicId,
@@ -396,7 +396,7 @@ export async function markEncounterRoomNeedsTurnover(params: {
   if (!assignment) return null;
   const facilityId = assignment.clinic.facilityId || assignment.room.facilityId;
   if (!facilityId) return null;
-  return transitionRoomOperationalState({
+  return transitionRoomOperationalStateInTx(tx, {
     roomId: params.encounter.roomId,
     clinicId: params.encounter.clinicId,
     facilityId,
@@ -405,6 +405,13 @@ export async function markEncounterRoomNeedsTurnover(params: {
     encounterId: params.encounter.id,
     createdByUserId: params.userId || null
   });
+}
+
+export async function markEncounterRoomNeedsTurnover(params: {
+  encounter: EncounterRoomCandidate;
+  userId?: string | null;
+}) {
+  return prisma.$transaction((tx) => markEncounterRoomNeedsTurnoverInTx(tx, params));
 }
 
 export async function listRoomCards(params: {

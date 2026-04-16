@@ -74,6 +74,7 @@
     "@vitejs/plugin-react": "4.7.0",
     "playwright": "^1.58.2",
     "tailwindcss": "4.1.12",
+    "terser": "^5.43.1",
     "vite": "6.3.5"
   },
   "peerDependencies": {

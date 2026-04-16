@@ -11,6 +11,7 @@ import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 import {
   assertRoomAssignableForEncounter,
   markEncounterRoomNeedsTurnover,
+  markEncounterRoomNeedsTurnoverInTx,
   markEncounterRoomOccupiedInTx
 } from "../lib/room-operations.js";
 import { hasActiveTemporaryClinicOverride, listActiveTemporaryClinicOverrideIds } from "../lib/assignment-overrides.js";
@@ -66,7 +67,7 @@ const updateStatusSchema = z.object({
 });
 
 const updateRoomingSchema = z.object({
-  roomId: z.string().uuid().optional(),
+  roomId: z.string().uuid().nullable().optional(),
   data: z.record(z.string(), z.unknown()).optional()
 });
 
@@ -933,7 +934,11 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
 
     await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    const roomContext = dto.roomId
+    const hasRoomUpdate = Object.prototype.hasOwnProperty.call(dto, "roomId");
+    const nextRoomId = hasRoomUpdate ? dto.roomId ?? null : encounter.roomId;
+    const isChangingRooms = hasRoomUpdate && nextRoomId !== encounter.roomId;
+
+    const roomContext = isChangingRooms && dto.roomId
       ? await assertRoomAssignableForEncounter({
           encounter: { id: encounter.id, clinicId: encounter.clinicId, roomId: encounter.roomId },
           roomId: dto.roomId,
@@ -942,7 +947,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       : null;
 
     const data: Prisma.EncounterUncheckedUpdateInput = {
-      roomId: dto.roomId ?? encounter.roomId
+      roomId: nextRoomId
     };
 
     if (dto.data !== undefined) {
@@ -954,7 +959,13 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         where: { id: encounterId },
         data
       });
-      if (dto.roomId && roomContext) {
+      if (isChangingRooms && encounter.roomId) {
+        await markEncounterRoomNeedsTurnoverInTx(tx, {
+          encounter: { id: row.id, clinicId: row.clinicId, roomId: encounter.roomId },
+          userId: request.user!.id
+        });
+      }
+      if (isChangingRooms && dto.roomId && roomContext) {
         await markEncounterRoomOccupiedInTx(tx, {
           encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
           roomId: dto.roomId,

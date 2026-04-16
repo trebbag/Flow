@@ -25,6 +25,7 @@ import type {
   AlertThreshold,
   NotificationPolicy,
   ClinicAssignment,
+  AdminEncounterRecoveryRow,
   ReasonStatus,
   TemplateStatus,
   TemplateFieldDefinition,
@@ -41,6 +42,7 @@ import type {
   SafetyEvent,
   Role,
 } from "./types";
+export type { AdminEncounterRecoveryRow } from "./types";
 import { buildHeaders, getCurrentSession } from "./auth-session";
 import { acquireMicrosoftAccessToken } from "./microsoft-auth";
 import {
@@ -1324,6 +1326,26 @@ export const admin = {
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
     return apiFetch<ClinicAssignment[]>(`/admin/assignments${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
+  },
+  listArchivedEncounters(params?: {
+    facilityId?: string;
+    clinicId?: string;
+    status?: EncounterStatus;
+    from?: string;
+    to?: string;
+    unresolvedOnly?: boolean;
+    search?: string;
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.facilityId) qs.set("facilityId", params.facilityId);
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    if (typeof params?.unresolvedOnly === "boolean") qs.set("unresolvedOnly", String(params.unresolvedOnly));
+    if (params?.search?.trim()) qs.set("search", params.search.trim());
+    const q = qs.toString();
+    return apiFetch<AdminEncounterRecoveryRow[]>(`/admin/encounters${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
   updateAssignment(clinicId: string, dto: { providerUserId?: string | null; maUserId?: string | null }) {
     return apiFetch<ClinicAssignment>(`/admin/assignments/${clinicId}`, {

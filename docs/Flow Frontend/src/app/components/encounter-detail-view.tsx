@@ -41,7 +41,7 @@ import {
   type EncounterStatus,
 } from "./mock-data";
 import { useEncounters } from "./encounter-context";
-import { admin, rooms as roomsApi, type RoomLiveCard } from "./api-client";
+import { admin, encounters as encounterApi, rooms as roomsApi, type RoomLiveCard } from "./api-client";
 import { loadSession } from "./auth-session";
 import { SafetyAssistModal } from "./safety-assist-modal";
 import { toast } from "sonner";
@@ -467,9 +467,13 @@ export function EncounterDetailView() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const ctx = useEncounters();
+  const session = loadSession();
+  const isAdminUser = session?.role === "Admin";
 
   // Find the base encounter from shared context
   const baseEnc = ctx.getEncounter(id!);
+  const [loadingEncounter, setLoadingEncounter] = useState(false);
+  const [encounterLoadError, setEncounterLoadError] = useState<string | null>(null);
 
   // ── Local state for status transitions ──
   const [localStatus, setLocalStatus] = useState<EncounterStatus | null>(null);
@@ -493,6 +497,7 @@ export function EncounterDetailView() {
     checkout: {},
   });
   const [operationalRooms, setOperationalRooms] = useState<RoomLiveCard[]>([]);
+  const [savingRecoveryRoom, setSavingRecoveryRoom] = useState(false);
   const [roomingLaunch] = useState(() => ({
     preferredRoomId: searchParams.get("preferredRoomId") || "",
     lastReadyRoom: searchParams.get("lastReadyRoom") === "true",
@@ -500,6 +505,37 @@ export function EncounterDetailView() {
 
   // Tasks from shared context
   const { maTasks: encMaTasks, createdTasks } = ctx.getTasksForEncounter(id!);
+
+  useEffect(() => {
+    if (!id) return;
+    if (baseEnc) {
+      setEncounterLoadError(null);
+      setLoadingEncounter(false);
+      return;
+    }
+
+    let mounted = true;
+    setLoadingEncounter(true);
+    setEncounterLoadError(null);
+    ctx.fetchEncounter(id)
+      .then((encounter) => {
+        if (!mounted) return;
+        if (!encounter) {
+          setEncounterLoadError("Encounter not found");
+        }
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setEncounterLoadError((error as Error).message || "Unable to load encounter");
+      })
+      .finally(() => {
+        if (mounted) setLoadingEncounter(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [baseEnc, ctx.fetchEncounter, id]);
 
   useEffect(() => {
     let mounted = true;
@@ -683,13 +719,25 @@ export function EncounterDetailView() {
     setShowRequiredFieldErrors(false);
   }, [baseEnc, showRequiredFieldErrors, localStatus, runtimeTemplates, templateValues, localRoom]);
 
+  if (!baseEnc && loadingEncounter) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <Activity className="w-12 h-12 text-violet-300 mx-auto mb-3 animate-spin" />
+          <h2 className="text-[18px]" style={{ fontWeight: 600 }}>Loading encounter</h2>
+          <p className="text-[13px] text-muted-foreground mt-1">Fetching encounter {id}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!baseEnc) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <FileText className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-          <h2 className="text-[18px]" style={{ fontWeight: 600 }}>Encounter not found</h2>
-          <p className="text-[13px] text-muted-foreground mt-1">ID: {id}</p>
+          <h2 className="text-[18px]" style={{ fontWeight: 600 }}>{encounterLoadError ? "Unable to load encounter" : "Encounter not found"}</h2>
+          <p className="text-[13px] text-muted-foreground mt-1">{encounterLoadError || `ID: ${id}`}</p>
           <button
             onClick={() => navigate(-1)}
             className="mt-4 px-4 py-2 rounded-lg bg-gray-100 text-[13px] text-gray-600 hover:bg-gray-200 transition-colors"
@@ -709,6 +757,67 @@ export function EncounterDetailView() {
     roomNumber: localRoom || baseEnc.roomNumber,
     currentStageStartAtIso: localStatus !== null ? localStageStartIso || baseEnc.currentStageStartAtIso : baseEnc.currentStageStartAtIso,
   };
+
+  // Available rooms for this clinic. Operational data wins so non-ready rooms cannot be selected.
+  const fallbackRooms = ctx.getAvailableRoomsForClinic(baseEnc.clinicId).map((room) => ({
+    id: room.id,
+    roomId: room.id,
+    name: room.name,
+    operationalStatus: "Ready" as const,
+  }));
+  const availableRooms = operationalRooms.length > 0 ? operationalRooms : fallbackRooms;
+  const readyRooms = availableRooms.filter((room) => room.operationalStatus === "Ready");
+  const nonReadyRooms = availableRooms.filter((room) => room.operationalStatus !== "Ready");
+  const selectedOperationalRoom = availableRooms.find((room) => room.name === localRoom);
+  const lastReadyRoomSelected = roomingLaunch.lastReadyRoom && selectedOperationalRoom?.roomId === roomingLaunch.preferredRoomId;
+
+  const canEditRecoveryRoom = isAdminUser && enc.status !== "Optimized" && enc.status !== "Rooming";
+  const recoveryRoomOptions = (() => {
+    const options = new Map<string, { value: string; label: string; disabled?: boolean }>();
+    options.set("", { value: "", label: "No room assigned" });
+    if (enc.roomNumber) {
+      options.set(enc.roomNumber, { value: enc.roomNumber, label: `${enc.roomNumber} (current)` });
+    }
+    readyRooms.forEach((room) => {
+      options.set(room.name, { value: room.name, label: room.name });
+    });
+    nonReadyRooms.forEach((room) => {
+      if (!options.has(room.name)) {
+        options.set(room.name, {
+          value: room.name,
+          label: `${room.name} - ${room.operationalStatus}`,
+          disabled: true,
+        });
+      }
+    });
+    return Array.from(options.values());
+  })();
+
+  async function saveRecoveryRoomAssignment() {
+    setSavingRecoveryRoom(true);
+    try {
+      const selectedRoom = availableRooms.find((room) => room.name === localRoom);
+      const roomId = localRoom === "" ? null : selectedRoom?.roomId || selectedRoom?.id || null;
+
+      if (localRoom && !roomId) {
+        throw new Error("Select a valid room before saving.");
+      }
+
+      await encounterApi.updateRooming(enc.id, { roomId });
+      await ctx.refreshData();
+      const refreshed = await ctx.fetchEncounter(enc.id, { force: true });
+      setLocalRoom(refreshed?.roomNumber || "");
+      toast.success("Encounter room updated", {
+        description: roomId ? `${enc.patientId} is now assigned to ${localRoom}.` : `${enc.patientId} is no longer assigned to a room.`,
+      });
+    } catch (error) {
+      toast.error("Unable to update encounter room", {
+        description: (error as Error).message || "The room assignment could not be saved.",
+      });
+    } finally {
+      setSavingRecoveryRoom(false);
+    }
+  }
 
   const statusColor = statusColors[enc.status];
   const currentIdx = statusFlow.indexOf(enc.status);
@@ -789,19 +898,6 @@ export function EncounterDetailView() {
       pharmacyChanged: readYesNo("pharmacyChanged"),
     };
   })();
-
-  // Available rooms for this clinic. Operational data wins so non-ready rooms cannot be selected.
-  const fallbackRooms = ctx.getAvailableRoomsForClinic(baseEnc.clinicId).map((room) => ({
-    id: room.id,
-    roomId: room.id,
-    name: room.name,
-    operationalStatus: "Ready" as const,
-  }));
-  const availableRooms = operationalRooms.length > 0 ? operationalRooms : fallbackRooms;
-  const readyRooms = availableRooms.filter((room) => room.operationalStatus === "Ready");
-  const nonReadyRooms = availableRooms.filter((room) => room.operationalStatus !== "Ready");
-  const selectedOperationalRoom = availableRooms.find((room) => room.name === localRoom);
-  const lastReadyRoomSelected = roomingLaunch.lastReadyRoom && selectedOperationalRoom?.roomId === roomingLaunch.preferredRoomId;
 
   function setFieldValue(fieldName: string, value: string | boolean) {
     setTemplateValues((prev) => ({
@@ -998,6 +1094,48 @@ export function EncounterDetailView() {
               )}
             </div>
           </div>
+
+          {canEditRecoveryRoom && (
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[13px] text-blue-900" style={{ fontWeight: 700 }}>
+                    <DoorOpen className="w-4 h-4" />
+                    Admin room recovery
+                  </div>
+                  <p className="mt-1 text-[12px] text-blue-800">
+                    Use this when an older encounter carried into today with the wrong room state. You can clear the room or move the patient to a different ready room without relying on the live day board.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="min-w-[240px]">
+                    <label className="text-[11px] text-blue-700 mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 600 }}>
+                      Assigned room
+                    </label>
+                    <select
+                      value={localRoom}
+                      onChange={(event) => setLocalRoom(event.target.value)}
+                      className="h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                      {recoveryRoomOptions.map((option) => (
+                        <option key={`${option.value || "none"}:${option.label}`} value={option.value} disabled={option.disabled}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => saveRecoveryRoomAssignment().catch(() => undefined)}
+                    disabled={savingRecoveryRoom}
+                    className="h-10 px-4 rounded-lg bg-blue-600 text-white text-[12px] hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    style={{ fontWeight: 600 }}
+                  >
+                    {savingRecoveryRoom ? "Saving..." : "Save Room Fix"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

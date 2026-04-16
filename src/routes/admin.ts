@@ -1,11 +1,18 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { AlertLevel, AlertThresholdMetric, EncounterStatus, Prisma, RoleName, TemplateType } from "@prisma/client";
+import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { env } from "../lib/env.js";
 import { ApiError, assert } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
-import { formatUserDisplayName } from "../lib/display-names.js";
+import {
+  formatClinicDisplayName,
+  formatProviderDisplayName,
+  formatReasonDisplayName,
+  formatRoomDisplayName,
+  formatUserDisplayName
+} from "../lib/display-names.js";
 import { getEntraDirectoryUserByObjectId, searchEntraDirectoryUsers, type EntraDirectoryUser } from "../lib/entra-directory.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import {
@@ -242,6 +249,16 @@ const provisionUserSchema = z.object({
   clinicId: z.string().uuid().optional()
 });
 
+const archivedEncounterQuerySchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  clinicId: z.string().uuid().optional(),
+  status: z.nativeEnum(EncounterStatus).optional(),
+  from: z.string().trim().optional(),
+  to: z.string().trim().optional(),
+  unresolvedOnly: z.string().optional(),
+  search: z.string().trim().optional()
+});
+
 const updateUserSchema = z.object({
   email: z.string().email().optional(),
   name: z.string().min(1).optional(),
@@ -406,6 +423,27 @@ async function resolveFacilityForRequest(request: FastifyRequest, requestedFacil
   const facility = await getFirstActiveFacility();
   assert(facility, 404, "No facility found");
   return facility;
+}
+
+function parseQueryBoolean(value: string | undefined, fallback: boolean) {
+  if (value === undefined) return fallback;
+  return value === "true";
+}
+
+function parseFacilityDateBoundary(
+  value: string | undefined,
+  timezone: string,
+  boundary: "start" | "end",
+  fallback: DateTime
+) {
+  if (!value) {
+    return boundary === "start" ? fallback.startOf("day") : fallback.endOf("day");
+  }
+  const parsed = DateTime.fromISO(value, { zone: timezone });
+  if (!parsed.isValid) {
+    throw new ApiError(400, `Invalid date '${value}'`);
+  }
+  return boundary === "start" ? parsed.startOf("day") : parsed.endOf("day");
 }
 
 async function resolveClinicForFacility(clinicId: string, facilityId: string) {
@@ -1827,6 +1865,94 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       maUserName: formatUserDisplayName(assignment.maUser) || null,
       maUserStatus: assignment.maUser?.status || null
     };
+  });
+
+  app.get("/admin/encounters", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const query = archivedEncounterQuerySchema.parse(request.query);
+    const facility = await resolveFacilityForRequest(request, query.facilityId);
+    const timezone = facility.timezone || "America/New_York";
+    const todayStart = DateTime.now().setZone(timezone).startOf("day");
+    const defaultFrom = todayStart.minus({ days: 14 });
+    const defaultTo = todayStart.minus({ days: 1 });
+    const from = parseFacilityDateBoundary(query.from, timezone, "start", defaultFrom);
+    const to = parseFacilityDateBoundary(query.to, timezone, "end", defaultTo);
+    assert(to >= from, 400, "Encounter recovery date range is invalid.");
+    const unresolvedOnly = parseQueryBoolean(query.unresolvedOnly, true);
+    const search = query.search?.trim() || "";
+
+    const rows = await prisma.encounter.findMany({
+      where: {
+        clinic: {
+          facilityId: facility.id,
+          ...(query.clinicId ? { id: query.clinicId } : {})
+        },
+        dateOfService: {
+          gte: from.toUTC().toJSDate(),
+          lte: to.toUTC().toJSDate()
+        },
+        ...(query.status
+          ? { currentStatus: query.status }
+          : unresolvedOnly
+            ? { currentStatus: { not: EncounterStatus.Optimized } }
+            : {}),
+        ...(search
+          ? {
+              OR: [
+                { patientId: { contains: search } },
+                { id: { contains: search } }
+              ]
+            }
+          : {})
+      },
+      include: {
+        clinic: { select: { id: true, name: true, status: true } },
+        provider: { select: { id: true, name: true, active: true } },
+        reason: { select: { id: true, name: true } },
+        room: { select: { id: true, name: true, status: true } }
+      },
+      orderBy: [{ dateOfService: "desc" }, { checkInAt: "desc" }, { patientId: "asc" }],
+      take: 250
+    });
+
+    const maUserIds = Array.from(new Set(rows.map((row) => row.assignedMaUserId).filter((value): value is string => Boolean(value))));
+    const maUsers = maUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: maUserIds } },
+          select: { id: true, name: true, status: true, email: true }
+        })
+      : [];
+    const maById = new Map(maUsers.map((user) => [user.id, user]));
+
+    return rows.map((row) => {
+      const dateOfService = DateTime.fromJSDate(row.dateOfService).setZone(timezone).toISODate() || row.dateOfService.toISOString().slice(0, 10);
+      const assignedMa = row.assignedMaUserId ? maById.get(row.assignedMaUserId) : null;
+      const archivedForOperations = row.dateOfService.getTime() < todayStart.toUTC().toJSDate().getTime();
+      return {
+        id: row.id,
+        version: row.version,
+        patientId: row.patientId,
+        clinicId: row.clinicId,
+        clinicName: formatClinicDisplayName(row.clinic),
+        dateOfService,
+        currentStatus: row.currentStatus,
+        providerName: formatProviderDisplayName(row.provider),
+        reasonForVisit: formatReasonDisplayName(row.reason) || null,
+        roomId: row.roomId,
+        roomName: formatRoomDisplayName(row.room),
+        assignedMaUserId: row.assignedMaUserId,
+        assignedMaName: assignedMa ? formatUserDisplayName(assignedMa) || assignedMa.email : null,
+        checkInAt: row.checkInAt,
+        roomingStartAt: row.roomingStartAt,
+        roomingCompleteAt: row.roomingCompleteAt,
+        providerStartAt: row.providerStartAt,
+        providerEndAt: row.providerEndAt,
+        checkoutCompleteAt: row.checkoutCompleteAt,
+        closedAt: row.closedAt,
+        closureType: row.closureType,
+        archivedForOperations,
+        needsRecovery: archivedForOperations && row.currentStatus !== EncounterStatus.Optimized
+      };
+    });
   });
 
   app.get("/admin/assignment-overrides", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {

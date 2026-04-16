@@ -437,9 +437,23 @@ describe("Flow backend core relationships", () => {
 
   it("returns persisted room daily history rollups", async () => {
     const ctx = await bootstrapCore();
-    const date = DateTime.now().setZone("America/New_York").toISODate()!;
+    const date = DateTime.now().setZone("America/New_York").minus({ days: 1 }).toISODate()!;
     const at = (hour: number, minute: number) =>
       DateTime.fromISO(date, { zone: "America/New_York" }).plus({ hours: hour, minutes: minute }).toUTC().toJSDate();
+
+    await prisma.roomChecklistRun.create({
+      data: {
+        roomId: ctx.clinicRoomA.id,
+        clinicId: ctx.clinic.id,
+        facilityId: ctx.facility.id,
+        kind: "DayStart",
+        dateKey: date,
+        itemsJson: [{ key: "visual-ready", label: "Room visually ready", completed: true }],
+        completed: true,
+        completedAt: at(7, 55),
+        completedByUserId: ctx.admin.id
+      }
+    });
 
     await prisma.roomOperationalEvent.createMany({
       data: [
@@ -742,6 +756,162 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.ma.id, RoleName.MA)
     });
     expect(deniedAfter.statusCode).toBe(403);
+  });
+
+  it("lists prior-day encounters for admin recovery and keeps optimized rows optional", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-ARCHIVE-RECOVERY-1",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const unresolvedEncounterId = created.json().id as string;
+    const archivedDate = DateTime.now().setZone("America/New_York").minus({ days: 1 }).startOf("day").toUTC().toJSDate();
+
+    await prisma.encounter.update({
+      where: { id: unresolvedEncounterId },
+      data: {
+        dateOfService: archivedDate,
+        currentStatus: "ReadyForProvider"
+      }
+    });
+
+    const optimized = await prisma.encounter.create({
+      data: {
+        patientId: "PT-ARCHIVE-RECOVERY-2",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        currentStatus: "Optimized",
+        dateOfService: archivedDate,
+        closedAt: new Date(),
+        version: 1,
+      }
+    });
+
+    const defaultList = await app.inject({
+      method: "GET",
+      url: `/admin/encounters?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin)
+    });
+    expect(defaultList.statusCode).toBe(200);
+    const defaultRows = defaultList.json() as Array<{ id: string; needsRecovery: boolean; archivedForOperations: boolean }>;
+    expect(defaultRows.some((row) => row.id === unresolvedEncounterId && row.needsRecovery && row.archivedForOperations)).toBe(true);
+    expect(defaultRows.some((row) => row.id === optimized.id)).toBe(false);
+
+    const allRows = await app.inject({
+      method: "GET",
+      url: `/admin/encounters?facilityId=${ctx.facility.id}&unresolvedOnly=false`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin)
+    });
+    expect(allRows.statusCode).toBe(200);
+    expect((allRows.json() as Array<{ id: string }>).some((row) => row.id === optimized.id)).toBe(true);
+  });
+
+  it("reassigns or clears archived encounter rooms and releases stale occupancy", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-ARCHIVE-ROOM-1",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    const encounter = created.json();
+
+    const initialAssignment = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+    });
+    expect(initialAssignment.statusCode).toBe(200);
+
+    const clinicRoomC = await prisma.clinicRoom.create({
+      data: {
+        facilityId: ctx.facility.id,
+        name: "Room 3",
+        roomNumber: 3,
+        roomType: "exam",
+        status: "active",
+        sortOrder: 3
+      }
+    });
+    await prisma.clinicRoomAssignment.create({
+      data: {
+        clinicId: ctx.clinic.id,
+        roomId: clinicRoomC.id,
+        active: true
+      }
+    });
+    await prisma.roomOperationalState.create({
+      data: {
+        roomId: clinicRoomC.id,
+        currentStatus: "Ready",
+        lastReadyAt: new Date()
+      }
+    });
+    await prisma.roomChecklistRun.create({
+      data: {
+        roomId: clinicRoomC.id,
+        clinicId: ctx.clinic.id,
+        facilityId: ctx.facility.id,
+        kind: "DayStart",
+        dateKey: DateTime.now().setZone("America/New_York").toISODate()!,
+        itemsJson: [{ key: "visual-ready", label: "Room visually ready", completed: true }],
+        completed: true,
+        completedAt: new Date(),
+        completedByUserId: ctx.admin.id
+      }
+    });
+
+    const reassigned = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: { roomId: clinicRoomC.id }
+    });
+    expect(reassigned.statusCode).toBe(200);
+
+    const roomAStateAfterReassign = await prisma.roomOperationalState.findUnique({
+      where: { roomId: ctx.clinicRoomA.id }
+    });
+    const roomCStateAfterReassign = await prisma.roomOperationalState.findUnique({
+      where: { roomId: clinicRoomC.id }
+    });
+    expect(roomAStateAfterReassign?.currentStatus).toBe("NeedsTurnover");
+    expect(roomCStateAfterReassign?.currentStatus).toBe("Occupied");
+    expect(roomCStateAfterReassign?.occupiedEncounterId).toBe(encounter.id);
+
+    const cleared = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: { roomId: null }
+    });
+    expect(cleared.statusCode).toBe(200);
+
+    const clearedEncounter = await prisma.encounter.findUnique({
+      where: { id: encounter.id }
+    });
+    const roomCStateAfterClear = await prisma.roomOperationalState.findUnique({
+      where: { roomId: clinicRoomC.id }
+    });
+    expect(clearedEncounter?.roomId).toBeNull();
+    expect(roomCStateAfterClear?.currentStatus).toBe("NeedsTurnover");
+    expect(roomCStateAfterClear?.occupiedEncounterId).toBeNull();
   });
 
   it("moves an occupied room to NeedsTurnover when the encounter enters CheckOut", async () => {
