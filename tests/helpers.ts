@@ -13,8 +13,16 @@ export const prisma = new PrismaClient({
 export async function resetDb() {
   await prisma.auditLog.deleteMany();
   await prisma.eventOutbox.deleteMany();
+  await prisma.revenueCycleDailyRollup.deleteMany();
   await prisma.roomDailyRollup.deleteMany();
   await prisma.officeManagerDailyRollup.deleteMany();
+  await prisma.revenueCaseEvent.deleteMany();
+  await prisma.revenueChecklistItem.deleteMany();
+  await prisma.providerClarification.deleteMany();
+  await prisma.chargeCaptureRecord.deleteMany();
+  await prisma.checkoutCollectionTracking.deleteMany();
+  await prisma.financialReadiness.deleteMany();
+  await prisma.revenueCase.deleteMany();
   await prisma.safetyEvent.deleteMany();
   await prisma.roomChecklistRun.deleteMany();
   await prisma.roomIssue.deleteMany();

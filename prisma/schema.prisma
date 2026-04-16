@@ -73,6 +73,76 @@ enum TaskSourceType {
   RoomIssue
   RoomSupplyFlag
   RoomAudit
+  RevenueCase
+  ProviderClarification
+}
+
+enum RevenueStatus {
+  FinancialReadinessNeeded
+  FinanciallyCleared
+  CheckoutTrackingNeeded
+  ChargeCaptureNeeded
+  CodingReviewInProgress
+  ProviderClarificationNeeded
+  ReadyForAthenaHandoff
+  AthenaHandoffInProgress
+  AthenaHandoffConfirmed
+  MonitoringOnly
+  Closed
+}
+
+enum RevenueWorkQueue {
+  FinancialReadiness
+  CheckoutTracking
+  ChargeCapture
+  ProviderQueries
+  AthenaHandoff
+  Monitoring
+}
+
+enum RevenueDayBucket {
+  Today
+  Yesterday
+  Rolled
+  Monitoring
+}
+
+enum FinancialEligibilityStatus {
+  NotChecked
+  Clear
+  Blocked
+  Pending
+}
+
+enum CollectionOutcome {
+  CollectedInFull
+  CollectedPartial
+  NotCollected
+  NoCollectionExpected
+  Waived
+  Deferred
+}
+
+enum CodingStage {
+  NotStarted
+  InProgress
+  ReadyForReview
+  ReadyForAthena
+}
+
+enum ProviderClarificationStatus {
+  Open
+  Responded
+  Resolved
+}
+
+enum RevenueChecklistGroup {
+  financial_readiness
+  checkout_tracking
+  charge_capture
+  athena_handoff
+  athena_monitoring
+  day_close
 }
 
 enum RoomOperationalStatus {
@@ -152,6 +222,7 @@ model User {
   temporaryClinicOverrides  TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentUser")
   temporaryOverridesCreated TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentCreatedBy")
   temporaryOverridesRevoked TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentRevokedBy")
+  revenueCasesAssigned      RevenueCase[]                       @relation("RevenueCaseAssignedUser")
 
   @@index([activeFacilityId])
   @@index([entraTenantId])
@@ -181,6 +252,8 @@ model Facility {
   alertInbox                         UserAlertInbox[]
   temporaryClinicAssignmentOverrides TemporaryClinicAssignmentOverride[]
   roomDailyRollups                   RoomDailyRollup[]
+  revenueCases                       RevenueCase[]
+  revenueCycleDailyRollups           RevenueCycleDailyRollup[]
 }
 
 model Clinic {
@@ -212,6 +285,8 @@ model Clinic {
   encounters                   Encounter[]
   officeManagerDailyRollups    OfficeManagerDailyRollup[]
   roomDailyRollups             RoomDailyRollup[]
+  revenueCases                 RevenueCase[]
+  revenueCycleDailyRollups     RevenueCycleDailyRollup[]
   alertInbox                   UserAlertInbox[]
   temporaryAssignmentOverrides TemporaryClinicAssignmentOverride[]
 
@@ -229,6 +304,7 @@ model Provider {
   clinicAssignments ClinicAssignment[]
   incomingSchedules IncomingSchedule[]
   encounters        Encounter[]
+  revenueCases      RevenueCase[]
 
   @@index([clinicId, active])
 }
@@ -549,6 +625,8 @@ model Encounter {
   statusEvents           StatusChangeEvent[]
   alertState             AlertState?
   tasks                  Task[]
+  revenueCase            RevenueCase?
+  providerClarifications ProviderClarification[]
   safetyEvents           SafetyEvent[]
   operationalOccupancies RoomOperationalState[] @relation("RoomOperationalEncounter")
   roomOperationalEvents  RoomOperationalEvent[]
@@ -591,8 +669,10 @@ model Task {
   clinicId         String?
   encounterId      String?
   roomId           String?
+  revenueCaseId    String?
   sourceType       TaskSourceType?
   sourceId         String?
+  taskCategory     String?
   taskType         String
   description      String
   assignedToRole   RoleName?
@@ -600,6 +680,7 @@ model Task {
   status           String          @default("open")
   priority         Int             @default(0)
   blocking         Boolean         @default(false)
+  dueAt            DateTime?
   createdAt        DateTime        @default(now())
   createdBy        String
   acknowledgedAt   DateTime?
@@ -611,6 +692,7 @@ model Task {
 
   encounter    Encounter?  @relation(fields: [encounterId], references: [id], onDelete: SetNull)
   room         ClinicRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  revenueCase  RevenueCase? @relation(fields: [revenueCaseId], references: [id], onDelete: SetNull)
   creator      User        @relation("TaskCreatedBy", fields: [createdBy], references: [id])
   acknowledger User?       @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id])
   completer    User?       @relation("TaskCompletedBy", fields: [completedBy], references: [id])
@@ -619,7 +701,164 @@ model Task {
   @@index([clinicId, status, createdAt])
   @@index([roomId, status, createdAt])
   @@index([encounterId, status])
+  @@index([revenueCaseId, status])
   @@index([assignedToRole, status])
+}
+
+model RevenueCase {
+  id                       String            @id @default(uuid())
+  encounterId              String            @unique
+  facilityId               String
+  clinicId                 String
+  patientId                String
+  providerId               String?
+  dateOfService            DateTime
+  currentRevenueStatus     RevenueStatus     @default(FinancialReadinessNeeded)
+  currentWorkQueue         RevenueWorkQueue  @default(FinancialReadiness)
+  currentDayBucket         RevenueDayBucket  @default(Today)
+  priority                 Int               @default(0)
+  assignedToUserId         String?
+  assignedToRole           RoleName?
+  currentBlockerCategory   String?
+  currentBlockerText       String?
+  dueAt                    DateTime?
+  rolledFromDateKey        String?
+  rollReason               String?
+  readyForAthenaAt         DateTime?
+  athenaHandoffConfirmedAt DateTime?
+  closedAt                 DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  encounter                  Encounter                    @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  facility                   Facility                     @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  clinic                     Clinic                       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  provider                   Provider?                    @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  assignedToUser             User?                        @relation("RevenueCaseAssignedUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  financialReadiness         FinancialReadiness?
+  checkoutCollectionTracking CheckoutCollectionTracking?
+  chargeCaptureRecord        ChargeCaptureRecord?
+  providerClarifications     ProviderClarification[]
+  checklistItems             RevenueChecklistItem[]
+  events                     RevenueCaseEvent[]
+  tasks                      Task[]
+
+  @@index([facilityId, currentDayBucket, currentWorkQueue])
+  @@index([clinicId, dateOfService])
+  @@index([clinicId, currentRevenueStatus, currentDayBucket])
+  @@index([assignedToUserId, currentRevenueStatus])
+  @@index([assignedToRole, currentRevenueStatus])
+}
+
+model FinancialReadiness {
+  revenueCaseId                  String                    @id
+  eligibilityStatus              FinancialEligibilityStatus @default(NotChecked)
+  verifiedAt                     DateTime?
+  verifiedByUserId               String?
+  primaryPayerName               String?
+  primaryPlanName                String?
+  secondaryPayerName             String?
+  financialClass                 String?
+  pointOfServiceAmountDueCents   Int                       @default(0)
+  outstandingPriorBalanceCents   Int                       @default(0)
+  coverageIssueCategory          String?
+  coverageIssueText              String?
+  referralRequired               Boolean                   @default(false)
+  referralStatus                 String?
+  priorAuthRequired              Boolean                   @default(false)
+  priorAuthStatus                String?
+  priorAuthNumber                String?
+  notesJson                      Json?
+
+  revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+}
+
+model CheckoutCollectionTracking {
+  revenueCaseId           String            @id
+  collectionExpected      Boolean           @default(false)
+  amountDueCents          Int               @default(0)
+  amountCollectedCents    Int               @default(0)
+  collectionOutcome       CollectionOutcome?
+  missedCollectionReason  String?
+  trackingNote            String?
+  trackedByUserId         String?
+  trackedAt               DateTime?
+  sourceFieldJson         Json?
+
+  revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+}
+
+model ChargeCaptureRecord {
+  revenueCaseId          String      @id
+  documentationComplete  Boolean     @default(false)
+  codingStage            CodingStage @default(NotStarted)
+  icd10CodesJson         Json?
+  cptCodesJson           Json?
+  modifiersJson          Json?
+  unitsJson              Json?
+  codingNote             String?
+  reviewedByUserId       String?
+  reviewedAt             DateTime?
+  readyForAthenaAt       DateTime?
+
+  revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+}
+
+model ProviderClarification {
+  id                String                     @id @default(uuid())
+  revenueCaseId     String
+  encounterId       String
+  requestedByUserId String
+  targetUserId      String?
+  queryType         String?
+  questionText      String
+  responseText      String?
+  status            ProviderClarificationStatus @default(Open)
+  openedAt          DateTime                   @default(now())
+  respondedAt       DateTime?
+  resolvedAt        DateTime?
+
+  revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+  encounter   Encounter   @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@index([revenueCaseId, status, openedAt])
+  @@index([encounterId, status])
+  @@index([targetUserId, status])
+}
+
+model RevenueChecklistItem {
+  id                String               @id @default(uuid())
+  revenueCaseId     String
+  group             RevenueChecklistGroup
+  label             String
+  required          Boolean              @default(true)
+  status            String               @default("pending")
+  sortOrder         Int                  @default(0)
+  dueAt             DateTime?
+  completedAt       DateTime?
+  completedByUserId String?
+  evidenceText      String?
+  payloadJson       Json?
+
+  revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+
+  @@index([revenueCaseId, group, status])
+}
+
+model RevenueCaseEvent {
+  id           String         @id @default(uuid())
+  revenueCaseId String
+  eventType    String
+  fromStatus   RevenueStatus?
+  toStatus     RevenueStatus?
+  actorUserId  String?
+  eventText    String?
+  payloadJson  Json?
+  createdAt    DateTime       @default(now())
+
+  revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+
+  @@index([revenueCaseId, createdAt])
 }
 
 model RoomOperationalState {
@@ -838,6 +1077,36 @@ model RoomDailyRollup {
   @@index([facilityId, dateKey])
   @@index([dateKey])
   @@index([clinicId, dateKey])
+}
+
+model RevenueCycleDailyRollup {
+  id                           String   @id @default(uuid())
+  facilityId                   String
+  clinicId                     String
+  dateKey                      String
+  sameDayCollectionExpectedCents Int    @default(0)
+  sameDayCollectionTrackedCents Int     @default(0)
+  sameDayCollectionRate        Float    @default(0)
+  financiallyClearedCount      Int      @default(0)
+  chargeCaptureCompletedCount  Int      @default(0)
+  athenaHandoffConfirmedCount  Int      @default(0)
+  rolledCount                  Int      @default(0)
+  avgFlowHandoffHours          Float    @default(0)
+  avgAthenaDaysToSubmit        Float?
+  avgAthenaDaysInAR            Float?
+  queueCountsJson              Json
+  missedCollectionReasonsJson  Json
+  rollReasonsJson              Json
+  queryAgingJson               Json
+  computedAt                   DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  clinic   Clinic   @relation(fields: [clinicId], references: [id])
+
+  @@unique([clinicId, dateKey])
+  @@index([facilityId, dateKey])
+  @@index([clinicId, dateKey])
+  @@index([dateKey])
 }
 
 model AuditLog {

@@ -14,6 +14,7 @@ import {
   markEncounterRoomNeedsTurnoverInTx,
   markEncounterRoomOccupiedInTx
 } from "../lib/room-operations.js";
+import { syncRevenueCaseForEncounter } from "../lib/revenue-cycle.js";
 import { hasActiveTemporaryClinicOverride, listActiveTemporaryClinicOverrideIds } from "../lib/assignment-overrides.js";
 import {
   formatClinicDisplayName,
@@ -260,7 +261,13 @@ async function assertEncounterAccess(
   userId: string,
   role: RoleName
 ) {
-  if (role === RoleName.Admin || role === RoleName.OfficeManager || role === RoleName.FrontDeskCheckIn || role === RoleName.FrontDeskCheckOut) {
+  if (
+    role === RoleName.Admin ||
+    role === RoleName.OfficeManager ||
+    role === RoleName.FrontDeskCheckIn ||
+    role === RoleName.FrontDeskCheckOut ||
+    role === RoleName.RevenueCycle
+  ) {
     return;
   }
 
@@ -755,10 +762,11 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       return created;
     });
 
+    await syncRevenueCaseForEncounter(prisma, encounter.id);
     return withStatusAlias(encounter);
   });
 
-  app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
+  app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
     const query = request.query as {
       clinicId?: string;
       status?: EncounterStatus;
@@ -790,7 +798,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin) }, async (request) => {
+  app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
 
     await refreshEncounterAlertStates(prisma, {
@@ -921,6 +929,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         userId: request.user!.id
       });
     }
+    await syncRevenueCaseForEncounter(prisma, updated.id);
     return withStatusAlias(updated);
   });
 
@@ -1181,6 +1190,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
       userId: request.user!.id
     });
+    await syncRevenueCaseForEncounter(prisma, updated.id);
     return withStatusAlias(updated);
   });
 
@@ -1239,6 +1249,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       where: { id: encounterId },
       data
     });
+    await syncRevenueCaseForEncounter(prisma, updated.id);
     return withStatusAlias(updated);
   });
 
@@ -1295,6 +1306,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         }
       }
     });
+    await syncRevenueCaseForEncounter(prisma, updated.id);
     return withStatusAlias(updated);
   });
 }

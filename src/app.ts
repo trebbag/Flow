@@ -15,6 +15,7 @@ import { registerAlertRoutes } from "./routes/alerts.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
+import { registerRevenueRoutes } from "./routes/revenue.js";
 import { isMutatingMethod, recordMutationOperationalEvent } from "./lib/operational-events.js";
 
 export function buildApp() {
@@ -184,6 +185,7 @@ export function buildApp() {
   app.register(registerSafetyRoutes);
   app.register(registerTaskRoutes);
   app.register(registerRoomRoutes);
+  app.register(registerRevenueRoutes);
   app.register(registerAlertRoutes);
   app.register(registerEventRoutes);
   app.register(registerDashboardRoutes);
