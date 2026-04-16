@@ -165,7 +165,7 @@ If you are already on Azure Node `24`, the fastest path is:
 
 This repo already exposes:
 
-- [src/routes/health.ts](/Users/gregorygabbert/Documents/GitHub/Flow/src/routes/health.ts)
+- [src/routes/health.ts](../src/routes/health.ts)
 
 Test:
 
@@ -317,7 +317,7 @@ Imported <n> rows into ClinicRoomAssignment
 
 ## Current Repo Limitation
 
-The biggest remaining code-level pilot item is no longer runtime PostgreSQL connectivity. That switch is now implemented in [src/lib/prisma.ts](/Users/gregorygabbert/Documents/GitHub/Flow/src/lib/prisma.ts).
+The biggest remaining code-level pilot item is no longer runtime PostgreSQL connectivity. That switch is now implemented in [src/lib/prisma.ts](../src/lib/prisma.ts).
 
 The remaining pilot work is operational validation:
 

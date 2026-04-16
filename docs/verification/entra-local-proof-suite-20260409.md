@@ -5,10 +5,10 @@
 
 ## Evidence
 
-- Pilot user sync and OID mapping: [entra-local-auth-20260409.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/entra-local-auth-20260409.md)
-- Browser redirect wiring: [entra-browser-redirect-20260409.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/entra-browser-redirect-20260409.md)
-- Role-by-role facility switching: [staging-facility-switch-roles-20260409-122526.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/staging-facility-switch-roles-20260409-122526.md)
-- Threshold alerts across all roles: [staging-threshold-evidence-20260409-122302.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/verification/staging-threshold-evidence-20260409-122302.md)
+- Pilot user sync and OID mapping: [entra-local-auth-20260409.md](entra-local-auth-20260409.md)
+- Browser redirect wiring: [entra-browser-redirect-20260409.md](entra-browser-redirect-20260409.md)
+- Role-by-role facility switching: [staging-facility-switch-roles-20260409-122526.md](staging-facility-switch-roles-20260409-122526.md)
+- Threshold alerts across all roles: [staging-threshold-evidence-20260412-122358.md](staging-threshold-evidence-20260412-122358.md)
 
 ## Result
 

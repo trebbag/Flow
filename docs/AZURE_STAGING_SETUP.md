@@ -204,13 +204,13 @@ Save this as the future value for:
 
 Repo references:
 
-- [POSTGRES_MIGRATION.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/POSTGRES_MIGRATION.md)
-- [DEPLOYMENT_RUNBOOK.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/DEPLOYMENT_RUNBOOK.md)
+- [POSTGRES_MIGRATION.md](POSTGRES_MIGRATION.md)
+- [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)
 
 Run these from your local terminal in the repo root:
 
 ```bash
-cd /Users/gregorygabbert/Documents/GitHub/Flow
+cd <repo-root>
 pnpm db:export:snapshot
 POSTGRES_DATABASE_URL='postgresql://...' pnpm db:push:postgres
 POSTGRES_DATABASE_URL='postgresql://...' pnpm db:preflight:postgres
@@ -364,7 +364,7 @@ You no longer need to hand-edit a generated Azure backend workflow for this repo
 
 A repo-managed backend deployment workflow now exists here:
 
-- [azure-appservice-staging.yml](/Users/gregorygabbert/Documents/GitHub/Flow/.github/workflows/azure-appservice-staging.yml)
+- [.github/workflows/azure-appservice-staging.yml](../.github/workflows/azure-appservice-staging.yml)
 
 What it does:
 
@@ -465,7 +465,7 @@ Azure may offer to generate a GitHub Actions workflow for the frontend deploymen
 
 This repo now includes its own staging workflow at:
 
-- [.github/workflows/azure-static-webapp-staging.yml](/Users/gregorygabbert/Documents/GitHub/Flow/.github/workflows/azure-static-webapp-staging.yml)
+- [.github/workflows/azure-static-webapp-staging.yml](../.github/workflows/azure-static-webapp-staging.yml)
 
 Use that workflow instead of relying on Azure’s generated `azure-static-web-apps-*.yml`.
 
@@ -515,7 +515,7 @@ VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH=/login
 
 The frontend now also includes Azure Static Web Apps SPA routing support at:
 
-- [docs/Flow Frontend/public/staticwebapp.config.json](/Users/gregorygabbert/Documents/GitHub/Flow/docs/Flow%20Frontend/public/staticwebapp.config.json)
+- [docs/Flow Frontend/public/staticwebapp.config.json](Flow%20Frontend/public/staticwebapp.config.json)
 
 That file ensures routes like `/login` correctly rewrite to `index.html` in Azure.
 
@@ -664,7 +664,7 @@ If you return to the login page with an auth error:
 Once both staging URLs exist, run the repo’s validation from your local machine:
 
 ```bash
-cd /Users/gregorygabbert/Documents/GitHub/Flow
+cd <repo-root>
 
 STAGING_FRONTEND_API_BASE_URL=https://<your-backend-app>.azurewebsites.net \
 STAGING_FRONTEND_BEARER_TOKEN=<admin-token> \
@@ -698,14 +698,14 @@ After you have a working staging environment:
    - `AUTH_ALLOW_DEV_HEADERS=false`
    - `AUTH_ALLOW_IMPLICIT_ADMIN=false`
 3. This repo’s official staging/pilot validation flow is:
-   - [pilot-preflight.ts](/Users/gregorygabbert/Documents/GitHub/Flow/scripts/pilot-preflight.ts)
+   - [pilot-preflight.ts](../scripts/pilot-preflight.ts)
    - `pnpm pilot:preflight`
    - `pnpm pilot:validate:staging`
 
 ## What Still Needs To Be Implemented Before Azure PostgreSQL Staging Is Truly Live
 
 1. Runtime PostgreSQL support in the backend app.
-   - Current blocker: [src/lib/prisma.ts](/Users/gregorygabbert/Documents/GitHub/Flow/src/lib/prisma.ts)
+   - Current blocker: [src/lib/prisma.ts](../src/lib/prisma.ts)
 2. A true staging hostname for the frontend.
 3. Real staging bearer tokens or live Entra role sign-ins for the validation suite.
 4. AthenaOne staging connector inputs and live dry run.
@@ -724,4 +724,4 @@ After you have a working staging environment:
 
 If the current staging setup is partially created but failing, use:
 
-- [AZURE_STAGING_RECOVERY_GUIDE.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/AZURE_STAGING_RECOVERY_GUIDE.md)
+- [AZURE_STAGING_RECOVERY_GUIDE.md](AZURE_STAGING_RECOVERY_GUIDE.md)

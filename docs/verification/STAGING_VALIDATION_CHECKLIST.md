@@ -5,7 +5,7 @@ Run this before pilot go/no-go:
 1. Export staging auth/env inputs:
    - `STAGING_FRONTEND_API_BASE_URL`
    - `STAGING_FRONTEND_BEARER_TOKEN` (preferred) or `STAGING_VITE_DEV_USER_ID`
-   - AthenaOne staging connector inputs from [ATHENAONE_STAGING_RUNBOOK.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/ATHENAONE_STAGING_RUNBOOK.md)
+   - AthenaOne staging connector inputs from [ATHENAONE_STAGING_RUNBOOK.md](../ATHENAONE_STAGING_RUNBOOK.md)
 2. Run `pnpm pilot:validate:staging` from repo root.
 3. Confirm a new report exists in `docs/verification/` named `staging-validation-*.md`.
 4. Verify both steps passed in the report:

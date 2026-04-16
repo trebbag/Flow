@@ -14,7 +14,7 @@ This does not enable live schedule ingestion by itself. It validates the current
 
 ## Required Inputs
 
-Provide the same values listed in [docs/NEEDS_FROM_YOU.md](/Users/gregorygabbert/Documents/GitHub/Flow/docs/NEEDS_FROM_YOU.md):
+Provide the same values listed in [NEEDS_FROM_YOU.md](NEEDS_FROM_YOU.md):
 
 1. `baseUrl`
 2. `practiceId`

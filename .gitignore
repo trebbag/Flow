@@ -23,5 +23,9 @@ docs/verification/bearer-proof-env.*
 prisma/dev.db
 
 .azure/
+.codex/
 .idea/
 .vscode/
+docs/Flow Frontend/.vite/
+docs/Flow Frontend/playwright-report/
+docs/Flow Frontend/test-results/

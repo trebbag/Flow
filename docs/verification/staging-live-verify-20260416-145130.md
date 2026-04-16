@@ -10,7 +10,7 @@
 
 ## What Changed
 - Added a repeatable token refresh path with `pnpm staging:auth:refresh`.
-- Stabilized the staging browser verifier in `/Users/gregorygabbert/Documents/GitHub/Flow/docs/Flow Frontend/scripts/test-e2e-browser.mjs`:
+- Stabilized the staging browser verifier in `docs/Flow Frontend/scripts/test-e2e-browser.mjs`:
   - uses `/incoming/reference` for canonical provider last-name samples
   - creates future clinic-local import times
   - tolerates clinic selector variance in staging
