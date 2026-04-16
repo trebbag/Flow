@@ -1,15 +1,17 @@
 # Flow
 
-Flow is a clinical operations workflow application for ambulatory care teams. It supports front desk intake, MA rooming, clinician workflow, checkout, room readiness, task routing, reporting, and Entra-backed authentication for staged pilot environments.
+Flow is a clinical operations workflow application for ambulatory care teams. It is designed to move a patient visit from incoming schedule intake through rooming, clinician handoff, checkout, room turnover, operational alerts, and end-of-day closeout.
 
-This repository contains:
+The project is being built with staged pilot deployment in mind, so the repository includes both product code and the operational tooling needed to test, deploy, secure, and validate the application in Azure-backed environments.
+
+## What’s In This Repository
 
 - A Fastify + Prisma backend
 - A React + Vite frontend in [`docs/Flow Frontend`](docs/Flow%20Frontend)
 - SQLite-first local development with PostgreSQL staging support
 - Deployment, pilot, and security runbooks under [`docs`](docs)
 
-## Highlights
+## Product Scope
 
 - Encounter lifecycle: `Incoming -> Lobby -> Rooming -> ReadyForProvider -> Optimizing -> CheckOut -> Optimized`
 - Room operations: Day Start / Day End, readiness gating, turnover, holds, room issues, room analytics
@@ -24,7 +26,7 @@ This repository contains:
 - Data: SQLite for local development, PostgreSQL for staging/pilot readiness
 - Testing: Vitest, browser/live verification scripts, staging GitHub Actions workflows
 
-## Repository Structure
+## Repository Layout
 
 - [`src`](src): backend application source
 - [`tests`](tests): backend tests
@@ -92,6 +94,12 @@ Frontend:
 - `pnpm -C "docs/Flow Frontend" test:e2e-live`
 - `pnpm -C "docs/Flow Frontend" test:e2e-browser`
 
+## Architecture Notes
+
+- The backend owns workflow, authorization, room operations, alerts, analytics rollups, and admin APIs.
+- The frontend is a dedicated operator console for front desk, MAs, clinicians, office managers, revenue cycle, and admins.
+- Authentication for staging and pilot environments is Microsoft Entra-first, while local development can still use explicit developer bypass modes.
+
 ## Authentication
 
 Local development supports explicit dev-header auth and JWT-backed auth depending on environment configuration.
@@ -129,7 +137,7 @@ pnpm build
 pnpm -C "docs/Flow Frontend" build
 ```
 
-## Security Note
+## Repository Hygiene
 
 - Do not commit local `.env` files, generated build artifacts, local database files, or verification tokens.
 - If you are preparing the repository for broader sharing, review [`docs/NEEDS_FROM_YOU.md`](docs/NEEDS_FROM_YOU.md) for any follow-up secret rotation or environment actions.
