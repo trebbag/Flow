@@ -109,6 +109,63 @@ This is not a deploy failure.
 - `vars.STAGING_FRONTEND_API_BASE_URL` is present and valid.
 - The missing input is the GitHub Actions auth credential used for automated authenticated staging checks.
 
+## Follow-Up Auth Proof (Same Day)
+
+The staging environment secret was then populated with a short-lived valid admin bearer token from the signed-in Azure CLI session:
+
+- Secret target: `staging / STAGING_FRONTEND_BEARER_TOKEN`
+- Source identity: `admin@ClinicOS1.onmicrosoft.com`
+
+### Auth Rerun 1
+
+- Workflow: `Staging Frontend Live Verify`
+- Run: `24515625319`
+
+Result:
+
+- The workflow got past environment validation and authenticated contract/visual steps.
+- It failed in authenticated live E2E because the selected clinic had no operationally ready room:
+
+```text
+expected at least one operationally Ready room for selected clinic
+```
+
+### Staging Data Adjustment
+
+To remove that staging-only precondition blocker, I completed a targeted Day Start checklist for:
+
+- Clinic: `Team A`
+- Room: `Room 3`
+- Room ID: `c6eba2a4-711f-4da7-bbec-81858713c5ad`
+- Date key: `2026-04-16`
+
+After the upsert:
+
+- `Room 3` became `Ready`
+- `assignable` became `true`
+
+### Auth Rerun 2
+
+- Workflow: `Staging Frontend Live Verify`
+- Run: `24515673124`
+
+Result:
+
+- `Contract checks passed`
+- `Visual artifact checks passed`
+- The workflow moved past auth and room-readiness setup
+- New blocker:
+
+```text
+500 Internal Server Error for /incoming/import: {"message":"Internal server error"}
+```
+
+### Current Meaning
+
+At this point the original staging-auth blocker is resolved.
+
+The next authenticated staging-proof blocker is no longer secret wiring or room readiness. It is a real staging backend failure in `/incoming/import`.
+
 ## Archived Encounter Recovery Proof Status
 
 ### Proven
@@ -117,16 +174,62 @@ This is not a deploy failure.
 - The staging frontend and backend both deployed successfully from `codex/rooms-mvp`.
 - The staging hosts are live and healthy.
 - The archived encounter recovery API/frontend changes pass local verification and ship within the enforced frontend bundle budget.
+- The staging authenticated verifier now has valid auth and progresses into real product checks.
 
-### Not Automatically Executed
+## Focused Live Recovery Mutation Proof
 
-I did **not** auto-mutate a real stale staging encounter just to prove the recovery buttons against live data. That would modify operational staging data without a safe, user-approved target case.
+Using the staging admin bearer token, I selected a real archived encounter that still held a room from the prior day:
 
-### Safe Next Proof Options
+- Encounter ID: `da2535c8-1f6c-40c3-a990-f29061008628`
+- Patient ID: `PT-1019`
+- Date of service: `2026-04-15`
+- Status before recovery: `ReadyForProvider`
+- Room before recovery: `Room 4`
+- Room ID: `c48bf4d7-8121-4f76-aa5d-16cee8009995`
 
-1. Provide `secrets.STAGING_FRONTEND_BEARER_TOKEN` so the automated authenticated staging suite can run again.
-2. Give me a specific safe stale encounter in staging to use for a focused admin recovery mutation proof.
-3. Sign in as staging admin and perform one live archived-encounter recovery pass while I observe/log the exact result.
+### Before
+
+- Encounter still had `roomId = c48bf4d7-8121-4f76-aa5d-16cee8009995`
+- Room card showed:
+  - `operationalStatus = Occupied`
+  - `actualOperationalStatus = Occupied`
+  - `currentEncounter.id = da2535c8-1f6c-40c3-a990-f29061008628`
+
+### Recovery Mutation
+
+Executed:
+
+```http
+PATCH /encounters/da2535c8-1f6c-40c3-a990-f29061008628/rooming
+{
+  "roomId": null
+}
+```
+
+### After
+
+- Encounter now has:
+  - `roomId = null`
+  - `roomName = null`
+- Room card now shows:
+  - `operationalStatus = NeedsTurnover`
+  - `actualOperationalStatus = NeedsTurnover`
+  - `currentEncounter = null`
+
+### Recovery Conclusion
+
+This validates the exact stranded-encounter admin recovery path:
+
+- a prior-day encounter can be found from the archived encounter list/API
+- the stale room assignment can be cleared
+- the room is released from the encounter
+- room operational state transitions away from `Occupied` instead of remaining stuck
+
+## Safe Next Proof Options
+
+1. Fix the staging `/incoming/import` 500 so authenticated staging verification can complete end-to-end.
+2. Refresh or replace the short-lived staging bearer token before it expires if you want to keep using GitHub-based authenticated staging checks.
+3. Continue with role-by-role staging proof once the import path is stable again.
 
 ## Files Changed In This Pass
 
@@ -142,4 +245,3 @@ I did **not** auto-mutate a real stale staging encounter just to prove the recov
 - [package.json](/Users/gregorygabbert/Documents/GitHub/Flow/docs/Flow%20Frontend/package.json)
 - [pnpm-lock.yaml](/Users/gregorygabbert/Documents/GitHub/Flow/docs/Flow%20Frontend/pnpm-lock.yaml)
 - [vite.config.ts](/Users/gregorygabbert/Documents/GitHub/Flow/docs/Flow%20Frontend/vite.config.ts)
-

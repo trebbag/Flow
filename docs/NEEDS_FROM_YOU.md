@@ -123,10 +123,25 @@ The backend implementation is now pilot-oriented, but these final inputs are req
   - Live host checks:
     - `https://flow-staging-api-esgxesfjhnenabg7.centralus-01.azurewebsites.net/health` returned `{"status":"ok"}`
     - `https://orange-beach-0851cdc0f.6.azurestaticapps.net/` returned HTTP `200`
-  - The authenticated staging verifier was re-run and is now blocked only by a missing GitHub Actions auth secret, not by the base URL:
+  - The initial authenticated staging verifier failed on missing GitHub Actions auth credentials:
     - `Staging Frontend Live Verify`, run `24515125066`
     - failure: `Missing auth credentials. Set secrets.STAGING_FRONTEND_BEARER_TOKEN (preferred) or secrets.STAGING_VITE_DEV_USER_ID.`
-  - `vars.STAGING_FRONTEND_API_BASE_URL` is present and working. The remaining missing input for automated staging auth proof is `secrets.STAGING_FRONTEND_BEARER_TOKEN` (preferred) or the dev-header fallback `secrets.STAGING_VITE_DEV_USER_ID`.
+  - That secret gap is now resolved:
+    - `secrets.STAGING_FRONTEND_BEARER_TOKEN` was populated in the `staging` environment on April 16, 2026 using a short-lived admin bearer token from the current Azure CLI session.
+    - `vars.STAGING_FRONTEND_API_BASE_URL` is present and working.
+  - The authenticated staging verifier now progresses into real product checks:
+    - `Staging Frontend Live Verify`, run `24515625319`
+      - auth passed
+      - blocked by staging data precondition: no operationally ready room in the selected clinic
+    - After completing Day Start for Team A / Room 3 (`c6eba2a4-711f-4da7-bbec-81858713c5ad`) on `2026-04-16`, the verifier was rerun:
+    - `Staging Frontend Live Verify`, run `24515673124`
+      - contract checks passed
+      - visual artifact checks passed
+      - new blocker: `500 Internal Server Error for /incoming/import: {"message":"Internal server error"}`
+  - Current staging-proof blocker:
+    - fix the staging `/incoming/import` runtime failure
+  - Current operational note:
+    - the GitHub `STAGING_FRONTEND_BEARER_TOKEN` is short-lived and will need to be refreshed or replaced with a more durable staging-proof approach before future authenticated staging runs.
 - Local Entra pilot mapping, local bearer verification, browser redirect proof, and local threshold-alert evidence were re-run on **April 9, 2026**.
 - Azure PostgreSQL staging target is now known as of **April 10, 2026**, and both schema push and preflight have succeeded.
 - The remaining Azure database blocker is no longer connectivity, schema creation, runtime code support, or snapshot import; it is:
@@ -156,6 +171,8 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 
 ## Current Live Follow-Ups (2026-04-12)
 - Complete the role-by-role staging proof with the real Entra pilot accounts after the latest auth and provisioning fixes are deployed.
+- Fix the staging `/incoming/import` 500 so authenticated staging verification can complete end-to-end again.
+- Refresh or replace the short-lived `STAGING_FRONTEND_BEARER_TOKEN` before it expires if GitHub-based authenticated staging proof remains in use.
 - Review the first scheduled `Entra Directory Sync` workflow run in GitHub Actions and confirm it completes without suspending any active pilot user unexpectedly.
 - Confirm and enforce the pilot Conditional Access policy above before any PHI-facing rollout.
 - Add all pilot users to the `Flow Pilot Users` Entra group.
