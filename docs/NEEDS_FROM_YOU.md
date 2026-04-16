@@ -50,3 +50,14 @@ Rotate any secrets or reusable credentials that may have been stored in:
 - `docs/verification/bearer-proof-env.json`
 
 Keep using checked-in `.env.example` files as templates for future setup.
+
+## Post History Rewrite Follow-Up
+
+The public git history was rewritten to remove previously committed secret-bearing paths.
+
+If you have other local clones or other machines with this repository checked out:
+
+- re-clone the repository, or
+- run `git fetch --all --prune` and reset local branches to the rewritten `origin/main`
+
+If any external automation cached the old history, refresh that checkout before making more changes.
