@@ -4,9 +4,11 @@ This directory contains the operational and product-facing documentation for Flo
 
 ## Start Here
 
+- [ARCHITECTURE.md](ARCHITECTURE.md): the current system overview, runtime boundaries, and deployment shape
 - [MVP_STATUS.md](MVP_STATUS.md): current delivery snapshot, percent complete by area, and remaining pilot work
 - [NEEDS_FROM_YOU.md](NEEDS_FROM_YOU.md): the external inputs still required from the project owner or tenant admin
 - [verification/README.md](verification/README.md): curated verification evidence and the latest staging proof trail
+- [REPO_SHARING_GUIDE.md](REPO_SHARING_GUIDE.md): safe next steps for history scrubbing and final license selection
 
 ## Product and Workflow Docs
 

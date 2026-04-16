@@ -35,6 +35,18 @@ The project is being built with staged pilot deployment in mind, so the reposito
 - [`docs/Flow Frontend`](docs/Flow%20Frontend): frontend application
 - [`docs`](docs): deployment, security, migration, and pilot documentation
 
+## System Overview
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full overview.
+
+```mermaid
+flowchart LR
+  UI["React operator console"] --> API["Fastify API"]
+  API --> ID["Microsoft Entra"]
+  API --> DATA["SQLite / PostgreSQL"]
+  API --> OPS["Tasks, alerts, room ops, analytics"]
+```
+
 ## Quick Start
 
 ### 1. Install dependencies
@@ -120,6 +132,8 @@ See:
 
 Key runbooks:
 
+- [`docs/README.md`](docs/README.md)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - [`docs/DEPLOYMENT_RUNBOOK.md`](docs/DEPLOYMENT_RUNBOOK.md)
 - [`docs/POSTGRES_MIGRATION.md`](docs/POSTGRES_MIGRATION.md)
 - [`docs/AZURE_STAGING_RECOVERY_GUIDE.md`](docs/AZURE_STAGING_RECOVERY_GUIDE.md)
@@ -142,3 +156,4 @@ pnpm -C "docs/Flow Frontend" build
 - Do not commit local `.env` files, generated build artifacts, local database files, or verification tokens.
 - If you are preparing the repository for broader sharing, review [`docs/NEEDS_FROM_YOU.md`](docs/NEEDS_FROM_YOU.md) for any follow-up secret rotation or environment actions.
 - Reporting guidance and setup expectations are also documented in [`SECURITY.md`](SECURITY.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- The remaining history-scrub and licensing steps are documented in [`docs/REPO_SHARING_GUIDE.md`](docs/REPO_SHARING_GUIDE.md).
