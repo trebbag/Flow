@@ -174,6 +174,77 @@ function fallbackProviderLastName(displayName) {
   return tokens[tokens.length - 1] || "Provider";
 }
 
+async function ensureReadyRoom({ clinicId, facilityId, adminAuth }) {
+  const fetchRoomCards = async () =>
+    request(`/rooms/live?clinicId=${clinicId}`, {
+      auth: { ...adminAuth, facilityId },
+    });
+
+  let roomCards = await fetchRoomCards();
+  let room = Array.isArray(roomCards)
+    ? roomCards.find((row) => row.operationalStatus === "Ready")
+    : null;
+  if (room) return room;
+
+  const recoverableRoom = Array.isArray(roomCards)
+    ? roomCards.find(
+        (row) =>
+          row.roomId &&
+          row.actualOperationalStatus !== "Occupied" &&
+          row.actualOperationalStatus !== "Hold" &&
+          row.dayStartCompleted === false,
+      )
+    : null;
+
+  if (recoverableRoom?.roomId) {
+    await request("/rooms/checklists/day-start", {
+      method: "POST",
+      auth: { ...adminAuth, facilityId },
+      body: {
+        roomId: recoverableRoom.roomId,
+        clinicId,
+        completed: true,
+        items: [
+          { key: "visual-ready", label: "Room visually ready", completed: true },
+          { key: "baseline-supplies", label: "Baseline supplies and equipment present", completed: true },
+          { key: "prior-holds-reviewed", label: "Prior holds reviewed", completed: true },
+          { key: "status-confirmed", label: "Room status confirmed", completed: true },
+        ],
+      },
+    });
+    roomCards = await fetchRoomCards();
+    room = Array.isArray(roomCards)
+      ? roomCards.find((row) => row.operationalStatus === "Ready")
+      : null;
+  }
+
+  const turnoverRoom =
+    !room && Array.isArray(roomCards)
+      ? roomCards.find(
+          (row) =>
+            row.roomId &&
+            row.dayStartCompleted === true &&
+            (row.actualOperationalStatus === "NeedsTurnover" || row.actualOperationalStatus === "NotReady"),
+        )
+      : null;
+
+  if (!room && turnoverRoom?.roomId) {
+    await request(`/rooms/${turnoverRoom.roomId}/actions/mark-ready`, {
+      method: "POST",
+      auth: { ...adminAuth, facilityId },
+      body: {
+        clinicId,
+      },
+    });
+    roomCards = await fetchRoomCards();
+    room = Array.isArray(roomCards)
+      ? roomCards.find((row) => row.operationalStatus === "Ready")
+      : null;
+  }
+
+  return room || null;
+}
+
 function actorForRole(user, role, adminAuth, facilityId) {
   if (user?.id) {
     return { userId: user.id, role, facilityId };
@@ -336,12 +407,11 @@ async function main() {
   const clinicianData = buildRequiredData(templates, { type: "clinician", clinicId: clinic.id });
   const checkoutData = buildRequiredData(templates, { type: "checkout", clinicId: clinic.id });
 
-  const roomCards = await request(`/rooms/live?clinicId=${clinic.id}`, {
-    auth: { ...adminAuth, facilityId: originalFacilityId },
+  const room = await ensureReadyRoom({
+    clinicId: clinic.id,
+    facilityId: originalFacilityId,
+    adminAuth,
   });
-  const room = Array.isArray(roomCards)
-    ? roomCards.find((row) => row.operationalStatus === "Ready")
-    : null;
   assert.ok(room, "expected at least one operationally Ready room for selected clinic");
 
   const providerLastName =
