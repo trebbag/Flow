@@ -38,6 +38,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm -C "docs/Flow Frontend" install --frozen-lockfile
 
+      - name: Install Playwright browser
+        run: pnpm -C "docs/Flow Frontend" exec playwright install --with-deps chromium
+
       - name: Validate staging env
         run: |
           if [[ -z "${FRONTEND_API_BASE_URL}" ]]; then
