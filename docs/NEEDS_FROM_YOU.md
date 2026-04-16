@@ -138,10 +138,19 @@ The backend implementation is now pilot-oriented, but these final inputs are req
       - contract checks passed
       - visual artifact checks passed
       - new blocker: `500 Internal Server Error for /incoming/import: {"message":"Internal server error"}`
-  - Current staging-proof blocker:
-    - fix the staging `/incoming/import` runtime failure
+  - That staging proof path has now been repaired on **April 16, 2026**:
+    - local `pnpm frontend:verify-live` against staging passed end-to-end
+    - `Staging Frontend Live Verify`, run `24517100857`
+      - contract checks passed
+      - visual artifact checks passed
+      - live e2e passed
+      - browser e2e passed
+      - bundle budgets passed
+  - Current staging-proof status:
+    - authenticated staging frontend verification is green again
   - Current operational note:
-    - the GitHub `STAGING_FRONTEND_BEARER_TOKEN` is short-lived and will need to be refreshed or replaced with a more durable staging-proof approach before future authenticated staging runs.
+    - the GitHub `STAGING_FRONTEND_BEARER_TOKEN` is still short-lived
+    - use `pnpm staging:auth:refresh` from a signed-in Azure CLI session to verify a fresh token against staging and update the GitHub `staging` environment secret before future authenticated staging runs
 - Local Entra pilot mapping, local bearer verification, browser redirect proof, and local threshold-alert evidence were re-run on **April 9, 2026**.
 - Azure PostgreSQL staging target is now known as of **April 10, 2026**, and both schema push and preflight have succeeded.
 - The remaining Azure database blocker is no longer connectivity, schema creation, runtime code support, or snapshot import; it is:
@@ -171,8 +180,7 @@ The backend implementation is now pilot-oriented, but these final inputs are req
 
 ## Current Live Follow-Ups (2026-04-12)
 - Complete the role-by-role staging proof with the real Entra pilot accounts after the latest auth and provisioning fixes are deployed.
-- Fix the staging `/incoming/import` 500 so authenticated staging verification can complete end-to-end again.
-- Refresh or replace the short-lived `STAGING_FRONTEND_BEARER_TOKEN` before it expires if GitHub-based authenticated staging proof remains in use.
+- Keep `STAGING_FRONTEND_BEARER_TOKEN` fresh with `pnpm staging:auth:refresh` before future GitHub-based authenticated staging proofs, or replace it with a more durable approach if you want fully hands-off staging automation.
 - Review the first scheduled `Entra Directory Sync` workflow run in GitHub Actions and confirm it completes without suspending any active pilot user unexpectedly.
 - Confirm and enforce the pilot Conditional Access policy above before any PHI-facing rollout.
 - Add all pilot users to the `Flow Pilot Users` Entra group.
