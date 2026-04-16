@@ -936,8 +936,8 @@ export function CheckInView() {
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         {editingIncomingId === encounter.id ? (
-                          <>
-                            <div className="grid flex-1 grid-cols-2 gap-2">
+                          <div className="w-full rounded-lg border border-sky-100 bg-sky-50/60 p-3 space-y-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                               <div>
                                 <label className="text-[10px] text-muted-foreground block mb-1">Appointment Day</label>
                                 <div className="relative">
@@ -946,7 +946,7 @@ export function CheckInView() {
                                     type="date"
                                     value={incomingDraft.dateOfService}
                                     onChange={(event) => setIncomingDraft((prev) => ({ ...prev, dateOfService: event.target.value }))}
-                                    className="h-8 w-full pl-8 pr-2 rounded-lg border border-gray-200 bg-white text-[11px]"
+                                    className="h-9 w-full pl-8 pr-2 rounded-lg border border-gray-200 bg-white text-[11px] shadow-sm"
                                   />
                                 </div>
                               </div>
@@ -958,37 +958,39 @@ export function CheckInView() {
                                     type="time"
                                     value={incomingDraft.appointmentTime}
                                     onChange={(event) => setIncomingDraft((prev) => ({ ...prev, appointmentTime: event.target.value }))}
-                                    className="h-8 w-full pl-8 pr-2 rounded-lg border border-gray-200 bg-white text-[11px]"
+                                    className="h-9 w-full pl-8 pr-2 rounded-lg border border-gray-200 bg-white text-[11px] shadow-sm"
                                   />
                                 </div>
                               </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                saveIncomingEdit(encounter.id).catch(() => undefined);
-                              }}
-                              className="h-8 px-2.5 rounded-lg bg-indigo-600 text-white text-[11px] hover:bg-indigo-700 transition-colors flex items-center gap-1"
-                              style={{ fontWeight: 500 }}
-                              disabled={savingIncomingId === encounter.id}
-                            >
-                              <Save className="w-3 h-3" />
-                              {savingIncomingId === encounter.id ? "Saving" : "Save"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                cancelIncomingEdit();
-                              }}
-                              className="h-8 px-2.5 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1"
-                              style={{ fontWeight: 500 }}
-                            >
-                              <X className="w-3 h-3" />
-                              Cancel
-                            </button>
-                          </>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  cancelIncomingEdit();
+                                }}
+                                className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[11px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1"
+                                style={{ fontWeight: 500 }}
+                              >
+                                <X className="w-3 h-3" />
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  saveIncomingEdit(encounter.id).catch(() => undefined);
+                                }}
+                                className="h-8 px-3 rounded-lg bg-indigo-600 text-white text-[11px] hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                                style={{ fontWeight: 500 }}
+                                disabled={savingIncomingId === encounter.id}
+                              >
+                                <Save className="w-3 h-3" />
+                                {savingIncomingId === encounter.id ? "Saving" : "Save"}
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <button
                             type="button"
