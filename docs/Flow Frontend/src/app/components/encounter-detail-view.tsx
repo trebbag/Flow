@@ -2265,8 +2265,7 @@ export function EncounterDetailView() {
                           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                             <div className="space-y-4">
                               <StructuredCodeComposer
-                                label="Working diagnosis codes"
-                                helpText="ICD-10 only."
+                                label="Diagnosis codes"
                                 placeholder="Add ICD-10 code"
                                 codes={clinicianDiagnosisCodes}
                                 inputValue={diagnosisInput}
@@ -2278,8 +2277,7 @@ export function EncounterDetailView() {
                                 onSuggestionClick={(code) => addStructuredCode("diagnosis", code)}
                               />
                               <StructuredCodeComposer
-                                label="Working procedure codes"
-                                helpText="CPT / HCPCS only."
+                                label="Procedure codes"
                                 placeholder="Add CPT / HCPCS code"
                                 codes={clinicianProcedureCodes}
                                 inputValue={procedureInput}
@@ -2699,7 +2697,6 @@ function CheckRow({ label, checked }: { label: string; checked: boolean }) {
 
 function StructuredCodeComposer({
   label,
-  helpText,
   placeholder,
   codes,
   inputValue,
@@ -2712,7 +2709,6 @@ function StructuredCodeComposer({
   onSuggestionClick,
 }: {
   label: string;
-  helpText: string;
   placeholder: string;
   codes: string[];
   inputValue: string;
@@ -2727,11 +2723,7 @@ function StructuredCodeComposer({
   return (
     <div className="rounded-xl border border-cyan-100 bg-white px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{label}</div>
-          <div className="mt-1 text-[11px] text-slate-500">{helpText}</div>
-        </div>
-        <Badge className="border-0 bg-cyan-50 text-cyan-700 text-[10px]">{codes.length} added</Badge>
+        <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{label}</div>
       </div>
       <div className="mt-3 flex gap-2">
         <input
@@ -2760,7 +2752,7 @@ function StructuredCodeComposer({
       </div>
       {suggestionCodes.length > 0 && onSuggestionClick && (
         <div className="mt-3">
-          <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Suggested from MA service capture</div>
+          <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">MA suggestions</div>
           <div className="flex flex-wrap gap-2">
             {suggestionCodes.map((code) => (
               <button
@@ -2778,22 +2770,19 @@ function StructuredCodeComposer({
       )}
       {searchResults.length > 0 && onSuggestionClick && (
         <div className="mt-3">
-          <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Lookup matches</div>
+          <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Matches</div>
           <div className="space-y-2">
             {searchResults
-              .filter((entry) => !codes.includes(entry.code))
+              .filter((entry) => !codes.includes(entry))
               .map((entry) => (
                 <button
-                  key={entry.code}
+                  key={entry}
                   type="button"
-                  onClick={() => onSuggestionClick(entry.code)}
+                  onClick={() => onSuggestionClick(entry)}
                   disabled={disabled}
-                  className="flex w-full items-start justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left disabled:opacity-50"
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left disabled:opacity-50"
                 >
-                  <div>
-                    <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{entry.code}</div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">{entry.label}</div>
-                  </div>
+                  <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{entry}</div>
                   <div className="text-[11px] text-cyan-700" style={{ fontWeight: 700 }}>Use</div>
                 </button>
               ))}
@@ -2801,7 +2790,6 @@ function StructuredCodeComposer({
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
-        {codes.length === 0 && <span className="text-[12px] text-slate-400">No codes added yet.</span>}
         {codes.map((code) => (
           <button
             key={code}

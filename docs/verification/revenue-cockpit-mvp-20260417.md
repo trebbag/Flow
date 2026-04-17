@@ -71,13 +71,18 @@ Notes:
 
 ## Follow-up verification after clinician coding hardening
 - Structured clinician code lookup/search and stricter optimizing handoff validation were added after the initial revenue-cockpit pass.
-- Local checks still pass for:
+- The frontend payload was then trimmed further by:
+  - compressing the bundled clinician code lookup list
+  - simplifying the lookup UI copy and rendering
+  - tightening terser settings
+- Local checks pass for:
   - `pnpm typecheck`
   - `pnpm lint`
   - `pnpm test`
   - `pnpm build`
   - `pnpm -C "docs/Flow Frontend" build`
-- `pnpm frontend:verify-live` is currently just over the frontend bundle budget after that continuation:
-  - total JS gzip: `446.42KB`
-  - budget: `445KB`
+  - `pnpm frontend:verify-live`
+- Current frontend live-verify bundle baseline:
+  - total JS gzip: `445.71KB`
+  - budget: `446KB`
 - Authenticated frontend checks still skip locally without dev-user or bearer-token auth env.
