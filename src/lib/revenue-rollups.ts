@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { DateTime } from "luxon";
 import { listDateKeys, type ScopedClinic } from "./office-manager-rollups.js";
+import { buildRevenueExpectationSummary, getRevenueSettings } from "./revenue-cycle.js";
 
 function asRecord(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -39,6 +40,10 @@ export type RevenueDailyHistoryPoint = {
   sameDayCollectionTrackedCents: number;
   sameDayCollectionVisitRate: number;
   sameDayCollectionDollarRate: number;
+  expectedGrossChargeCents: number;
+  serviceCaptureCompletedVisitCount: number;
+  clinicianCodingEnteredVisitCount: number;
+  chargeCaptureReadyVisitCount: number;
   financiallyClearedCount: number;
   chargeCaptureCompletedCount: number;
   athenaHandoffConfirmedCount: number;
@@ -100,11 +105,16 @@ export async function computeRevenueDailyRollup(
     include: { items: true },
     orderBy: { createdAt: "desc" },
   });
+  const settings = cases[0]?.facilityId ? await getRevenueSettings(prisma, cases[0].facilityId) : null;
 
   let expectedVisitCount = 0;
   let capturedVisitCount = 0;
   let expected = 0;
   let tracked = 0;
+  let expectedGrossChargeCents = 0;
+  let serviceCaptureCompletedVisitCount = 0;
+  let clinicianCodingEnteredVisitCount = 0;
+  let chargeCaptureReadyVisitCount = 0;
   let financiallyClearedCount = 0;
   let chargeCaptureCompletedCount = 0;
   let athenaHandoffConfirmedCount = 0;
@@ -154,6 +164,22 @@ export async function computeRevenueDailyRollup(
       missedCollectionReasons[tracking.missedCollectionReason] = (missedCollectionReasons[tracking.missedCollectionReason] || 0) + 1;
     }
 
+    const expectation = buildRevenueExpectationSummary({
+      chargeCapture: {
+        documentationComplete: Boolean(item.chargeCaptureRecord?.documentationComplete),
+        icd10CodesJson: Array.isArray(item.chargeCaptureRecord?.icd10CodesJson) ? (item.chargeCaptureRecord?.icd10CodesJson as string[]) : [],
+        procedureLinesJson: Array.isArray(item.chargeCaptureRecord?.procedureLinesJson) ? (item.chargeCaptureRecord?.procedureLinesJson as any[]) : [],
+        serviceCaptureItemsJson: Array.isArray(item.chargeCaptureRecord?.serviceCaptureItemsJson)
+          ? (item.chargeCaptureRecord?.serviceCaptureItemsJson as any[])
+          : [],
+      },
+      chargeSchedule: settings?.chargeSchedule || [],
+    });
+    expectedGrossChargeCents += expectation.expectedGrossChargeCents;
+    if (expectation.serviceCaptureCompleted) serviceCaptureCompletedVisitCount += 1;
+    if (expectation.clinicianCodingEntered) clinicianCodingEnteredVisitCount += 1;
+    if (expectation.chargeCaptureReady) chargeCaptureReadyVisitCount += 1;
+
     item.providerClarifications.forEach((query) => {
       queryAging[bucketQueryAge(query.openedAt, new Date())] += 1;
     });
@@ -187,6 +213,10 @@ export async function computeRevenueDailyRollup(
     sameDayCollectionTrackedCents: tracked,
     sameDayCollectionVisitRate,
     sameDayCollectionDollarRate,
+    expectedGrossChargeCents,
+    serviceCaptureCompletedVisitCount,
+    clinicianCodingEnteredVisitCount,
+    chargeCaptureReadyVisitCount,
     financiallyClearedCount,
     chargeCaptureCompletedCount,
     athenaHandoffConfirmedCount,
@@ -231,6 +261,10 @@ export async function getRevenueDailyHistoryRollups(
           sameDayCollectionTrackedCents: existing.sameDayCollectionTrackedCents,
           sameDayCollectionVisitRate: existing.sameDayCollectionVisitRate,
           sameDayCollectionDollarRate: existing.sameDayCollectionDollarRate,
+          expectedGrossChargeCents: existing.expectedGrossChargeCents,
+          serviceCaptureCompletedVisitCount: existing.serviceCaptureCompletedVisitCount,
+          clinicianCodingEnteredVisitCount: existing.clinicianCodingEnteredVisitCount,
+          chargeCaptureReadyVisitCount: existing.chargeCaptureReadyVisitCount,
           financiallyClearedCount: existing.financiallyClearedCount,
           chargeCaptureCompletedCount: existing.chargeCaptureCompletedCount,
           athenaHandoffConfirmedCount: existing.athenaHandoffConfirmedCount,
@@ -264,6 +298,10 @@ export async function getRevenueDailyHistoryRollups(
             sameDayCollectionTrackedCents: computed.sameDayCollectionTrackedCents,
             sameDayCollectionVisitRate: computed.sameDayCollectionVisitRate,
             sameDayCollectionDollarRate: computed.sameDayCollectionDollarRate,
+            expectedGrossChargeCents: computed.expectedGrossChargeCents,
+            serviceCaptureCompletedVisitCount: computed.serviceCaptureCompletedVisitCount,
+            clinicianCodingEnteredVisitCount: computed.clinicianCodingEnteredVisitCount,
+            chargeCaptureReadyVisitCount: computed.chargeCaptureReadyVisitCount,
             financiallyClearedCount: computed.financiallyClearedCount,
             chargeCaptureCompletedCount: computed.chargeCaptureCompletedCount,
             athenaHandoffConfirmedCount: computed.athenaHandoffConfirmedCount,

@@ -1538,6 +1538,21 @@ export const admin = {
     providerQueryTemplates?: string[];
     athenaLinkTemplate?: string | null;
     athenaChecklistDefaults?: Array<{ label: string; sortOrder?: number }>;
+    checklistDefaults?: Record<string, Array<{ label: string; sortOrder?: number; required?: boolean }>>;
+    serviceCatalog?: Array<{
+      id: string;
+      label: string;
+      suggestedProcedureCode?: string | null;
+      expectedChargeCents?: number | null;
+      active?: boolean;
+      allowCustomNote?: boolean;
+    }>;
+    chargeSchedule?: Array<{
+      code: string;
+      amountCents: number;
+      description?: string | null;
+      active?: boolean;
+    }>;
   }) {
     return apiFetch<RevenueSettings>("/admin/revenue-settings", {
       method: "POST",

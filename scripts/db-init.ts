@@ -93,9 +93,17 @@ const requiresRebuild =
   !hasColumn("RevenueCase", "athenaHandoffNote") ||
   !hasColumn("RevenueCase", "closeoutState") ||
   !hasColumn("ChargeCaptureRecord", "procedureLinesJson") ||
+  !hasColumn("ChargeCaptureRecord", "serviceCaptureItemsJson") ||
+  !hasColumn("RevenueCycleSettings", "checklistDefaultsJson") ||
+  !hasColumn("RevenueCycleSettings", "serviceCatalogJson") ||
+  !hasColumn("RevenueCycleSettings", "chargeScheduleJson") ||
   !hasColumn("RevenueCycleDailyRollup", "facilityId") ||
   !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionExpectedVisitCount") ||
-  !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionVisitRate");
+  !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionVisitRate") ||
+  !hasColumn("RevenueCycleDailyRollup", "expectedGrossChargeCents") ||
+  !hasColumn("RevenueCycleDailyRollup", "serviceCaptureCompletedVisitCount") ||
+  !hasColumn("RevenueCycleDailyRollup", "clinicianCodingEnteredVisitCount") ||
+  !hasColumn("RevenueCycleDailyRollup", "chargeCaptureReadyVisitCount");
 
 if (requiresRebuild) {
   db.exec(`
@@ -721,6 +729,7 @@ CREATE TABLE IF NOT EXISTS ChargeCaptureRecord (
   codingStage TEXT NOT NULL DEFAULT 'NotStarted',
   icd10CodesJson TEXT NOT NULL DEFAULT '[]',
   procedureLinesJson TEXT NOT NULL DEFAULT '[]',
+  serviceCaptureItemsJson TEXT NOT NULL DEFAULT '[]',
   cptCodesJson TEXT NOT NULL DEFAULT '[]',
   modifiersJson TEXT NOT NULL DEFAULT '[]',
   unitsJson TEXT NOT NULL DEFAULT '[]',
@@ -785,6 +794,9 @@ CREATE TABLE IF NOT EXISTS RevenueCycleSettings (
   providerQueryTemplatesJson TEXT NOT NULL DEFAULT '[]',
   athenaLinkTemplate TEXT,
   athenaChecklistDefaultsJson TEXT NOT NULL DEFAULT '[]',
+  checklistDefaultsJson TEXT NOT NULL DEFAULT '{}',
+  serviceCatalogJson TEXT NOT NULL DEFAULT '[]',
+  chargeScheduleJson TEXT NOT NULL DEFAULT '[]',
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE
@@ -854,6 +866,10 @@ CREATE TABLE IF NOT EXISTS RevenueCycleDailyRollup (
   sameDayCollectionTrackedCents INTEGER NOT NULL DEFAULT 0,
   sameDayCollectionVisitRate REAL NOT NULL DEFAULT 0,
   sameDayCollectionDollarRate REAL NOT NULL DEFAULT 0,
+  expectedGrossChargeCents INTEGER NOT NULL DEFAULT 0,
+  serviceCaptureCompletedVisitCount INTEGER NOT NULL DEFAULT 0,
+  clinicianCodingEnteredVisitCount INTEGER NOT NULL DEFAULT 0,
+  chargeCaptureReadyVisitCount INTEGER NOT NULL DEFAULT 0,
   financiallyClearedCount INTEGER NOT NULL DEFAULT 0,
   chargeCaptureCompletedCount INTEGER NOT NULL DEFAULT 0,
   athenaHandoffConfirmedCount INTEGER NOT NULL DEFAULT 0,

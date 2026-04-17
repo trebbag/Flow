@@ -57,6 +57,8 @@ export const CHECKIN_FINANCIAL_KEYS = {
   referralStatus: "financial.referral_status",
 } as const;
 
+export const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items" as const;
+
 export const DEFAULT_ATHENA_CHECKLIST = [
   { label: "Review coding summary", sortOrder: 10 },
   { label: "Open encounter in Athena", sortOrder: 20 },
@@ -81,6 +83,102 @@ export const DEFAULT_PROVIDER_QUERY_TEMPLATES = [
   "Please add the missing clinical detail revenue needs before Athena handoff.",
 ] as const;
 
+export type RevenueChecklistDefaultItem = {
+  label: string;
+  sortOrder: number;
+  required?: boolean;
+};
+
+export type RevenueServiceCatalogItem = {
+  id: string;
+  label: string;
+  suggestedProcedureCode: string | null;
+  expectedChargeCents: number | null;
+  active: boolean;
+  allowCustomNote?: boolean;
+};
+
+export type RevenueChargeScheduleItem = {
+  code: string;
+  amountCents: number;
+  description: string | null;
+  active: boolean;
+};
+
+export type RevenueServiceCaptureItem = {
+  id: string;
+  catalogItemId: string | null;
+  label: string;
+  sourceRole: string;
+  sourceTaskId: string | null;
+  quantity: number;
+  note: string | null;
+  performedAt: string | null;
+  capturedByUserId: string | null;
+  suggestedProcedureCode: string | null;
+  expectedChargeCents: number | null;
+};
+
+export const DEFAULT_REVENUE_CHECKLIST_DEFAULTS: Record<string, RevenueChecklistDefaultItem[]> = {
+  financial_readiness: [
+    { label: "Eligibility checked", sortOrder: 10 },
+    { label: "Payer / plan snapshot confirmed", sortOrder: 20 },
+    { label: "Expected POS amount recorded", sortOrder: 30 },
+    { label: "Prior auth / referral addressed", sortOrder: 40 },
+  ],
+  checkout_tracking: [
+    { label: "Amount due recorded", sortOrder: 10 },
+    { label: "Collection outcome recorded", sortOrder: 20 },
+    { label: "Missed reason recorded when needed", sortOrder: 30 },
+    { label: "Follow-up ownership captured if not fully collected", sortOrder: 40 },
+  ],
+  charge_capture: [
+    { label: "MA service capture complete", sortOrder: 10 },
+    { label: "Clinician working codes entered", sortOrder: 20 },
+    { label: "Final diagnosis / procedure set verified", sortOrder: 30 },
+    { label: "Documentation complete enough for handoff", sortOrder: 40 },
+  ],
+  athena_handoff: DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item })),
+  day_close: [
+    { label: "Unfinished work routed with owner, next action, and due date", sortOrder: 10 },
+  ],
+};
+
+export const DEFAULT_SERVICE_CATALOG: RevenueServiceCatalogItem[] = [
+  { id: "svc-venipuncture", label: "Venipuncture", suggestedProcedureCode: "36415", expectedChargeCents: 1800, active: true },
+  { id: "svc-ekg", label: "EKG", suggestedProcedureCode: "93000", expectedChargeCents: 9500, active: true },
+  { id: "svc-injection", label: "Injection administration", suggestedProcedureCode: "96372", expectedChargeCents: 4200, active: true },
+  { id: "svc-nebulizer", label: "Nebulizer treatment", suggestedProcedureCode: "94640", expectedChargeCents: 6700, active: true },
+  { id: "svc-spirometry", label: "Spirometry", suggestedProcedureCode: "94010", expectedChargeCents: 7900, active: true },
+  { id: "svc-urinalysis", label: "Urinalysis", suggestedProcedureCode: "81002", expectedChargeCents: 1600, active: true },
+  { id: "svc-rapid-strep", label: "Rapid strep test", suggestedProcedureCode: "87880", expectedChargeCents: 2800, active: true },
+  { id: "svc-covid-pcr", label: "COVID PCR test", suggestedProcedureCode: "87635", expectedChargeCents: 5100, active: true },
+  { id: "svc-wound-care", label: "Simple wound repair", suggestedProcedureCode: "12001", expectedChargeCents: 12500, active: true },
+  { id: "svc-other", label: "Other service", suggestedProcedureCode: null, expectedChargeCents: null, active: true, allowCustomNote: true },
+];
+
+export const DEFAULT_CHARGE_SCHEDULE: RevenueChargeScheduleItem[] = [
+  { code: "99202", amountCents: 15600, description: "New patient office visit, straightforward", active: true },
+  { code: "99203", amountCents: 22400, description: "New patient office visit, low complexity", active: true },
+  { code: "99204", amountCents: 33800, description: "New patient office visit, moderate complexity", active: true },
+  { code: "99205", amountCents: 43200, description: "New patient office visit, high complexity", active: true },
+  { code: "99211", amountCents: 7100, description: "Established patient office visit, minimal", active: true },
+  { code: "99212", amountCents: 9800, description: "Established patient office visit, straightforward", active: true },
+  { code: "99213", amountCents: 14600, description: "Established patient office visit, low complexity", active: true },
+  { code: "99214", amountCents: 21200, description: "Established patient office visit, moderate complexity", active: true },
+  { code: "99215", amountCents: 29200, description: "Established patient office visit, high complexity", active: true },
+  { code: "36415", amountCents: 1800, description: "Venipuncture", active: true },
+  { code: "93000", amountCents: 9500, description: "Electrocardiogram", active: true },
+  { code: "96372", amountCents: 4200, description: "Therapeutic injection administration", active: true },
+  { code: "94640", amountCents: 6700, description: "Inhalation treatment", active: true },
+  { code: "94010", amountCents: 7900, description: "Spirometry", active: true },
+  { code: "81002", amountCents: 1600, description: "Urinalysis, dip stick or tablet reagent", active: true },
+  { code: "87880", amountCents: 2800, description: "Rapid streptococcus antigen detection", active: true },
+  { code: "87635", amountCents: 5100, description: "SARS-CoV-2 amplified probe technique", active: true },
+  { code: "J1100", amountCents: 500, description: "Dexamethasone sodium phosphate, 1 mg", active: true },
+  { code: "12001", amountCents: 12500, description: "Simple repair superficial wounds", active: true },
+];
+
 export const DEFAULT_REVENUE_SETTINGS = {
   missedCollectionReasons: [...DEFAULT_MISSED_COLLECTION_REASONS],
   queueSla: {
@@ -97,6 +195,11 @@ export const DEFAULT_REVENUE_SETTINGS = {
   providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
   athenaLinkTemplate: "",
   athenaChecklistDefaults: DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item })),
+  checklistDefaults: Object.fromEntries(
+    Object.entries(DEFAULT_REVENUE_CHECKLIST_DEFAULTS).map(([key, rows]) => [key, rows.map((item) => ({ ...item }))]),
+  ),
+  serviceCatalog: DEFAULT_SERVICE_CATALOG.map((item) => ({ ...item })),
+  chargeSchedule: DEFAULT_CHARGE_SCHEDULE.map((item) => ({ ...item })),
 } as const;
 
 export type RevenueProcedureLine = {
@@ -105,6 +208,15 @@ export type RevenueProcedureLine = {
   modifiers: string[];
   units: number;
   diagnosisPointers: number[];
+};
+
+export type RevenueExpectationSummary = {
+  expectedGrossChargeCents: number;
+  missingChargeMapping: boolean;
+  missingChargeMappingCount: number;
+  serviceCaptureCompleted: boolean;
+  clinicianCodingEntered: boolean;
+  chargeCaptureReady: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -258,6 +370,174 @@ function buildLegacyCodingArrays(lines: RevenueProcedureLine[]) {
   };
 }
 
+function parseChecklistDefaultRows(
+  value: Prisma.JsonValue | null | undefined,
+  fallback: readonly RevenueChecklistDefaultItem[],
+) {
+  if (!Array.isArray(value)) return fallback.map((item) => ({ ...item }));
+  const parsed: RevenueChecklistDefaultItem[] = [];
+  value.forEach((entry) => {
+    const source = asRecord(entry);
+    const label = asString(source.label);
+    if (!label) return;
+    parsed.push({
+      label,
+      sortOrder: Math.max(0, asInt(source.sortOrder) ?? 0),
+      required: asBoolean(source.required) ?? true,
+    });
+  });
+  return parsed.length > 0 ? parsed : fallback.map((item) => ({ ...item }));
+}
+
+function parseChecklistDefaults(value: Prisma.JsonValue | null | undefined) {
+  const source = asRecord(value);
+  return Object.fromEntries(
+    Object.entries(DEFAULT_REVENUE_CHECKLIST_DEFAULTS).map(([group, fallback]) => [
+      group,
+      parseChecklistDefaultRows(source[group] as Prisma.JsonValue | null | undefined, fallback),
+    ]),
+  ) as Record<string, RevenueChecklistDefaultItem[]>;
+}
+
+function parseServiceCatalog(value: Prisma.JsonValue | null | undefined) {
+  if (!Array.isArray(value)) return DEFAULT_SERVICE_CATALOG.map((item) => ({ ...item }));
+  const parsed: RevenueServiceCatalogItem[] = [];
+  value.forEach((entry, index) => {
+    const source = asRecord(entry);
+    const label = asString(source.label);
+    if (!label) return;
+    parsed.push({
+      id: asString(source.id) || `service-catalog-${index + 1}`,
+      label,
+      suggestedProcedureCode: asString(source.suggestedProcedureCode),
+      expectedChargeCents: asInt(source.expectedChargeCents),
+      active: asBoolean(source.active) ?? true,
+      allowCustomNote: asBoolean(source.allowCustomNote) ?? false,
+    });
+  });
+  if (parsed.length === 0) return DEFAULT_SERVICE_CATALOG.map((item) => ({ ...item }));
+  const seenIds = new Set(parsed.map((item) => item.id));
+  const merged = [...parsed];
+  DEFAULT_SERVICE_CATALOG.forEach((item) => {
+    if (!seenIds.has(item.id)) merged.push({ ...item });
+  });
+  return merged;
+}
+
+function parseChargeSchedule(value: Prisma.JsonValue | null | undefined) {
+  if (!Array.isArray(value)) return DEFAULT_CHARGE_SCHEDULE.map((item) => ({ ...item }));
+  const parsed = value
+    .map((entry) => {
+      const source = asRecord(entry);
+      const code = asString(source.code)?.toUpperCase() || null;
+      const amountCents = asInt(source.amountCents);
+      if (!code || amountCents === null || amountCents < 0) return null;
+      return {
+        code,
+        amountCents,
+        description: asString(source.description),
+        active: asBoolean(source.active) ?? true,
+      } satisfies RevenueChargeScheduleItem;
+    })
+    .filter((entry): entry is RevenueChargeScheduleItem => Boolean(entry));
+  if (parsed.length === 0) return DEFAULT_CHARGE_SCHEDULE.map((item) => ({ ...item }));
+  const seenCodes = new Set(parsed.map((item) => item.code.toUpperCase()));
+  const merged = [...parsed];
+  DEFAULT_CHARGE_SCHEDULE.forEach((item) => {
+    if (!seenCodes.has(item.code.toUpperCase())) merged.push({ ...item });
+  });
+  return merged;
+}
+
+function buildServiceCatalogMap(serviceCatalog: RevenueServiceCatalogItem[]) {
+  return new Map(serviceCatalog.map((item) => [item.id, item]));
+}
+
+function buildChargeScheduleMap(chargeSchedule: RevenueChargeScheduleItem[]) {
+  return new Map(chargeSchedule.filter((item) => item.active).map((item) => [item.code.toUpperCase(), item]));
+}
+
+function normalizeServiceCaptureItems(
+  value: unknown,
+  serviceCatalog: RevenueServiceCatalogItem[],
+): RevenueServiceCaptureItem[] {
+  if (!Array.isArray(value)) return [];
+  const catalogById = buildServiceCatalogMap(serviceCatalog);
+  return value
+    .map((entry, index) => {
+      const source = asRecord(entry);
+      const catalogItemId = asString(source.catalogItemId);
+      const catalogItem = catalogItemId ? catalogById.get(catalogItemId) : null;
+      const label = asString(source.label) || catalogItem?.label || asString(source.name);
+      if (!label) return null;
+      return {
+        id: asString(source.id) || `service-item-${index + 1}`,
+        catalogItemId,
+        label,
+        sourceRole: asString(source.sourceRole) || RoleName.MA,
+        sourceTaskId: asString(source.sourceTaskId),
+        quantity: Math.max(1, asInt(source.quantity) || 1),
+        note: asString(source.note),
+        performedAt: asString(source.performedAt),
+        capturedByUserId: asString(source.capturedByUserId),
+        suggestedProcedureCode: asString(source.suggestedProcedureCode) || catalogItem?.suggestedProcedureCode || null,
+        expectedChargeCents: asInt(source.expectedChargeCents) ?? catalogItem?.expectedChargeCents ?? null,
+      } satisfies RevenueServiceCaptureItem;
+    })
+    .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
+}
+
+export function buildRevenueExpectationSummary(params: {
+  chargeCapture: {
+    documentationComplete: boolean;
+    icd10CodesJson: string[];
+    procedureLinesJson: RevenueProcedureLine[];
+    serviceCaptureItemsJson?: RevenueServiceCaptureItem[];
+  };
+  chargeSchedule: RevenueChargeScheduleItem[];
+}) {
+  const scheduleByCode = buildChargeScheduleMap(params.chargeSchedule);
+  const serviceItems = params.chargeCapture.serviceCaptureItemsJson || [];
+  const clinicianCodingEntered =
+    params.chargeCapture.icd10CodesJson.length > 0 || params.chargeCapture.procedureLinesJson.length > 0;
+  const serviceCaptureCompleted = serviceItems.length > 0;
+  const chargeCaptureReady =
+    serviceCaptureCompleted &&
+    params.chargeCapture.documentationComplete &&
+    params.chargeCapture.icd10CodesJson.length > 0 &&
+    params.chargeCapture.procedureLinesJson.length > 0;
+
+  let expectedGrossChargeCents = 0;
+  let missingChargeMappingCount = 0;
+  if (params.chargeCapture.procedureLinesJson.length > 0) {
+    params.chargeCapture.procedureLinesJson.forEach((line) => {
+      const scheduleRow = scheduleByCode.get(line.cptCode.toUpperCase());
+      if (!scheduleRow) {
+        missingChargeMappingCount += 1;
+        return;
+      }
+      expectedGrossChargeCents += scheduleRow.amountCents * Math.max(1, line.units || 1);
+    });
+  } else if (serviceItems.length > 0) {
+    serviceItems.forEach((item) => {
+      if (item.expectedChargeCents === null || item.expectedChargeCents === undefined) {
+        missingChargeMappingCount += 1;
+        return;
+      }
+      expectedGrossChargeCents += item.expectedChargeCents * Math.max(1, item.quantity || 1);
+    });
+  }
+
+  return {
+    expectedGrossChargeCents,
+    missingChargeMapping: missingChargeMappingCount > 0,
+    missingChargeMappingCount,
+    serviceCaptureCompleted,
+    clinicianCodingEntered,
+    chargeCaptureReady,
+  } satisfies RevenueExpectationSummary;
+}
+
 export function normalizeChargeCaptureInput(input: {
   documentationComplete?: boolean;
   codingStage?: CodingStage;
@@ -297,6 +577,12 @@ export function normalizeChargeCaptureInput(input: {
     unitsJson: legacy.units,
     codingNote: input.codingNote || null,
   };
+}
+
+function collectionOutcomeNeedsMissedReason(outcome: CollectionOutcome | null | undefined) {
+  return outcome === CollectionOutcome.CollectedPartial
+    || outcome === CollectionOutcome.NotCollected
+    || outcome === CollectionOutcome.Deferred;
 }
 
 function toEligibilityStatus(value: string | null, insuranceVerified: boolean): FinancialEligibilityStatus {
@@ -454,15 +740,21 @@ function parseFinancialReadiness(encounter: {
   };
 }
 
-function parseChargeCapture(encounter: {
-  clinicianData: Prisma.JsonValue | null;
-}) {
+function parseChargeCapture(
+  encounter: {
+    clinicianData: Prisma.JsonValue | null;
+    roomingData: Prisma.JsonValue | null;
+  },
+  serviceCatalog: RevenueServiceCatalogItem[],
+) {
   const source = asRecord(encounter.clinicianData);
+  const roomingSource = asRecord(encounter.roomingData);
   const diagnosisText = asString(source[CLINICIAN_CODING_KEYS.diagnosisText]);
   const procedureText = asString(source[CLINICIAN_CODING_KEYS.procedureText]);
   const documentationComplete = asBoolean(source[CLINICIAN_CODING_KEYS.documentationComplete]) ?? false;
   const codingNote = asString(source[CLINICIAN_CODING_KEYS.note]);
   const diagnoses = splitCodes(diagnosisText);
+  const serviceCaptureItemsJson = normalizeServiceCaptureItems(roomingSource[ROOMING_SERVICE_CAPTURE_KEY], serviceCatalog);
   const procedureLines = normalizeProcedureLines({
     diagnoses,
     cptCodes: splitCodes(procedureText),
@@ -477,6 +769,7 @@ function parseChargeCapture(encounter: {
     codingStage,
     icd10CodesJson: diagnoses,
     procedureLinesJson: procedureLines,
+    serviceCaptureItemsJson,
     cptCodesJson: legacyCodingArrays.cptCodes,
     modifiersJson: legacyCodingArrays.modifiers,
     unitsJson: legacyCodingArrays.units,
@@ -601,6 +894,7 @@ function computeCaseState(params: {
   >;
   checkoutTracking: ReturnType<typeof parseCheckoutTracking>;
   chargeCapture: ReturnType<typeof parseChargeCapture> & { readyForAthenaAt?: Date | null };
+  expectation: RevenueExpectationSummary;
   revenueCase: Pick<
     RevenueCase,
     | "rolledFromDateKey"
@@ -625,11 +919,7 @@ function computeCaseState(params: {
     collectionExpected: params.checkoutTracking.collectionExpected,
     missedCollectionReason: params.checkoutTracking.missedCollectionReason,
   });
-  const chargeReady =
-    params.chargeCapture.documentationComplete &&
-    params.chargeCapture.codingStage === CodingStage.ReadyForAthena &&
-    params.chargeCapture.icd10CodesJson.length > 0 &&
-    params.chargeCapture.procedureLinesJson.length > 0;
+  const chargeReady = params.expectation.chargeCaptureReady;
   const hasAthenaConfirmation = Boolean(params.revenueCase?.athenaHandoffConfirmedAt);
   let currentRevenueStatus: RevenueStatus = RevenueStatus.FinanciallyCleared;
   let currentWorkQueue: RevenueWorkQueue = RevenueWorkQueue.FinancialReadiness;
@@ -677,7 +967,11 @@ function computeCaseState(params: {
         : RevenueStatus.ChargeCaptureNeeded;
     currentWorkQueue = RevenueWorkQueue.ChargeCapture;
     blockerCategory = "charge_capture";
-    blockerText = "Coding summary is incomplete for Athena handoff.";
+    blockerText = params.expectation.serviceCaptureCompleted
+      ? params.expectation.clinicianCodingEntered
+        ? "Final coding verification or documentation is incomplete for Athena handoff."
+        : "Clinician working codes have not been entered yet."
+      : "MA service capture is incomplete for charge capture.";
   } else if (chargeReady && !hasAthenaConfirmation) {
     currentRevenueStatus =
       params.athenaChecklistCompletedCount > 0 || params.revenueCase?.athenaHandoffStartedAt || params.revenueCase?.athenaHandoffOwnerUserId
@@ -685,7 +979,9 @@ function computeCaseState(params: {
         : RevenueStatus.ReadyForAthenaHandoff;
     currentWorkQueue = RevenueWorkQueue.AthenaHandoff;
     blockerCategory = "athena_handoff";
-    blockerText = "Athena handoff is not yet confirmed.";
+    blockerText = params.expectation.missingChargeMapping
+      ? `Athena handoff is pending and ${params.expectation.missingChargeMappingCount} charge mapping${params.expectation.missingChargeMappingCount === 1 ? " is" : "s are"} missing in Flow.`
+      : "Athena handoff is not yet confirmed.";
   } else if (hasAthenaConfirmation) {
     currentRevenueStatus = RevenueStatus.MonitoringOnly;
     currentWorkQueue = RevenueWorkQueue.Monitoring;
@@ -731,19 +1027,7 @@ function parseSettingsArray(value: Prisma.JsonValue | null | undefined, fallback
 }
 
 function parseAthenaChecklistDefaults(value: Prisma.JsonValue | null | undefined) {
-  if (!Array.isArray(value)) return DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item }));
-  const parsed = value
-    .map((entry) => {
-      const source = asRecord(entry);
-      const label = asString(source.label);
-      if (!label) return null;
-      return {
-        label,
-        sortOrder: asInt(source.sortOrder) ?? 0,
-      };
-    })
-    .filter((entry): entry is { label: string; sortOrder: number } => Boolean(entry));
-  return parsed.length > 0 ? parsed : DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item }));
+  return parseChecklistDefaultRows(value, DEFAULT_ATHENA_CHECKLIST);
 }
 
 export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionClient, facilityId: string) {
@@ -757,9 +1041,16 @@ export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionCl
       providerQueryTemplatesJson: [...DEFAULT_REVENUE_SETTINGS.providerQueryTemplates] as Prisma.InputJsonValue,
       athenaLinkTemplate: DEFAULT_REVENUE_SETTINGS.athenaLinkTemplate,
       athenaChecklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.athenaChecklistDefaults as Prisma.InputJsonValue,
+      checklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.checklistDefaults as Prisma.InputJsonValue,
+      serviceCatalogJson: DEFAULT_REVENUE_SETTINGS.serviceCatalog as Prisma.InputJsonValue,
+      chargeScheduleJson: DEFAULT_REVENUE_SETTINGS.chargeSchedule as Prisma.InputJsonValue,
     },
     update: {},
   });
+
+  const checklistDefaults = parseChecklistDefaults(settings.checklistDefaultsJson);
+  const athenaChecklistDefaults = parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson);
+  checklistDefaults[RevenueChecklistGroup.athena_handoff] = athenaChecklistDefaults;
 
   return {
     facilityId: settings.facilityId,
@@ -768,7 +1059,10 @@ export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionCl
     dayCloseDefaults: asRecord(settings.dayCloseDefaultsJson),
     providerQueryTemplates: parseSettingsArray(settings.providerQueryTemplatesJson, DEFAULT_PROVIDER_QUERY_TEMPLATES),
     athenaLinkTemplate: settings.athenaLinkTemplate || "",
-    athenaChecklistDefaults: parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson),
+    athenaChecklistDefaults,
+    checklistDefaults,
+    serviceCatalog: parseServiceCatalog(settings.serviceCatalogJson),
+    chargeSchedule: parseChargeSchedule(settings.chargeScheduleJson),
   };
 }
 
@@ -785,25 +1079,75 @@ type RevenueEncounter = Prisma.EncounterGetPayload<{
 async function ensureAthenaChecklist(
   db: PrismaClient | Prisma.TransactionClient,
   revenueCaseId: string,
-  checklistDefaults: ReadonlyArray<{ label: string; sortOrder: number }> = DEFAULT_ATHENA_CHECKLIST,
+  checklistDefaults: ReadonlyArray<RevenueChecklistDefaultItem> = DEFAULT_ATHENA_CHECKLIST,
+) {
+  await ensureRevenueChecklistGroup(db, revenueCaseId, RevenueChecklistGroup.athena_handoff, checklistDefaults);
+}
+
+async function ensureRevenueChecklistGroup(
+  db: PrismaClient | Prisma.TransactionClient,
+  revenueCaseId: string,
+  group: RevenueChecklistGroup,
+  checklistDefaults: ReadonlyArray<RevenueChecklistDefaultItem>,
 ) {
   const existing = await db.revenueChecklistItem.findMany({
     where: {
       revenueCaseId,
-      group: RevenueChecklistGroup.athena_handoff,
+      group,
     },
   });
   for (const item of checklistDefaults) {
-    if (existing.find((entry) => entry.label === item.label && entry.group === RevenueChecklistGroup.athena_handoff)) {
+    if (existing.find((entry) => entry.label === item.label && entry.group === group)) {
       continue;
     }
     await db.revenueChecklistItem.create({
       data: {
         revenueCaseId,
-        group: RevenueChecklistGroup.athena_handoff,
+        group,
         label: item.label,
-        required: true,
+        required: item.required ?? true,
         sortOrder: item.sortOrder,
+      },
+    });
+  }
+}
+
+async function ensureRevenueChecklistItems(
+  db: PrismaClient | Prisma.TransactionClient,
+  revenueCaseId: string,
+  checklistDefaults: Record<string, RevenueChecklistDefaultItem[]>,
+) {
+  const supportedGroups: RevenueChecklistGroup[] = [
+    RevenueChecklistGroup.financial_readiness,
+    RevenueChecklistGroup.checkout_tracking,
+    RevenueChecklistGroup.charge_capture,
+    RevenueChecklistGroup.athena_handoff,
+    RevenueChecklistGroup.day_close,
+  ];
+  for (const group of supportedGroups) {
+    await ensureRevenueChecklistGroup(db, revenueCaseId, group, checklistDefaults[group] || []);
+  }
+}
+
+async function syncChecklistCompletion(
+  db: PrismaClient | Prisma.TransactionClient,
+  revenueCaseId: string,
+  group: RevenueChecklistGroup,
+  completions: Array<{ label: string; completed: boolean; evidenceText?: string | null }>,
+) {
+  const items = await db.revenueChecklistItem.findMany({
+    where: { revenueCaseId, group },
+  });
+  for (const completion of completions) {
+    const match = items.find((item) => item.label === completion.label);
+    if (!match) continue;
+    await db.revenueChecklistItem.update({
+      where: { id: match.id },
+      data: {
+        status: completion.completed ? "completed" : "pending",
+        completedAt: completion.completed ? match.completedAt || new Date() : null,
+        completedByUserId: completion.completed ? match.completedByUserId || null : null,
+        evidenceText: completion.completed ? completion.evidenceText || match.evidenceText || "Captured in Flow" : null,
       },
     });
   }
@@ -830,8 +1174,8 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
 
   const financial = parseFinancialReadiness(encounter);
   const checkoutTracking = parseCheckoutTracking(encounter);
-  const chargeCapture = parseChargeCapture(encounter);
   const settings = await getRevenueSettings(db, encounter.clinic.facilityId);
+  const chargeCapture = parseChargeCapture(encounter, settings.serviceCatalog);
 
   const upsertedCase = await db.revenueCase.upsert({
     where: { encounterId: encounter.id },
@@ -927,6 +1271,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       codingStage: chargeCapture.codingStage,
       icd10CodesJson: chargeCapture.icd10CodesJson as Prisma.InputJsonValue,
       procedureLinesJson: chargeCapture.procedureLinesJson as Prisma.InputJsonValue,
+      serviceCaptureItemsJson: chargeCapture.serviceCaptureItemsJson as Prisma.InputJsonValue,
       cptCodesJson: chargeCapture.cptCodesJson as Prisma.InputJsonValue,
       modifiersJson: chargeCapture.modifiersJson as Prisma.InputJsonValue,
       unitsJson: chargeCapture.unitsJson as Prisma.InputJsonValue,
@@ -938,6 +1283,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       codingStage: chargeCapture.codingStage,
       icd10CodesJson: chargeCapture.icd10CodesJson as Prisma.InputJsonValue,
       procedureLinesJson: chargeCapture.procedureLinesJson as Prisma.InputJsonValue,
+      serviceCaptureItemsJson: chargeCapture.serviceCaptureItemsJson as Prisma.InputJsonValue,
       cptCodesJson: chargeCapture.cptCodesJson as Prisma.InputJsonValue,
       modifiersJson: chargeCapture.modifiersJson as Prisma.InputJsonValue,
       unitsJson: chargeCapture.unitsJson as Prisma.InputJsonValue,
@@ -946,7 +1292,96 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
     },
   });
 
-  await ensureAthenaChecklist(db, upsertedCase.id, settings.athenaChecklistDefaults);
+  await ensureRevenueChecklistItems(db, upsertedCase.id, settings.checklistDefaults);
+
+  const priorAuthOrReferralAddressed =
+    (!financial.priorAuthRequired || isRequirementSatisfied(financial.priorAuthStatus, true)) &&
+    (!financial.referralRequired || isRequirementSatisfied(financial.referralStatus, true));
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.financial_readiness, [
+    {
+      label: "Eligibility checked",
+      completed: financial.eligibilityStatus !== FinancialEligibilityStatus.NotChecked,
+      evidenceText: financial.eligibilityStatus !== FinancialEligibilityStatus.NotChecked ? `Eligibility marked ${financial.eligibilityStatus}` : null,
+    },
+    {
+      label: "Payer / plan snapshot confirmed",
+      completed: Boolean(financial.primaryPayerName || financial.primaryPlanName || financial.secondaryPayerName),
+      evidenceText: financial.primaryPayerName || financial.primaryPlanName || financial.secondaryPayerName
+        ? `${financial.primaryPayerName || "Payer"} / ${financial.primaryPlanName || "Plan"}`
+        : null,
+    },
+    {
+      label: "Expected POS amount recorded",
+      completed: financial.pointOfServiceAmountDueCents >= 0,
+      evidenceText: `POS amount ${financial.pointOfServiceAmountDueCents}`,
+    },
+    {
+      label: "Prior auth / referral addressed",
+      completed: priorAuthOrReferralAddressed,
+      evidenceText: priorAuthOrReferralAddressed ? "Prior auth / referral requirements addressed in Flow" : null,
+    },
+  ]);
+
+  const followUpCaptured =
+    checkoutTracking.collectionOutcome === CollectionOutcome.CollectedInFull ||
+    checkoutTracking.collectionOutcome === CollectionOutcome.NoCollectionExpected ||
+    checkoutTracking.collectionOutcome === CollectionOutcome.Waived ||
+    Boolean(upsertedCase.assignedToUserId || upsertedCase.assignedToRole);
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.checkout_tracking, [
+    {
+      label: "Amount due recorded",
+      completed: checkoutTracking.amountDueCents >= 0,
+      evidenceText: `Amount due ${checkoutTracking.amountDueCents}`,
+    },
+    {
+      label: "Collection outcome recorded",
+      completed: Boolean(checkoutTracking.collectionOutcome),
+      evidenceText: checkoutTracking.collectionOutcome || null,
+    },
+    {
+      label: "Missed reason recorded when needed",
+      completed:
+        !checkoutTracking.collectionOutcome ||
+        !collectionOutcomeNeedsMissedReason(checkoutTracking.collectionOutcome) ||
+        Boolean(checkoutTracking.missedCollectionReason),
+      evidenceText: checkoutTracking.missedCollectionReason,
+    },
+    {
+      label: "Follow-up ownership captured if not fully collected",
+      completed: followUpCaptured,
+      evidenceText: followUpCaptured ? "Owner captured for collection follow-up" : null,
+    },
+  ]);
+
+  const expectation = buildRevenueExpectationSummary({
+    chargeCapture,
+    chargeSchedule: settings.chargeSchedule,
+  });
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.charge_capture, [
+    {
+      label: "MA service capture complete",
+      completed: expectation.serviceCaptureCompleted,
+      evidenceText: expectation.serviceCaptureCompleted ? `${chargeCapture.serviceCaptureItemsJson.length} service item(s) captured` : null,
+    },
+    {
+      label: "Clinician working codes entered",
+      completed: expectation.clinicianCodingEntered,
+      evidenceText: expectation.clinicianCodingEntered ? "Clinician working codes saved in Flow" : null,
+    },
+    {
+      label: "Final diagnosis / procedure set verified",
+      completed: chargeCapture.icd10CodesJson.length > 0 && chargeCapture.procedureLinesJson.length > 0,
+      evidenceText:
+        chargeCapture.icd10CodesJson.length > 0 && chargeCapture.procedureLinesJson.length > 0
+          ? `${chargeCapture.icd10CodesJson.length} dx / ${chargeCapture.procedureLinesJson.length} procedure lines`
+          : null,
+    },
+    {
+      label: "Documentation complete enough for handoff",
+      completed: chargeCapture.documentationComplete,
+      evidenceText: chargeCapture.documentationComplete ? "Clinician marked documentation complete" : null,
+    },
+  ]);
 
   const refreshed = await db.revenueCase.findUnique({
     where: { id: upsertedCase.id },
@@ -971,6 +1406,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       ...chargeCapture,
       readyForAthenaAt: refreshed.chargeCaptureRecord.readyForAthenaAt,
     },
+    expectation,
     revenueCase: refreshed,
     athenaChecklistCompletedCount: refreshed.checklistItems.filter(
       (item) => item.group === RevenueChecklistGroup.athena_handoff && item.status === "completed",

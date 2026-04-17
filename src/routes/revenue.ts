@@ -19,12 +19,15 @@ import { ApiError, assert } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import {
   buildRevenueCaseList,
+  buildRevenueExpectationSummary,
   createRevenueProviderClarification,
   getRevenueSettings,
   normalizeChargeCaptureInput,
   respondToRevenueProviderClarification,
   syncRevenueCaseForEncounter,
   syncRevenueCasesForScope,
+  type RevenueProcedureLine,
+  type RevenueServiceCaptureItem,
 } from "../lib/revenue-cycle.js";
 import { getRevenueDailyHistoryRollups, listDateKeys } from "../lib/revenue-rollups.js";
 import {
@@ -51,6 +54,64 @@ const revenueHistorySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
 });
+
+function readStringArray(value: Prisma.JsonValue | null | undefined): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function readProcedureLines(value: Prisma.JsonValue | null | undefined): RevenueProcedureLine[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+      const line = entry as Record<string, unknown>;
+      const cptCode = typeof line.cptCode === "string" ? line.cptCode.trim() : "";
+      if (!cptCode) return null;
+      return {
+        lineId: typeof line.lineId === "string" && line.lineId.trim() ? line.lineId.trim() : `line-${index + 1}`,
+        cptCode,
+        modifiers: Array.isArray(line.modifiers)
+          ? line.modifiers.filter((modifier): modifier is string => typeof modifier === "string" && modifier.trim().length > 0)
+          : [],
+        units: Number.isFinite(Number(line.units)) && Number(line.units) > 0 ? Number(line.units) : 1,
+        diagnosisPointers: Array.isArray(line.diagnosisPointers)
+          ? line.diagnosisPointers
+              .map((pointer) => Number(pointer))
+              .filter((pointer) => Number.isInteger(pointer) && pointer > 0)
+          : [],
+      } satisfies RevenueProcedureLine;
+    })
+    .filter((entry): entry is RevenueProcedureLine => Boolean(entry));
+}
+
+function readServiceCaptureItems(value: Prisma.JsonValue | null | undefined): RevenueServiceCaptureItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+      const item = entry as Record<string, unknown>;
+      const id = typeof item.id === "string" ? item.id.trim() : "";
+      const label = typeof item.label === "string" ? item.label.trim() : "";
+      if (!id || !label) return null;
+      return {
+        id,
+        catalogItemId: typeof item.catalogItemId === "string" && item.catalogItemId.trim() ? item.catalogItemId.trim() : null,
+        label,
+        sourceRole: typeof item.sourceRole === "string" && item.sourceRole.trim() ? item.sourceRole.trim() : RoleName.MA,
+        sourceTaskId: typeof item.sourceTaskId === "string" && item.sourceTaskId.trim() ? item.sourceTaskId.trim() : null,
+        quantity: Number.isFinite(Number(item.quantity)) && Number(item.quantity) > 0 ? Number(item.quantity) : 1,
+        note: typeof item.note === "string" && item.note.trim() ? item.note.trim() : null,
+        performedAt: typeof item.performedAt === "string" && item.performedAt.trim() ? item.performedAt.trim() : null,
+        capturedByUserId: typeof item.capturedByUserId === "string" && item.capturedByUserId.trim() ? item.capturedByUserId.trim() : null,
+        suggestedProcedureCode:
+          typeof item.suggestedProcedureCode === "string" && item.suggestedProcedureCode.trim()
+            ? item.suggestedProcedureCode.trim()
+            : null,
+        expectedChargeCents: Number.isFinite(Number(item.expectedChargeCents)) ? Number(item.expectedChargeCents) : null,
+      } satisfies RevenueServiceCaptureItem;
+    })
+    .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
+}
 
 const updateRevenueCaseSchema = z.object({
   assignedToUserId: z.string().uuid().nullable().optional(),
@@ -363,6 +424,21 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const sameDayCollectionDollarRate = collectionExpectedCents > 0
       ? Number(((collectionCapturedCents / collectionExpectedCents) * 100).toFixed(2))
       : 0;
+    const expectationRows = todayRows.map((row) =>
+      buildRevenueExpectationSummary({
+        chargeCapture: {
+          documentationComplete: Boolean(row.chargeCaptureRecord?.documentationComplete),
+          icd10CodesJson: readStringArray(row.chargeCaptureRecord?.icd10CodesJson),
+          procedureLinesJson: readProcedureLines(row.chargeCaptureRecord?.procedureLinesJson),
+          serviceCaptureItemsJson: readServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson),
+        },
+        chargeSchedule: settings.chargeSchedule,
+      }),
+    );
+    const expectedGrossChargeCents = expectationRows.reduce((sum, row) => sum + row.expectedGrossChargeCents, 0);
+    const serviceCaptureCompletedVisitCount = expectationRows.filter((row) => row.serviceCaptureCompleted).length;
+    const clinicianCodingEnteredVisitCount = expectationRows.filter((row) => row.clinicianCodingEntered).length;
+    const chargeCaptureReadyVisitCount = expectationRows.filter((row) => row.chargeCaptureReady).length;
 
     const handoffDurations = todayRows
       .filter((row) => row.encounter.checkoutCompleteAt && row.athenaHandoffConfirmedAt)
@@ -392,6 +468,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         sameDayCollectionCapturedCents: collectionCapturedCents,
         sameDayCollectionVisitRate,
         sameDayCollectionDollarRate,
+        expectedGrossChargeCents,
+        serviceCaptureCompletedVisitCount,
+        clinicianCodingEnteredVisitCount,
+        chargeCaptureReadyVisitCount,
         averageFlowHandoffLagHours,
         athenaDaysToSubmit,
         athenaDaysInAR,
@@ -411,6 +491,9 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         missedCollectionReasons: settings.missedCollectionReasons,
         providerQueryTemplates: settings.providerQueryTemplates,
         athenaLinkTemplate: settings.athenaLinkTemplate,
+        serviceCatalog: settings.serviceCatalog,
+        chargeSchedule: settings.chargeSchedule,
+        checklistDefaults: settings.checklistDefaults,
       },
       cases: rows.map(mapRevenueCaseRow),
     };
@@ -492,6 +575,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         sameDayCollectionTrackedCents: entry.sameDayCollectionTrackedCents,
         sameDayCollectionVisitRate: entry.sameDayCollectionVisitRate,
         sameDayCollectionDollarRate: entry.sameDayCollectionDollarRate,
+        expectedGrossChargeCents: entry.expectedGrossChargeCents,
+        serviceCaptureCompletedVisitCount: entry.serviceCaptureCompletedVisitCount,
+        clinicianCodingEnteredVisitCount: entry.clinicianCodingEnteredVisitCount,
+        chargeCaptureReadyVisitCount: entry.chargeCaptureReadyVisitCount,
         financiallyClearedCount: entry.financiallyClearedCount,
         chargeCaptureCompletedCount: entry.chargeCaptureCompletedCount,
         athenaHandoffConfirmedCount: entry.athenaHandoffConfirmedCount,
@@ -954,7 +1041,20 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           rolledFromDateKey: item.rollover ? targetDate : null,
           rollReason: item.rollover ? item.reasonNotCompleted : null,
           closeoutState: item.rollover ? RevenueCloseoutState.RolledOver : RevenueCloseoutState.ClosedUnresolved,
-          currentDayBucket: item.rollover ? RevenueDayBucket.Rolled : RevenueDayBucket.Today,
+          currentDayBucket: item.rollover ? RevenueDayBucket.Rolled : RevenueDayBucket.Yesterday,
+        },
+      });
+
+      await prisma.revenueChecklistItem.updateMany({
+        where: {
+          revenueCaseId: unresolvedCase.id,
+          group: "day_close",
+        },
+        data: {
+          status: "completed",
+          completedAt: new Date(),
+          completedByUserId: request.user!.id,
+          evidenceText: `${item.reasonNotCompleted} | Next: ${item.nextAction}`,
         },
       });
 

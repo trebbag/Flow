@@ -291,7 +291,7 @@ export interface MATask {
   id: string;
   encounterId: string;
   patientId: string;
-  taskType: "rooming" | "vitals" | "prep" | "followup" | "alert_ack" | "reassignment";
+  taskType: "rooming" | "vitals" | "prep" | "service_capture" | "followup" | "alert_ack" | "reassignment";
   description: string;
   assignedMA: string;
   priority: 1 | 2 | 3; // 1 = urgent, 2 = normal, 3 = low

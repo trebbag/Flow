@@ -152,6 +152,7 @@ function mapTaskType(raw: string): MATask["taskType"] {
   const normalized = raw.toLowerCase();
   if (normalized.includes("room")) return "rooming";
   if (normalized.includes("vital")) return "vitals";
+  if (normalized.includes("service")) return "service_capture";
   if (normalized.includes("prep")) return "prep";
   if (normalized.includes("alert")) return "alert_ack";
   if (normalized.includes("assign")) return "reassignment";

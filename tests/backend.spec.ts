@@ -15,6 +15,7 @@ async function createRevenueWorkflowEncounter(params: {
   maUserId: string;
   clinicianUserId: string;
   patientId?: string;
+  roomingData?: Record<string, unknown>;
   clinicianData?: Record<string, unknown>;
   checkoutData?: Record<string, unknown>;
 }) {
@@ -50,7 +51,21 @@ async function createRevenueWorkflowEncounter(params: {
     url: `/encounters/${encounter.id}/rooming`,
     headers: authHeaders(params.maUserId, RoleName.MA),
     payload: {
-      data: { vitals: "120/80" },
+      data: {
+        vitals: "120/80",
+        "service.capture_items": [
+          {
+            id: "svc-test-1",
+            catalogItemId: "svc-venipuncture",
+            label: "Venipuncture",
+            sourceRole: "MA",
+            quantity: 1,
+            suggestedProcedureCode: "36415",
+            expectedChargeCents: 1800,
+          },
+        ],
+        ...(params.roomingData || {}),
+      },
     },
   });
   expect(saveRooming.statusCode).toBe(200);
@@ -4066,6 +4081,56 @@ describe("Flow backend core relationships", () => {
       trackingNote: "Collected partial before leaving checkout",
     });
     expect(revenueCase?.chargeCaptureRecord?.codingStage).toBe("ReadyForAthena");
+    expect(revenueCase?.chargeCaptureRecord?.serviceCaptureItemsJson).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Venipuncture",
+          suggestedProcedureCode: "36415",
+        }),
+      ]),
+    );
+  });
+
+  it("builds expected gross charge visibility from MA service capture without Athena data", async () => {
+    const ctx = await bootstrapCore();
+    await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-EXPECT",
+      clinicianData: {
+        "coding.note": "Working note only; revenue will finalize codes later.",
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 2000,
+        "billing.amount_collected_cents": 2000,
+        "billing.collection_outcome": "CollectedInFull",
+        disposition: "Discharged",
+      },
+    });
+
+    const dashboard = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&from=${DateTime.now().toISODate()}&to=${DateTime.now().toISODate()}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.json().kpis).toEqual(
+      expect.objectContaining({
+        expectedGrossChargeCents: expect.any(Number),
+        serviceCaptureCompletedVisitCount: expect.any(Number),
+        clinicianCodingEnteredVisitCount: expect.any(Number),
+        chargeCaptureReadyVisitCount: expect.any(Number),
+      }),
+    );
+    expect(dashboard.json().kpis.expectedGrossChargeCents).toBeGreaterThanOrEqual(1800);
+    expect(dashboard.json().kpis.serviceCaptureCompletedVisitCount).toBeGreaterThanOrEqual(1);
   });
 
   it("supports provider clarification and returns the case to Athena handoff once resolved", async () => {
@@ -4238,6 +4303,9 @@ describe("Flow backend core relationships", () => {
         facilityId: ctx.facility.id,
         missedCollectionReasons: expect.any(Array),
         providerQueryTemplates: expect.any(Array),
+        serviceCatalog: expect.any(Array),
+        chargeSchedule: expect.any(Array),
+        checklistDefaults: expect.any(Object),
       }),
     );
 
@@ -4250,6 +4318,23 @@ describe("Flow backend core relationships", () => {
         missedCollectionReasons: ["patient declined", "eligibility/coverage issue", "other"],
         providerQueryTemplates: ["Please confirm the diagnosis selection."],
         athenaLinkTemplate: "https://athena.example.com/encounters/{encounterId}",
+        serviceCatalog: [
+          {
+            id: "svc-custom",
+            label: "Custom MA service",
+            suggestedProcedureCode: "99000",
+            expectedChargeCents: 5600,
+            active: true,
+          },
+        ],
+        chargeSchedule: [
+          {
+            code: "99000",
+            amountCents: 5600,
+            description: "Handling and conveyance",
+            active: true,
+          },
+        ],
       },
     });
     expect(updateSettings.statusCode).toBe(200);
@@ -4258,6 +4343,26 @@ describe("Flow backend core relationships", () => {
         facilityId: ctx.facility.id,
         athenaLinkTemplate: "https://athena.example.com/encounters/{encounterId}",
         providerQueryTemplates: ["Please confirm the diagnosis selection."],
+        serviceCatalog: expect.arrayContaining([
+          expect.objectContaining({
+            id: "svc-venipuncture",
+            suggestedProcedureCode: "36415",
+          }),
+          expect.objectContaining({
+            id: "svc-custom",
+            label: "Custom MA service",
+          }),
+        ]),
+        chargeSchedule: expect.arrayContaining([
+          expect.objectContaining({
+            code: "99213",
+            amountCents: 14600,
+          }),
+          expect.objectContaining({
+            code: "99000",
+            amountCents: 5600,
+          }),
+        ]),
       }),
     );
   });

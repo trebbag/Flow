@@ -237,7 +237,35 @@ const revenueSettingsSchema = z.object({
         sortOrder: z.number().int().nonnegative().optional()
       })
     )
-    .optional()
+    .optional(),
+  checklistDefaults: z.record(
+    z.string(),
+    z.array(
+      z.object({
+        label: z.string().trim().min(1),
+        sortOrder: z.number().int().nonnegative().optional(),
+        required: z.boolean().optional()
+      })
+    )
+  ).optional(),
+  serviceCatalog: z.array(
+    z.object({
+      id: z.string().trim().min(1),
+      label: z.string().trim().min(1),
+      suggestedProcedureCode: z.string().trim().nullable().optional(),
+      expectedChargeCents: z.number().int().nullable().optional(),
+      active: z.boolean().optional(),
+      allowCustomNote: z.boolean().optional()
+    })
+  ).optional(),
+  chargeSchedule: z.array(
+    z.object({
+      code: z.string().trim().min(1),
+      amountCents: z.number().int().nonnegative(),
+      description: z.string().trim().nullable().optional(),
+      active: z.boolean().optional()
+    })
+  ).optional()
 });
 
 const notificationSchema = z.object({
@@ -3068,11 +3096,17 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       providerQueryTemplates: settings.providerQueryTemplates,
       athenaLinkTemplate: settings.athenaLinkTemplate,
       athenaChecklistDefaults: settings.athenaChecklistDefaults,
+      checklistDefaults: settings.checklistDefaults,
+      serviceCatalog: settings.serviceCatalog,
+      chargeSchedule: settings.chargeSchedule,
       defaults: {
         missedCollectionReasons: [...DEFAULT_MISSED_COLLECTION_REASONS],
         providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
         queueSla: { ...DEFAULT_REVENUE_SETTINGS.queueSla },
-        dayCloseDefaults: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults }
+        dayCloseDefaults: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults },
+        checklistDefaults: { ...DEFAULT_REVENUE_SETTINGS.checklistDefaults },
+        serviceCatalog: [...DEFAULT_REVENUE_SETTINGS.serviceCatalog],
+        chargeSchedule: [...DEFAULT_REVENUE_SETTINGS.chargeSchedule],
       }
     };
   });
@@ -3082,7 +3116,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
     const existing = await getRevenueSettings(prisma, facility.id);
 
-    const saved = await prisma.revenueCycleSettings.upsert({
+    await prisma.revenueCycleSettings.upsert({
       where: { facilityId: facility.id },
       create: {
         facilityId: facility.id,
@@ -3093,7 +3127,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         ) as Prisma.InputJsonValue,
         providerQueryTemplatesJson: (dto.providerQueryTemplates || existing.providerQueryTemplates) as Prisma.InputJsonValue,
         athenaLinkTemplate: dto.athenaLinkTemplate ?? existing.athenaLinkTemplate,
-        athenaChecklistDefaultsJson: (dto.athenaChecklistDefaults || existing.athenaChecklistDefaults) as Prisma.InputJsonValue
+        athenaChecklistDefaultsJson: (dto.athenaChecklistDefaults || existing.athenaChecklistDefaults) as Prisma.InputJsonValue,
+        checklistDefaultsJson: (dto.checklistDefaults || existing.checklistDefaults) as Prisma.InputJsonValue,
+        serviceCatalogJson: (dto.serviceCatalog || existing.serviceCatalog) as Prisma.InputJsonValue,
+        chargeScheduleJson: (dto.chargeSchedule || existing.chargeSchedule) as Prisma.InputJsonValue
       },
       update: {
         missedCollectionReasonsJson: dto.missedCollectionReasons
@@ -3109,18 +3146,31 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         athenaLinkTemplate: dto.athenaLinkTemplate === undefined ? undefined : dto.athenaLinkTemplate,
         athenaChecklistDefaultsJson: dto.athenaChecklistDefaults
           ? (dto.athenaChecklistDefaults as Prisma.InputJsonValue)
+          : undefined,
+        checklistDefaultsJson: dto.checklistDefaults
+          ? (dto.checklistDefaults as Prisma.InputJsonValue)
+          : undefined,
+        serviceCatalogJson: dto.serviceCatalog
+          ? (dto.serviceCatalog as Prisma.InputJsonValue)
+          : undefined,
+        chargeScheduleJson: dto.chargeSchedule
+          ? (dto.chargeSchedule as Prisma.InputJsonValue)
           : undefined
       }
     });
 
+    const settings = await getRevenueSettings(prisma, facility.id);
     return {
       facilityId: facility.id,
-      missedCollectionReasons: (saved.missedCollectionReasonsJson || existing.missedCollectionReasons) as string[],
-      queueSla: (saved.queueSlaJson || existing.queueSla) as Record<string, number>,
-      dayCloseDefaults: (saved.dayCloseDefaultsJson || existing.dayCloseDefaults) as Record<string, unknown>,
-      providerQueryTemplates: (saved.providerQueryTemplatesJson || existing.providerQueryTemplates) as string[],
-      athenaLinkTemplate: saved.athenaLinkTemplate || "",
-      athenaChecklistDefaults: (saved.athenaChecklistDefaultsJson || existing.athenaChecklistDefaults) as Array<{ label: string; sortOrder: number }>
+      missedCollectionReasons: settings.missedCollectionReasons,
+      queueSla: settings.queueSla,
+      dayCloseDefaults: settings.dayCloseDefaults,
+      providerQueryTemplates: settings.providerQueryTemplates,
+      athenaLinkTemplate: settings.athenaLinkTemplate,
+      athenaChecklistDefaults: settings.athenaChecklistDefaults,
+      checklistDefaults: settings.checklistDefaults,
+      serviceCatalog: settings.serviceCatalog,
+      chargeSchedule: settings.chargeSchedule
     };
   });
 

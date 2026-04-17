@@ -822,18 +822,19 @@ model CheckoutCollectionTracking {
 }
 
 model ChargeCaptureRecord {
-  revenueCaseId         String      @id
-  documentationComplete Boolean     @default(false)
-  codingStage           CodingStage @default(NotStarted)
-  icd10CodesJson        Json?
-  procedureLinesJson    Json?
-  cptCodesJson          Json?
-  modifiersJson         Json?
-  unitsJson             Json?
-  codingNote            String?
-  reviewedByUserId      String?
-  reviewedAt            DateTime?
-  readyForAthenaAt      DateTime?
+  revenueCaseId           String      @id
+  documentationComplete   Boolean     @default(false)
+  codingStage             CodingStage @default(NotStarted)
+  icd10CodesJson          Json?
+  procedureLinesJson      Json?
+  serviceCaptureItemsJson Json?
+  cptCodesJson            Json?
+  modifiersJson           Json?
+  unitsJson               Json?
+  codingNote              String?
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  readyForAthenaAt        DateTime?
 
   revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
 }
@@ -903,6 +904,9 @@ model RevenueCycleSettings {
   providerQueryTemplatesJson  Json
   athenaLinkTemplate          String?
   athenaChecklistDefaultsJson Json
+  checklistDefaultsJson       Json
+  serviceCatalogJson          Json
+  chargeScheduleJson          Json
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 
@@ -1181,6 +1185,10 @@ model RevenueCycleDailyRollup {
   sameDayCollectionTrackedCents       Int      @default(0)
   sameDayCollectionVisitRate          Float    @default(0)
   sameDayCollectionDollarRate         Float    @default(0)
+  expectedGrossChargeCents            Int      @default(0)
+  serviceCaptureCompletedVisitCount   Int      @default(0)
+  clinicianCodingEnteredVisitCount    Int      @default(0)
+  chargeCaptureReadyVisitCount        Int      @default(0)
   financiallyClearedCount             Int      @default(0)
   chargeCaptureCompletedCount         Int      @default(0)
   athenaHandoffConfirmedCount         Int      @default(0)

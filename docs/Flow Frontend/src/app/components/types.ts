@@ -596,6 +596,7 @@ export interface RevenueChargeCaptureRecord {
   codingStage: CodingStage;
   icd10CodesJson: string[];
   procedureLinesJson: RevenueProcedureLine[];
+  serviceCaptureItemsJson: RevenueServiceCaptureItem[];
   cptCodesJson: string[];
   modifiersJson: string[];
   unitsJson: string[];
@@ -611,6 +612,36 @@ export interface RevenueProcedureLine {
   modifiers: string[];
   units: number;
   diagnosisPointers: number[];
+}
+
+export interface RevenueServiceCaptureItem {
+  id: string;
+  catalogItemId: string | null;
+  label: string;
+  sourceRole: string;
+  sourceTaskId: string | null;
+  quantity: number;
+  note: string | null;
+  performedAt: string | null;
+  capturedByUserId: string | null;
+  suggestedProcedureCode: string | null;
+  expectedChargeCents: number | null;
+}
+
+export interface RevenueServiceCatalogItem {
+  id: string;
+  label: string;
+  suggestedProcedureCode: string | null;
+  expectedChargeCents: number | null;
+  active: boolean;
+  allowCustomNote?: boolean;
+}
+
+export interface RevenueChargeScheduleItem {
+  code: string;
+  amountCents: number;
+  description: string | null;
+  active: boolean;
 }
 
 export interface RevenueCaseDetail {
@@ -683,6 +714,10 @@ export interface RevenueDashboardSnapshot {
     sameDayCollectionCapturedCents: number;
     sameDayCollectionVisitRate: number;
     sameDayCollectionDollarRate: number;
+    expectedGrossChargeCents: number;
+    serviceCaptureCompletedVisitCount: number;
+    clinicianCodingEnteredVisitCount: number;
+    chargeCaptureReadyVisitCount: number;
     averageFlowHandoffLagHours: number;
     athenaDaysToSubmit: number | null;
     athenaDaysInAR: number | null;
@@ -700,6 +735,9 @@ export interface RevenueDashboardSnapshot {
     missedCollectionReasons: string[];
     providerQueryTemplates: string[];
     athenaLinkTemplate: string;
+    serviceCatalog: RevenueServiceCatalogItem[];
+    chargeSchedule: RevenueChargeScheduleItem[];
+    checklistDefaults: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
   };
   cases: RevenueCaseDetail[];
 }
@@ -714,6 +752,10 @@ export interface RevenueDailyHistoryRollup {
   sameDayCollectionTrackedCents: number;
   sameDayCollectionVisitRate: number;
   sameDayCollectionDollarRate: number;
+  expectedGrossChargeCents: number;
+  serviceCaptureCompletedVisitCount: number;
+  clinicianCodingEnteredVisitCount: number;
+  chargeCaptureReadyVisitCount: number;
   financiallyClearedCount: number;
   chargeCaptureCompletedCount: number;
   athenaHandoffConfirmedCount: number;
@@ -759,11 +801,17 @@ export interface RevenueSettings {
   providerQueryTemplates: string[];
   athenaLinkTemplate: string;
   athenaChecklistDefaults: Array<{ label: string; sortOrder: number }>;
+  checklistDefaults: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
+  serviceCatalog: RevenueServiceCatalogItem[];
+  chargeSchedule: RevenueChargeScheduleItem[];
   defaults?: {
     missedCollectionReasons: string[];
     providerQueryTemplates: string[];
     queueSla: Record<string, number>;
     dayCloseDefaults: Record<string, unknown>;
+    checklistDefaults?: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
+    serviceCatalog?: RevenueServiceCatalogItem[];
+    chargeSchedule?: RevenueChargeScheduleItem[];
   };
 }
 

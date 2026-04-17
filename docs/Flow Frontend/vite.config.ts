@@ -19,8 +19,13 @@ export default defineConfig({
   build: {
     minify: "terser",
     terserOptions: {
+      module: true,
       compress: {
-        passes: 2,
+        passes: 3,
+        toplevel: true,
+      },
+      mangle: {
+        toplevel: true,
       },
       format: {
         comments: false,

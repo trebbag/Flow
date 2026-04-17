@@ -46,7 +46,8 @@ import { loadSession } from "./auth-session";
 import { SafetyAssistModal } from "./safety-assist-modal";
 import { toast } from "sonner";
 import { getEncounterStageSeconds, getEncounterTotalSeconds } from "./encounter-timers";
-import type { RevenueCaseDetail } from "./types";
+import { searchClinicalCodes, type ClinicalCodeReference } from "./clinical-code-reference";
+import type { RevenueCaseDetail, RevenueServiceCaptureItem, RevenueSettings } from "./types";
 
 // ── Status progression ──
 
@@ -86,6 +87,10 @@ const nextStatusActionLabel: Record<string, string> = {
   CheckOut: "Complete Check Out",
 };
 
+const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items";
+const ICD10_CODE_PATTERN = /^[A-TV-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?$/i;
+const CPT_HCPCS_CODE_PATTERN = /^(?:\d{5}|[A-Z]\d{4})$/i;
+
 function fmtTimer(totalSec: number): string {
   if (totalSec < 0) return "0:00";
   const h = Math.floor(totalSec / 3600);
@@ -99,6 +104,62 @@ function parseIsoMs(value?: string | null) {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseServiceCaptureItems(value: unknown): RevenueServiceCaptureItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+      const source = entry as Record<string, unknown>;
+      const label = typeof source.label === "string" ? source.label.trim() : "";
+      if (!label) return null;
+      return {
+        id: typeof source.id === "string" ? source.id : `service-item-${index + 1}`,
+        catalogItemId: typeof source.catalogItemId === "string" ? source.catalogItemId : null,
+        label,
+        sourceRole: typeof source.sourceRole === "string" ? source.sourceRole : "MA",
+        sourceTaskId: typeof source.sourceTaskId === "string" ? source.sourceTaskId : null,
+        quantity: Number(source.quantity || 1) > 0 ? Number(source.quantity || 1) : 1,
+        note: typeof source.note === "string" ? source.note : null,
+        performedAt: typeof source.performedAt === "string" ? source.performedAt : null,
+        capturedByUserId: typeof source.capturedByUserId === "string" ? source.capturedByUserId : null,
+        suggestedProcedureCode: typeof source.suggestedProcedureCode === "string" ? source.suggestedProcedureCode : null,
+        expectedChargeCents: Number.isFinite(Number(source.expectedChargeCents)) ? Number(source.expectedChargeCents) : null,
+      } satisfies RevenueServiceCaptureItem;
+    })
+    .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
+}
+
+function splitStructuredCodes(value: unknown) {
+  if (typeof value !== "string") return [];
+  return value
+    .split(/[,\n]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeCodeToken(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function dedupeCodes(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+function parseValidatedCodes(
+  rawValue: string,
+  kind: "diagnosis" | "procedure",
+): { valid: string[]; invalid: string[] } {
+  const pattern = kind === "diagnosis" ? ICD10_CODE_PATTERN : CPT_HCPCS_CODE_PATTERN;
+  const candidates = splitStructuredCodes(rawValue).map(normalizeCodeToken);
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  candidates.forEach((code) => {
+    if (pattern.test(code)) valid.push(code);
+    else invalid.push(code);
+  });
+  return { valid: dedupeCodes(valid), invalid: dedupeCodes(invalid) };
 }
 
 function stageDurationSeconds(encounter: Encounter, status: EncounterStatus, nowMs: number) {
@@ -150,6 +211,7 @@ const taskTypeConfig: Record<string, { label: string; color: string; icon: React
   rooming: { label: "Room", color: "#8b5cf6", icon: DoorOpen },
   vitals: { label: "Vitals", color: "#6366f1", icon: Activity },
   prep: { label: "Prep", color: "#0ea5e9", icon: ClipboardList },
+  service_capture: { label: "Service Capture", color: "#0891b2", icon: FileText },
   followup: { label: "Follow-up", color: "#10b981", icon: ListChecks },
   alert_ack: { label: "Alert", color: "#f59e0b", icon: Bell },
   reassignment: { label: "Reassign", color: "#ec4899", icon: Users },
@@ -174,6 +236,7 @@ const emptyTask: NewTask = {
 };
 
 const taskTypeOptions = [
+  { value: "service_capture", label: "Service Capture" },
   { value: "lab_order", label: "Lab Order" },
   { value: "referral", label: "Referral" },
   { value: "prescription", label: "Prescription" },
@@ -485,6 +548,8 @@ export function EncounterDetailView() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [safetyModal, setSafetyModal] = useState<"activate" | "resolve" | null>(null);
   const [templateValues, setTemplateValues] = useState<Record<string, Record<string, string | boolean>>>({});
+  const [diagnosisInput, setDiagnosisInput] = useState("");
+  const [procedureInput, setProcedureInput] = useState("");
   const [completedStages, setCompletedStages] = useState<Set<EncounterStatus>>(new Set());
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [newTask, setNewTask] = useState<NewTask>({ ...emptyTask });
@@ -501,6 +566,10 @@ export function EncounterDetailView() {
   const [operationalRooms, setOperationalRooms] = useState<RoomLiveCard[]>([]);
   const [savingRecoveryRoom, setSavingRecoveryRoom] = useState(false);
   const [revenueCase, setRevenueCase] = useState<RevenueCaseDetail | null>(null);
+  const [revenueSettings, setRevenueSettings] = useState<RevenueSettings | null>(null);
+  const [serviceCaptureItems, setServiceCaptureItems] = useState<RevenueServiceCaptureItem[]>([]);
+  const [customServiceLabel, setCustomServiceLabel] = useState("");
+  const [customServiceNote, setCustomServiceNote] = useState("");
   const [clarificationResponses, setClarificationResponses] = useState<Record<string, string>>({});
   const [savingClarificationId, setSavingClarificationId] = useState<string | null>(null);
   const [roomingLaunch] = useState(() => ({
@@ -547,11 +616,12 @@ export function EncounterDetailView() {
     const loadRuntimeTemplates = async () => {
       try {
         const facilityId = loadSession()?.facilityId;
-        const [reasonRows, roomingRows, clinicianRows, checkoutRows] = await Promise.all([
+        const [reasonRows, roomingRows, clinicianRows, checkoutRows, revenueSettingsResult] = await Promise.all([
           admin.listReasons({ facilityId, includeInactive: true, includeArchived: false }),
           admin.listTemplates({ facilityId, type: "rooming" }),
           admin.listTemplates({ facilityId, type: "clinician" }),
           admin.listTemplates({ facilityId, type: "checkout" }),
+          admin.getRevenueSettings(facilityId),
         ]);
         if (!mounted) return;
 
@@ -587,6 +657,7 @@ export function EncounterDetailView() {
         });
 
         setRuntimeTemplates(mapped);
+        setRevenueSettings(revenueSettingsResult);
       } catch {
         if (!mounted) return;
         setRuntimeTemplates({
@@ -594,6 +665,7 @@ export function EncounterDetailView() {
           clinician: {},
           checkout: {},
         });
+        setRevenueSettings(null);
       }
     };
 
@@ -655,6 +727,11 @@ export function EncounterDetailView() {
       setShowRequiredFieldErrors(false);
     }
   }, [baseEnc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const roomingValues = (baseEnc?.roomingData || {}) as Record<string, unknown>;
+    setServiceCaptureItems(parseServiceCaptureItems(roomingValues[ROOMING_SERVICE_CAPTURE_KEY]));
+  }, [baseEnc?.id, baseEnc?.roomingData]);
 
   useEffect(() => {
     if (!roomingLaunch.preferredRoomId || operationalRooms.length === 0) return;
@@ -857,6 +934,28 @@ export function EncounterDetailView() {
   const canAdvance = !!nextStatusMap[enc.status];
 
   const currentTemplateVals = templateValues[enc.status] || {};
+  const clinicianDiagnosisParse = useMemo(
+    () => parseValidatedCodes(String(currentTemplateVals["coding.working_diagnosis_codes_text"] || ""), "diagnosis"),
+    [currentTemplateVals],
+  );
+  const clinicianProcedureParse = useMemo(
+    () => parseValidatedCodes(String(currentTemplateVals["coding.working_procedure_codes_text"] || ""), "procedure"),
+    [currentTemplateVals],
+  );
+  const clinicianDiagnosisCodes = clinicianDiagnosisParse.valid;
+  const clinicianProcedureCodes = clinicianProcedureParse.valid;
+  const suggestedProcedureCodes = useMemo(
+    () =>
+      dedupeCodes(
+        serviceCaptureItems
+          .map((item) => item.suggestedProcedureCode)
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .map(normalizeCodeToken),
+      ),
+    [serviceCaptureItems],
+  );
+  const diagnosisSearchResults = useMemo(() => searchClinicalCodes("diagnosis", diagnosisInput), [diagnosisInput]);
+  const procedureSearchResults = useMemo(() => searchClinicalCodes("procedure", procedureInput), [procedureInput]);
   const fieldsForCompletion = enc.status === "Rooming" ? [...standardRoomingFields, ...templateFields] : templateFields;
   const requiredFields = fieldsForCompletion.filter((f) => f.required);
   const requiredCount = requiredFields.length;
@@ -867,7 +966,7 @@ export function EncounterDetailView() {
   );
 
   // For rooming: also need room assigned
-  const roomingReady = enc.status === "Rooming" ? allRequiredComplete && !!localRoom : allRequiredComplete;
+  const roomingReady = enc.status === "Rooming" ? allRequiredComplete && !!localRoom && serviceCaptureItems.length > 0 : allRequiredComplete;
 
   const stageSec = getEncounterStageSeconds(enc, nowMs);
 
@@ -936,6 +1035,100 @@ export function EncounterDetailView() {
     }));
   }
 
+  function setCodeListField(fieldName: "coding.working_diagnosis_codes_text" | "coding.working_procedure_codes_text", codes: string[]) {
+    setFieldValue(fieldName, codes.join(", "));
+  }
+
+  function addStructuredCode(kind: "diagnosis" | "procedure", rawValue?: string) {
+    const input = rawValue ?? (kind === "diagnosis" ? diagnosisInput : procedureInput);
+    const { valid, invalid } = parseValidatedCodes(input, kind);
+    if (valid.length === 0) {
+      toast.error(kind === "diagnosis" ? "Add a valid ICD-10 code" : "Add a valid CPT / HCPCS code", {
+        description:
+          kind === "diagnosis"
+            ? "Use ICD-10 format like J01.90."
+            : "Use CPT/HCPCS format like 99213.",
+      });
+      return;
+    }
+
+    const nextCodes = dedupeCodes([
+      ...(kind === "diagnosis" ? clinicianDiagnosisCodes : clinicianProcedureCodes),
+      ...valid,
+    ]);
+    setCodeListField(
+      kind === "diagnosis" ? "coding.working_diagnosis_codes_text" : "coding.working_procedure_codes_text",
+      nextCodes,
+    );
+
+    if (kind === "diagnosis") setDiagnosisInput("");
+    else setProcedureInput("");
+
+    if (invalid.length > 0) {
+      toast.error("Some codes were not added", {
+        description: invalid.join(", "),
+      });
+    }
+  }
+
+  function removeStructuredCode(kind: "diagnosis" | "procedure", code: string) {
+    const nextCodes = (kind === "diagnosis" ? clinicianDiagnosisCodes : clinicianProcedureCodes).filter((entry) => entry !== code);
+    setCodeListField(
+      kind === "diagnosis" ? "coding.working_diagnosis_codes_text" : "coding.working_procedure_codes_text",
+      nextCodes,
+    );
+  }
+
+  function addServiceCaptureFromCatalog(catalogItemId: string) {
+    const catalogItem = (revenueSettings?.serviceCatalog || []).find((item) => item.id === catalogItemId);
+    if (!catalogItem) return;
+    setServiceCaptureItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        catalogItemId: catalogItem.id,
+        label: catalogItem.label,
+        sourceRole: "MA",
+        sourceTaskId: null,
+        quantity: 1,
+        note: null,
+        performedAt: new Date().toISOString(),
+        capturedByUserId: session?.userId || null,
+        suggestedProcedureCode: catalogItem.suggestedProcedureCode,
+        expectedChargeCents: catalogItem.expectedChargeCents,
+      },
+    ]);
+  }
+
+  function addCustomServiceCapture() {
+    if (!customServiceLabel.trim()) {
+      toast.error("Add a service label before saving other service capture.");
+      return;
+    }
+    setServiceCaptureItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        catalogItemId: null,
+        label: customServiceLabel.trim(),
+        sourceRole: "MA",
+        sourceTaskId: null,
+        quantity: 1,
+        note: customServiceNote.trim() || null,
+        performedAt: new Date().toISOString(),
+        capturedByUserId: session?.userId || null,
+        suggestedProcedureCode: null,
+        expectedChargeCents: null,
+      },
+    ]);
+    setCustomServiceLabel("");
+    setCustomServiceNote("");
+  }
+
+  function removeServiceCaptureItem(itemId: string) {
+    setServiceCaptureItems((prev) => prev.filter((item) => item.id !== itemId));
+  }
+
   function handleAdvance() {
     if (isRevenueReadOnly) {
       toast.info("Revenue Cycle review is read-only", {
@@ -958,7 +1151,19 @@ export function EncounterDetailView() {
     if (enc.status === "Rooming" && !roomingReady) {
       setShowRequiredFieldErrors(true);
       toast.error("Complete all required fields before advancing", {
-        description: `${completedCount}/${requiredCount} required fields complete${!localRoom ? ", room not assigned" : ""}`,
+        description: `${completedCount}/${requiredCount} required fields complete${!localRoom ? ", room not assigned" : ""}${serviceCaptureItems.length === 0 ? ", service capture not documented" : ""}`,
+      });
+      return;
+    }
+
+    if (
+      enc.status === "Optimizing" &&
+      (clinicianDiagnosisCodes.length === 0 ||
+        clinicianProcedureCodes.length === 0 ||
+        currentTemplateVals["coding.documentation_complete"] !== true)
+    ) {
+      toast.error("Complete the structured coding handoff before checkout", {
+        description: "Add diagnosis, procedure, and documentation-complete before checkout.",
       });
       return;
     }
@@ -970,7 +1175,10 @@ export function EncounterDetailView() {
 
     const roomingDataForSave =
       enc.status === "Rooming"
-        ? (templateValues["Rooming"] || {})
+        ? {
+            ...(templateValues["Rooming"] || {}),
+            [ROOMING_SERVICE_CAPTURE_KEY]: serviceCaptureItems,
+          }
         : undefined;
 
     // Transition locally AND in shared context
@@ -1648,6 +1856,92 @@ export function EncounterDetailView() {
                       </div>
                     </div>
 
+                    <div className="mt-6 rounded-xl border border-cyan-100 bg-cyan-50/50 overflow-hidden">
+                      <div className="px-5 py-3.5 border-b border-cyan-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-cyan-100 flex items-center justify-center">
+                            <FileText className="w-3.5 h-3.5 text-cyan-700" />
+                          </div>
+                          <div>
+                            <span className="text-[13px]" style={{ fontWeight: 600 }}>MA Service Capture</span>
+                            <span className="text-[11px] text-muted-foreground ml-2">Time-of-service revenue evidence</span>
+                          </div>
+                        </div>
+                        <Badge className="border-0 bg-white text-cyan-700 text-[10px]">
+                          {serviceCaptureItems.length > 0 ? `${serviceCaptureItems.length} captured` : "Required"}
+                        </Badge>
+                      </div>
+                      <div className="p-5 space-y-4">
+                        <div className="text-[12px] text-slate-600">
+                          Capture the performed MA services here so Revenue Cycle can build the same-day charge expectation in Flow without waiting on Athena data.
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(revenueSettings?.serviceCatalog || []).filter((item) => item.active !== false && !item.allowCustomNote).map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => addServiceCaptureFromCatalog(item.id)}
+                              disabled={isRevenueReadOnly}
+                              className="rounded-full border border-cyan-200 bg-white px-3 py-1.5 text-[11px] text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {item.label}
+                              {item.suggestedProcedureCode ? ` · ${item.suggestedProcedureCode}` : ""}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
+                          <input
+                            value={customServiceLabel}
+                            onChange={(event) => setCustomServiceLabel(event.target.value)}
+                            placeholder="Other service label"
+                            disabled={isRevenueReadOnly}
+                            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
+                          />
+                          <input
+                            value={customServiceNote}
+                            onChange={(event) => setCustomServiceNote(event.target.value)}
+                            placeholder="Optional note for other service"
+                            disabled={isRevenueReadOnly}
+                            className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
+                          />
+                          <button
+                            type="button"
+                            onClick={addCustomServiceCapture}
+                            disabled={isRevenueReadOnly}
+                            className="h-10 px-3 rounded-lg bg-cyan-600 text-white text-[12px] hover:bg-cyan-700 transition-colors disabled:opacity-50"
+                            style={{ fontWeight: 600 }}
+                          >
+                            Add other
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {serviceCaptureItems.length === 0 && (
+                            <div className="rounded-xl border border-dashed border-cyan-200 bg-white px-4 py-4 text-[12px] text-cyan-800">
+                              Document at least one structured service or other-service note before sending the encounter forward.
+                            </div>
+                          )}
+                          {serviceCaptureItems.map((item) => (
+                            <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-cyan-100 bg-white px-4 py-3">
+                              <div>
+                                <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{item.label}</div>
+                                <div className="mt-1 text-[11px] text-muted-foreground">
+                                  Qty {item.quantity}
+                                  {item.suggestedProcedureCode ? ` · Suggested CPT ${item.suggestedProcedureCode}` : ""}
+                                  {item.note ? ` · ${item.note}` : ""}
+                                </div>
+                              </div>
+                              {!isRevenueReadOnly && (
+                                <button onClick={() => removeServiceCaptureItem(item.id)} className="text-rose-500">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* ── Visit-reason-conditional template (like Front Desk) ── */}
                     {templateFields.length > 0 && (
                       <div className="mt-6 rounded-xl border border-purple-100 bg-purple-50/50 overflow-hidden">
@@ -1951,31 +2245,87 @@ export function EncounterDetailView() {
                           </div>
                           <Badge className="border-0 bg-white text-cyan-700 text-[10px]">MVP</Badge>
                         </div>
-                        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <TemplateFieldInput
-                            field={{ key: "coding.working_diagnosis_codes_text", name: "Working Diagnosis Codes", type: "textarea", required: false }}
-                            value={currentTemplateVals["coding.working_diagnosis_codes_text"]}
-                            disabled={isRevenueReadOnly}
-                            onChange={(val) => setFieldValue("coding.working_diagnosis_codes_text", val)}
-                          />
-                          <TemplateFieldInput
-                            field={{ key: "coding.working_procedure_codes_text", name: "Working Procedure Codes", type: "textarea", required: false }}
-                            value={currentTemplateVals["coding.working_procedure_codes_text"]}
-                            disabled={isRevenueReadOnly}
-                            onChange={(val) => setFieldValue("coding.working_procedure_codes_text", val)}
-                          />
-                          <TemplateFieldInput
-                            field={{ key: "coding.documentation_complete", name: "Documentation Complete", type: "yesNo", required: false }}
-                            value={currentTemplateVals["coding.documentation_complete"]}
-                            disabled={isRevenueReadOnly}
-                            onChange={(val) => setFieldValue("coding.documentation_complete", val)}
-                          />
-                          <TemplateFieldInput
-                            field={{ key: "coding.note", name: "Coding Note", type: "textarea", required: false }}
-                            value={currentTemplateVals["coding.note"]}
-                            disabled={isRevenueReadOnly}
-                            onChange={(val) => setFieldValue("coding.note", val)}
-                          />
+                        <div className="p-5 space-y-4">
+                          <div className="rounded-xl border border-cyan-200 bg-white px-4 py-3 text-[12px] text-cyan-900">
+                            Enter real ICD-10 and CPT/HCPCS codes here, not narrative text.
+                          </div>
+                          {(clinicianDiagnosisParse.invalid.length > 0 || clinicianProcedureParse.invalid.length > 0) && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
+                              Legacy text was found. Replace anything that is not a real ICD-10 or CPT/HCPCS code.
+                              <div className="mt-2 space-y-1 text-[11px] text-amber-800">
+                                {clinicianDiagnosisParse.invalid.length > 0 && (
+                                  <div>Diagnosis cleanup needed: {clinicianDiagnosisParse.invalid.join(", ")}</div>
+                                )}
+                                {clinicianProcedureParse.invalid.length > 0 && (
+                                  <div>Procedure cleanup needed: {clinicianProcedureParse.invalid.join(", ")}</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+                            <div className="space-y-4">
+                              <StructuredCodeComposer
+                                label="Working diagnosis codes"
+                                helpText="ICD-10 only."
+                                placeholder="Add ICD-10 code"
+                                codes={clinicianDiagnosisCodes}
+                                inputValue={diagnosisInput}
+                                searchResults={diagnosisSearchResults}
+                                disabled={isRevenueReadOnly}
+                                onInputChange={setDiagnosisInput}
+                                onAdd={() => addStructuredCode("diagnosis")}
+                                onRemove={(code) => removeStructuredCode("diagnosis", code)}
+                                onSuggestionClick={(code) => addStructuredCode("diagnosis", code)}
+                              />
+                              <StructuredCodeComposer
+                                label="Working procedure codes"
+                                helpText="CPT / HCPCS only."
+                                placeholder="Add CPT / HCPCS code"
+                                codes={clinicianProcedureCodes}
+                                inputValue={procedureInput}
+                                searchResults={procedureSearchResults}
+                                disabled={isRevenueReadOnly}
+                                onInputChange={setProcedureInput}
+                                onAdd={() => addStructuredCode("procedure")}
+                                onRemove={(code) => removeStructuredCode("procedure", code)}
+                                suggestionCodes={suggestedProcedureCodes}
+                                onSuggestionClick={(code) => addStructuredCode("procedure", code)}
+                              />
+                            </div>
+                            <div className="space-y-3">
+                              <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 px-4 py-4">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-700">Coding quality checks</div>
+                                <div className="mt-3 grid gap-2 text-[12px] text-slate-700">
+                                  <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                    <span>Diagnosis codes added</span>
+                                    <span style={{ fontWeight: 700 }}>{clinicianDiagnosisCodes.length}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                    <span>Procedure codes added</span>
+                                    <span style={{ fontWeight: 700 }}>{clinicianProcedureCodes.length}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                    <span>Documentation complete</span>
+                                    <span style={{ fontWeight: 700 }}>
+                                      {currentTemplateVals["coding.documentation_complete"] === true ? "Yes" : "No"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <TemplateFieldInput
+                                field={{ key: "coding.documentation_complete", name: "Documentation Complete", type: "yesNo", required: false }}
+                                value={currentTemplateVals["coding.documentation_complete"]}
+                                disabled={isRevenueReadOnly}
+                                onChange={(val) => setFieldValue("coding.documentation_complete", val)}
+                              />
+                              <TemplateFieldInput
+                                field={{ key: "coding.note", name: "Coding Note", type: "textarea", required: false }}
+                                value={currentTemplateVals["coding.note"]}
+                                disabled={isRevenueReadOnly}
+                                onChange={(val) => setFieldValue("coding.note", val)}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2343,6 +2693,128 @@ function CheckRow({ label, checked }: { label: string; checked: boolean }) {
     <div className={`rounded-lg border px-2.5 py-2 text-[11px] flex items-center justify-between ${checked ? "border-emerald-200 bg-emerald-50/60 text-emerald-700" : "border-gray-100 bg-gray-50 text-gray-500"}`}>
       <span>{label}</span>
       <span style={{ fontWeight: 600 }}>{checked ? "Done" : "Pending"}</span>
+    </div>
+  );
+}
+
+function StructuredCodeComposer({
+  label,
+  helpText,
+  placeholder,
+  codes,
+  inputValue,
+  searchResults = [],
+  disabled,
+  onInputChange,
+  onAdd,
+  onRemove,
+  suggestionCodes = [],
+  onSuggestionClick,
+}: {
+  label: string;
+  helpText: string;
+  placeholder: string;
+  codes: string[];
+  inputValue: string;
+  searchResults?: ClinicalCodeReference[];
+  disabled?: boolean;
+  onInputChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (code: string) => void;
+  suggestionCodes?: string[];
+  onSuggestionClick?: (code: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-cyan-100 bg-white px-4 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{label}</div>
+          <div className="mt-1 text-[11px] text-slate-500">{helpText}</div>
+        </div>
+        <Badge className="border-0 bg-cyan-50 text-cyan-700 text-[10px]">{codes.length} added</Badge>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={inputValue}
+          onChange={(event) => onInputChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="h-10 flex-1 rounded-xl border border-cyan-100 px-3 text-[12px] outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={disabled}
+          className="inline-flex items-center gap-1 rounded-full bg-cyan-700 px-4 py-2 text-[11px] text-white disabled:opacity-50"
+          style={{ fontWeight: 700 }}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add
+        </button>
+      </div>
+      {suggestionCodes.length > 0 && onSuggestionClick && (
+        <div className="mt-3">
+          <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Suggested from MA service capture</div>
+          <div className="flex flex-wrap gap-2">
+            {suggestionCodes.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => onSuggestionClick(code)}
+                disabled={disabled}
+                className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700 disabled:opacity-50"
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {searchResults.length > 0 && onSuggestionClick && (
+        <div className="mt-3">
+          <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Lookup matches</div>
+          <div className="space-y-2">
+            {searchResults
+              .filter((entry) => !codes.includes(entry.code))
+              .map((entry) => (
+                <button
+                  key={entry.code}
+                  type="button"
+                  onClick={() => onSuggestionClick(entry.code)}
+                  disabled={disabled}
+                  className="flex w-full items-start justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left disabled:opacity-50"
+                >
+                  <div>
+                    <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{entry.code}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">{entry.label}</div>
+                  </div>
+                  <div className="text-[11px] text-cyan-700" style={{ fontWeight: 700 }}>Use</div>
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {codes.length === 0 && <span className="text-[12px] text-slate-400">No codes added yet.</span>}
+        {codes.map((code) => (
+          <button
+            key={code}
+            type="button"
+            onClick={() => onRemove(code)}
+            disabled={disabled}
+            className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700 disabled:opacity-50"
+          >
+            <span>{code}</span>
+            <X className="w-3 h-3" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

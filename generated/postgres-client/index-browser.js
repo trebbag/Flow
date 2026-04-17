@@ -488,6 +488,7 @@ exports.Prisma.ChargeCaptureRecordScalarFieldEnum = {
   codingStage: 'codingStage',
   icd10CodesJson: 'icd10CodesJson',
   procedureLinesJson: 'procedureLinesJson',
+  serviceCaptureItemsJson: 'serviceCaptureItemsJson',
   cptCodesJson: 'cptCodesJson',
   modifiersJson: 'modifiersJson',
   unitsJson: 'unitsJson',
@@ -547,6 +548,9 @@ exports.Prisma.RevenueCycleSettingsScalarFieldEnum = {
   providerQueryTemplatesJson: 'providerQueryTemplatesJson',
   athenaLinkTemplate: 'athenaLinkTemplate',
   athenaChecklistDefaultsJson: 'athenaChecklistDefaultsJson',
+  checklistDefaultsJson: 'checklistDefaultsJson',
+  serviceCatalogJson: 'serviceCatalogJson',
+  chargeScheduleJson: 'chargeScheduleJson',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -752,6 +756,10 @@ exports.Prisma.RevenueCycleDailyRollupScalarFieldEnum = {
   sameDayCollectionTrackedCents: 'sameDayCollectionTrackedCents',
   sameDayCollectionVisitRate: 'sameDayCollectionVisitRate',
   sameDayCollectionDollarRate: 'sameDayCollectionDollarRate',
+  expectedGrossChargeCents: 'expectedGrossChargeCents',
+  serviceCaptureCompletedVisitCount: 'serviceCaptureCompletedVisitCount',
+  clinicianCodingEnteredVisitCount: 'clinicianCodingEnteredVisitCount',
+  chargeCaptureReadyVisitCount: 'chargeCaptureReadyVisitCount',
   financiallyClearedCount: 'financiallyClearedCount',
   chargeCaptureCompletedCount: 'chargeCaptureCompletedCount',
   athenaHandoffConfirmedCount: 'athenaHandoffConfirmedCount',

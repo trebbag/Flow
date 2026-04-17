@@ -3689,6 +3689,36 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             sortOrder: index,
           }))
           .filter((row) => row.label),
+        checklistDefaults: Object.fromEntries(
+          Object.entries(revenueSettings.checklistDefaults || {}).map(([group, rows]) => [
+            group,
+            rows
+              .map((row, index) => ({
+                label: row.label.trim(),
+                sortOrder: index,
+                required: row.required !== false,
+              }))
+              .filter((row) => row.label),
+          ]),
+        ),
+        serviceCatalog: (revenueSettings.serviceCatalog || [])
+          .map((item) => ({
+            id: item.id.trim(),
+            label: item.label.trim(),
+            suggestedProcedureCode: item.suggestedProcedureCode?.trim() || null,
+            expectedChargeCents: item.expectedChargeCents ?? null,
+            active: item.active !== false,
+            allowCustomNote: Boolean(item.allowCustomNote),
+          }))
+          .filter((item) => item.id && item.label),
+        chargeSchedule: (revenueSettings.chargeSchedule || [])
+          .map((item) => ({
+            code: item.code.trim().toUpperCase(),
+            amountCents: Number(item.amountCents || 0),
+            description: item.description?.trim() || null,
+            active: item.active !== false,
+          }))
+          .filter((item) => item.code),
       });
       setRevenueSettings(saved);
       toast.success("Revenue operations settings saved");
@@ -4474,6 +4504,316 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                         style={{ fontWeight: 500 }}
                       >
                         Add handoff step
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                  <div>
+                    <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Time-of-service guidance defaults</div>
+                    <div className="text-[12px] text-muted-foreground mt-1">
+                      Configure the checklist groups, MA service catalog, and expected-charge schedule that Flow uses for same-day RCM guidance and revenue expectation.
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {Object.entries(revenueSettings.checklistDefaults || {}).map(([group, rows]) => (
+                      <div key={group} className="rounded-xl border border-gray-200 bg-slate-50/60 p-3 space-y-3">
+                        <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>{group.replaceAll("_", " ")}</div>
+                        {rows.map((row, index) => (
+                          <div key={`${group}-${index}`} className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2 items-center">
+                            <input
+                              value={row.label}
+                              onChange={(event) =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        checklistDefaults: {
+                                          ...prev.checklistDefaults,
+                                          [group]: (prev.checklistDefaults[group] || []).map((entry, rowIndex) =>
+                                            rowIndex === index ? { ...entry, label: event.target.value } : entry,
+                                          ),
+                                        },
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                            />
+                            <label className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                              Required
+                              <Switch
+                                checked={row.required !== false}
+                                onCheckedChange={(checked) =>
+                                  setRevenueSettings((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          checklistDefaults: {
+                                            ...prev.checklistDefaults,
+                                            [group]: (prev.checklistDefaults[group] || []).map((entry, rowIndex) =>
+                                              rowIndex === index ? { ...entry, required: checked } : entry,
+                                            ),
+                                          },
+                                        }
+                                      : prev,
+                                  )
+                                }
+                              />
+                            </label>
+                            <button
+                              onClick={() =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        checklistDefaults: {
+                                          ...prev.checklistDefaults,
+                                          [group]: (prev.checklistDefaults[group] || []).filter((_, rowIndex) => rowIndex !== index),
+                                        },
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="text-rose-500"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    checklistDefaults: {
+                                      ...prev.checklistDefaults,
+                                      [group]: [...(prev.checklistDefaults[group] || []), { label: "New checklist step", sortOrder: (prev.checklistDefaults[group] || []).length, required: true }],
+                                    },
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                          style={{ fontWeight: 500 }}
+                        >
+                          Add checklist row
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>MA service catalog</div>
+                      {(revenueSettings.serviceCatalog || []).map((item, index) => (
+                        <div key={`${item.id}-${index}`} className="grid grid-cols-1 gap-2 rounded-xl border border-gray-200 bg-slate-50/60 p-3">
+                          <div className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2 items-center">
+                            <input
+                              value={item.label}
+                              onChange={(event) =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        serviceCatalog: prev.serviceCatalog.map((entry, itemIndex) =>
+                                          itemIndex === index ? { ...entry, label: event.target.value } : entry,
+                                        ),
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                              placeholder="Service label"
+                            />
+                            <input
+                              value={item.suggestedProcedureCode || ""}
+                              onChange={(event) =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        serviceCatalog: prev.serviceCatalog.map((entry, itemIndex) =>
+                                          itemIndex === index ? { ...entry, suggestedProcedureCode: event.target.value } : entry,
+                                        ),
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                              placeholder="CPT"
+                            />
+                            <button
+                              onClick={() =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        serviceCatalog: prev.serviceCatalog.filter((_, itemIndex) => itemIndex !== index),
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="text-rose-500"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <NumberStepperControl
+                              value={Number(item.expectedChargeCents || 0)}
+                              min={0}
+                              step={100}
+                              onChange={(nextValue) =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        serviceCatalog: prev.serviceCatalog.map((entry, itemIndex) =>
+                                          itemIndex === index ? { ...entry, expectedChargeCents: nextValue } : entry,
+                                        ),
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="h-9"
+                            />
+                            <label className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                              Other / note path
+                              <Switch
+                                checked={Boolean(item.allowCustomNote)}
+                                onCheckedChange={(checked) =>
+                                  setRevenueSettings((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          serviceCatalog: prev.serviceCatalog.map((entry, itemIndex) =>
+                                            itemIndex === index ? { ...entry, allowCustomNote: checked } : entry,
+                                          ),
+                                        }
+                                      : prev,
+                                  )
+                                }
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  serviceCatalog: [
+                                    ...prev.serviceCatalog,
+                                    { id: `service-${prev.serviceCatalog.length + 1}`, label: "New service", suggestedProcedureCode: "", expectedChargeCents: 0, active: true, allowCustomNote: false },
+                                  ],
+                                }
+                              : prev,
+                          )
+                        }
+                        className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Add service catalog item
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>Charge schedule</div>
+                      {(revenueSettings.chargeSchedule || []).map((item, index) => (
+                        <div key={`${item.code}-${index}`} className="grid grid-cols-[120px_140px_minmax(0,1fr)_auto] gap-2 items-center rounded-xl border border-gray-200 bg-slate-50/60 p-3">
+                          <input
+                            value={item.code}
+                            onChange={(event) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      chargeSchedule: prev.chargeSchedule.map((entry, itemIndex) =>
+                                        itemIndex === index ? { ...entry, code: event.target.value.toUpperCase() } : entry,
+                                      ),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                            placeholder="Code"
+                          />
+                          <NumberStepperControl
+                            value={Number(item.amountCents || 0)}
+                            min={0}
+                            step={100}
+                            onChange={(nextValue) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      chargeSchedule: prev.chargeSchedule.map((entry, itemIndex) =>
+                                        itemIndex === index ? { ...entry, amountCents: nextValue } : entry,
+                                      ),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9"
+                          />
+                          <input
+                            value={item.description || ""}
+                            onChange={(event) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      chargeSchedule: prev.chargeSchedule.map((entry, itemIndex) =>
+                                        itemIndex === index ? { ...entry, description: event.target.value } : entry,
+                                      ),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                            placeholder="Description"
+                          />
+                          <button
+                            onClick={() =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      chargeSchedule: prev.chargeSchedule.filter((_, itemIndex) => itemIndex !== index),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="text-rose-500"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  chargeSchedule: [
+                                    ...prev.chargeSchedule,
+                                    { code: "NEWCODE", amountCents: 0, description: "New charge", active: true },
+                                  ],
+                                }
+                              : prev,
+                          )
+                        }
+                        className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Add charge schedule row
                       </button>
                     </div>
                   </div>

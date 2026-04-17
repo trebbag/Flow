@@ -302,6 +302,25 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     const completed = dto.completed === true || dto.status?.toLowerCase() === "completed";
     const acknowledged = dto.acknowledged === true;
 
+    if (completed && task.taskType === "service_capture" && task.encounterId) {
+      const encounter = await prisma.encounter.findUnique({
+        where: { id: task.encounterId },
+        select: { roomingData: true },
+      });
+      const roomingData =
+        encounter?.roomingData && typeof encounter.roomingData === "object" && !Array.isArray(encounter.roomingData)
+          ? (encounter.roomingData as Record<string, unknown>)
+          : {};
+      const serviceCaptureItems = Array.isArray(roomingData["service.capture_items"])
+        ? roomingData["service.capture_items"]
+        : [];
+      assert(
+        serviceCaptureItems.length > 0,
+        400,
+        "Complete structured MA service capture in the encounter before closing this service-capture task.",
+      );
+    }
+
     const updated = await prisma.task.update({
       where: { id: taskId },
       data: {

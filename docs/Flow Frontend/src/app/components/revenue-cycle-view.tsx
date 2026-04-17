@@ -186,14 +186,55 @@ function defaultCloseoutDraft(
   };
 }
 
-function queueRowSubsummary(row: RevenueCaseDetail) {
+function buildChargeScheduleMap(settings: RevenueSettings | null) {
+  return new Map((settings?.chargeSchedule || []).filter((item) => item.active !== false).map((item) => [item.code.toUpperCase(), item]));
+}
+
+function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings | null) {
+  const chargeSchedule = buildChargeScheduleMap(settings);
+  const serviceItems = row.chargeCaptureRecord?.serviceCaptureItemsJson || [];
+  const procedureLines = row.chargeCaptureRecord?.procedureLinesJson || [];
+  let expectedGrossChargeCents = 0;
+  let missingChargeMapping = false;
+
+  if (procedureLines.length > 0) {
+    procedureLines.forEach((line) => {
+      const scheduleRow = chargeSchedule.get(line.cptCode.toUpperCase());
+      if (!scheduleRow) {
+        missingChargeMapping = true;
+        return;
+      }
+      expectedGrossChargeCents += scheduleRow.amountCents * Math.max(1, line.units || 1);
+    });
+  } else {
+    serviceItems.forEach((item) => {
+      if (item.expectedChargeCents == null) {
+        missingChargeMapping = true;
+        return;
+      }
+      expectedGrossChargeCents += item.expectedChargeCents * Math.max(1, item.quantity || 1);
+    });
+  }
+
+  return {
+    expectedGrossChargeCents,
+    missingChargeMapping,
+    serviceCaptureComplete: serviceItems.length > 0,
+  };
+}
+
+function queueRowSubsummary(row: RevenueCaseDetail, settings: RevenueSettings | null) {
   const diagnosisCount = row.chargeCaptureRecord?.icd10CodesJson?.length || 0;
   const procedureCount = row.chargeCaptureRecord?.procedureLinesJson?.length || 0;
+  const expectation = getRevenueExpectation(row, settings);
   const codingReady = row.chargeCaptureRecord?.documentationComplete && diagnosisCount > 0 && procedureCount > 0;
   return {
     diagnosisCount,
     procedureCount,
     codingReady,
+    serviceCaptureComplete: expectation.serviceCaptureComplete,
+    expectedGrossChargeCents: expectation.expectedGrossChargeCents,
+    missingChargeMapping: expectation.missingChargeMapping,
     athenaStatus: row.athenaClaimStatus || (row.athenaHandoffConfirmedAt ? "Handoff confirmed" : "Not yet synced from Athena"),
   };
 }
@@ -316,7 +357,10 @@ export function RevenueCycleView() {
         athenaLinkTemplate: dashboardResult.settings?.athenaLinkTemplate || "",
         queueSla: {},
         dayCloseDefaults: { defaultDueHours: 18, requireNextAction: true },
-        athenaChecklistDefaults: [],
+        athenaChecklistDefaults: dashboardResult.settings?.checklistDefaults?.athena_handoff || [],
+        checklistDefaults: dashboardResult.settings?.checklistDefaults || {},
+        serviceCatalog: dashboardResult.settings?.serviceCatalog || [],
+        chargeSchedule: dashboardResult.settings?.chargeSchedule || [],
       };
       setSettings(nextSettings);
       setQueueRows(queueResult);
@@ -534,6 +578,7 @@ export function RevenueCycleView() {
 
   async function saveCodingHandoff(markReadyForAthena = false) {
     if (!selectedCase) return;
+    const serviceCaptureCount = selectedCase.chargeCaptureRecord?.serviceCaptureItemsJson?.length || 0;
     const validProcedureLines = codingDraft.procedureLines
       .map((line) => ({
         ...line,
@@ -542,9 +587,9 @@ export function RevenueCycleView() {
         diagnosisPointers: line.diagnosisPointers.filter((value) => value > 0),
       }))
       .filter((line) => line.cptCode);
-    if (markReadyForAthena && (!codingDraft.documentationComplete || codingDraft.diagnoses.length === 0 || validProcedureLines.length === 0)) {
+    if (markReadyForAthena && (serviceCaptureCount === 0 || !codingDraft.documentationComplete || codingDraft.diagnoses.length === 0 || validProcedureLines.length === 0)) {
       toast.error("Coding is not ready for Athena yet", {
-        description: "Add at least one diagnosis, one procedure line, and mark documentation complete before handoff.",
+        description: "Complete MA service capture, add at least one diagnosis and one procedure line, and mark documentation complete before handoff.",
       });
       return;
     }
@@ -795,7 +840,7 @@ export function RevenueCycleView() {
 
           {activeView === "Overview" && dashboard && (
             <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 <KpiCard
                   title="Visits collected"
                   value={`${dashboard.kpis.sameDayCollectionCapturedVisitCount}/${dashboard.kpis.sameDayCollectionExpectedVisitCount || 0}`}
@@ -809,6 +854,27 @@ export function RevenueCycleView() {
                   hint={`${formatPercent(dashboard.kpis.sameDayCollectionDollarRate)} of ${formatCurrency(dashboard.kpis.sameDayCollectionExpectedCents)} expected`}
                   icon={DollarSign}
                   tone="#059669"
+                />
+                <KpiCard
+                  title="Expected gross charges"
+                  value={formatCurrency(dashboard.kpis.expectedGrossChargeCents)}
+                  hint="Flow-estimated from service capture and coded charge lines"
+                  icon={TrendingUp}
+                  tone="#0f766e"
+                />
+                <KpiCard
+                  title="Service capture complete"
+                  value={`${dashboard.kpis.serviceCaptureCompletedVisitCount}`}
+                  hint={`${dashboard.kpis.chargeCaptureReadyVisitCount}/${dashboard.kpis.sameDayCollectionExpectedVisitCount || dashboard.cases.length || 0} cases moving toward Athena-ready capture`}
+                  icon={CheckCircle2}
+                  tone="#7c3aed"
+                />
+                <KpiCard
+                  title="Clinician coding entered"
+                  value={`${dashboard.kpis.clinicianCodingEnteredVisitCount}`}
+                  hint="Working codes entered in Flow before revenue verification"
+                  icon={FileText}
+                  tone="#2563eb"
                 />
                 <KpiCard title="Average Flow handoff lag" value={formatHours(dashboard.kpis.averageFlowHandoffLagHours)} hint="Checkout complete to Athena handoff confirmation" icon={Clock} tone="#2563eb" />
                 <KpiCard title="Athena days to submit" value={formatNullableAthenaMetric(dashboard.kpis.athenaDaysToSubmit)} hint={athenaUnavailableText} icon={Send} tone="#64748b" unavailable={dashboard.kpis.athenaDaysToSubmit == null} />
@@ -957,10 +1023,18 @@ export function RevenueCycleView() {
                             {row.currentBlockerText || "No blocker text recorded"}
                           </div>
                           <div className={`mt-3 flex flex-wrap gap-2 text-[11px] ${selectedCaseId === row.id ? "text-white/80" : "text-slate-500"}`}>
-                            <span>Dx {queueRowSubsummary(row).diagnosisCount}</span>
-                            <span>Proc {queueRowSubsummary(row).procedureCount}</span>
-                            <span>{queueRowSubsummary(row).codingReady ? "Coding ready" : "Coding incomplete"}</span>
-                            <span>{queueRowSubsummary(row).athenaStatus}</span>
+                            <span>{queueRowSubsummary(row, settings).serviceCaptureComplete ? "Service capture complete" : "Service capture missing"}</span>
+                            <span>Dx {queueRowSubsummary(row, settings).diagnosisCount}</span>
+                            <span>Proc {queueRowSubsummary(row, settings).procedureCount}</span>
+                            <span>{queueRowSubsummary(row, settings).codingReady ? "Coding ready" : "Coding incomplete"}</span>
+                            <span>
+                              {queueRowSubsummary(row, settings).expectedGrossChargeCents > 0
+                                ? `Expected ${formatCurrency(queueRowSubsummary(row, settings).expectedGrossChargeCents)}`
+                                : queueRowSubsummary(row, settings).missingChargeMapping
+                                  ? "Missing charge mapping"
+                                  : "No expected charge yet"}
+                            </span>
+                            <span>{queueRowSubsummary(row, settings).athenaStatus}</span>
                           </div>
                         </div>
                         <div className={`text-[12px] ${selectedCaseId === row.id ? "text-white/80" : "text-slate-600"}`}>
@@ -1211,7 +1285,7 @@ export function RevenueCycleView() {
 
           {activeView === "History" && (
             <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <KpiCard
                   title="Visits collected"
                   value={history.length ? `${history[history.length - 1].sameDayCollectionCapturedVisitCount}/${history[history.length - 1].sameDayCollectionExpectedVisitCount}` : "0/0"}
@@ -1225,6 +1299,13 @@ export function RevenueCycleView() {
                   hint={history.length ? formatPercent(history[history.length - 1].sameDayCollectionDollarRate) : "Manual"}
                   icon={DollarSign}
                   tone="#059669"
+                />
+                <KpiCard
+                  title="Expected gross charges"
+                  value={history.length ? formatCurrency(history[history.length - 1].expectedGrossChargeCents) : formatCurrency(0)}
+                  hint="Flow-estimated"
+                  icon={TrendingUp}
+                  tone="#0f766e"
                 />
                 <KpiCard
                   title="Avg handoff lag"
@@ -1280,6 +1361,9 @@ export function RevenueCycleView() {
                       <div className="mt-4 grid grid-cols-2 gap-3 text-[12px] text-slate-600">
                         <MetricMini label="Visit rate" value={formatPercent(entry.sameDayCollectionVisitRate)} />
                         <MetricMini label="Dollar rate" value={formatPercent(entry.sameDayCollectionDollarRate)} />
+                        <MetricMini label="Expected gross" value={formatCurrency(entry.expectedGrossChargeCents)} />
+                        <MetricMini label="Service capture" value={String(entry.serviceCaptureCompletedVisitCount)} />
+                        <MetricMini label="Clinician coding" value={String(entry.clinicianCodingEnteredVisitCount)} />
                         <MetricMini label="Charge capture done" value={String(entry.chargeCaptureCompletedCount)} />
                         <MetricMini label="Athena handoffs" value={String(entry.athenaHandoffConfirmedCount)} />
                         <MetricMini label="Rolled" value={String(entry.rolledCount)} />
@@ -1566,8 +1650,10 @@ function RevenueCaseDetailPane({
                 <SummaryBox title="Flow-controlled" rows={[
                   { label: "Eligibility", value: revenueCase.financialReadiness?.eligibilityStatus || "Not checked" },
                   { label: "Collection outcome", value: revenueCase.checkoutCollectionTracking?.collectionOutcome || "Not tracked" },
+                  { label: "Service capture items", value: String(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson.length || 0) },
                   { label: "Diagnoses", value: String(revenueCase.chargeCaptureRecord?.icd10CodesJson.length || 0) },
                   { label: "Procedure lines", value: String(revenueCase.chargeCaptureRecord?.procedureLinesJson.length || 0) },
+                  { label: "Expected gross", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedGrossChargeCents) },
                 ]} />
                 <SummaryBox title="Athena-observed" rows={[
                   { label: "Charge entered", value: revenueCase.athenaChargeEnteredAt ? formatDateTime(revenueCase.athenaChargeEnteredAt) : "Not yet synced from Athena" },
@@ -1581,6 +1667,10 @@ function RevenueCaseDetailPane({
 
           {activeDrawerTab === "Insurance" && (
             <div className="space-y-4">
+              <ChecklistGroupCard
+                title="Financial readiness checklist"
+                items={revenueCase.checklistItems.filter((item) => item.group === "financial_readiness")}
+              />
               <section className="grid gap-3 md:grid-cols-2">
                 <Field label="Eligibility status">
                   <select
@@ -1694,6 +1784,10 @@ function RevenueCaseDetailPane({
 
           {activeDrawerTab === "Checkout" && (
             <div className="space-y-4">
+              <ChecklistGroupCard
+                title="Checkout tracking checklist"
+                items={revenueCase.checklistItems.filter((item) => item.group === "checkout_tracking")}
+              />
               <div className="grid gap-3 md:grid-cols-2">
                 <ToggleField label="Collection expected" checked={checkoutDraft.collectionExpected} onChange={(checked) => setCheckoutDraft((prev) => ({ ...prev, collectionExpected: checked }))} />
                 <Field label="Collection outcome">
@@ -1756,6 +1850,33 @@ function RevenueCaseDetailPane({
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] text-slate-600">
                 Clinicians provide a lightweight coding handoff upstream. Revenue finalizes the structured codes and documentation readiness here.
+              </div>
+              <ChecklistGroupCard
+                title="Charge capture checklist"
+                items={revenueCase.checklistItems.filter((item) => item.group === "charge_capture")}
+              />
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">MA service capture</div>
+                <div className="space-y-2">
+                  {(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson || []).length === 0 && (
+                    <div className="text-[12px] text-slate-500">No structured service capture items recorded yet. MA service capture must be completed in Flow before Athena handoff.</div>
+                  )}
+                  {(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson || []).map((item) => (
+                    <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-[12px]">
+                      <div>
+                        <div className="text-slate-900" style={{ fontWeight: 700 }}>{item.label}</div>
+                        <div className="text-slate-500">
+                          Qty {item.quantity}
+                          {item.suggestedProcedureCode ? ` · suggested CPT ${item.suggestedProcedureCode}` : ""}
+                          {item.note ? ` · ${item.note}` : ""}
+                        </div>
+                      </div>
+                      <div className="text-right text-slate-600">
+                        {item.expectedChargeCents == null ? "Needs mapping" : formatCurrency(item.expectedChargeCents * Math.max(1, item.quantity || 1))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <ToggleField label="Documentation complete" checked={codingDraft.documentationComplete} onChange={(checked) => setCodingDraft((prev) => ({ ...prev, documentationComplete: checked }))} />
               <Field label="Diagnosis codes">
@@ -1919,17 +2040,10 @@ function RevenueCaseDetailPane({
                 ]} />
               </div>
               <div className="space-y-2">
-                {revenueCase.checklistItems.filter((item) => item.group === "athena_handoff").map((item) => (
-                  <div key={item.id} className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-[12px]">
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{item.label}</div>
-                      <div className="text-slate-500">{item.completedAt ? formatDateTime(item.completedAt) : "Not completed"}</div>
-                    </div>
-                    <Badge className={`border-0 ${item.status === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-600"}`}>
-                      {item.status}
-                    </Badge>
-                  </div>
-                ))}
+                <ChecklistGroupCard
+                  title="Athena handoff checklist"
+                  items={revenueCase.checklistItems.filter((item) => item.group === "athena_handoff")}
+                />
               </div>
               <Field label="Athena note / reference">
                 <textarea value={athenaReference} onChange={(event) => setAthenaReference(event.target.value)} placeholder="Optional note or reference from Athena." className="min-h-[88px] w-full rounded-2xl border border-slate-200 px-3 py-3 text-[12px] outline-none focus:border-slate-300" />
@@ -2036,6 +2150,34 @@ function SummaryBox({ title, rows }: { title: string; rows: Array<{ label: strin
           <div key={row.label} className="flex items-start justify-between gap-4 text-[12px]">
             <span className="text-slate-500">{row.label}</span>
             <span className="text-right text-slate-800" style={{ fontWeight: 600 }}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChecklistGroupCard({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ id: string; label: string; status: string; completedAt?: string | null }>;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">{title}</div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-[12px]">
+            <div>
+              <div className="text-slate-900" style={{ fontWeight: 700 }}>{item.label}</div>
+              <div className="text-slate-500">{item.completedAt ? formatDateTime(item.completedAt) : "Not completed"}</div>
+            </div>
+            <Badge className={`border-0 ${item.status === "completed" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-600"}`}>
+              {item.status}
+            </Badge>
           </div>
         ))}
       </div>
