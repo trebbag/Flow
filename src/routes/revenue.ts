@@ -3,7 +3,9 @@ import {
   CodingStage,
   CollectionOutcome,
   FinancialEligibilityStatus,
+  FinancialRequirementStatus,
   ProviderClarificationStatus,
+  RevenueCloseoutState,
   RevenueDayBucket,
   RevenueStatus,
   RevenueWorkQueue,
@@ -18,6 +20,8 @@ import { requireRoles } from "../lib/auth.js";
 import {
   buildRevenueCaseList,
   createRevenueProviderClarification,
+  getRevenueSettings,
+  normalizeChargeCaptureInput,
   respondToRevenueProviderClarification,
   syncRevenueCaseForEncounter,
   syncRevenueCasesForScope,
@@ -33,6 +37,7 @@ import {
 
 const listRevenueCasesSchema = z.object({
   clinicId: z.string().uuid().optional(),
+  encounterId: z.string().uuid().optional(),
   dayBucket: z.nativeEnum(RevenueDayBucket).optional(),
   workQueue: z.nativeEnum(RevenueWorkQueue).optional(),
   search: z.string().optional(),
@@ -53,20 +58,27 @@ const updateRevenueCaseSchema = z.object({
   priority: z.number().int().min(0).max(4).optional(),
   blockerCategory: z.string().nullable().optional(),
   blockerText: z.string().nullable().optional(),
-  dueAt: z.string().datetime().nullable().optional(),
+  dueAt: z.string().datetime({ offset: true }).nullable().optional(),
   readyForAthena: z.boolean().optional(),
   athenaHandoffConfirmed: z.boolean().optional(),
+  athenaHandoffStarted: z.boolean().optional(),
+  athenaHandoffNote: z.string().nullable().optional(),
   financialReadiness: z
     .object({
       eligibilityStatus: z.nativeEnum(FinancialEligibilityStatus).optional(),
       coverageIssueCategory: z.string().nullable().optional(),
       coverageIssueText: z.string().nullable().optional(),
+      primaryPayerName: z.string().nullable().optional(),
+      primaryPlanName: z.string().nullable().optional(),
+      secondaryPayerName: z.string().nullable().optional(),
+      financialClass: z.string().nullable().optional(),
       referralRequired: z.boolean().optional(),
-      referralStatus: z.string().nullable().optional(),
+      referralStatus: z.nativeEnum(FinancialRequirementStatus).nullable().optional(),
       priorAuthRequired: z.boolean().optional(),
-      priorAuthStatus: z.string().nullable().optional(),
+      priorAuthStatus: z.nativeEnum(FinancialRequirementStatus).nullable().optional(),
       priorAuthNumber: z.string().nullable().optional(),
       pointOfServiceAmountDueCents: z.number().int().optional(),
+      outstandingPriorBalanceCents: z.number().int().optional(),
     })
     .optional(),
   checkoutTracking: z
@@ -84,6 +96,17 @@ const updateRevenueCaseSchema = z.object({
       documentationComplete: z.boolean().optional(),
       codingStage: z.nativeEnum(CodingStage).optional(),
       icd10Codes: z.array(z.string()).optional(),
+      procedureLines: z
+        .array(
+          z.object({
+            lineId: z.string().optional(),
+            cptCode: z.string().min(1),
+            modifiers: z.array(z.string()).optional(),
+            units: z.number().int().min(1).optional(),
+            diagnosisPointers: z.array(z.number().int().min(1)).optional(),
+          }),
+        )
+        .optional(),
       cptCodes: z.array(z.string()).optional(),
       modifiers: z.array(z.string()).optional(),
       units: z.array(z.string()).optional(),
@@ -106,41 +129,69 @@ const providerQuerySchema = z.object({
   queryType: z.string().optional(),
 });
 
-const providerResponseSchema = z.object({
-  responseText: z.string().min(1),
+const providerClarificationPatchSchema = z.object({
+  responseText: z.string().min(1).optional(),
+  status: z.nativeEnum(ProviderClarificationStatus).optional(),
   resolve: z.boolean().optional(),
+});
+
+const assignRevenueCaseSchema = z.object({
+  assignedToUserId: z.string().uuid().nullable().optional(),
+  assignedToRole: z.nativeEnum(RoleName),
 });
 
 const rollRevenueCaseSchema = z.object({
   rollReason: z.string().min(1),
   assignedToUserId: z.string().uuid().nullable().optional(),
   assignedToRole: z.nativeEnum(RoleName).nullable().optional(),
-  dueAt: z.string().datetime().optional(),
+  dueAt: z.string().datetime({ offset: true }).optional(),
 });
 
 const revenueCloseoutSchema = z.object({
   clinicId: z.string().uuid().optional(),
   date: z.string().optional(),
-  rollovers: z
+  note: z.string().nullable().optional(),
+  items: z
     .array(
       z.object({
         revenueCaseId: z.string().uuid(),
-        rollReason: z.string().min(1),
-        assignedToUserId: z.string().uuid().nullable().optional(),
-        assignedToRole: z.nativeEnum(RoleName).nullable().optional(),
-        dueAt: z.string().datetime().optional(),
+        ownerUserId: z.string().uuid().nullable().optional(),
+        ownerRole: z.nativeEnum(RoleName).nullable().optional(),
+        reasonNotCompleted: z.string().min(1),
+        nextAction: z.string().min(1),
+        dueAt: z.string().datetime({ offset: true }),
+        rollover: z.boolean(),
       }),
     )
     .optional(),
 });
 
-type ScopedClinic = { id: string; timezone: string; facilityId?: string | null };
+const athenaHandoffConfirmSchema = z.object({
+  athenaHandoffNote: z.string().nullable().optional(),
+  checklistUpdates: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        status: z.string(),
+        evidenceText: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
+});
+
+type ScopedClinic = {
+  id: string;
+  name: string;
+  shortCode?: string | null;
+  timezone: string;
+  facilityId?: string | null;
+};
 
 async function resolveClinicsInScope(user: { clinicId: string | null; facilityId: string | null }, requestedClinicId?: string) {
   if (requestedClinicId) {
     const clinic = await prisma.clinic.findUnique({
       where: { id: requestedClinicId },
-      select: { id: true, timezone: true, facilityId: true },
+      select: { id: true, name: true, shortCode: true, timezone: true, facilityId: true },
     });
     if (!clinic) throw new ApiError(404, "Clinic not found");
     if (user.clinicId && clinic.id !== user.clinicId) throw new ApiError(403, "Clinic is outside your assigned scope");
@@ -151,7 +202,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
   if (user.clinicId) {
     const clinic = await prisma.clinic.findUnique({
       where: { id: user.clinicId },
-      select: { id: true, timezone: true, facilityId: true },
+      select: { id: true, name: true, shortCode: true, timezone: true, facilityId: true },
     });
     if (!clinic) throw new ApiError(404, "Assigned clinic not found");
     return [clinic] as ScopedClinic[];
@@ -159,7 +210,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
 
   const clinics = await prisma.clinic.findMany({
     where: { facilityId: user.facilityId || undefined },
-    select: { id: true, timezone: true, facilityId: true },
+    select: { id: true, name: true, shortCode: true, timezone: true, facilityId: true },
     orderBy: { id: "asc" },
   });
   if (clinics.length === 0) throw new ApiError(404, "No clinics are available in scope");
@@ -187,8 +238,20 @@ function mapRevenueCaseRow(row: Awaited<ReturnType<typeof buildRevenueCaseList>>
     dueAt: row.dueAt,
     rolledFromDateKey: row.rolledFromDateKey,
     rollReason: row.rollReason,
+    closeoutState: row.closeoutState,
     readyForAthenaAt: row.readyForAthenaAt,
+    athenaHandoffOwnerUserId: row.athenaHandoffOwnerUserId,
+    athenaHandoffStartedAt: row.athenaHandoffStartedAt,
     athenaHandoffConfirmedAt: row.athenaHandoffConfirmedAt,
+    athenaHandoffConfirmedByUserId: row.athenaHandoffConfirmedByUserId,
+    athenaHandoffNote: row.athenaHandoffNote,
+    athenaChargeEnteredAt: row.athenaChargeEnteredAt,
+    athenaClaimSubmittedAt: row.athenaClaimSubmittedAt,
+    athenaDaysToSubmit: row.athenaDaysToSubmit,
+    athenaDaysInAR: row.athenaDaysInAR,
+    athenaClaimStatus: row.athenaClaimStatus,
+    athenaPatientBalanceCents: row.athenaPatientBalanceCents,
+    athenaLastSyncAt: row.athenaLastSyncAt,
     closedAt: row.closedAt,
     providerQueryOpenCount: row.providerQueryOpenCount,
     encounter: {
@@ -213,10 +276,34 @@ function mapRevenueCaseRow(row: Awaited<ReturnType<typeof buildRevenueCaseList>>
   };
 }
 
+function accumulateCounts(target: Record<string, number>, source: Record<string, number> | null | undefined) {
+  Object.entries(source || {}).forEach(([key, value]) => {
+    target[key] = (target[key] || 0) + Number(value || 0);
+  });
+}
+
+function averageNumbers(values: number[]) {
+  if (values.length === 0) return 0;
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+}
+
+function averageNullableNumbers(values: Array<number | null | undefined>) {
+  const usable = values.filter((value): value is number => value !== null && value !== undefined && Number.isFinite(value));
+  return usable.length > 0 ? averageNumbers(usable) : null;
+}
+
+function sortCountEntries(counts: Record<string, number>, limit = 5) {
+  return Object.entries(counts)
+    .filter(([, value]) => Number(value) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count: Number(count) }));
+}
+
 async function assertRevenueCaseReadable(revenueCaseId: string, user: { clinicId: string | null; facilityId: string | null }) {
   const revenueCase = await prisma.revenueCase.findUnique({
     where: { id: revenueCaseId },
-    select: { id: true, clinicId: true, facilityId: true },
+    select: { id: true, clinicId: true, facilityId: true, encounterId: true },
   });
   assert(revenueCase, 404, "Revenue case not found");
   if (user.clinicId && revenueCase.clinicId !== user.clinicId) throw new ApiError(403, "Revenue case is outside your assigned scope");
@@ -224,14 +311,25 @@ async function assertRevenueCaseReadable(revenueCaseId: string, user: { clinicId
   return revenueCase;
 }
 
+function assertAthenaHandoffRole(role: RoleName | null | undefined) {
+  assert(
+    role === RoleName.RevenueCycle || role === RoleName.OfficeManager || role === RoleName.Admin,
+    400,
+    "Athena handoff ownership must stay with Revenue Cycle, Office Manager, or Admin.",
+  );
+}
+
 export async function registerRevenueRoutes(app: FastifyInstance) {
-  const revenueGuard = requireRoles(RoleName.RevenueCycle, RoleName.Admin);
+  const revenueGuard = requireRoles(RoleName.RevenueCycle, RoleName.OfficeManager, RoleName.Admin);
 
   app.get("/dashboard/revenue-cycle", { preHandler: revenueGuard }, async (request) => {
     const query = listRevenueCasesSchema.parse(request.query);
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
     const toDate = query.to || DateTime.now().toISODate()!;
     const fromDate = query.from || toDate;
+    const facilityId = request.user!.facilityId || clinics[0]?.facilityId;
+    assert(facilityId, 400, "Revenue settings require a facility scope.");
+    const settings = await getRevenueSettings(prisma, facilityId);
     await syncRevenueCasesForScope(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
       facilityId: request.user!.facilityId,
@@ -242,6 +340,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
       facilityId: request.user!.facilityId,
+      encounterId: query.encounterId,
       dayBucket: query.dayBucket,
       workQueue: query.workQueue,
       search: query.search,
@@ -251,12 +350,19 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     });
 
     const todayRows = rows.filter((row) => row.currentDayBucket === RevenueDayBucket.Today);
-    const collectionExpected = todayRows.reduce(
+    const collectionExpectedVisitCount = todayRows.filter((row) => row.checkoutCollectionTracking?.collectionExpected).length;
+    const collectionCapturedVisitCount = todayRows.filter((row) => (row.checkoutCollectionTracking?.amountCollectedCents || 0) > 0).length;
+    const collectionExpectedCents = todayRows.reduce(
       (sum, row) => sum + (row.checkoutCollectionTracking?.collectionExpected ? row.checkoutCollectionTracking.amountDueCents : 0),
       0,
     );
-    const collectionTracked = todayRows.reduce((sum, row) => sum + (row.checkoutCollectionTracking?.amountCollectedCents || 0), 0);
-    const sameDayCollectionRate = collectionExpected > 0 ? Number(((collectionTracked / collectionExpected) * 100).toFixed(2)) : 0;
+    const collectionCapturedCents = todayRows.reduce((sum, row) => sum + (row.checkoutCollectionTracking?.amountCollectedCents || 0), 0);
+    const sameDayCollectionVisitRate = collectionExpectedVisitCount > 0
+      ? Number(((collectionCapturedVisitCount / collectionExpectedVisitCount) * 100).toFixed(2))
+      : 0;
+    const sameDayCollectionDollarRate = collectionExpectedCents > 0
+      ? Number(((collectionCapturedCents / collectionExpectedCents) * 100).toFixed(2))
+      : 0;
 
     const handoffDurations = todayRows
       .filter((row) => row.encounter.checkoutCompleteAt && row.athenaHandoffConfirmedAt)
@@ -270,6 +376,8 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const averageFlowHandoffLagHours = handoffDurations.length > 0
       ? Number((handoffDurations.reduce((sum, value) => sum + value, 0) / handoffDurations.length).toFixed(2))
       : 0;
+    const athenaDaysToSubmit = averageNullableNumbers(rows.map((row) => row.athenaDaysToSubmit));
+    const athenaDaysInAR = averageNullableNumbers(rows.map((row) => row.athenaDaysInAR));
 
     return {
       scope: {
@@ -278,10 +386,15 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         to: toDate,
       },
       kpis: {
-        sameDayCollectionRate,
+        sameDayCollectionExpectedVisitCount: collectionExpectedVisitCount,
+        sameDayCollectionCapturedVisitCount: collectionCapturedVisitCount,
+        sameDayCollectionExpectedCents: collectionExpectedCents,
+        sameDayCollectionCapturedCents: collectionCapturedCents,
+        sameDayCollectionVisitRate,
+        sameDayCollectionDollarRate,
         averageFlowHandoffLagHours,
-        athenaDaysToSubmit: null,
-        athenaDaysInAR: null,
+        athenaDaysToSubmit,
+        athenaDaysInAR,
       },
       risks: {
         eligibilityBlockers: rows.filter((row) => row.currentWorkQueue === RevenueWorkQueue.FinancialReadiness).length,
@@ -294,6 +407,11 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       queueCounts: Object.fromEntries(
         Object.values(RevenueWorkQueue).map((queue) => [queue, rows.filter((row) => row.currentWorkQueue === queue).length]),
       ),
+      settings: {
+        missedCollectionReasons: settings.missedCollectionReasons,
+        providerQueryTemplates: settings.providerQueryTemplates,
+        athenaLinkTemplate: settings.athenaLinkTemplate,
+      },
       cases: rows.map(mapRevenueCaseRow),
     };
   });
@@ -321,6 +439,42 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       persist: true,
       forceRecompute: true,
     });
+    const clinicNameById = new Map(clinics.map((clinic) => [clinic.id, formatClinicDisplayName({ name: clinic.name })]));
+    const unfinishedQueueCounts: Record<string, number> = {};
+    const unfinishedOwnerCounts: Record<string, number> = {};
+    const unfinishedProviderCounts: Record<string, number> = {};
+    const unfinishedReasonCounts: Record<string, number> = {};
+    const unfinishedClinicCounts: Record<string, number> = {};
+
+    daily.forEach((entry) => {
+      accumulateCounts(unfinishedQueueCounts, entry.unfinishedQueueCounts);
+      accumulateCounts(unfinishedOwnerCounts, entry.unfinishedOwnerCounts);
+      accumulateCounts(unfinishedProviderCounts, entry.unfinishedProviderCounts);
+      accumulateCounts(unfinishedReasonCounts, entry.rollReasons);
+      const clinicLabel = clinicNameById.get(entry.clinicId) || entry.clinicId;
+      unfinishedClinicCounts[clinicLabel] =
+        (unfinishedClinicCounts[clinicLabel] || 0) +
+        Object.values(entry.unfinishedQueueCounts || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+    });
+
+    const ownerIds = Object.keys(unfinishedOwnerCounts).filter((value) => /^[0-9a-f-]{36}$/i.test(value));
+    const providerIds = Object.keys(unfinishedProviderCounts).filter((value) => /^[0-9a-f-]{36}$/i.test(value));
+    const [ownerRows, providerRows] = await Promise.all([
+      ownerIds.length > 0
+        ? prisma.user.findMany({
+            where: { id: { in: ownerIds } },
+            select: { id: true, name: true, status: true },
+          })
+        : Promise.resolve([]),
+      providerIds.length > 0
+        ? prisma.user.findMany({
+            where: { id: { in: providerIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const ownerNameById = new Map(ownerRows.map((row) => [row.id, formatUserDisplayName(row)]));
+    const providerNameById = new Map(providerRows.map((row) => [row.id, row.name || "Unassigned"]));
 
     return {
       scope: {
@@ -328,7 +482,53 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         from: effectiveFrom,
         to: effectiveTo,
       },
-      daily,
+      daily: daily.map((entry) => ({
+        clinicId: entry.clinicId,
+        clinicName: clinicNameById.get(entry.clinicId) || entry.clinicId,
+        dateKey: entry.date,
+        sameDayCollectionExpectedVisitCount: entry.sameDayCollectionExpectedVisitCount,
+        sameDayCollectionCapturedVisitCount: entry.sameDayCollectionCapturedVisitCount,
+        sameDayCollectionExpectedCents: entry.sameDayCollectionExpectedCents,
+        sameDayCollectionTrackedCents: entry.sameDayCollectionTrackedCents,
+        sameDayCollectionVisitRate: entry.sameDayCollectionVisitRate,
+        sameDayCollectionDollarRate: entry.sameDayCollectionDollarRate,
+        financiallyClearedCount: entry.financiallyClearedCount,
+        chargeCaptureCompletedCount: entry.chargeCaptureCompletedCount,
+        athenaHandoffConfirmedCount: entry.athenaHandoffConfirmedCount,
+        rolledCount: entry.rolledCount,
+        avgFlowHandoffHours: entry.avgFlowHandoffHours,
+        avgAthenaDaysToSubmit: entry.avgAthenaDaysToSubmit,
+        avgAthenaDaysInAR: entry.avgAthenaDaysInAR,
+        queueCountsJson: entry.queueCounts,
+        missedCollectionReasonsJson: entry.missedCollectionReasons,
+        rollReasonsJson: entry.rollReasons,
+        queryAgingJson: entry.queryAging,
+        unfinishedQueueCountsJson: entry.unfinishedQueueCounts,
+        unfinishedOwnerCountsJson: Object.fromEntries(
+          Object.entries(entry.unfinishedOwnerCounts || {}).map(([key, value]) => [ownerNameById.get(key) || key, value]),
+        ),
+        unfinishedProviderCountsJson: Object.fromEntries(
+          Object.entries(entry.unfinishedProviderCounts || {}).map(([key, value]) => [providerNameById.get(key) || key, value]),
+        ),
+        computedAt: new Date().toISOString(),
+      })),
+      summary: {
+        unfinishedQueues: sortCountEntries(unfinishedQueueCounts),
+        unfinishedReasons: sortCountEntries(unfinishedReasonCounts),
+        unfinishedOwners: sortCountEntries(
+          Object.fromEntries(Object.entries(unfinishedOwnerCounts).map(([key, value]) => [ownerNameById.get(key) || key, value])),
+        ),
+        unfinishedProviders: sortCountEntries(
+          Object.fromEntries(Object.entries(unfinishedProviderCounts).map(([key, value]) => [providerNameById.get(key) || key, value])),
+        ),
+        unfinishedClinics: sortCountEntries(unfinishedClinicCounts),
+        averageFlowHandoffLagHours: averageNumbers(
+          daily.map((entry) => entry.avgFlowHandoffHours).filter((value) => Number.isFinite(value) && value > 0),
+        ),
+        averageAthenaDaysToSubmit: averageNullableNumbers(daily.map((entry) => entry.avgAthenaDaysToSubmit)),
+        averageAthenaDaysInAR: averageNullableNumbers(daily.map((entry) => entry.avgAthenaDaysInAR)),
+        rolledCount: daily.reduce((sum, entry) => sum + entry.rolledCount, 0),
+      },
     };
   });
 
@@ -347,6 +547,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
       facilityId: request.user!.facilityId,
+      encounterId: query.encounterId,
       dayBucket: query.dayBucket,
       workQueue: query.workQueue,
       search: query.search,
@@ -373,6 +574,9 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = updateRevenueCaseSchema.parse(request.body);
     const revenueCase = await assertRevenueCaseReadable(revenueCaseId, request.user!);
+    if (dto.checkoutTracking?.collectionOutcome && ["CollectedPartial", "NotCollected", "Deferred"].includes(dto.checkoutTracking.collectionOutcome)) {
+      assert(dto.checkoutTracking.missedCollectionReason, 400, "A missed-collection reason is required for partial, deferred, or not-collected outcomes.");
+    }
 
     await prisma.$transaction(async (tx) => {
       if (dto.financialReadiness) {
@@ -396,27 +600,30 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         });
       }
       if (dto.chargeCapture) {
+        const normalized = normalizeChargeCaptureInput(dto.chargeCapture);
         await tx.chargeCaptureRecord.upsert({
           where: { revenueCaseId },
           create: {
             revenueCaseId,
-            documentationComplete: dto.chargeCapture.documentationComplete ?? false,
-            codingStage: dto.chargeCapture.codingStage,
-            icd10CodesJson: (dto.chargeCapture.icd10Codes || []) as Prisma.InputJsonValue,
-            cptCodesJson: (dto.chargeCapture.cptCodes || []) as Prisma.InputJsonValue,
-            modifiersJson: (dto.chargeCapture.modifiers || []) as Prisma.InputJsonValue,
-            unitsJson: (dto.chargeCapture.units || []) as Prisma.InputJsonValue,
-            codingNote: dto.chargeCapture.codingNote ?? null,
+            documentationComplete: normalized.documentationComplete,
+            codingStage: normalized.codingStage,
+            icd10CodesJson: normalized.icd10CodesJson as Prisma.InputJsonValue,
+            procedureLinesJson: normalized.procedureLinesJson as Prisma.InputJsonValue,
+            cptCodesJson: normalized.cptCodesJson as Prisma.InputJsonValue,
+            modifiersJson: normalized.modifiersJson as Prisma.InputJsonValue,
+            unitsJson: normalized.unitsJson as Prisma.InputJsonValue,
+            codingNote: normalized.codingNote,
             readyForAthenaAt: dto.readyForAthena ? new Date() : null,
           },
           update: {
-            documentationComplete: dto.chargeCapture.documentationComplete,
-            codingStage: dto.chargeCapture.codingStage,
-            icd10CodesJson: dto.chargeCapture.icd10Codes ? (dto.chargeCapture.icd10Codes as Prisma.InputJsonValue) : undefined,
-            cptCodesJson: dto.chargeCapture.cptCodes ? (dto.chargeCapture.cptCodes as Prisma.InputJsonValue) : undefined,
-            modifiersJson: dto.chargeCapture.modifiers ? (dto.chargeCapture.modifiers as Prisma.InputJsonValue) : undefined,
-            unitsJson: dto.chargeCapture.units ? (dto.chargeCapture.units as Prisma.InputJsonValue) : undefined,
-            codingNote: dto.chargeCapture.codingNote,
+            documentationComplete: normalized.documentationComplete,
+            codingStage: normalized.codingStage,
+            icd10CodesJson: normalized.icd10CodesJson as Prisma.InputJsonValue,
+            procedureLinesJson: normalized.procedureLinesJson as Prisma.InputJsonValue,
+            cptCodesJson: normalized.cptCodesJson as Prisma.InputJsonValue,
+            modifiersJson: normalized.modifiersJson as Prisma.InputJsonValue,
+            unitsJson: normalized.unitsJson as Prisma.InputJsonValue,
+            codingNote: normalized.codingNote,
             readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
           },
         });
@@ -445,12 +652,20 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           currentBlockerText: dto.blockerText,
           dueAt: dto.dueAt ? new Date(dto.dueAt) : dto.dueAt === null ? null : undefined,
           readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
+          athenaHandoffStartedAt: dto.athenaHandoffStarted === undefined ? undefined : dto.athenaHandoffStarted ? new Date() : null,
           athenaHandoffConfirmedAt:
             dto.athenaHandoffConfirmed === undefined
               ? undefined
               : dto.athenaHandoffConfirmed
                 ? new Date()
                 : null,
+          athenaHandoffConfirmedByUserId:
+            dto.athenaHandoffConfirmed === undefined
+              ? undefined
+              : dto.athenaHandoffConfirmed
+                ? request.user!.id
+                : null,
+          athenaHandoffNote: dto.athenaHandoffNote,
         },
       });
 
@@ -473,6 +688,49 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     return mapRevenueCaseRow(row);
   });
 
+  app.patch("/revenue-cases/:id/assign", { preHandler: revenueGuard }, async (request) => {
+    const revenueCaseId = (request.params as { id: string }).id;
+    const dto = assignRevenueCaseSchema.parse(request.body);
+    await assertRevenueCaseReadable(revenueCaseId, request.user!);
+    assertAthenaHandoffRole(dto.assignedToRole);
+
+    const updated = await prisma.revenueCase.update({
+      where: { id: revenueCaseId },
+      data: {
+        assignedToUserId: dto.assignedToUserId,
+        assignedToRole: dto.assignedToRole,
+      },
+    });
+
+    await prisma.revenueCaseEvent.create({
+      data: {
+        revenueCaseId,
+        eventType: "assignment_updated",
+        actorUserId: request.user!.id,
+        eventText: `Assigned to ${dto.assignedToRole}${dto.assignedToUserId ? ` (${dto.assignedToUserId})` : ""}`,
+      },
+    });
+
+    await syncRevenueCaseForEncounter(prisma, updated.encounterId);
+    const row = (await buildRevenueCaseList(prisma, { facilityId: request.user!.facilityId })).find((entry) => entry.id === revenueCaseId);
+    assert(row, 404, "Revenue case not found");
+    return mapRevenueCaseRow(row);
+  });
+
+  app.post("/revenue-cases/:id/provider-clarifications", { preHandler: revenueGuard }, async (request) => {
+    const revenueCaseId = (request.params as { id: string }).id;
+    const dto = providerQuerySchema.parse(request.body);
+    await assertRevenueCaseReadable(revenueCaseId, request.user!);
+    const created = await createRevenueProviderClarification(prisma, {
+      revenueCaseId,
+      requestedByUserId: request.user!.id,
+      questionText: dto.questionText,
+      queryType: dto.queryType,
+    });
+    assert(created, 404, "Revenue case not found");
+    return created;
+  });
+
   app.post("/revenue-cases/:id/provider-query", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = providerQuerySchema.parse(request.body);
@@ -487,22 +745,97 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     return created;
   });
 
+  const patchProviderClarification = async (request: any) => {
+    const clarificationId = (request.params as { id: string }).id;
+    const dto = providerClarificationPatchSchema.parse(request.body);
+    assert(dto.responseText || dto.status || dto.resolve !== undefined, 400, "No provider clarification updates were supplied.");
+    const updated = await respondToRevenueProviderClarification(prisma, {
+      clarificationId,
+      actorUserId: request.user!.id,
+      responseText: dto.responseText || "Updated in Flow",
+      resolve: dto.resolve ?? dto.status === ProviderClarificationStatus.Resolved,
+    });
+    assert(updated, 404, "Provider clarification not found");
+    if (dto.status === ProviderClarificationStatus.Open) {
+      await prisma.providerClarification.update({
+        where: { id: clarificationId },
+        data: {
+          status: ProviderClarificationStatus.Open,
+          respondedAt: null,
+          resolvedAt: null,
+        },
+      });
+    }
+    return prisma.providerClarification.findUnique({ where: { id: clarificationId } });
+  };
+
+  app.patch(
+    "/provider-clarifications/:id",
+    { preHandler: requireRoles(RoleName.Clinician, RoleName.Admin, RoleName.RevenueCycle, RoleName.OfficeManager) },
+    patchProviderClarification,
+  );
+
   app.post(
     "/revenue-cases/queries/:id/respond",
-    { preHandler: requireRoles(RoleName.Clinician, RoleName.Admin, RoleName.RevenueCycle) },
-    async (request) => {
-      const clarificationId = (request.params as { id: string }).id;
-      const dto = providerResponseSchema.parse(request.body);
-      const updated = await respondToRevenueProviderClarification(prisma, {
-        clarificationId,
-        actorUserId: request.user!.id,
-        responseText: dto.responseText,
-        resolve: dto.resolve,
-      });
-      assert(updated, 404, "Provider clarification not found");
-      return updated;
-    },
+    { preHandler: requireRoles(RoleName.Clinician, RoleName.Admin, RoleName.RevenueCycle, RoleName.OfficeManager) },
+    patchProviderClarification,
   );
+
+  app.post("/revenue-cases/:id/athena-handoff-confirm", { preHandler: revenueGuard }, async (request) => {
+    const revenueCaseId = (request.params as { id: string }).id;
+    const dto = athenaHandoffConfirmSchema.parse(request.body);
+    await assertRevenueCaseReadable(revenueCaseId, request.user!);
+    assertAthenaHandoffRole(request.user!.role);
+
+    await prisma.$transaction(async (tx) => {
+      if (dto.checklistUpdates?.length) {
+        for (const item of dto.checklistUpdates) {
+          await tx.revenueChecklistItem.update({
+            where: { id: item.id },
+            data: {
+              status: item.status,
+              evidenceText: item.evidenceText,
+              completedAt: item.status === "completed" ? new Date() : null,
+              completedByUserId: item.status === "completed" ? request.user!.id : null,
+            },
+          });
+        }
+      }
+
+      const revenueCase = await tx.revenueCase.findUnique({ where: { id: revenueCaseId } });
+      assert(revenueCase, 404, "Revenue case not found");
+
+      await tx.revenueCase.update({
+        where: { id: revenueCaseId },
+        data: {
+          athenaHandoffOwnerUserId: revenueCase.athenaHandoffOwnerUserId || request.user!.id,
+          athenaHandoffStartedAt: revenueCase.athenaHandoffStartedAt || new Date(),
+          athenaHandoffConfirmedAt: new Date(),
+          athenaHandoffConfirmedByUserId: request.user!.id,
+          athenaHandoffNote: dto.athenaHandoffNote || null,
+          closeoutState:
+            revenueCase.closeoutState === RevenueCloseoutState.ClosedResolved
+              ? RevenueCloseoutState.ClosedResolved
+              : RevenueCloseoutState.Open,
+        },
+      });
+
+      await tx.revenueCaseEvent.create({
+        data: {
+          revenueCaseId,
+          eventType: "athena_handoff_confirmed",
+          actorUserId: request.user!.id,
+          eventText: dto.athenaHandoffNote || "Athena handoff confirmed in Flow",
+        },
+      });
+
+      await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+    });
+
+    const row = (await buildRevenueCaseList(prisma, { facilityId: request.user!.facilityId })).find((entry) => entry.id === revenueCaseId);
+    assert(row, 404, "Revenue case not found");
+    return mapRevenueCaseRow(row);
+  });
 
   app.post("/revenue-cases/:id/roll", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
@@ -521,6 +854,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         assignedToUserId: dto.assignedToUserId,
         assignedToRole: dto.assignedToRole,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
+        closeoutState: RevenueCloseoutState.RolledOver,
       },
     });
 
@@ -540,6 +874,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
   app.post("/revenue-closeout", { preHandler: revenueGuard }, async (request) => {
     const dto = revenueCloseoutSchema.parse(request.body);
     const clinics = await resolveClinicsInScope(request.user!, dto.clinicId);
+    assert(clinics.length === 1, 400, "Revenue day close is clinic-specific. Select a single clinic before closing the day.");
     const targetDate = (dto.date || DateTime.now().toISODate() || "").trim();
     await syncRevenueCasesForScope(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
@@ -556,33 +891,91 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           notIn: [RevenueStatus.MonitoringOnly, RevenueStatus.Closed],
         },
       },
-      select: { id: true, patientId: true, currentRevenueStatus: true },
+      select: {
+        id: true,
+        patientId: true,
+        providerId: true,
+        encounterId: true,
+        currentWorkQueue: true,
+        currentRevenueStatus: true,
+        assignedToUserId: true,
+        assignedToRole: true,
+      },
     });
 
-    const rollovers = dto.rollovers || [];
-    const rolledIds = new Set(rollovers.map((item) => item.revenueCaseId));
-    const blockers = unresolved.filter((row) => !rolledIds.has(row.id));
-    if (blockers.length > 0) {
-      throw new ApiError(400, `${blockers.length} revenue case(s) still need rollover ownership before day close.`);
+    const items = dto.items || [];
+    const itemMap = new Map(items.map((item) => [item.revenueCaseId, item]));
+    const missing = unresolved.filter((row) => !itemMap.has(row.id));
+    if (missing.length > 0) {
+      throw new ApiError(400, `${missing.length} unresolved revenue case(s) still need closeout metadata.`);
     }
 
-    for (const rollover of rollovers) {
-      await prisma.revenueCase.update({
-        where: { id: rollover.revenueCaseId },
+    for (const item of items) {
+      assert(item.ownerUserId || item.ownerRole, 400, "Every unresolved case needs an owner.");
+    }
+
+    const run = await prisma.revenueCloseoutRun.create({
+      data: {
+        facilityId: request.user!.facilityId!,
+        clinicId: clinics[0]!.id,
+        dateKey: targetDate,
+        closedByUserId: request.user!.id,
+        unresolvedCount: unresolved.length,
+        rolledCount: items.filter((item) => item.rollover).length,
+        note: dto.note || null,
+      },
+    });
+
+    for (const unresolvedCase of unresolved) {
+      const item = itemMap.get(unresolvedCase.id)!;
+      await prisma.revenueCloseoutItem.create({
         data: {
-          rolledFromDateKey: targetDate,
-          rollReason: rollover.rollReason,
-          currentDayBucket: RevenueDayBucket.Rolled,
-          assignedToUserId: rollover.assignedToUserId,
-          assignedToRole: rollover.assignedToRole,
-          dueAt: rollover.dueAt ? new Date(rollover.dueAt) : undefined,
+          closeoutRunId: run.id,
+          revenueCaseId: unresolvedCase.id,
+          queue: unresolvedCase.currentWorkQueue,
+          snapshotStatus: unresolvedCase.currentRevenueStatus,
+          ownerUserId: item.ownerUserId || unresolvedCase.assignedToUserId || null,
+          ownerRole: item.ownerRole || unresolvedCase.assignedToRole || RoleName.RevenueCycle,
+          reasonNotCompleted: item.reasonNotCompleted,
+          nextAction: item.nextAction,
+          dueAt: new Date(item.dueAt),
+          rollover: item.rollover,
+          patientId: unresolvedCase.patientId,
+          providerId: unresolvedCase.providerId,
+        },
+      });
+
+      await prisma.revenueCase.update({
+        where: { id: unresolvedCase.id },
+        data: {
+          assignedToUserId: item.ownerUserId || unresolvedCase.assignedToUserId || null,
+          assignedToRole: item.ownerRole || unresolvedCase.assignedToRole || RoleName.RevenueCycle,
+          dueAt: new Date(item.dueAt),
+          rolledFromDateKey: item.rollover ? targetDate : null,
+          rollReason: item.rollover ? item.reasonNotCompleted : null,
+          closeoutState: item.rollover ? RevenueCloseoutState.RolledOver : RevenueCloseoutState.ClosedUnresolved,
+          currentDayBucket: item.rollover ? RevenueDayBucket.Rolled : RevenueDayBucket.Today,
+        },
+      });
+
+      await prisma.revenueCaseEvent.create({
+        data: {
+          revenueCaseId: unresolvedCase.id,
+          eventType: item.rollover ? "closeout_rolled" : "closeout_unresolved",
+          actorUserId: request.user!.id,
+          eventText: item.reasonNotCompleted,
+          payloadJson: {
+            nextAction: item.nextAction,
+            dueAt: item.dueAt,
+            rollover: item.rollover,
+          } as Prisma.InputJsonValue,
         },
       });
     }
 
     return {
       date: targetDate,
-      rolledCount: rollovers.length,
+      rolledCount: items.filter((item) => item.rollover).length,
       unresolvedCount: unresolved.length,
       status: "closed",
     };

@@ -18,10 +18,17 @@ import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import {
   mergeAthenaConnectorConfig,
   normalizeAthenaConnectorConfig,
+  previewAthenaRevenueMonitoring,
   previewAthenaSchedule,
   redactAthenaConnectorConfig,
   testAthenaConnectorConfig
 } from "../lib/athena-one.js";
+import {
+  DEFAULT_MISSED_COLLECTION_REASONS,
+  DEFAULT_PROVIDER_QUERY_TEMPLATES,
+  DEFAULT_REVENUE_SETTINGS,
+  getRevenueSettings
+} from "../lib/revenue-cycle.js";
 
 const facilitySchema = z.object({
   name: z.string().min(1),
@@ -191,6 +198,7 @@ const athenaConnectorSchema = z.object({
       retryBackoffMs: z.number().int().positive().optional(),
       testPath: z.string().trim().optional(),
       previewPath: z.string().trim().optional(),
+      revenuePath: z.string().trim().optional(),
       headers: z.record(z.string(), z.string()).optional()
     })
     .optional(),
@@ -201,6 +209,35 @@ const athenaPreviewSchema = z.object({
   facilityId: z.string().uuid().optional(),
   clinicId: z.string().uuid().optional(),
   dateOfService: z.string().optional()
+});
+
+const athenaRevenueMonitoringSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  clinicId: z.string().uuid().optional(),
+  dateOfService: z.string().optional(),
+  maxRows: z.number().int().positive().max(250).optional(),
+});
+
+const revenueSettingsSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  missedCollectionReasons: z.array(z.string().trim().min(1)).optional(),
+  queueSla: z.record(z.string(), z.number().int().positive()).optional(),
+  dayCloseDefaults: z
+    .object({
+      defaultDueHours: z.number().int().positive().optional(),
+      requireNextAction: z.boolean().optional()
+    })
+    .optional(),
+  providerQueryTemplates: z.array(z.string().trim().min(1)).optional(),
+  athenaLinkTemplate: z.string().trim().nullable().optional(),
+  athenaChecklistDefaults: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1),
+        sortOrder: z.number().int().nonnegative().optional()
+      })
+    )
+    .optional()
 });
 
 const notificationSchema = z.object({
@@ -856,6 +893,67 @@ function mapAthenaConnectorResponse(connector: {
     lastSyncAt: connector.lastSyncAt,
     lastSyncMessage: connector.lastSyncMessage
   };
+}
+
+type AthenaRevenueImportPreviewRow = {
+  index: number;
+  encounterId: string;
+  patientId: string;
+  clinic: string;
+  dateOfService: string;
+  chargeEnteredAt: string | null;
+  claimSubmittedAt: string | null;
+  daysToSubmit: number | null;
+  daysInAR: number | null;
+  claimStatus: string;
+  patientBalanceCents: number | null;
+  raw: Record<string, unknown>;
+};
+
+async function matchRevenueCaseForAthenaRow(
+  facilityId: string,
+  row: AthenaRevenueImportPreviewRow,
+) {
+  if (row.encounterId) {
+    const byEncounter = await prisma.revenueCase.findFirst({
+      where: { facilityId, encounterId: row.encounterId },
+      select: {
+        id: true,
+        encounterId: true,
+        patientId: true,
+        clinicId: true,
+        currentRevenueStatus: true,
+        currentWorkQueue: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (byEncounter) return byEncounter;
+  }
+
+  if (!row.patientId || !row.dateOfService) return null;
+  const dateAnchor = DateTime.fromISO(row.dateOfService, { zone: "utc" });
+  if (!dateAnchor.isValid) return null;
+  const startOfDay = dateAnchor.startOf("day").toJSDate();
+  const endOfDay = dateAnchor.plus({ days: 1 }).startOf("day").toJSDate();
+  return prisma.revenueCase.findFirst({
+    where: {
+      facilityId,
+      patientId: row.patientId,
+      dateOfService: {
+        gte: startOfDay,
+        lt: endOfDay,
+      },
+    },
+    select: {
+      id: true,
+      encounterId: true,
+      patientId: true,
+      clinicId: true,
+      currentRevenueStatus: true,
+      currentWorkQueue: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
 }
 
 async function listUserAssignmentImpact(userId: string) {
@@ -2781,6 +2879,248 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       rows,
       message,
       detail: previewResult.detail
+    };
+  });
+
+  app.post("/admin/integrations/athenaone/revenue-preview", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const dto = athenaRevenueMonitoringSchema.parse(request.body);
+    const facility = await resolveFacilityForRequest(request, dto.facilityId);
+
+    if (dto.clinicId) {
+      await resolveClinicForFacility(dto.clinicId, facility.id);
+    }
+
+    const connector = await prisma.integrationConnector.findUnique({
+      where: {
+        facilityId_vendor: {
+          facilityId: facility.id,
+          vendor: "athenaone"
+        }
+      }
+    });
+    assert(connector, 400, "AthenaOne connector is not configured for this facility");
+
+    const previewDate = dto.dateOfService || new Date().toISOString().slice(0, 10);
+    const previewResult = await previewAthenaRevenueMonitoring({
+      config: normalizeAthenaConnectorConfig(connector.configJson),
+      mapping: connector.mappingJson || {},
+      dateOfService: previewDate,
+      clinicId: dto.clinicId,
+      maxRows: dto.maxRows,
+    });
+
+    const rows = await Promise.all(
+      previewResult.rows.map(async (row) => {
+        const matchedCase = await matchRevenueCaseForAthenaRow(facility.id, row);
+        return {
+          ...row,
+          matchedRevenueCaseId: matchedCase?.id || null,
+          matchedEncounterId: matchedCase?.encounterId || null,
+          matchedPatientId: matchedCase?.patientId || null,
+          matchedClinicId: matchedCase?.clinicId || null,
+          currentRevenueStatus: matchedCase?.currentRevenueStatus || null,
+          currentWorkQueue: matchedCase?.currentWorkQueue || null,
+          importable: Boolean(matchedCase),
+        };
+      }),
+    );
+
+    await prisma.integrationConnector.update({
+      where: {
+        facilityId_vendor: {
+          facilityId: facility.id,
+          vendor: "athenaone"
+        }
+      },
+      data: {
+        lastSyncStatus: previewResult.ok ? "revenue_preview_ok" : "revenue_preview_error",
+        lastSyncAt: new Date(),
+        lastSyncMessage: previewResult.message
+      }
+    });
+
+    return {
+      ok: previewResult.ok,
+      mode: "revenue_preview",
+      dateOfService: previewDate,
+      rowCount: rows.length,
+      matchedCount: rows.filter((row) => row.importable).length,
+      rows,
+      message: previewResult.message,
+      detail: previewResult.detail,
+    };
+  });
+
+  app.post("/admin/integrations/athenaone/revenue-import", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const dto = athenaRevenueMonitoringSchema.parse(request.body);
+    const facility = await resolveFacilityForRequest(request, dto.facilityId);
+
+    if (dto.clinicId) {
+      await resolveClinicForFacility(dto.clinicId, facility.id);
+    }
+
+    const connector = await prisma.integrationConnector.findUnique({
+      where: {
+        facilityId_vendor: {
+          facilityId: facility.id,
+          vendor: "athenaone"
+        }
+      }
+    });
+    assert(connector, 400, "AthenaOne connector is not configured for this facility");
+
+    const importDate = dto.dateOfService || new Date().toISOString().slice(0, 10);
+    const previewResult = await previewAthenaRevenueMonitoring({
+      config: normalizeAthenaConnectorConfig(connector.configJson),
+      mapping: connector.mappingJson || {},
+      dateOfService: importDate,
+      clinicId: dto.clinicId,
+      maxRows: dto.maxRows,
+    });
+    if (!previewResult.ok) {
+      throw new ApiError(400, previewResult.message);
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    const importedCaseIds: string[] = [];
+    const unmatchedRows: Array<{ index: number; patientId: string; encounterId: string; dateOfService: string }> = [];
+
+    for (const row of previewResult.rows) {
+      const matchedCase = await matchRevenueCaseForAthenaRow(facility.id, row);
+      if (!matchedCase) {
+        skippedCount += 1;
+        unmatchedRows.push({
+          index: row.index,
+          patientId: row.patientId,
+          encounterId: row.encounterId,
+          dateOfService: row.dateOfService,
+        });
+        continue;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.revenueCase.update({
+          where: { id: matchedCase.id },
+          data: {
+            athenaChargeEnteredAt: row.chargeEnteredAt ? new Date(row.chargeEnteredAt) : undefined,
+            athenaClaimSubmittedAt: row.claimSubmittedAt ? new Date(row.claimSubmittedAt) : undefined,
+            athenaDaysToSubmit: row.daysToSubmit,
+            athenaDaysInAR: row.daysInAR,
+            athenaClaimStatus: row.claimStatus || null,
+            athenaPatientBalanceCents: row.patientBalanceCents,
+            athenaLastSyncAt: new Date(),
+          },
+        });
+        await tx.revenueCaseEvent.create({
+          data: {
+            revenueCaseId: matchedCase.id,
+            eventType: "athena_monitoring_imported",
+            actorUserId: request.user!.id,
+            eventText: row.claimStatus
+              ? `Athena monitoring imported: ${row.claimStatus}`
+              : "Athena monitoring imported.",
+            payloadJson: row.raw as Prisma.InputJsonValue,
+          },
+        });
+      });
+
+      importedCount += 1;
+      importedCaseIds.push(matchedCase.id);
+    }
+
+    await prisma.integrationConnector.update({
+      where: {
+        facilityId_vendor: {
+          facilityId: facility.id,
+          vendor: "athenaone"
+        }
+      },
+      data: {
+        lastSyncStatus: "revenue_import_ok",
+        lastSyncAt: new Date(),
+        lastSyncMessage: `Imported Athena monitoring for ${importedCount} revenue case(s). ${skippedCount} unmatched row(s).`
+      }
+    });
+
+    return {
+      ok: true,
+      mode: "revenue_import",
+      dateOfService: importDate,
+      rowCount: previewResult.rows.length,
+      importedCount,
+      skippedCount,
+      importedCaseIds,
+      unmatchedRows,
+      message: `Imported Athena monitoring for ${importedCount} revenue case(s).`,
+    };
+  });
+
+  app.get("/admin/revenue-settings", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const query = request.query as { facilityId?: string };
+    const facility = await resolveFacilityForRequest(request, query.facilityId);
+    const settings = await getRevenueSettings(prisma, facility.id);
+    return {
+      facilityId: facility.id,
+      missedCollectionReasons: settings.missedCollectionReasons,
+      queueSla: settings.queueSla,
+      dayCloseDefaults: settings.dayCloseDefaults,
+      providerQueryTemplates: settings.providerQueryTemplates,
+      athenaLinkTemplate: settings.athenaLinkTemplate,
+      athenaChecklistDefaults: settings.athenaChecklistDefaults,
+      defaults: {
+        missedCollectionReasons: [...DEFAULT_MISSED_COLLECTION_REASONS],
+        providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
+        queueSla: { ...DEFAULT_REVENUE_SETTINGS.queueSla },
+        dayCloseDefaults: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults }
+      }
+    };
+  });
+
+  app.post("/admin/revenue-settings", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const dto = revenueSettingsSchema.parse(request.body);
+    const facility = await resolveFacilityForRequest(request, dto.facilityId);
+    const existing = await getRevenueSettings(prisma, facility.id);
+
+    const saved = await prisma.revenueCycleSettings.upsert({
+      where: { facilityId: facility.id },
+      create: {
+        facilityId: facility.id,
+        missedCollectionReasonsJson: (dto.missedCollectionReasons || existing.missedCollectionReasons) as Prisma.InputJsonValue,
+        queueSlaJson: (dto.queueSla || existing.queueSla) as Prisma.InputJsonValue,
+        dayCloseDefaultsJson: (
+          dto.dayCloseDefaults ? { ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } : existing.dayCloseDefaults
+        ) as Prisma.InputJsonValue,
+        providerQueryTemplatesJson: (dto.providerQueryTemplates || existing.providerQueryTemplates) as Prisma.InputJsonValue,
+        athenaLinkTemplate: dto.athenaLinkTemplate ?? existing.athenaLinkTemplate,
+        athenaChecklistDefaultsJson: (dto.athenaChecklistDefaults || existing.athenaChecklistDefaults) as Prisma.InputJsonValue
+      },
+      update: {
+        missedCollectionReasonsJson: dto.missedCollectionReasons
+          ? (dto.missedCollectionReasons as Prisma.InputJsonValue)
+          : undefined,
+        queueSlaJson: dto.queueSla ? (dto.queueSla as Prisma.InputJsonValue) : undefined,
+        dayCloseDefaultsJson: dto.dayCloseDefaults
+          ? ({ ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } as Prisma.InputJsonValue)
+          : undefined,
+        providerQueryTemplatesJson: dto.providerQueryTemplates
+          ? (dto.providerQueryTemplates as Prisma.InputJsonValue)
+          : undefined,
+        athenaLinkTemplate: dto.athenaLinkTemplate === undefined ? undefined : dto.athenaLinkTemplate,
+        athenaChecklistDefaultsJson: dto.athenaChecklistDefaults
+          ? (dto.athenaChecklistDefaults as Prisma.InputJsonValue)
+          : undefined
+      }
+    });
+
+    return {
+      facilityId: facility.id,
+      missedCollectionReasons: (saved.missedCollectionReasonsJson || existing.missedCollectionReasons) as string[],
+      queueSla: (saved.queueSlaJson || existing.queueSla) as Record<string, number>,
+      dayCloseDefaults: (saved.dayCloseDefaultsJson || existing.dayCloseDefaults) as Record<string, unknown>,
+      providerQueryTemplates: (saved.providerQueryTemplatesJson || existing.providerQueryTemplates) as string[],
+      athenaLinkTemplate: saved.athenaLinkTemplate || "",
+      athenaChecklistDefaults: (saved.athenaChecklistDefaultsJson || existing.athenaChecklistDefaults) as Array<{ label: string; sortOrder: number }>
     };
   });
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   mergeAthenaConnectorConfig,
   normalizeAthenaConnectorConfig,
+  previewAthenaRevenueMonitoring,
   previewAthenaSchedule,
   redactAthenaConnectorConfig,
   testAthenaConnectorConfig
@@ -134,5 +135,64 @@ describe("AthenaOne connector helpers", () => {
       providerLastName: "Nguyen",
       reasonForVisit: "Follow-up"
     });
+  });
+
+  it("maps Athena revenue monitoring rows with downstream metric aliases", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          appointments: [
+            {
+              encounter_id: "ENC-200",
+              mrn: "PT-200",
+              dos: "2026-04-17",
+              charge_entry_date: "2026-04-18T09:30:00Z",
+              claim_submission_date: "2026-04-20",
+              days_to_submit: "3",
+              days_in_ar: 11,
+              claim_status: "submitted",
+              patient_balance: "42.50",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const preview = await previewAthenaRevenueMonitoring({
+      config: {
+        baseUrl: "https://example-athena.test",
+        practiceId: "practice-1",
+        revenuePath: "/billing/monitoring",
+      },
+      mapping: {
+        revenueEncounterId: "encounter_id",
+        patientId: "mrn",
+        dateOfService: "dos",
+        revenueChargeEnteredAt: "charge_entry_date",
+        revenueClaimSubmittedAt: "claim_submission_date",
+        revenueDaysToSubmit: "days_to_submit",
+        revenueDaysInAR: "days_in_ar",
+        revenueClaimStatus: "claim_status",
+        patientBalance: "patient_balance",
+      },
+      dateOfService: "2026-04-17",
+    });
+
+    expect(preview.ok).toBe(true);
+    expect(preview.rows[0]).toMatchObject({
+      encounterId: "ENC-200",
+      patientId: "PT-200",
+      dateOfService: "2026-04-17",
+      daysToSubmit: 3,
+      daysInAR: 11,
+      claimStatus: "submitted",
+      patientBalanceCents: 4250,
+    });
+    expect(preview.rows[0]?.chargeEnteredAt).toContain("2026-04-18");
+    expect(preview.rows[0]?.claimSubmittedAt).toContain("2026-04-20");
   });
 });

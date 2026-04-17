@@ -114,6 +114,14 @@ enum FinancialEligibilityStatus {
   Pending
 }
 
+enum FinancialRequirementStatus {
+  NotRequired
+  Pending
+  Approved
+  Expired
+  UnableToObtain
+}
+
 enum CollectionOutcome {
   CollectedInFull
   CollectedPartial
@@ -143,6 +151,13 @@ enum RevenueChecklistGroup {
   athena_handoff
   athena_monitoring
   day_close
+}
+
+enum RevenueCloseoutState {
+  Open
+  ClosedResolved
+  ClosedUnresolved
+  RolledOver
 }
 
 enum RoomOperationalStatus {
@@ -253,6 +268,8 @@ model Facility {
   temporaryClinicAssignmentOverrides TemporaryClinicAssignmentOverride[]
   roomDailyRollups                   RoomDailyRollup[]
   revenueCases                       RevenueCase[]
+  revenueSettings                    RevenueCycleSettings?
+  revenueCloseoutRuns                RevenueCloseoutRun[]
   revenueCycleDailyRollups           RevenueCycleDailyRollup[]
 }
 
@@ -286,6 +303,7 @@ model Clinic {
   officeManagerDailyRollups    OfficeManagerDailyRollup[]
   roomDailyRollups             RoomDailyRollup[]
   revenueCases                 RevenueCase[]
+  revenueCloseoutRuns          RevenueCloseoutRun[]
   revenueCycleDailyRollups     RevenueCycleDailyRollup[]
   alertInbox                   UserAlertInbox[]
   temporaryAssignmentOverrides TemporaryClinicAssignmentOverride[]
@@ -725,7 +743,19 @@ model RevenueCase {
   rolledFromDateKey        String?
   rollReason               String?
   readyForAthenaAt         DateTime?
+  athenaHandoffOwnerUserId String?
+  athenaHandoffStartedAt   DateTime?
   athenaHandoffConfirmedAt DateTime?
+  athenaHandoffConfirmedByUserId String?
+  athenaHandoffNote        String?
+  athenaChargeEnteredAt    DateTime?
+  athenaClaimSubmittedAt   DateTime?
+  athenaDaysToSubmit       Float?
+  athenaDaysInAR           Float?
+  athenaClaimStatus        String?
+  athenaPatientBalanceCents Int?
+  athenaLastSyncAt         DateTime?
+  closeoutState            RevenueCloseoutState @default(Open)
   closedAt                 DateTime?
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
@@ -741,6 +771,7 @@ model RevenueCase {
   providerClarifications     ProviderClarification[]
   checklistItems             RevenueChecklistItem[]
   events                     RevenueCaseEvent[]
+  closeoutItems              RevenueCloseoutItem[]
   tasks                      Task[]
 
   @@index([facilityId, currentDayBucket, currentWorkQueue])
@@ -748,6 +779,7 @@ model RevenueCase {
   @@index([clinicId, currentRevenueStatus, currentDayBucket])
   @@index([assignedToUserId, currentRevenueStatus])
   @@index([assignedToRole, currentRevenueStatus])
+  @@index([closeoutState, currentDayBucket])
 }
 
 model FinancialReadiness {
@@ -764,9 +796,9 @@ model FinancialReadiness {
   coverageIssueCategory          String?
   coverageIssueText              String?
   referralRequired               Boolean                   @default(false)
-  referralStatus                 String?
+  referralStatus                 FinancialRequirementStatus @default(NotRequired)
   priorAuthRequired              Boolean                   @default(false)
-  priorAuthStatus                String?
+  priorAuthStatus                FinancialRequirementStatus @default(NotRequired)
   priorAuthNumber                String?
   notesJson                      Json?
 
@@ -793,6 +825,7 @@ model ChargeCaptureRecord {
   documentationComplete  Boolean     @default(false)
   codingStage            CodingStage @default(NotStarted)
   icd10CodesJson         Json?
+  procedureLinesJson     Json?
   cptCodesJson           Json?
   modifiersJson          Json?
   unitsJson              Json?
@@ -859,6 +892,63 @@ model RevenueCaseEvent {
   revenueCase RevenueCase @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
 
   @@index([revenueCaseId, createdAt])
+}
+
+model RevenueCycleSettings {
+  facilityId                  String   @id
+  missedCollectionReasonsJson Json
+  queueSlaJson                Json
+  dayCloseDefaultsJson        Json
+  providerQueryTemplatesJson  Json
+  athenaLinkTemplate          String?
+  athenaChecklistDefaultsJson Json
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+}
+
+model RevenueCloseoutRun {
+  id              String   @id @default(uuid())
+  facilityId      String
+  clinicId        String
+  dateKey         String
+  closedByUserId  String?
+  unresolvedCount Int      @default(0)
+  rolledCount     Int      @default(0)
+  note            String?
+  createdAt       DateTime @default(now())
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  clinic   Clinic   @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  items    RevenueCloseoutItem[]
+
+  @@index([facilityId, dateKey])
+  @@index([clinicId, dateKey])
+}
+
+model RevenueCloseoutItem {
+  id                 String           @id @default(uuid())
+  closeoutRunId      String
+  revenueCaseId      String
+  queue              RevenueWorkQueue
+  snapshotStatus     RevenueStatus
+  ownerUserId        String?
+  ownerRole          RoleName?
+  reasonNotCompleted String
+  nextAction         String?
+  dueAt              DateTime?
+  rollover           Boolean          @default(false)
+  patientId          String
+  providerId         String?
+  createdAt          DateTime         @default(now())
+
+  closeoutRun RevenueCloseoutRun @relation(fields: [closeoutRunId], references: [id], onDelete: Cascade)
+  revenueCase RevenueCase        @relation(fields: [revenueCaseId], references: [id], onDelete: Cascade)
+
+  @@index([closeoutRunId])
+  @@index([revenueCaseId])
+  @@index([queue, rollover])
 }
 
 model RoomOperationalState {
@@ -1084,9 +1174,12 @@ model RevenueCycleDailyRollup {
   facilityId                   String
   clinicId                     String
   dateKey                      String
+  sameDayCollectionExpectedVisitCount Int @default(0)
+  sameDayCollectionCapturedVisitCount Int @default(0)
   sameDayCollectionExpectedCents Int    @default(0)
   sameDayCollectionTrackedCents Int     @default(0)
-  sameDayCollectionRate        Float    @default(0)
+  sameDayCollectionVisitRate   Float    @default(0)
+  sameDayCollectionDollarRate  Float    @default(0)
   financiallyClearedCount      Int      @default(0)
   chargeCaptureCompletedCount  Int      @default(0)
   athenaHandoffConfirmedCount  Int      @default(0)
@@ -1098,6 +1191,9 @@ model RevenueCycleDailyRollup {
   missedCollectionReasonsJson  Json
   rollReasonsJson              Json
   queryAgingJson               Json
+  unfinishedQueueCountsJson    Json
+  unfinishedOwnerCountsJson    Json
+  unfinishedProviderCountsJson Json
   computedAt                   DateTime @default(now())
 
   facility Facility @relation(fields: [facilityId], references: [id])

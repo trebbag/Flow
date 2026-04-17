@@ -40,6 +40,7 @@ import {
   ChevronRight,
   Download,
   Upload,
+  DollarSign,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -87,7 +88,7 @@ import {
 import { useEncounters } from "./encounter-context";
 import { applySession, loadSession, saveSession } from "./auth-session";
 import { labelUserName } from "./display-names";
-import type { EncounterStatus } from "./types";
+import type { EncounterStatus, RevenueSettings } from "./types";
 import {
   ADMIN_REFRESH_EVENT,
   FACILITY_CONTEXT_CHANGED_EVENT,
@@ -3028,6 +3029,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
     retryBackoffMs: number;
     testPath: string;
     previewPath: string;
+    revenuePath: string;
   }>({
     baseUrl: "",
     practiceId: "",
@@ -3045,6 +3047,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
     retryBackoffMs: 400,
     testPath: "/",
     previewPath: "/",
+    revenuePath: "/",
   });
   const [athenaSecretsConfigured, setAthenaSecretsConfigured] = useState<{
     password: boolean;
@@ -3077,6 +3080,23 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
   const [savingAthena, setSavingAthena] = useState(false);
   const [testingAthena, setTestingAthena] = useState(false);
   const [syncPreviewingAthena, setSyncPreviewingAthena] = useState(false);
+  const [revenuePreviewingAthena, setRevenuePreviewingAthena] = useState(false);
+  const [revenueImportingAthena, setRevenueImportingAthena] = useState(false);
+  const [revenueSettings, setRevenueSettings] = useState<RevenueSettings | null>(null);
+  const [savingRevenueSettings, setSavingRevenueSettings] = useState(false);
+  const [revenueMonitoringPreview, setRevenueMonitoringPreview] = useState<{
+    rowCount: number;
+    matchedCount: number;
+    rows: Array<Record<string, unknown>>;
+    message: string;
+  } | null>(null);
+  const [revenueMonitoringImportResult, setRevenueMonitoringImportResult] = useState<{
+    rowCount: number;
+    importedCount: number;
+    skippedCount: number;
+    unmatchedRows: Array<Record<string, unknown>>;
+    message: string;
+  } | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [rowDraft, setRowDraft] = useState<{
     patientId: string;
@@ -3137,7 +3157,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
     setLoading(true);
     setReferenceLoading(true);
     try {
-      const [incomingRows, importBatches, pendingRows, referencePayload, athenaConnector] = await Promise.all([
+      const [incomingRows, importBatches, pendingRows, referencePayload, athenaConnector, revenueSettingsResult] = await Promise.all([
         incomingApi.list({
           clinicId: selectedClinicId || undefined,
           date: dateOfService,
@@ -3158,6 +3178,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
           clinicId: selectedClinicId || undefined,
         }),
         admin.getAthenaOneConnector(selectedFacilityId),
+        admin.getRevenueSettings(selectedFacilityId),
       ]);
       setRows(incomingRows as any[]);
       setBatches(importBatches as any[]);
@@ -3187,6 +3208,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
         retryBackoffMs: Number(connectorConfig.retryBackoffMs || 400),
         testPath: String(connectorConfig.testPath || "/"),
         previewPath: String(connectorConfig.previewPath || "/"),
+        revenuePath: String(connectorConfig.revenuePath || "/"),
       });
       setAthenaSecretsConfigured({
         password: Boolean(secretState.password),
@@ -3214,6 +3236,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
         lastSyncAt: (athenaConnector as any)?.lastSyncAt || null,
         lastSyncMessage: (athenaConnector as any)?.lastSyncMessage || null,
       });
+      setRevenueSettings(revenueSettingsResult);
     } catch (error) {
       toast.error("Failed to load incoming schedule", {
         description: (error as Error).message || "Unable to load incoming schedule data",
@@ -3226,6 +3249,11 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
 
   useEffect(() => {
     refreshSchedule().catch(() => undefined);
+  }, [dateOfService, selectedClinicId, selectedFacilityId]);
+
+  useEffect(() => {
+    setRevenueMonitoringPreview(null);
+    setRevenueMonitoringImportResult(null);
   }, [dateOfService, selectedClinicId, selectedFacilityId]);
 
   useEffect(() => {
@@ -3504,6 +3532,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
           retryBackoffMs: athenaConfig.retryBackoffMs,
           testPath: athenaConfig.testPath.trim() || "/",
           previewPath: athenaConfig.previewPath.trim() || "/",
+          revenuePath: athenaConfig.revenuePath.trim() || "/",
         },
         mapping: athenaMapping,
       });
@@ -3544,6 +3573,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
           retryBackoffMs: athenaConfig.retryBackoffMs,
           testPath: athenaConfig.testPath.trim() || "/",
           previewPath: athenaConfig.previewPath.trim() || "/",
+          revenuePath: athenaConfig.revenuePath.trim() || "/",
         },
         mapping: athenaMapping,
       });
@@ -3578,6 +3608,96 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
       });
     } finally {
       setSyncPreviewingAthena(false);
+    }
+  };
+
+  const previewAthenaRevenueMonitoring = async () => {
+    setRevenuePreviewingAthena(true);
+    try {
+      const preview = await admin.athenaOneRevenuePreview({
+        facilityId: selectedFacilityId,
+        clinicId: selectedClinicId || undefined,
+        dateOfService,
+      });
+      setRevenueMonitoringPreview({
+        rowCount: preview.rowCount,
+        matchedCount: preview.matchedCount,
+        rows: preview.rows,
+        message: preview.message,
+      });
+      setRevenueMonitoringImportResult(null);
+      if (preview.ok) {
+        toast.success(`Revenue monitoring preview matched ${preview.matchedCount} of ${preview.rowCount} Athena row${preview.rowCount === 1 ? "" : "s"}.`);
+      } else {
+        toast.error(preview.message || "Revenue monitoring preview failed");
+      }
+      await refreshSchedule();
+    } catch (error) {
+      toast.error("Athena revenue preview failed", {
+        description: (error as Error).message || "Unable to preview Athena revenue monitoring",
+      });
+    } finally {
+      setRevenuePreviewingAthena(false);
+    }
+  };
+
+  const importAthenaRevenueMonitoring = async () => {
+    setRevenueImportingAthena(true);
+    try {
+      const result = await admin.athenaOneRevenueImport({
+        facilityId: selectedFacilityId,
+        clinicId: selectedClinicId || undefined,
+        dateOfService,
+      });
+      setRevenueMonitoringImportResult({
+        rowCount: result.rowCount,
+        importedCount: result.importedCount,
+        skippedCount: result.skippedCount,
+        unmatchedRows: result.unmatchedRows,
+        message: result.message,
+      });
+      toast.success(`Imported Athena monitoring onto ${result.importedCount} revenue case${result.importedCount === 1 ? "" : "s"}.`, {
+        description:
+          result.skippedCount > 0
+            ? `${result.skippedCount} row${result.skippedCount === 1 ? "" : "s"} could not be matched and were skipped.`
+            : "All previewed rows matched to Flow revenue cases.",
+      });
+      await refreshSchedule();
+    } catch (error) {
+      toast.error("Athena revenue import failed", {
+        description: (error as Error).message || "Unable to import Athena revenue monitoring",
+      });
+    } finally {
+      setRevenueImportingAthena(false);
+    }
+  };
+
+  const saveRevenueOperationsSettings = async () => {
+    if (!revenueSettings) return;
+    setSavingRevenueSettings(true);
+    try {
+      const saved = await admin.saveRevenueSettings({
+        facilityId: selectedFacilityId,
+        missedCollectionReasons: revenueSettings.missedCollectionReasons.filter((value) => value.trim()),
+        queueSla: revenueSettings.queueSla,
+        dayCloseDefaults: revenueSettings.dayCloseDefaults,
+        providerQueryTemplates: revenueSettings.providerQueryTemplates.filter((value) => value.trim()),
+        athenaLinkTemplate: revenueSettings.athenaLinkTemplate || null,
+        athenaChecklistDefaults: revenueSettings.athenaChecklistDefaults
+          .map((row, index) => ({
+            label: row.label.trim(),
+            sortOrder: index,
+          }))
+          .filter((row) => row.label),
+      });
+      setRevenueSettings(saved);
+      toast.success("Revenue operations settings saved");
+    } catch (error) {
+      toast.error("Unable to save revenue operations settings", {
+        description: (error as Error).message || "Try again.",
+      });
+    } finally {
+      setSavingRevenueSettings(false);
     }
   };
 
@@ -3923,8 +4043,8 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                 </div>
               </div>
               <div>
-                <label className="text-[11px] text-muted-foreground mb-1.5 block">Test Path / Preview Path</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="text-[11px] text-muted-foreground mb-1.5 block">Test / Schedule Preview / Revenue Preview Paths</label>
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
                   <input
                     type="text"
                     value={athenaConfig.testPath}
@@ -3936,6 +4056,13 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                     type="text"
                     value={athenaConfig.previewPath}
                     onChange={(event) => setAthenaConfig((prev) => ({ ...prev, previewPath: event.target.value }))}
+                    className="h-9 w-full px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                    placeholder="/"
+                  />
+                  <input
+                    type="text"
+                    value={athenaConfig.revenuePath}
+                    onChange={(event) => setAthenaConfig((prev) => ({ ...prev, revenuePath: event.target.value }))}
                     className="h-9 w-full px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
                     placeholder="/"
                   />
@@ -3957,6 +4084,96 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
               <br />
               Last preview sync: {athenaStatus.lastSyncStatus || "—"} {athenaStatus.lastSyncAt ? `· ${formatDateTime(athenaStatus.lastSyncAt)}` : ""}
               {athenaStatus.lastSyncMessage ? ` · ${athenaStatus.lastSyncMessage}` : ""}
+            </div>
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Athena revenue monitoring</div>
+                  <div className="mt-1 text-[12px] text-muted-foreground">
+                    Preview how Athena downstream fields match existing Flow revenue cases, then import the read-only monitoring data without moving billing execution into Flow.
+                  </div>
+                </div>
+                <Badge className="border-0 bg-white text-indigo-700">Read-only mirror</Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => previewAthenaRevenueMonitoring().catch(() => undefined)}
+                  className="h-9 px-3 rounded-lg border border-indigo-200 text-indigo-700 bg-white text-[12px] hover:bg-indigo-50 transition-colors"
+                  style={{ fontWeight: 500 }}
+                  disabled={revenuePreviewingAthena}
+                >
+                  {revenuePreviewingAthena ? "Previewing revenue..." : "Preview Revenue Monitoring"}
+                </button>
+                <button
+                  onClick={() => importAthenaRevenueMonitoring().catch(() => undefined)}
+                  className="h-9 px-3 rounded-lg bg-indigo-600 text-white text-[12px] hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  style={{ fontWeight: 500 }}
+                  disabled={revenueImportingAthena}
+                >
+                  {revenueImportingAthena ? "Importing..." : "Import Revenue Monitoring"}
+                </button>
+              </div>
+              {revenueMonitoringPreview && (
+                <div className="rounded-xl border border-white/70 bg-white p-3 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Preview rows</div>
+                      <div className="mt-1 text-[18px] text-slate-900" style={{ fontWeight: 700 }}>{revenueMonitoringPreview.rowCount}</div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-700">Matched revenue cases</div>
+                      <div className="mt-1 text-[18px] text-emerald-900" style={{ fontWeight: 700 }}>{revenueMonitoringPreview.matchedCount}</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Preview note</div>
+                      <div className="mt-1 text-[12px] text-slate-700">{revenueMonitoringPreview.message}</div>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-left text-[11px]">
+                      <thead className="text-slate-500">
+                        <tr>
+                          <th className="pb-2 pr-3">Patient</th>
+                          <th className="pb-2 pr-3">Encounter</th>
+                          <th className="pb-2 pr-3">DOS</th>
+                          <th className="pb-2 pr-3">Claim status</th>
+                          <th className="pb-2 pr-3">Days to submit</th>
+                          <th className="pb-2 pr-3">Days in A/R</th>
+                          <th className="pb-2 pr-3">Matched</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-700">
+                        {revenueMonitoringPreview.rows.slice(0, 6).map((row, index) => (
+                          <tr key={`${String(row.patientId || row.encounterId || index)}`} className="border-t border-slate-100">
+                            <td className="py-2 pr-3">{String(row.patientId || "—")}</td>
+                            <td className="py-2 pr-3">{String(row.encounterId || "—")}</td>
+                            <td className="py-2 pr-3">{String(row.dateOfService || "—")}</td>
+                            <td className="py-2 pr-3">{String(row.claimStatus || "Not yet synced")}</td>
+                            <td className="py-2 pr-3">{String(row.daysToSubmit ?? "—")}</td>
+                            <td className="py-2 pr-3">{String(row.daysInAR ?? "—")}</td>
+                            <td className="py-2 pr-3">
+                              {row.importable ? (
+                                <Badge className="border-0 bg-emerald-100 text-emerald-700">Matched</Badge>
+                              ) : (
+                                <Badge className="border-0 bg-amber-100 text-amber-700">Unmatched</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {revenueMonitoringImportResult && (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3 text-[12px] text-emerald-900">
+                  Imported {revenueMonitoringImportResult.importedCount} of {revenueMonitoringImportResult.rowCount} Athena row
+                  {revenueMonitoringImportResult.rowCount === 1 ? "" : "s"}.
+                  {revenueMonitoringImportResult.skippedCount > 0
+                    ? ` ${revenueMonitoringImportResult.skippedCount} row${revenueMonitoringImportResult.skippedCount === 1 ? "" : "s"} could not be matched.`
+                    : " All previewed rows matched to Flow revenue cases."}
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -3984,6 +4201,296 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                 {syncPreviewingAthena ? "Previewing..." : "Sync Preview"}
               </button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-emerald-500 to-cyan-400" />
+          <CardContent className="p-5 space-y-4">
+            <SectionHeader icon={DollarSign} title="Revenue Operations Settings" iconColor="text-emerald-500" />
+            <p className="text-[12px] text-muted-foreground">
+              Facility-scoped taxonomy and defaults for the Revenue Operations cockpit. This is where we keep missed-collection reasons, queue SLAs, provider query shortcuts, and Athena handoff defaults configurable instead of hardcoded.
+            </p>
+            {!revenueSettings ? (
+              <EmptyState icon={Settings} message="Revenue settings are loading for this facility." />
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                  <div>
+                    <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Revenue settings</div>
+                    <div className="text-[12px] text-muted-foreground mt-1">
+                      These defaults drive the revenue cockpit, checkout taxonomy, soft day close, and Athena handoff checklist.
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] text-muted-foreground mb-1.5 block">Athena link template</label>
+                      <input
+                        type="text"
+                        value={revenueSettings.athenaLinkTemplate || ""}
+                        onChange={(event) => setRevenueSettings((prev) => (prev ? { ...prev, athenaLinkTemplate: event.target.value } : prev))}
+                        className="h-9 w-full px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                        placeholder="https://athena.example.com/encounters/{encounterId}"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] text-muted-foreground mb-1.5 block">Default due hours</label>
+                        <NumberStepperControl
+                          value={Number(revenueSettings.dayCloseDefaults?.defaultDueHours || 18)}
+                          min={1}
+                          onChange={(nextValue) =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    dayCloseDefaults: {
+                                      ...prev.dayCloseDefaults,
+                                      defaultDueHours: nextValue,
+                                    },
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="h-9"
+                        />
+                      </div>
+                      <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-[12px]">
+                        <span>Require next action at close</span>
+                        <Switch
+                          checked={Boolean(revenueSettings.dayCloseDefaults?.requireNextAction)}
+                          onCheckedChange={(checked) =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    dayCloseDefaults: {
+                                      ...prev.dayCloseDefaults,
+                                      requireNextAction: checked,
+                                    },
+                                  }
+                                : prev,
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                  <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Missed-collection taxonomy editor</div>
+                  <div className="text-[12px] text-muted-foreground">
+                    Editable list of default reasons shown in checkout tracking and revenue review.
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {revenueSettings.missedCollectionReasons.map((reason, index) => (
+                      <div key={`${reason}-${index}`} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] text-slate-700">
+                        <input
+                          value={reason}
+                          onChange={(event) =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    missedCollectionReasons: prev.missedCollectionReasons.map((entry, reasonIndex) =>
+                                      reasonIndex === index ? event.target.value : entry,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="w-[180px] bg-transparent outline-none"
+                        />
+                        <button
+                          onClick={() =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    missedCollectionReasons: prev.missedCollectionReasons.filter((_, reasonIndex) => reasonIndex !== index),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="text-rose-500"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setRevenueSettings((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              missedCollectionReasons: [...prev.missedCollectionReasons, "new reason"],
+                            }
+                          : prev,
+                      )
+                    }
+                    className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Add reason
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                  <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Checklist + SLA defaults</div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      {Object.entries(revenueSettings.queueSla || {}).map(([queueKey, value]) => (
+                        <div key={queueKey} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2">
+                          <div className="text-[12px] text-slate-700">{queueKey}</div>
+                          <NumberStepperControl
+                            value={Number(value || 0)}
+                            min={0}
+                            onChange={(nextValue) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      queueSla: {
+                                        ...prev.queueSla,
+                                        [queueKey]: nextValue,
+                                      },
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9 w-[140px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="text-[12px] text-muted-foreground">Provider query templates</div>
+                      {revenueSettings.providerQueryTemplates.map((template, index) => (
+                        <div key={`${template}-${index}`} className="flex items-center gap-2">
+                          <input
+                            value={template}
+                            onChange={(event) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      providerQueryTemplates: prev.providerQueryTemplates.map((entry, templateIndex) =>
+                                        templateIndex === index ? event.target.value : entry,
+                                      ),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9 flex-1 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                          />
+                          <button
+                            onClick={() =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      providerQueryTemplates: prev.providerQueryTemplates.filter((_, templateIndex) => templateIndex !== index),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="text-rose-500"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  providerQueryTemplates: [...prev.providerQueryTemplates, "New provider clarification template"],
+                                }
+                              : prev,
+                          )
+                        }
+                        className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Add provider template
+                      </button>
+                      <div className="text-[12px] text-muted-foreground pt-2">Athena handoff checklist</div>
+                      {revenueSettings.athenaChecklistDefaults.map((item, index) => (
+                        <div key={`${item.label}-${index}`} className="flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground w-6">{index + 1}.</span>
+                          <input
+                            value={item.label}
+                            onChange={(event) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      athenaChecklistDefaults: prev.athenaChecklistDefaults.map((entry, checklistIndex) =>
+                                        checklistIndex === index ? { ...entry, label: event.target.value } : entry,
+                                      ),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9 flex-1 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                          />
+                          <button
+                            onClick={() =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      athenaChecklistDefaults: prev.athenaChecklistDefaults.filter((_, checklistIndex) => checklistIndex !== index),
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="text-rose-500"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  athenaChecklistDefaults: [
+                                    ...prev.athenaChecklistDefaults,
+                                    { label: "New handoff step", sortOrder: prev.athenaChecklistDefaults.length },
+                                  ],
+                                }
+                              : prev,
+                          )
+                        }
+                        className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                        style={{ fontWeight: 500 }}
+                      >
+                        Add handoff step
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => saveRevenueOperationsSettings().catch(() => undefined)}
+                    className="h-9 px-4 rounded-lg bg-emerald-600 text-white text-[12px] hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    style={{ fontWeight: 500 }}
+                    disabled={savingRevenueSettings}
+                  >
+                    {savingRevenueSettings ? "Saving..." : "Save Revenue Settings"}
+                  </button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

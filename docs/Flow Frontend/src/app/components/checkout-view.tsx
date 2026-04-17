@@ -517,6 +517,12 @@ function CheckoutCard({
 }) {
   const [checked, setChecked] = useState<string[]>([]);
   const [templateValues, setTemplateValues] = useState<Record<string, string | boolean>>({});
+  const [collectionExpected, setCollectionExpected] = useState(false);
+  const [amountDueCents, setAmountDueCents] = useState("0");
+  const [amountCollectedCents, setAmountCollectedCents] = useState("0");
+  const [collectionOutcome, setCollectionOutcome] = useState("NoCollectionExpected");
+  const [missedCollectionReason, setMissedCollectionReason] = useState("");
+  const [collectionNote, setCollectionNote] = useState("");
 
   const templateFields = templatesByReason[e.visitType] ?? checkoutTemplates[e.visitType] ?? [];
   const fieldGroups = useMemo(() => groupFields(templateFields), [templateFields]);
@@ -534,7 +540,9 @@ function CheckoutCard({
   const templateDone = requiredCount === 0 || completedCount === requiredCount;
   const blockingOpenTasks = assignedTasks.filter((task) => task.blocking && !task.completedAt && String(task.status || "").toLowerCase() !== "completed");
   const blockingCompletedCount = assignedTasks.filter((task) => task.blocking && (task.completedAt || String(task.status || "").toLowerCase() === "completed")).length;
-  const allReady = defaultsDone && templateDone && blockingOpenTasks.length === 0;
+  const collectionNeedsReason = ["CollectedPartial", "NotCollected", "Deferred"].includes(collectionOutcome);
+  const collectionTrackingReady = !collectionNeedsReason || missedCollectionReason.trim().length > 0;
+  const allReady = defaultsDone && templateDone && blockingOpenTasks.length === 0 && collectionTrackingReady;
 
   const totalRequired = checklistItems.length + requiredCount + blockingOpenTasks.length + blockingCompletedCount;
   const totalCompleted = checked.length + completedCount + blockingCompletedCount;
@@ -685,6 +693,97 @@ function CheckoutCard({
             )}
           </div>
 
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-emerald-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                <div>
+                  <span className="text-[13px]" style={{ fontWeight: 600 }}>Collection Tracking</span>
+                  <span className="text-[11px] text-muted-foreground ml-2">Revenue Cycle normalization</span>
+                </div>
+              </div>
+              <Badge className={`border-0 text-[10px] ${collectionTrackingReady ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                {collectionTrackingReady ? "Complete" : "Needs reason"}
+              </Badge>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-4 py-3 cursor-pointer">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                      Collection Expected
+                    </div>
+                    <div className="text-[12px] text-gray-600 mt-1">Should front desk expect same-day patient responsibility?</div>
+                  </div>
+                  <Switch checked={collectionExpected} onCheckedChange={setCollectionExpected} />
+                </label>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
+                    Collection Outcome
+                  </label>
+                  <select
+                    value={collectionOutcome}
+                    onChange={(event) => setCollectionOutcome(event.target.value)}
+                    className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                  >
+                    <option value="CollectedInFull">Collected in full</option>
+                    <option value="CollectedPartial">Collected partial</option>
+                    <option value="NotCollected">Not collected</option>
+                    <option value="NoCollectionExpected">No collection expected</option>
+                    <option value="Waived">Waived</option>
+                    <option value="Deferred">Deferred</option>
+                  </select>
+                </div>
+                <FormField label="Amount Due (cents)" icon={CreditCard}>
+                  <input
+                    type="number"
+                    value={amountDueCents}
+                    onChange={(event) => setAmountDueCents(event.target.value)}
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                  />
+                </FormField>
+                <FormField label="Amount Collected (cents)" icon={CreditCard}>
+                  <input
+                    type="number"
+                    value={amountCollectedCents}
+                    onChange={(event) => setAmountCollectedCents(event.target.value)}
+                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                  />
+                </FormField>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
+                  Missed Collection Reason {collectionNeedsReason && <span className="text-red-500">*</span>}
+                </label>
+                <textarea
+                  rows={2}
+                  value={missedCollectionReason}
+                  onChange={(event) => setMissedCollectionReason(event.target.value)}
+                  placeholder="Required for partial, deferred, or not-collected outcomes..."
+                  className={`w-full px-4 py-2.5 rounded-lg border bg-white text-[13px] resize-none focus:outline-none focus:ring-2 ${
+                    collectionNeedsReason && !collectionTrackingReady
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                      : "border-gray-200 focus:border-indigo-300 focus:ring-indigo-100"
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
+                  Collection Note
+                </label>
+                <textarea
+                  rows={2}
+                  value={collectionNote}
+                  onChange={(event) => setCollectionNote(event.target.value)}
+                  placeholder="Optional context for Revenue Cycle..."
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] resize-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* ── Visit-reason-conditional template section (purple sub-card) ── */}
           {templateFields.length > 0 && (
             <div className="rounded-xl border border-purple-100 bg-purple-50/50 overflow-hidden">
@@ -814,6 +913,11 @@ function CheckoutCard({
                   {blockingOpenTasks.length} blocking checkout task{blockingOpenTasks.length !== 1 ? "s" : ""} remaining
                 </span>
               )}
+              {!collectionTrackingReady && (
+                <span className="text-[11px] text-amber-600">
+                  Add a missed collection reason before completing checkout
+                </span>
+              )}
               {allReady && (
                 <span className="text-[11px] text-emerald-600 flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" /> All requirements met
@@ -821,7 +925,17 @@ function CheckoutCard({
               )}
             </div>
             <button
-              onClick={() => onComplete(e, checked, templateValues)}
+              onClick={() =>
+                onComplete(e, checked, {
+                  ...templateValues,
+                  "billing.collection_expected": collectionExpected,
+                  "billing.amount_due_cents": amountDueCents,
+                  "billing.amount_collected_cents": amountCollectedCents,
+                  "billing.collection_outcome": collectionOutcome,
+                  "billing.missed_reason": missedCollectionReason,
+                  "billing.tracking_note": collectionNote,
+                })
+              }
               disabled={!allReady}
               className={`w-full h-12 rounded-xl text-[14px] flex items-center justify-center gap-2 shadow-sm transition-all ${
                 allReady

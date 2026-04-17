@@ -41,6 +41,19 @@ import type {
   ResolveSafetyRequest,
   SafetyEvent,
   Role,
+  RevenueDashboardSnapshot,
+  RevenueDailyHistoryRollup,
+  RevenueHistorySummary,
+  RevenueDayBucket,
+  RevenueWorkQueue,
+  RevenueCaseDetail,
+  RevenueStatus,
+  FinancialEligibilityStatus,
+  FinancialRequirementStatus,
+  CollectionOutcome,
+  CodingStage,
+  RevenueProcedureLine,
+  RevenueSettings,
 } from "./types";
 export type { AdminEncounterRecoveryRow } from "./types";
 import { buildHeaders, getCurrentSession } from "./auth-session";
@@ -508,9 +521,11 @@ export type BackendTask = {
   facilityId?: string | null;
   clinicId?: string | null;
   encounterId: string | null;
+  revenueCaseId?: string | null;
   roomId?: string | null;
-  sourceType?: "Encounter" | "RoomIssue" | "RoomSupplyFlag" | "RoomAudit" | null;
+  sourceType?: "Encounter" | "RoomIssue" | "RoomSupplyFlag" | "RoomAudit" | "RevenueCase" | "ProviderClarification" | null;
   sourceId?: string | null;
+  taskCategory?: string | null;
   taskType: string;
   description: string;
   assignedToRole: Role | null;
@@ -518,6 +533,7 @@ export type BackendTask = {
   status: string;
   priority: number;
   blocking: boolean;
+  dueAt?: string | null;
   createdAt: string;
   createdBy: string;
   acknowledgedAt: string | null;
@@ -1465,6 +1481,69 @@ export const admin = {
       body: JSON.stringify(dto),
     });
   },
+  athenaOneRevenuePreview(dto: {
+    facilityId?: string;
+    clinicId?: string;
+    dateOfService?: string;
+    maxRows?: number;
+  }) {
+    return apiFetch<{
+      ok: boolean;
+      mode: "revenue_preview";
+      dateOfService: string;
+      rowCount: number;
+      matchedCount: number;
+      rows: Array<Record<string, unknown>>;
+      message: string;
+    }>("/admin/integrations/athenaone/revenue-preview", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  athenaOneRevenueImport(dto: {
+    facilityId?: string;
+    clinicId?: string;
+    dateOfService?: string;
+    maxRows?: number;
+  }) {
+    return apiFetch<{
+      ok: boolean;
+      mode: "revenue_import";
+      dateOfService: string;
+      rowCount: number;
+      importedCount: number;
+      skippedCount: number;
+      importedCaseIds: string[];
+      unmatchedRows: Array<Record<string, unknown>>;
+      message: string;
+    }>("/admin/integrations/athenaone/revenue-import", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  getRevenueSettings(facilityId?: string) {
+    const qs = new URLSearchParams();
+    if (facilityId) qs.set("facilityId", facilityId);
+    const q = qs.toString();
+    return apiFetch<RevenueSettings>(`/admin/revenue-settings${q ? `?${q}` : ""}`);
+  },
+  saveRevenueSettings(dto: {
+    facilityId?: string;
+    missedCollectionReasons?: string[];
+    queueSla?: Record<string, number>;
+    dayCloseDefaults?: {
+      defaultDueHours?: number;
+      requireNextAction?: boolean;
+    };
+    providerQueryTemplates?: string[];
+    athenaLinkTemplate?: string | null;
+    athenaChecklistDefaults?: Array<{ label: string; sortOrder?: number }>;
+  }) {
+    return apiFetch<RevenueSettings>("/admin/revenue-settings", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
 };
 
 export const events = {
@@ -1665,12 +1744,184 @@ export const dashboards = {
       { cacheTtlMs: 30_000 },
     );
   },
-  revenueCycle(params?: { clinicId?: string; date?: string }) {
+  revenueCycle(params?: {
+    clinicId?: string;
+    from?: string;
+    to?: string;
+    dayBucket?: RevenueDayBucket;
+    workQueue?: RevenueWorkQueue;
+    mine?: boolean;
+    search?: string;
+  }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
-    if (params?.date) qs.set("date", params.date);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    if (params?.dayBucket) qs.set("dayBucket", params.dayBucket);
+    if (params?.workQueue) qs.set("workQueue", params.workQueue);
+    if (params?.mine) qs.set("mine", "true");
+    if (params?.search) qs.set("search", params.search);
     const q = qs.toString();
-    return apiFetch<unknown>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, { cacheTtlMs: 25_000 });
+    return apiFetch<RevenueDashboardSnapshot>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, { cacheTtlMs: 25_000 });
+  },
+  revenueCycleHistory(params?: { clinicId?: string; from?: string; to?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const q = qs.toString();
+    return apiFetch<{
+      scope: { clinicId?: string | null; from: string; to: string };
+      daily: RevenueDailyHistoryRollup[];
+      summary: RevenueHistorySummary;
+    }>(
+      `/dashboard/revenue-cycle/history${q ? `?${q}` : ""}`,
+      { cacheTtlMs: 30_000 },
+    );
+  },
+};
+
+export const revenueCases = {
+  list(params?: {
+    clinicId?: string;
+    encounterId?: string;
+    dayBucket?: RevenueDayBucket;
+    workQueue?: RevenueWorkQueue;
+    search?: string;
+    mine?: boolean;
+    from?: string;
+    to?: string;
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.encounterId) qs.set("encounterId", params.encounterId);
+    if (params?.dayBucket) qs.set("dayBucket", params.dayBucket);
+    if (params?.workQueue) qs.set("workQueue", params.workQueue);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.mine) qs.set("mine", "true");
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const q = qs.toString();
+    return apiFetch<RevenueCaseDetail[]>(`/revenue-cases${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
+  },
+  get(id: string) {
+    return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}`, { cacheTtlMs: 15_000 });
+  },
+  update(
+    id: string,
+    dto: {
+      assignedToUserId?: string | null;
+      assignedToRole?: Role | null;
+      priority?: number;
+      blockerCategory?: string | null;
+      blockerText?: string | null;
+      dueAt?: string | null;
+      readyForAthena?: boolean;
+      athenaHandoffStarted?: boolean;
+      athenaHandoffConfirmed?: boolean;
+      athenaHandoffNote?: string | null;
+      financialReadiness?: {
+        eligibilityStatus?: FinancialEligibilityStatus;
+        coverageIssueCategory?: string | null;
+        coverageIssueText?: string | null;
+        primaryPayerName?: string | null;
+        primaryPlanName?: string | null;
+        secondaryPayerName?: string | null;
+        financialClass?: string | null;
+        referralRequired?: boolean;
+        referralStatus?: FinancialRequirementStatus | null;
+        priorAuthRequired?: boolean;
+        priorAuthStatus?: FinancialRequirementStatus | null;
+        priorAuthNumber?: string | null;
+        pointOfServiceAmountDueCents?: number;
+        outstandingPriorBalanceCents?: number;
+      };
+      checkoutTracking?: {
+        collectionExpected?: boolean;
+        amountDueCents?: number;
+        amountCollectedCents?: number;
+        collectionOutcome?: CollectionOutcome | null;
+        missedCollectionReason?: string | null;
+        trackingNote?: string | null;
+      };
+      chargeCapture?: {
+        documentationComplete?: boolean;
+        codingStage?: CodingStage;
+        icd10Codes?: string[];
+        procedureLines?: RevenueProcedureLine[];
+        cptCodes?: string[];
+        modifiers?: string[];
+        units?: string[];
+        codingNote?: string | null;
+      };
+      checklistUpdates?: Array<{ id: string; status: string; evidenceText?: string | null }>;
+    },
+  ) {
+    return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    });
+  },
+  assign(id: string, dto: { assignedToUserId?: string | null; assignedToRole: Role }) {
+    return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}/assign`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    });
+  },
+  createProviderClarification(id: string, dto: { questionText: string; queryType?: string }) {
+    return apiFetch<unknown>(`/revenue-cases/${id}/provider-clarifications`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  createProviderQuery(id: string, dto: { questionText: string; queryType?: string }) {
+    return apiFetch<unknown>(`/revenue-cases/${id}/provider-query`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  updateProviderClarification(id: string, dto: { responseText?: string; resolve?: boolean; status?: "Open" | "Responded" | "Resolved" }) {
+    return apiFetch<unknown>(`/provider-clarifications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    });
+  },
+  respondToProviderQuery(id: string, dto: { responseText: string; resolve?: boolean }) {
+    return apiFetch<unknown>(`/revenue-cases/queries/${id}/respond`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  roll(id: string, dto: { rollReason: string; assignedToUserId?: string | null; assignedToRole?: Role | null; dueAt?: string }) {
+    return apiFetch<unknown>(`/revenue-cases/${id}/roll`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  confirmAthenaHandoff(id: string, dto: { athenaHandoffNote?: string | null; checklistUpdates?: Array<{ id: string; status: string; evidenceText?: string | null }> }) {
+    return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}/athena-handoff-confirm`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+  closeout(dto: {
+    clinicId?: string;
+    date?: string;
+    note?: string | null;
+    items?: Array<{
+      revenueCaseId: string;
+      ownerUserId?: string | null;
+      ownerRole?: Role | null;
+      reasonNotCompleted: string;
+      nextAction: string;
+      dueAt: string;
+      rollover: boolean;
+    }>;
+  }) {
+    return apiFetch<{ date: string; rolledCount: number; unresolvedCount: number; status: string }>("/revenue-closeout", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
   },
 };
 

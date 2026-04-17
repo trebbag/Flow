@@ -33,6 +33,41 @@ export type RevenueCycleStatus =
   | "Submitted"
   | "HoldException";
 
+export type RevenueStatus =
+  | "FinancialReadinessNeeded"
+  | "FinanciallyCleared"
+  | "CheckoutTrackingNeeded"
+  | "ChargeCaptureNeeded"
+  | "CodingReviewInProgress"
+  | "ProviderClarificationNeeded"
+  | "ReadyForAthenaHandoff"
+  | "AthenaHandoffInProgress"
+  | "AthenaHandoffConfirmed"
+  | "MonitoringOnly"
+  | "Closed";
+
+export type RevenueWorkQueue =
+  | "FinancialReadiness"
+  | "CheckoutTracking"
+  | "ChargeCapture"
+  | "ProviderQueries"
+  | "AthenaHandoff"
+  | "Monitoring";
+
+export type RevenueDayBucket = "Today" | "Yesterday" | "Rolled" | "Monitoring";
+export type FinancialEligibilityStatus = "NotChecked" | "Clear" | "Blocked" | "Pending";
+export type FinancialRequirementStatus = "NotRequired" | "Pending" | "Approved" | "Expired" | "UnableToObtain";
+export type CollectionOutcome =
+  | "CollectedInFull"
+  | "CollectedPartial"
+  | "NotCollected"
+  | "NoCollectionExpected"
+  | "Waived"
+  | "Deferred";
+export type CodingStage = "NotStarted" | "InProgress" | "ReadyForReview" | "ReadyForAthena";
+export type ProviderClarificationStatus = "Open" | "Responded" | "Resolved";
+export type RevenueCloseoutState = "Open" | "ClosedResolved" | "ClosedUnresolved" | "RolledOver";
+
 export type TemplateType = "checkin" | "rooming" | "clinician" | "checkout";
 export type TemplateStatus = "active" | "inactive" | "archived";
 export type ReasonStatus = "active" | "inactive" | "archived";
@@ -112,7 +147,10 @@ export interface EncounterBase {
 /** Task from backend */
 export interface Task {
   id: string;
-  encounterId: string;
+  encounterId: string | null;
+  revenueCaseId?: string | null;
+  taskCategory?: string | null;
+  dueAt?: string | null;
   taskType: string;
   description: string;
   assignedToRole: Role | null;
@@ -485,6 +523,250 @@ export interface RevenueCycleRow {
   providerQueryOpenCount: number;
 }
 
+export interface RevenueChecklistItem {
+  id: string;
+  group: string;
+  label: string;
+  required: boolean;
+  status: string;
+  sortOrder: number;
+  dueAt: string | null;
+  completedAt: string | null;
+  completedByUserId: string | null;
+  evidenceText: string | null;
+}
+
+export interface RevenueProviderClarification {
+  id: string;
+  encounterId: string;
+  requestedByUserId: string;
+  targetUserId: string | null;
+  queryType: string | null;
+  questionText: string;
+  responseText: string | null;
+  status: ProviderClarificationStatus;
+  openedAt: string;
+  respondedAt: string | null;
+  resolvedAt: string | null;
+}
+
+export interface RevenueCaseEvent {
+  id: string;
+  eventType: string;
+  fromStatus: RevenueStatus | null;
+  toStatus: RevenueStatus | null;
+  actorUserId: string | null;
+  eventText: string | null;
+  createdAt: string;
+  payloadJson?: Record<string, unknown> | null;
+}
+
+export interface RevenueFinancialReadiness {
+  eligibilityStatus: FinancialEligibilityStatus;
+  verifiedAt?: string | null;
+  verifiedByUserId?: string | null;
+  primaryPayerName?: string | null;
+  primaryPlanName?: string | null;
+  secondaryPayerName?: string | null;
+  financialClass?: string | null;
+  pointOfServiceAmountDueCents: number;
+  outstandingPriorBalanceCents?: number;
+  coverageIssueCategory?: string | null;
+  coverageIssueText?: string | null;
+  referralRequired: boolean;
+  referralStatus?: FinancialRequirementStatus | null;
+  priorAuthRequired: boolean;
+  priorAuthStatus?: FinancialRequirementStatus | null;
+  priorAuthNumber?: string | null;
+}
+
+export interface RevenueCheckoutCollectionTracking {
+  collectionExpected: boolean;
+  amountDueCents: number;
+  amountCollectedCents: number;
+  collectionOutcome: CollectionOutcome | null;
+  missedCollectionReason: string | null;
+  trackingNote: string | null;
+  trackedByUserId?: string | null;
+  trackedAt?: string | null;
+}
+
+export interface RevenueChargeCaptureRecord {
+  documentationComplete: boolean;
+  codingStage: CodingStage;
+  icd10CodesJson: string[];
+  procedureLinesJson: RevenueProcedureLine[];
+  cptCodesJson: string[];
+  modifiersJson: string[];
+  unitsJson: string[];
+  codingNote: string | null;
+  readyForAthenaAt?: string | null;
+  reviewedByUserId?: string | null;
+  reviewedAt?: string | null;
+}
+
+export interface RevenueProcedureLine {
+  lineId: string;
+  cptCode: string;
+  modifiers: string[];
+  units: number;
+  diagnosisPointers: number[];
+}
+
+export interface RevenueCaseDetail {
+  id: string;
+  encounterId: string;
+  patientId: string;
+  clinicId: string;
+  clinicName: string;
+  clinicColor: string;
+  providerName: string;
+  currentRevenueStatus: RevenueStatus;
+  currentWorkQueue: RevenueWorkQueue;
+  currentDayBucket: RevenueDayBucket;
+  priority: number;
+  assignedToUserId: string | null;
+  assignedToUserName: string | null;
+  assignedToRole: Role | null;
+  currentBlockerCategory: string | null;
+  currentBlockerText: string | null;
+  dueAt: string | null;
+  rolledFromDateKey: string | null;
+  rollReason: string | null;
+  closeoutState: RevenueCloseoutState;
+  readyForAthenaAt: string | null;
+  athenaHandoffOwnerUserId: string | null;
+  athenaHandoffStartedAt: string | null;
+  athenaHandoffConfirmedAt: string | null;
+  athenaHandoffConfirmedByUserId: string | null;
+  athenaHandoffNote: string | null;
+  athenaChargeEnteredAt: string | null;
+  athenaClaimSubmittedAt: string | null;
+  athenaDaysToSubmit: number | null;
+  athenaDaysInAR: number | null;
+  athenaClaimStatus: string | null;
+  athenaPatientBalanceCents: number | null;
+  athenaLastSyncAt: string | null;
+  closedAt: string | null;
+  providerQueryOpenCount: number;
+  encounter: {
+    id: string;
+    patientId: string;
+    currentStatus: EncounterStatus;
+    checkInAt: string | null;
+    providerEndAt: string | null;
+    checkoutCompleteAt: string | null;
+    roomName: string | null;
+    reasonForVisit: string | null;
+    roomingData?: Record<string, unknown> | null;
+    clinicianData?: Record<string, unknown> | null;
+    checkoutData?: Record<string, unknown> | null;
+  };
+  financialReadiness: RevenueFinancialReadiness | null;
+  checkoutCollectionTracking: RevenueCheckoutCollectionTracking | null;
+  chargeCaptureRecord: RevenueChargeCaptureRecord | null;
+  checklistItems: RevenueChecklistItem[];
+  providerClarifications: RevenueProviderClarification[];
+  events: RevenueCaseEvent[];
+}
+
+export interface RevenueDashboardSnapshot {
+  scope: {
+    clinicId?: string | null;
+    from: string;
+    to: string;
+  };
+  kpis: {
+    sameDayCollectionExpectedVisitCount: number;
+    sameDayCollectionCapturedVisitCount: number;
+    sameDayCollectionExpectedCents: number;
+    sameDayCollectionCapturedCents: number;
+    sameDayCollectionVisitRate: number;
+    sameDayCollectionDollarRate: number;
+    averageFlowHandoffLagHours: number;
+    athenaDaysToSubmit: number | null;
+    athenaDaysInAR: number | null;
+  };
+  risks: {
+    eligibilityBlockers: number;
+    checkoutCollectionMisses: number;
+    chargeCaptureNotStarted: number;
+    providerQueriesOpen: number;
+    readyForAthena: number;
+    rolledFromYesterday: number;
+  };
+  queueCounts: Record<string, number>;
+  settings: {
+    missedCollectionReasons: string[];
+    providerQueryTemplates: string[];
+    athenaLinkTemplate: string;
+  };
+  cases: RevenueCaseDetail[];
+}
+
+export interface RevenueDailyHistoryRollup {
+  clinicId: string;
+  clinicName: string;
+  dateKey: string;
+  sameDayCollectionExpectedVisitCount: number;
+  sameDayCollectionCapturedVisitCount: number;
+  sameDayCollectionExpectedCents: number;
+  sameDayCollectionTrackedCents: number;
+  sameDayCollectionVisitRate: number;
+  sameDayCollectionDollarRate: number;
+  financiallyClearedCount: number;
+  chargeCaptureCompletedCount: number;
+  athenaHandoffConfirmedCount: number;
+  rolledCount: number;
+  avgFlowHandoffHours: number;
+  avgAthenaDaysToSubmit: number | null;
+  avgAthenaDaysInAR: number | null;
+  queueCountsJson?: Record<string, number> | null;
+  missedCollectionReasonsJson?: Record<string, number> | null;
+  rollReasonsJson?: Record<string, number> | null;
+  queryAgingJson?: Record<string, number> | null;
+  unfinishedQueueCountsJson?: Record<string, number> | null;
+  unfinishedOwnerCountsJson?: Record<string, number> | null;
+  unfinishedProviderCountsJson?: Record<string, number> | null;
+  computedAt: string;
+}
+
+export interface RevenueHistorySummaryEntry {
+  label: string;
+  count: number;
+}
+
+export interface RevenueHistorySummary {
+  unfinishedQueues: RevenueHistorySummaryEntry[];
+  unfinishedReasons: RevenueHistorySummaryEntry[];
+  unfinishedOwners: RevenueHistorySummaryEntry[];
+  unfinishedProviders: RevenueHistorySummaryEntry[];
+  unfinishedClinics: RevenueHistorySummaryEntry[];
+  averageFlowHandoffLagHours: number;
+  averageAthenaDaysToSubmit: number | null;
+  averageAthenaDaysInAR: number | null;
+  rolledCount: number;
+}
+
+export interface RevenueSettings {
+  facilityId: string;
+  missedCollectionReasons: string[];
+  queueSla: Record<string, number>;
+  dayCloseDefaults: {
+    defaultDueHours?: number;
+    requireNextAction?: boolean;
+  };
+  providerQueryTemplates: string[];
+  athenaLinkTemplate: string;
+  athenaChecklistDefaults: Array<{ label: string; sortOrder: number }>;
+  defaults?: {
+    missedCollectionReasons: string[];
+    providerQueryTemplates: string[];
+    queueSla: Record<string, number>;
+    dayCloseDefaults: Record<string, unknown>;
+  };
+}
+
 /** Day closeout row */
 export interface CloseoutRow {
   encounterId: string;
@@ -602,6 +884,50 @@ export const REVENUE_CYCLE_COLORS: Record<RevenueCycleStatus, string> = {
   ReadyToSubmit: "#10b981",
   Submitted: "#06b6d4",
   HoldException: "#dc2626",
+};
+
+export const REVENUE_STATUS_LABELS: Record<RevenueStatus, string> = {
+  FinancialReadinessNeeded: "Financial Readiness Needed",
+  FinanciallyCleared: "Financially Cleared",
+  CheckoutTrackingNeeded: "Checkout Tracking Needed",
+  ChargeCaptureNeeded: "Charge Capture Needed",
+  CodingReviewInProgress: "Coding Review In Progress",
+  ProviderClarificationNeeded: "Provider Clarification Needed",
+  ReadyForAthenaHandoff: "Ready for Athena Handoff",
+  AthenaHandoffInProgress: "Athena Handoff In Progress",
+  AthenaHandoffConfirmed: "Athena Handoff Confirmed",
+  MonitoringOnly: "Monitoring Only",
+  Closed: "Closed",
+};
+
+export const REVENUE_STATUS_COLORS: Record<RevenueStatus, string> = {
+  FinancialReadinessNeeded: "#dc2626",
+  FinanciallyCleared: "#10b981",
+  CheckoutTrackingNeeded: "#f59e0b",
+  ChargeCaptureNeeded: "#f97316",
+  CodingReviewInProgress: "#6366f1",
+  ProviderClarificationNeeded: "#8b5cf6",
+  ReadyForAthenaHandoff: "#0891b2",
+  AthenaHandoffInProgress: "#2563eb",
+  AthenaHandoffConfirmed: "#0f766e",
+  MonitoringOnly: "#64748b",
+  Closed: "#94a3b8",
+};
+
+export const REVENUE_WORK_QUEUE_LABELS: Record<RevenueWorkQueue, string> = {
+  FinancialReadiness: "Financial Readiness",
+  CheckoutTracking: "Checkout Tracking",
+  ChargeCapture: "Charge Capture",
+  ProviderQueries: "Provider Queries",
+  AthenaHandoff: "Athena Handoff",
+  Monitoring: "Monitoring",
+};
+
+export const REVENUE_DAY_BUCKET_LABELS: Record<RevenueDayBucket, string> = {
+  Today: "Today",
+  Yesterday: "Yesterday",
+  Rolled: "Rolled",
+  Monitoring: "Monitoring",
 };
 
 export const ROLE_LABELS: Record<Role, string> = {

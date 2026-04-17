@@ -65,6 +65,7 @@ export type AthenaConnectorConfig = {
   retryBackoffMs: number;
   testPath: string;
   previewPath: string;
+  revenuePath: string;
   headers: Record<string, string>;
 };
 
@@ -112,6 +113,7 @@ export function normalizeAthenaConnectorConfig(input: unknown): AthenaConnectorC
         : env.ATHENA_RETRY_BACKOFF_MS,
     testPath: toStringValue(raw.testPath) || "/",
     previewPath: toStringValue(raw.previewPath) || "/",
+    revenuePath: toStringValue(raw.revenuePath) || "/",
     headers: normalizeHeaders(raw.headers)
   };
 }
@@ -303,6 +305,7 @@ export function mergeAthenaConnectorConfig(existingInput: unknown, incomingInput
   }
   if (!incoming.testPath) merged.testPath = existing.testPath;
   if (!incoming.previewPath) merged.previewPath = existing.previewPath;
+  if (!incoming.revenuePath) merged.revenuePath = existing.revenuePath;
   if (Object.keys(incoming.headers).length === 0 && Object.keys(existing.headers).length > 0) {
     merged.headers = existing.headers;
   }
@@ -484,5 +487,207 @@ export async function previewAthenaSchedule(params: {
       durationMs: result.durationMs,
       statusCode: result.statusCode
     }
+  };
+}
+
+function parseAthenaNumber(value: string) {
+  if (!value) return null;
+  const normalized = value.replace(/[$,%\s,]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAthenaInteger(value: string) {
+  const parsed = parseAthenaNumber(value);
+  return parsed === null ? null : Math.round(parsed);
+}
+
+function parseAthenaDateValue(value: string) {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+export type AthenaRevenueMonitoringRow = {
+  index: number;
+  encounterId: string;
+  patientId: string;
+  clinic: string;
+  dateOfService: string;
+  chargeEnteredAt: string | null;
+  claimSubmittedAt: string | null;
+  daysToSubmit: number | null;
+  daysInAR: number | null;
+  claimStatus: string;
+  patientBalanceCents: number | null;
+  raw: Record<string, unknown>;
+};
+
+export async function previewAthenaRevenueMonitoring(params: {
+  config: unknown;
+  mapping?: Record<string, string> | unknown;
+  dateOfService?: string;
+  clinicId?: string;
+  maxRows?: number;
+}) {
+  const config = normalizeAthenaConnectorConfig(params.config);
+  const mappingRaw = toRecord(params.mapping);
+
+  if (!config.baseUrl || !config.practiceId) {
+    return {
+      ok: false,
+      status: "error",
+      rowCount: 0,
+      rows: [] as AthenaRevenueMonitoringRow[],
+      message: "AthenaOne revenue monitoring preview requires baseUrl and practiceId in connector config.",
+      detail: {
+        attempts: 0,
+        durationMs: 0,
+        statusCode: null,
+      },
+    };
+  }
+
+  const result = await requestAthena(config, {
+    path: config.revenuePath || config.previewPath || "/",
+    query: {
+      practiceId: config.practiceId,
+      dateOfService: params.dateOfService,
+      clinicId: params.clinicId,
+      departmentIds: config.departmentIds.join(",") || undefined,
+    },
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      status: "error",
+      rowCount: 0,
+      rows: [] as AthenaRevenueMonitoringRow[],
+      message: `AthenaOne revenue monitoring preview failed: ${result.message}`,
+      detail: {
+        attempts: result.attempts,
+        durationMs: result.durationMs,
+        statusCode: result.statusCode,
+        responsePreview: summarizeBody(result.bodyText),
+      },
+    };
+  }
+
+  const payloadRows = extractPreviewRows(result.bodyJson);
+  const maxRows = Math.max(1, Math.min(250, params.maxRows || 50));
+
+  const encounterKeys = [
+    toStringValue(mappingRaw.revenueEncounterId),
+    toStringValue(mappingRaw.athenaEncounterId),
+    toStringValue(mappingRaw.encounterId),
+    "encounterId",
+    "encounter_id",
+    "appointmentid",
+    "appointmentId",
+    "athenaEncounterId",
+  ];
+  const patientKeys = [
+    toStringValue(mappingRaw.revenuePatientId),
+    toStringValue(mappingRaw.patientId),
+    "patientId",
+    "patient_id",
+    "patientid",
+    "mrn",
+  ];
+  const clinicKeys = [
+    toStringValue(mappingRaw.revenueClinicId),
+    toStringValue(mappingRaw.clinicId),
+    "clinicId",
+    "clinic_id",
+    "departmentid",
+    "departmentId",
+    "clinic",
+  ];
+  const dosKeys = [
+    toStringValue(mappingRaw.revenueDateOfService),
+    toStringValue(mappingRaw.dateOfService),
+    "dateOfService",
+    "date_of_service",
+    "dos",
+    "appointmentDate",
+    "appointment_date",
+    "date",
+  ];
+  const chargeEnteredKeys = [
+    toStringValue(mappingRaw.revenueChargeEnteredAt),
+    "chargeEnteredAt",
+    "charge_entered_at",
+    "chargeenteredat",
+    "chargeentrydate",
+    "chargeEntryDate",
+  ];
+  const claimSubmittedKeys = [
+    toStringValue(mappingRaw.revenueClaimSubmittedAt),
+    "claimSubmittedAt",
+    "claim_submitted_at",
+    "claimsubmittedat",
+    "claimSubmissionDate",
+    "claimsubmissiondate",
+  ];
+  const daysToSubmitKeys = [
+    toStringValue(mappingRaw.revenueDaysToSubmit),
+    "daysToSubmit",
+    "days_to_submit",
+    "daystosubmit",
+  ];
+  const daysInARKeys = [
+    toStringValue(mappingRaw.revenueDaysInAR),
+    "daysInAR",
+    "days_in_ar",
+    "daysinar",
+    "daysInAr",
+  ];
+  const claimStatusKeys = [
+    toStringValue(mappingRaw.revenueClaimStatus),
+    "claimStatus",
+    "claim_status",
+    "claimstatus",
+  ];
+  const patientBalanceKeys = [
+    toStringValue(mappingRaw.revenuePatientBalanceCents),
+    toStringValue(mappingRaw.patientBalance),
+    "patientBalanceCents",
+    "patient_balance_cents",
+    "patient_balance",
+    "patientbalance",
+    "patientBalance",
+  ];
+
+  const mappedRows = payloadRows.slice(0, maxRows).map((row, index) => {
+    const record = toRecord(row);
+    const patientBalance = parseAthenaNumber(readMappedValue(record, patientBalanceKeys));
+    return {
+      index: index + 1,
+      encounterId: readMappedValue(record, encounterKeys),
+      patientId: readMappedValue(record, patientKeys),
+      clinic: readMappedValue(record, clinicKeys),
+      dateOfService: readMappedValue(record, dosKeys),
+      chargeEnteredAt: parseAthenaDateValue(readMappedValue(record, chargeEnteredKeys)),
+      claimSubmittedAt: parseAthenaDateValue(readMappedValue(record, claimSubmittedKeys)),
+      daysToSubmit: parseAthenaInteger(readMappedValue(record, daysToSubmitKeys)),
+      daysInAR: parseAthenaInteger(readMappedValue(record, daysInARKeys)),
+      claimStatus: readMappedValue(record, claimStatusKeys),
+      patientBalanceCents: patientBalance === null ? null : Math.round(patientBalance * 100),
+      raw: record,
+    } satisfies AthenaRevenueMonitoringRow;
+  });
+
+  return {
+    ok: true,
+    status: "ok",
+    rowCount: mappedRows.length,
+    rows: mappedRows,
+    message: `AthenaOne revenue monitoring preview completed (${mappedRows.length} row${mappedRows.length === 1 ? "" : "s"}).`,
+    detail: {
+      attempts: result.attempts,
+      durationMs: result.durationMs,
+      statusCode: result.statusCode,
+    },
   };
 }

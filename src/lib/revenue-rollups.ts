@@ -15,6 +15,11 @@ function asRecord(value: Prisma.JsonValue | null | undefined): Record<string, un
   return value as Record<string, unknown>;
 }
 
+function asNumberRecord(value: Prisma.JsonValue | null | undefined): Record<string, number> {
+  const raw = asRecord(value);
+  return Object.fromEntries(Object.entries(raw).map(([key, entry]) => [key, readNumber(entry)]));
+}
+
 function readNumber(value: unknown) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
@@ -25,10 +30,15 @@ function average(total: number, count: number) {
 }
 
 export type RevenueDailyHistoryPoint = {
+  clinicId: string;
+  facilityId: string | null;
   date: string;
+  sameDayCollectionExpectedVisitCount: number;
+  sameDayCollectionCapturedVisitCount: number;
   sameDayCollectionExpectedCents: number;
   sameDayCollectionTrackedCents: number;
-  sameDayCollectionRate: number;
+  sameDayCollectionVisitRate: number;
+  sameDayCollectionDollarRate: number;
   financiallyClearedCount: number;
   chargeCaptureCompletedCount: number;
   athenaHandoffConfirmedCount: number;
@@ -40,6 +50,9 @@ export type RevenueDailyHistoryPoint = {
   missedCollectionReasons: Record<string, number>;
   rollReasons: Record<string, number>;
   queryAging: Record<string, number>;
+  unfinishedQueueCounts: Record<string, number>;
+  unfinishedOwnerCounts: Record<string, number>;
+  unfinishedProviderCounts: Record<string, number>;
 };
 
 function emptyQueueCounts() {
@@ -58,7 +71,7 @@ export async function computeRevenueDailyRollup(
   prisma: PrismaClient,
   clinic: ScopedClinic,
   dateKey: string,
-): Promise<RevenueDailyHistoryPoint & { clinicId: string; facilityId: string | null }> {
+): Promise<RevenueDailyHistoryPoint> {
   const start = DateTime.fromISO(dateKey, { zone: clinic.timezone }).startOf("day").toUTC().toJSDate();
   const end = DateTime.fromJSDate(start).plus({ days: 1 }).toJSDate();
 
@@ -82,7 +95,14 @@ export async function computeRevenueDailyRollup(
       },
     },
   });
+  const closeoutRun = await prisma.revenueCloseoutRun.findFirst({
+    where: { clinicId: clinic.id, dateKey },
+    include: { items: true },
+    orderBy: { createdAt: "desc" },
+  });
 
+  let expectedVisitCount = 0;
+  let capturedVisitCount = 0;
   let expected = 0;
   let tracked = 0;
   let financiallyClearedCount = 0;
@@ -91,10 +111,17 @@ export async function computeRevenueDailyRollup(
   let rolledCount = 0;
   let handoffHoursTotal = 0;
   let handoffHourSamples = 0;
+  let athenaDaysToSubmitTotal = 0;
+  let athenaDaysToSubmitSamples = 0;
+  let athenaDaysInARTotal = 0;
+  let athenaDaysInARSamples = 0;
   const queueCounts = emptyQueueCounts();
   const missedCollectionReasons: Record<string, number> = {};
   const rollReasons: Record<string, number> = {};
   const queryAging: Record<string, number> = { lt4h: 0, lt8h: 0, lt24h: 0, gte24h: 0 };
+  const unfinishedQueueCounts: Record<string, number> = {};
+  const unfinishedOwnerCounts: Record<string, number> = {};
+  const unfinishedProviderCounts: Record<string, number> = {};
   let facilityId: string | null = null;
 
   cases.forEach((item) => {
@@ -107,9 +134,21 @@ export async function computeRevenueDailyRollup(
     if (item.rollReason) {
       rollReasons[item.rollReason] = (rollReasons[item.rollReason] || 0) + 1;
     }
+    if (item.athenaDaysToSubmit !== null && item.athenaDaysToSubmit !== undefined) {
+      athenaDaysToSubmitTotal += item.athenaDaysToSubmit;
+      athenaDaysToSubmitSamples += 1;
+    }
+    if (item.athenaDaysInAR !== null && item.athenaDaysInAR !== undefined) {
+      athenaDaysInARTotal += item.athenaDaysInAR;
+      athenaDaysInARSamples += 1;
+    }
 
     const tracking = item.checkoutCollectionTracking;
-    if (tracking?.collectionExpected) expected += tracking.amountDueCents;
+    if (tracking?.collectionExpected) {
+      expectedVisitCount += 1;
+      expected += tracking.amountDueCents;
+    }
+    if ((tracking?.amountCollectedCents || 0) > 0) capturedVisitCount += 1;
     tracked += tracking?.amountCollectedCents || 0;
     if (tracking?.missedCollectionReason) {
       missedCollectionReasons[tracking.missedCollectionReason] = (missedCollectionReasons[tracking.missedCollectionReason] || 0) + 1;
@@ -126,26 +165,42 @@ export async function computeRevenueDailyRollup(
     }
   });
 
-  const sameDayCollectionRate = expected > 0 ? Number(((tracked / expected) * 100).toFixed(2)) : 0;
+  closeoutRun?.items.forEach((item) => {
+    unfinishedQueueCounts[item.queue] = (unfinishedQueueCounts[item.queue] || 0) + 1;
+    const ownerKey = item.ownerUserId || item.ownerRole || "unassigned";
+    unfinishedOwnerCounts[ownerKey] = (unfinishedOwnerCounts[ownerKey] || 0) + 1;
+    const providerKey = item.providerId || "unassigned";
+    unfinishedProviderCounts[providerKey] = (unfinishedProviderCounts[providerKey] || 0) + 1;
+    rollReasons[item.reasonNotCompleted] = (rollReasons[item.reasonNotCompleted] || 0) + 1;
+  });
+
+  const sameDayCollectionVisitRate = expectedVisitCount > 0 ? Number(((capturedVisitCount / expectedVisitCount) * 100).toFixed(2)) : 0;
+  const sameDayCollectionDollarRate = expected > 0 ? Number(((tracked / expected) * 100).toFixed(2)) : 0;
 
   return {
     clinicId: clinic.id,
     facilityId,
     date: dateKey,
+    sameDayCollectionExpectedVisitCount: expectedVisitCount,
+    sameDayCollectionCapturedVisitCount: capturedVisitCount,
     sameDayCollectionExpectedCents: expected,
     sameDayCollectionTrackedCents: tracked,
-    sameDayCollectionRate,
+    sameDayCollectionVisitRate,
+    sameDayCollectionDollarRate,
     financiallyClearedCount,
     chargeCaptureCompletedCount,
     athenaHandoffConfirmedCount,
     rolledCount,
     avgFlowHandoffHours: average(handoffHoursTotal, handoffHourSamples),
-    avgAthenaDaysToSubmit: null,
-    avgAthenaDaysInAR: null,
+    avgAthenaDaysToSubmit: athenaDaysToSubmitSamples > 0 ? average(athenaDaysToSubmitTotal, athenaDaysToSubmitSamples) : null,
+    avgAthenaDaysInAR: athenaDaysInARSamples > 0 ? average(athenaDaysInARTotal, athenaDaysInARSamples) : null,
     queueCounts,
     missedCollectionReasons,
     rollReasons,
     queryAging,
+    unfinishedQueueCounts,
+    unfinishedOwnerCounts,
+    unfinishedProviderCounts,
   };
 }
 
@@ -167,10 +222,15 @@ export async function getRevenueDailyHistoryRollups(
 
       if (existing) {
         results.push({
+          clinicId: existing.clinicId,
+          facilityId: existing.facilityId,
           date: existing.dateKey,
+          sameDayCollectionExpectedVisitCount: existing.sameDayCollectionExpectedVisitCount,
+          sameDayCollectionCapturedVisitCount: existing.sameDayCollectionCapturedVisitCount,
           sameDayCollectionExpectedCents: existing.sameDayCollectionExpectedCents,
           sameDayCollectionTrackedCents: existing.sameDayCollectionTrackedCents,
-          sameDayCollectionRate: existing.sameDayCollectionRate,
+          sameDayCollectionVisitRate: existing.sameDayCollectionVisitRate,
+          sameDayCollectionDollarRate: existing.sameDayCollectionDollarRate,
           financiallyClearedCount: existing.financiallyClearedCount,
           chargeCaptureCompletedCount: existing.chargeCaptureCompletedCount,
           athenaHandoffConfirmedCount: existing.athenaHandoffConfirmedCount,
@@ -178,10 +238,13 @@ export async function getRevenueDailyHistoryRollups(
           avgFlowHandoffHours: existing.avgFlowHandoffHours,
           avgAthenaDaysToSubmit: existing.avgAthenaDaysToSubmit ?? null,
           avgAthenaDaysInAR: existing.avgAthenaDaysInAR ?? null,
-          queueCounts: asRecord(existing.queueCountsJson),
-          missedCollectionReasons: asRecord(existing.missedCollectionReasonsJson),
-          rollReasons: asRecord(existing.rollReasonsJson),
-          queryAging: asRecord(existing.queryAgingJson),
+          queueCounts: asNumberRecord(existing.queueCountsJson),
+          missedCollectionReasons: asNumberRecord(existing.missedCollectionReasonsJson),
+          rollReasons: asNumberRecord(existing.rollReasonsJson),
+          queryAging: asNumberRecord(existing.queryAgingJson),
+          unfinishedQueueCounts: asNumberRecord(existing.unfinishedQueueCountsJson),
+          unfinishedOwnerCounts: asNumberRecord(existing.unfinishedOwnerCountsJson),
+          unfinishedProviderCounts: asNumberRecord(existing.unfinishedProviderCountsJson),
         });
         continue;
       }
@@ -195,9 +258,12 @@ export async function getRevenueDailyHistoryRollups(
             facilityId: computed.facilityId,
             clinicId: clinic.id,
             dateKey,
+            sameDayCollectionExpectedVisitCount: computed.sameDayCollectionExpectedVisitCount,
+            sameDayCollectionCapturedVisitCount: computed.sameDayCollectionCapturedVisitCount,
             sameDayCollectionExpectedCents: computed.sameDayCollectionExpectedCents,
             sameDayCollectionTrackedCents: computed.sameDayCollectionTrackedCents,
-            sameDayCollectionRate: computed.sameDayCollectionRate,
+            sameDayCollectionVisitRate: computed.sameDayCollectionVisitRate,
+            sameDayCollectionDollarRate: computed.sameDayCollectionDollarRate,
             financiallyClearedCount: computed.financiallyClearedCount,
             chargeCaptureCompletedCount: computed.chargeCaptureCompletedCount,
             athenaHandoffConfirmedCount: computed.athenaHandoffConfirmedCount,
@@ -209,11 +275,17 @@ export async function getRevenueDailyHistoryRollups(
             missedCollectionReasonsJson: computed.missedCollectionReasons as Prisma.InputJsonValue,
             rollReasonsJson: computed.rollReasons as Prisma.InputJsonValue,
             queryAgingJson: computed.queryAging as Prisma.InputJsonValue,
+            unfinishedQueueCountsJson: computed.unfinishedQueueCounts as Prisma.InputJsonValue,
+            unfinishedOwnerCountsJson: computed.unfinishedOwnerCounts as Prisma.InputJsonValue,
+            unfinishedProviderCountsJson: computed.unfinishedProviderCounts as Prisma.InputJsonValue,
           },
           update: {
+            sameDayCollectionExpectedVisitCount: computed.sameDayCollectionExpectedVisitCount,
+            sameDayCollectionCapturedVisitCount: computed.sameDayCollectionCapturedVisitCount,
             sameDayCollectionExpectedCents: computed.sameDayCollectionExpectedCents,
             sameDayCollectionTrackedCents: computed.sameDayCollectionTrackedCents,
-            sameDayCollectionRate: computed.sameDayCollectionRate,
+            sameDayCollectionVisitRate: computed.sameDayCollectionVisitRate,
+            sameDayCollectionDollarRate: computed.sameDayCollectionDollarRate,
             financiallyClearedCount: computed.financiallyClearedCount,
             chargeCaptureCompletedCount: computed.chargeCaptureCompletedCount,
             athenaHandoffConfirmedCount: computed.athenaHandoffConfirmedCount,
@@ -225,6 +297,9 @@ export async function getRevenueDailyHistoryRollups(
             missedCollectionReasonsJson: computed.missedCollectionReasons as Prisma.InputJsonValue,
             rollReasonsJson: computed.rollReasons as Prisma.InputJsonValue,
             queryAgingJson: computed.queryAging as Prisma.InputJsonValue,
+            unfinishedQueueCountsJson: computed.unfinishedQueueCounts as Prisma.InputJsonValue,
+            unfinishedOwnerCountsJson: computed.unfinishedOwnerCounts as Prisma.InputJsonValue,
+            unfinishedProviderCountsJson: computed.unfinishedProviderCounts as Prisma.InputJsonValue,
             computedAt: new Date(),
           },
         });

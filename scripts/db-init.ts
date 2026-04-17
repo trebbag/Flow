@@ -50,7 +50,7 @@ const requiresRebuild =
   hasTable("User") && !hasColumn("User", "identityProvider") ||
   hasTable("User") && !hasColumn("User", "directoryStatus") ||
   hasTable("Facility") && (!hasColumn("Facility", "address") || !hasColumn("Facility", "phone")) ||
-  hasTable("Task") && (!hasColumn("Task", "acknowledgedAt") || !hasColumn("Task", "notes") || !hasColumn("Task", "roomId") || !hasColumn("Task", "sourceType")) ||
+  hasTable("Task") && (!hasColumn("Task", "acknowledgedAt") || !hasColumn("Task", "notes") || !hasColumn("Task", "roomId") || !hasColumn("Task", "sourceType") || !hasColumn("Task", "revenueCaseId") || !hasColumn("Task", "taskCategory") || !hasColumn("Task", "dueAt")) ||
   !hasTable("ClinicRoomAssignment") ||
   !hasTable("RoomOperationalState") ||
   !hasTable("RoomOperationalEvent") ||
@@ -75,7 +75,27 @@ const requiresRebuild =
   !hasColumn("IncomingImportBatch", "status") ||
   !hasTable("IncomingImportIssue") ||
   !hasTable("IntegrationConnector") ||
-  !hasTable("UserAlertInbox");
+  !hasTable("UserAlertInbox") ||
+  !hasTable("RevenueCase") ||
+  !hasTable("FinancialReadiness") ||
+  !hasTable("CheckoutCollectionTracking") ||
+  !hasTable("ChargeCaptureRecord") ||
+  !hasTable("ProviderClarification") ||
+  !hasTable("RevenueChecklistItem") ||
+  !hasTable("RevenueCaseEvent") ||
+  !hasTable("RevenueCycleDailyRollup") ||
+  !hasTable("RevenueCycleSettings") ||
+  !hasTable("RevenueCloseoutRun") ||
+  !hasTable("RevenueCloseoutItem") ||
+  !hasColumn("RevenueCase", "athenaHandoffOwnerUserId") ||
+  !hasColumn("RevenueCase", "athenaHandoffStartedAt") ||
+  !hasColumn("RevenueCase", "athenaHandoffConfirmedByUserId") ||
+  !hasColumn("RevenueCase", "athenaHandoffNote") ||
+  !hasColumn("RevenueCase", "closeoutState") ||
+  !hasColumn("ChargeCaptureRecord", "procedureLinesJson") ||
+  !hasColumn("RevenueCycleDailyRollup", "facilityId") ||
+  !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionExpectedVisitCount") ||
+  !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionVisitRate");
 
 if (requiresRebuild) {
   db.exec(`
@@ -83,6 +103,7 @@ DROP TABLE IF EXISTS EventOutbox;
 DROP TABLE IF EXISTS AuditLog;
 DROP TABLE IF EXISTS RoomDailyRollup;
 DROP TABLE IF EXISTS OfficeManagerDailyRollup;
+DROP TABLE IF EXISTS RevenueCycleDailyRollup;
 DROP TABLE IF EXISTS NotificationPolicy;
 DROP TABLE IF EXISTS AlertThreshold;
 DROP TABLE IF EXISTS UserAlertInbox;
@@ -92,6 +113,16 @@ DROP TABLE IF EXISTS RoomIssue;
 DROP TABLE IF EXISTS RoomOperationalEvent;
 DROP TABLE IF EXISTS RoomOperationalState;
 DROP TABLE IF EXISTS Task;
+DROP TABLE IF EXISTS RevenueCaseEvent;
+DROP TABLE IF EXISTS RevenueChecklistItem;
+DROP TABLE IF EXISTS ProviderClarification;
+DROP TABLE IF EXISTS ChargeCaptureRecord;
+DROP TABLE IF EXISTS CheckoutCollectionTracking;
+DROP TABLE IF EXISTS FinancialReadiness;
+DROP TABLE IF EXISTS RevenueCloseoutItem;
+DROP TABLE IF EXISTS RevenueCloseoutRun;
+DROP TABLE IF EXISTS RevenueCycleSettings;
+DROP TABLE IF EXISTS RevenueCase;
 DROP TABLE IF EXISTS AlertState;
 DROP TABLE IF EXISTS StatusChangeEvent;
 DROP TABLE IF EXISTS Encounter;
@@ -438,9 +469,11 @@ CREATE TABLE IF NOT EXISTS Task (
   facilityId TEXT,
   clinicId TEXT,
   encounterId TEXT,
+  revenueCaseId TEXT,
   roomId TEXT,
   sourceType TEXT,
   sourceId TEXT,
+  taskCategory TEXT,
   taskType TEXT NOT NULL,
   description TEXT NOT NULL,
   assignedToRole TEXT,
@@ -448,6 +481,7 @@ CREATE TABLE IF NOT EXISTS Task (
   status TEXT NOT NULL DEFAULT 'open',
   priority INTEGER NOT NULL DEFAULT 0,
   blocking INTEGER NOT NULL DEFAULT 0,
+  dueAt TEXT,
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   createdBy TEXT NOT NULL,
   acknowledgedAt TEXT,
@@ -457,6 +491,7 @@ CREATE TABLE IF NOT EXISTS Task (
   notes TEXT,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (createdBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (acknowledgedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
@@ -601,6 +636,193 @@ CREATE TABLE IF NOT EXISTS NotificationPolicy (
   quietHoursJson TEXT
 );
 
+CREATE TABLE IF NOT EXISTS RevenueCase (
+  id TEXT PRIMARY KEY NOT NULL,
+  encounterId TEXT NOT NULL UNIQUE,
+  facilityId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  patientId TEXT NOT NULL,
+  providerId TEXT,
+  dateOfService TEXT NOT NULL,
+  currentRevenueStatus TEXT NOT NULL,
+  currentWorkQueue TEXT NOT NULL,
+  currentDayBucket TEXT NOT NULL DEFAULT 'Today',
+  priority INTEGER NOT NULL DEFAULT 2,
+  assignedToUserId TEXT,
+  assignedToRole TEXT,
+  currentBlockerCategory TEXT,
+  currentBlockerText TEXT,
+  dueAt TEXT,
+  rolledFromDateKey TEXT,
+  rollReason TEXT,
+  readyForAthenaAt TEXT,
+  athenaHandoffOwnerUserId TEXT,
+  athenaHandoffStartedAt TEXT,
+  athenaHandoffConfirmedAt TEXT,
+  athenaHandoffConfirmedByUserId TEXT,
+  athenaHandoffNote TEXT,
+  athenaChargeEnteredAt TEXT,
+  athenaClaimSubmittedAt TEXT,
+  athenaDaysToSubmit REAL,
+  athenaDaysInAR REAL,
+  athenaClaimStatus TEXT,
+  athenaPatientBalanceCents INTEGER,
+  athenaLastSyncAt TEXT,
+  closeoutState TEXT NOT NULL DEFAULT 'Open',
+  closedAt TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (providerId) REFERENCES Provider(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  FOREIGN KEY (assignedToUserId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS FinancialReadiness (
+  revenueCaseId TEXT PRIMARY KEY NOT NULL,
+  eligibilityStatus TEXT NOT NULL DEFAULT 'NotChecked',
+  verifiedAt TEXT,
+  verifiedByUserId TEXT,
+  primaryPayerName TEXT,
+  primaryPlanName TEXT,
+  secondaryPayerName TEXT,
+  financialClass TEXT,
+  pointOfServiceAmountDueCents INTEGER NOT NULL DEFAULT 0,
+  outstandingPriorBalanceCents INTEGER NOT NULL DEFAULT 0,
+  coverageIssueCategory TEXT,
+  coverageIssueText TEXT,
+  referralRequired INTEGER NOT NULL DEFAULT 0,
+  referralStatus TEXT NOT NULL DEFAULT 'NotRequired',
+  priorAuthRequired INTEGER NOT NULL DEFAULT 0,
+  priorAuthStatus TEXT NOT NULL DEFAULT 'NotRequired',
+  priorAuthNumber TEXT,
+  notesJson TEXT,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS CheckoutCollectionTracking (
+  revenueCaseId TEXT PRIMARY KEY NOT NULL,
+  collectionExpected INTEGER NOT NULL DEFAULT 0,
+  amountDueCents INTEGER NOT NULL DEFAULT 0,
+  amountCollectedCents INTEGER NOT NULL DEFAULT 0,
+  collectionOutcome TEXT,
+  missedCollectionReason TEXT,
+  trackingNote TEXT,
+  trackedByUserId TEXT,
+  trackedAt TEXT,
+  sourceFieldJson TEXT,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ChargeCaptureRecord (
+  revenueCaseId TEXT PRIMARY KEY NOT NULL,
+  documentationComplete INTEGER NOT NULL DEFAULT 0,
+  codingStage TEXT NOT NULL DEFAULT 'NotStarted',
+  icd10CodesJson TEXT NOT NULL DEFAULT '[]',
+  procedureLinesJson TEXT NOT NULL DEFAULT '[]',
+  cptCodesJson TEXT NOT NULL DEFAULT '[]',
+  modifiersJson TEXT NOT NULL DEFAULT '[]',
+  unitsJson TEXT NOT NULL DEFAULT '[]',
+  codingNote TEXT,
+  reviewedByUserId TEXT,
+  reviewedAt TEXT,
+  readyForAthenaAt TEXT,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ProviderClarification (
+  id TEXT PRIMARY KEY NOT NULL,
+  revenueCaseId TEXT NOT NULL,
+  encounterId TEXT NOT NULL,
+  requestedByUserId TEXT NOT NULL,
+  targetUserId TEXT,
+  queryType TEXT,
+  questionText TEXT NOT NULL,
+  responseText TEXT,
+  status TEXT NOT NULL DEFAULT 'Open',
+  openedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  respondedAt TEXT,
+  resolvedAt TEXT,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS RevenueChecklistItem (
+  id TEXT PRIMARY KEY NOT NULL,
+  revenueCaseId TEXT NOT NULL,
+  "group" TEXT NOT NULL,
+  label TEXT NOT NULL,
+  required INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  dueAt TEXT,
+  completedAt TEXT,
+  completedByUserId TEXT,
+  evidenceText TEXT,
+  payloadJson TEXT,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS RevenueCaseEvent (
+  id TEXT PRIMARY KEY NOT NULL,
+  revenueCaseId TEXT NOT NULL,
+  eventType TEXT NOT NULL,
+  fromStatus TEXT,
+  toStatus TEXT,
+  actorUserId TEXT,
+  eventText TEXT,
+  payloadJson TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS RevenueCycleSettings (
+  facilityId TEXT PRIMARY KEY NOT NULL,
+  missedCollectionReasonsJson TEXT NOT NULL DEFAULT '[]',
+  queueSlaJson TEXT NOT NULL DEFAULT '{}',
+  dayCloseDefaultsJson TEXT NOT NULL DEFAULT '{}',
+  providerQueryTemplatesJson TEXT NOT NULL DEFAULT '[]',
+  athenaLinkTemplate TEXT,
+  athenaChecklistDefaultsJson TEXT NOT NULL DEFAULT '[]',
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS RevenueCloseoutRun (
+  id TEXT PRIMARY KEY NOT NULL,
+  facilityId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  dateKey TEXT NOT NULL,
+  closedByUserId TEXT,
+  unresolvedCount INTEGER NOT NULL DEFAULT 0,
+  rolledCount INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS RevenueCloseoutItem (
+  id TEXT PRIMARY KEY NOT NULL,
+  closeoutRunId TEXT NOT NULL,
+  revenueCaseId TEXT NOT NULL,
+  queue TEXT NOT NULL,
+  snapshotStatus TEXT NOT NULL,
+  ownerUserId TEXT,
+  ownerRole TEXT,
+  reasonNotCompleted TEXT NOT NULL,
+  nextAction TEXT,
+  dueAt TEXT,
+  rollover INTEGER NOT NULL DEFAULT 0,
+  patientId TEXT NOT NULL,
+  providerId TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (closeoutRunId) REFERENCES RevenueCloseoutRun(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS OfficeManagerDailyRollup (
   id TEXT PRIMARY KEY NOT NULL,
   clinicId TEXT NOT NULL,
@@ -617,6 +839,37 @@ CREATE TABLE IF NOT EXISTS OfficeManagerDailyRollup (
   stageRollupsJson TEXT NOT NULL,
   providerRollupsJson TEXT NOT NULL,
   computedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  UNIQUE (clinicId, dateKey)
+);
+
+CREATE TABLE IF NOT EXISTS RevenueCycleDailyRollup (
+  id TEXT PRIMARY KEY NOT NULL,
+  facilityId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
+  dateKey TEXT NOT NULL,
+  sameDayCollectionExpectedVisitCount INTEGER NOT NULL DEFAULT 0,
+  sameDayCollectionCapturedVisitCount INTEGER NOT NULL DEFAULT 0,
+  sameDayCollectionExpectedCents INTEGER NOT NULL DEFAULT 0,
+  sameDayCollectionTrackedCents INTEGER NOT NULL DEFAULT 0,
+  sameDayCollectionVisitRate REAL NOT NULL DEFAULT 0,
+  sameDayCollectionDollarRate REAL NOT NULL DEFAULT 0,
+  financiallyClearedCount INTEGER NOT NULL DEFAULT 0,
+  chargeCaptureCompletedCount INTEGER NOT NULL DEFAULT 0,
+  athenaHandoffConfirmedCount INTEGER NOT NULL DEFAULT 0,
+  rolledCount INTEGER NOT NULL DEFAULT 0,
+  avgFlowHandoffHours REAL NOT NULL DEFAULT 0,
+  avgAthenaDaysToSubmit REAL,
+  avgAthenaDaysInAR REAL,
+  queueCountsJson TEXT NOT NULL DEFAULT '{}',
+  missedCollectionReasonsJson TEXT NOT NULL DEFAULT '{}',
+  rollReasonsJson TEXT NOT NULL DEFAULT '{}',
+  queryAgingJson TEXT NOT NULL DEFAULT '{}',
+  unfinishedQueueCountsJson TEXT NOT NULL DEFAULT '{}',
+  unfinishedOwnerCountsJson TEXT NOT NULL DEFAULT '{}',
+  unfinishedProviderCountsJson TEXT NOT NULL DEFAULT '{}',
+  computedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   UNIQUE (clinicId, dateKey)
 );
@@ -777,6 +1030,21 @@ CREATE INDEX IF NOT EXISTS RoomChecklistRun_clinicId_kind_dateKey_idx ON RoomChe
 CREATE INDEX IF NOT EXISTS UserAlertInbox_userId_status_createdAt_idx ON UserAlertInbox(userId, status, createdAt);
 CREATE INDEX IF NOT EXISTS UserAlertInbox_facility_clinic_kind_status_idx ON UserAlertInbox(facilityId, clinicId, kind, status);
 CREATE INDEX IF NOT EXISTS SafetyEvent_encounterId_resolvedAt_idx ON SafetyEvent(encounterId, resolvedAt);
+CREATE INDEX IF NOT EXISTS RevenueCase_facilityId_currentDayBucket_currentWorkQueue_idx ON RevenueCase(facilityId, currentDayBucket, currentWorkQueue);
+CREATE INDEX IF NOT EXISTS RevenueCase_clinicId_currentRevenueStatus_currentDayBucket_idx ON RevenueCase(clinicId, currentRevenueStatus, currentDayBucket);
+CREATE INDEX IF NOT EXISTS RevenueCase_assignedToUserId_currentRevenueStatus_idx ON RevenueCase(assignedToUserId, currentRevenueStatus);
+CREATE INDEX IF NOT EXISTS RevenueCase_assignedToRole_currentRevenueStatus_idx ON RevenueCase(assignedToRole, currentRevenueStatus);
+CREATE INDEX IF NOT EXISTS RevenueCase_closeoutState_currentDayBucket_idx ON RevenueCase(closeoutState, currentDayBucket);
+CREATE INDEX IF NOT EXISTS ProviderClarification_revenueCaseId_status_openedAt_idx ON ProviderClarification(revenueCaseId, status, openedAt);
+CREATE INDEX IF NOT EXISTS ProviderClarification_encounterId_status_idx ON ProviderClarification(encounterId, status);
+CREATE INDEX IF NOT EXISTS ProviderClarification_targetUserId_status_idx ON ProviderClarification(targetUserId, status);
+CREATE INDEX IF NOT EXISTS RevenueChecklistItem_revenueCaseId_group_status_idx ON RevenueChecklistItem(revenueCaseId, "group", status);
+CREATE INDEX IF NOT EXISTS RevenueCaseEvent_revenueCaseId_createdAt_idx ON RevenueCaseEvent(revenueCaseId, createdAt);
+CREATE INDEX IF NOT EXISTS RevenueCloseoutRun_facilityId_dateKey_idx ON RevenueCloseoutRun(facilityId, dateKey);
+CREATE INDEX IF NOT EXISTS RevenueCloseoutRun_clinicId_dateKey_idx ON RevenueCloseoutRun(clinicId, dateKey);
+CREATE INDEX IF NOT EXISTS RevenueCloseoutItem_closeoutRunId_idx ON RevenueCloseoutItem(closeoutRunId);
+CREATE INDEX IF NOT EXISTS RevenueCloseoutItem_revenueCaseId_idx ON RevenueCloseoutItem(revenueCaseId);
+CREATE INDEX IF NOT EXISTS RevenueCloseoutItem_queue_rollover_idx ON RevenueCloseoutItem(queue, rollover);
 CREATE INDEX IF NOT EXISTS OfficeManagerDailyRollup_dateKey_idx ON OfficeManagerDailyRollup(dateKey);
 CREATE INDEX IF NOT EXISTS OfficeManagerDailyRollup_clinicId_dateKey_idx ON OfficeManagerDailyRollup(clinicId, dateKey);
 CREATE INDEX IF NOT EXISTS RoomDailyRollup_facilityId_dateKey_idx ON RoomDailyRollup(facilityId, dateKey);

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus } from "@prisma/client";
 import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
@@ -6,9 +6,117 @@ import { authHeaders, bootstrapCore, jwtHeaders, prisma, resetDb } from "./helpe
 
 const app = buildApp();
 
+async function createRevenueWorkflowEncounter(params: {
+  clinicId: string;
+  providerId: string;
+  reasonForVisitId: string;
+  checkinUserId: string;
+  checkoutUserId: string;
+  maUserId: string;
+  clinicianUserId: string;
+  patientId?: string;
+  clinicianData?: Record<string, unknown>;
+  checkoutData?: Record<string, unknown>;
+}) {
+  const created = await app.inject({
+    method: "POST",
+    url: "/encounters",
+    headers: authHeaders(params.checkinUserId, RoleName.FrontDeskCheckIn),
+    payload: {
+      patientId: params.patientId || "PT-REV-001",
+      clinicId: params.clinicId,
+      providerId: params.providerId,
+      reasonForVisitId: params.reasonForVisitId,
+      walkIn: true,
+    },
+  });
+  expect(created.statusCode).toBe(200);
+  let encounter = created.json();
+
+  const toRooming = await app.inject({
+    method: "PATCH",
+    url: `/encounters/${encounter.id}/status`,
+    headers: authHeaders(params.maUserId, RoleName.MA),
+    payload: {
+      toStatus: "Rooming",
+      version: encounter.version,
+    },
+  });
+  expect(toRooming.statusCode).toBe(200);
+  encounter = toRooming.json();
+
+  const saveRooming = await app.inject({
+    method: "PATCH",
+    url: `/encounters/${encounter.id}/rooming`,
+    headers: authHeaders(params.maUserId, RoleName.MA),
+    payload: {
+      data: { vitals: "120/80" },
+    },
+  });
+  expect(saveRooming.statusCode).toBe(200);
+
+  const toReady = await app.inject({
+    method: "PATCH",
+    url: `/encounters/${encounter.id}/status`,
+    headers: authHeaders(params.maUserId, RoleName.MA),
+    payload: {
+      toStatus: "ReadyForProvider",
+      version: encounter.version,
+    },
+  });
+  expect(toReady.statusCode).toBe(200);
+  encounter = toReady.json();
+
+  const startVisit = await app.inject({
+    method: "POST",
+    url: `/encounters/${encounter.id}/visit/start`,
+    headers: authHeaders(params.clinicianUserId, RoleName.Clinician),
+    payload: {
+      version: encounter.version,
+    },
+  });
+  expect(startVisit.statusCode).toBe(200);
+  encounter = startVisit.json();
+
+  const endVisit = await app.inject({
+    method: "POST",
+    url: `/encounters/${encounter.id}/visit/end`,
+    headers: authHeaders(params.clinicianUserId, RoleName.Clinician),
+    payload: {
+      version: encounter.version,
+      data: {
+        assessment: "Visit complete",
+        ...(params.clinicianData || {}),
+      },
+    },
+  });
+  expect(endVisit.statusCode).toBe(200);
+  encounter = endVisit.json();
+
+  if (params.checkoutData) {
+    const completeCheckout = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/checkout/complete`,
+      headers: authHeaders(params.checkoutUserId, RoleName.Admin),
+      payload: {
+        version: encounter.version,
+        checkoutData: params.checkoutData,
+      },
+    });
+    expect(completeCheckout.statusCode).toBe(200);
+    encounter = completeCheckout.json();
+  }
+
+  return encounter;
+}
+
 describe("Flow backend core relationships", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   afterAll(async () => {
@@ -1031,12 +1139,33 @@ describe("Flow backend core relationships", () => {
 
     const dashboard = await app.inject({
       method: "GET",
-      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&from=${date}&to=${date}`,
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle)
     });
 
     expect(dashboard.statusCode).toBe(200);
-    expect(dashboard.json().optimizedCount).toBeGreaterThanOrEqual(1);
+    expect(dashboard.json()).toEqual(
+      expect.objectContaining({
+        kpis: expect.objectContaining({
+          sameDayCollectionExpectedVisitCount: expect.any(Number),
+          sameDayCollectionCapturedVisitCount: expect.any(Number),
+          sameDayCollectionExpectedCents: expect.any(Number),
+          sameDayCollectionCapturedCents: expect.any(Number),
+          sameDayCollectionVisitRate: expect.any(Number),
+          sameDayCollectionDollarRate: expect.any(Number),
+          averageFlowHandoffLagHours: expect.any(Number),
+          athenaDaysToSubmit: null,
+          athenaDaysInAR: null
+        }),
+        settings: expect.objectContaining({
+          missedCollectionReasons: expect.any(Array),
+          providerQueryTemplates: expect.any(Array),
+          athenaLinkTemplate: expect.any(String),
+        }),
+        queueCounts: expect.any(Object),
+        cases: expect.any(Array)
+      })
+    );
   });
 
   it("allows admin to assign a facility room to another clinic", async () => {
@@ -3555,6 +3684,164 @@ describe("Flow backend core relationships", () => {
     expect(storedConfig.clientSecret).toBe("secret-client");
   });
 
+  it("previews and imports Athena revenue monitoring rows and exposes Athena metrics in revenue dashboards", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-ATHENA-REV",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "M54.5",
+        "coding.working_procedure_codes_text": "99214",
+        "coding.documentation_complete": true,
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 2500,
+        "billing.amount_collected_cents": 2500,
+        "billing.collection_outcome": "CollectedInFull",
+        disposition: "Discharged",
+      },
+    });
+    const revenueCase = await prisma.revenueCase.findUnique({ where: { encounterId: finishedEncounter.id } });
+    expect(revenueCase).toBeTruthy();
+    const dateOfService = DateTime.fromJSDate(revenueCase!.dateOfService).toISODate();
+
+    const savedConnector = await app.inject({
+      method: "POST",
+      url: "/admin/integrations/athenaone",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        facilityId: ctx.facility.id,
+        enabled: true,
+        config: {
+          baseUrl: "https://example-athena.test",
+          practiceId: "practice-1",
+          revenuePath: "/billing/monitoring",
+        },
+      },
+    });
+    expect(savedConnector.statusCode).toBe(200);
+
+    const athenaPayload = JSON.stringify({
+      appointments: [
+        {
+          patient_id: "PT-ATHENA-REV",
+          date_of_service: dateOfService,
+          claim_status: "submitted",
+          days_to_submit: 2,
+          days_in_ar: 14,
+          patient_balance: "15.25",
+          charge_entered_at: `${dateOfService}T09:30:00Z`,
+          claim_submitted_at: `${dateOfService}T12:00:00Z`,
+        },
+      ],
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(athenaPayload, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const preview = await app.inject({
+      method: "POST",
+      url: "/admin/integrations/athenaone/revenue-preview",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        facilityId: ctx.facility.id,
+        clinicId: ctx.clinic.id,
+        dateOfService,
+      },
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toEqual(
+      expect.objectContaining({
+        ok: true,
+        matchedCount: 1,
+        rowCount: 1,
+      }),
+    );
+
+    const imported = await app.inject({
+      method: "POST",
+      url: "/admin/integrations/athenaone/revenue-import",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        facilityId: ctx.facility.id,
+        clinicId: ctx.clinic.id,
+        dateOfService,
+      },
+    });
+    expect(imported.statusCode).toBe(200);
+    expect(imported.json()).toEqual(
+      expect.objectContaining({
+        ok: true,
+        importedCount: 1,
+        skippedCount: 0,
+      }),
+    );
+
+    const scopedRevenueCase = await app.inject({
+      method: "GET",
+      url: `/revenue-cases?encounterId=${finishedEncounter.id}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(scopedRevenueCase.statusCode).toBe(200);
+    expect(scopedRevenueCase.json()).toHaveLength(1);
+
+    const refreshedCase = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
+    expect(refreshedCase?.athenaDaysToSubmit).toBe(2);
+    expect(refreshedCase?.athenaDaysInAR).toBe(14);
+    expect(refreshedCase?.athenaClaimStatus).toBe("submitted");
+    expect(refreshedCase?.athenaPatientBalanceCents).toBe(1525);
+
+    const dashboard = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&from=${dateOfService}&to=${dateOfService}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.json().kpis).toEqual(
+      expect.objectContaining({
+        athenaDaysToSubmit: 2,
+        athenaDaysInAR: 14,
+      }),
+    );
+
+    const history = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle/history?clinicId=${ctx.clinic.id}&from=${dateOfService}&to=${dateOfService}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json()).toEqual(
+      expect.objectContaining({
+        summary: expect.objectContaining({
+          averageAthenaDaysToSubmit: 2,
+          averageAthenaDaysInAR: 14,
+        }),
+      }),
+    );
+    expect(history.json().daily[0]).toEqual(
+      expect.objectContaining({
+        clinicId: ctx.clinic.id,
+        clinicName: expect.any(String),
+        dateKey: dateOfService,
+        avgAthenaDaysToSubmit: 2,
+        avgAthenaDaysInAR: 14,
+        unfinishedQueueCountsJson: expect.any(Object),
+      }),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
   it("dispatches real in-app notification test alerts to matching scoped users", async () => {
     const ctx = await bootstrapCore();
 
@@ -3680,5 +3967,298 @@ describe("Flow backend core relationships", () => {
         (item: any) => item.title === "Notification policy test" && item.payload?.policyId === notification.json().id
       )
     ).toBe(true);
+  });
+
+  it("creates revenue cases from encounter workflow state and allows RevenueCycle read-only encounter access", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-READONLY",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "I10",
+        "coding.working_procedure_codes_text": "99213",
+        "coding.documentation_complete": true,
+        "coding.note": "Clinician coding handoff complete",
+      },
+    });
+
+    const revenueList = await app.inject({
+      method: "GET",
+      url: "/revenue-cases?dayBucket=Today&workQueue=CheckoutTracking",
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(revenueList.statusCode).toBe(200);
+    expect(revenueList.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          encounterId: finishedEncounter.id,
+          patientId: "PT-REV-READONLY",
+          currentRevenueStatus: "CheckoutTrackingNeeded",
+          currentWorkQueue: "CheckoutTracking",
+        }),
+      ]),
+    );
+
+    const readEncounter = await app.inject({
+      method: "GET",
+      url: `/encounters/${finishedEncounter.id}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(readEncounter.statusCode).toBe(200);
+    expect(readEncounter.json().id).toBe(finishedEncounter.id);
+
+    const mutateEncounter = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${finishedEncounter.id}/status`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        toStatus: "Optimized",
+        version: finishedEncounter.version,
+      },
+    });
+    expect(mutateEncounter.statusCode).toBe(403);
+  });
+
+  it("normalizes checkout collection tracking into the revenue case", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-COLLECT",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "E11.9",
+        "coding.working_procedure_codes_text": "99214",
+        "coding.documentation_complete": true,
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 5000,
+        "billing.amount_collected_cents": 2500,
+        "billing.collection_outcome": "CollectedPartial",
+        "billing.missed_reason": "Patient requested payment plan",
+        "billing.collection_note": "Collected partial before leaving checkout",
+        disposition: "Discharged",
+      },
+    });
+
+    const revenueCase = await prisma.revenueCase.findUnique({
+      where: { encounterId: finishedEncounter.id },
+      include: { checkoutCollectionTracking: true, chargeCaptureRecord: true },
+    });
+    expect(revenueCase).toBeTruthy();
+    expect(revenueCase?.checkoutCollectionTracking).toMatchObject({
+      collectionExpected: true,
+      amountDueCents: 5000,
+      amountCollectedCents: 2500,
+      collectionOutcome: "CollectedPartial",
+      missedCollectionReason: "Patient requested payment plan",
+      trackingNote: "Collected partial before leaving checkout",
+    });
+    expect(revenueCase?.chargeCaptureRecord?.codingStage).toBe("ReadyForAthena");
+  });
+
+  it("supports provider clarification and returns the case to Athena handoff once resolved", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-QUERY",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "J01.90",
+        "coding.working_procedure_codes_text": "99213",
+        "coding.documentation_complete": true,
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 3000,
+        "billing.amount_collected_cents": 3000,
+        "billing.collection_outcome": "CollectedInFull",
+        disposition: "Discharged",
+      },
+    });
+
+    const revenueCase = await prisma.revenueCase.findUnique({ where: { encounterId: finishedEncounter.id } });
+    expect(revenueCase).toBeTruthy();
+
+    const createQuery = await app.inject({
+      method: "POST",
+      url: `/revenue-cases/${revenueCase!.id}/provider-clarifications`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        questionText: "Please confirm whether the working diagnosis should be acute sinusitis or chronic sinusitis.",
+      },
+    });
+    expect(createQuery.statusCode).toBe(200);
+
+    const afterCreate = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
+    expect(afterCreate?.currentRevenueStatus).toBe("ProviderClarificationNeeded");
+
+    const clarificationId = createQuery.json().id as string;
+    const respond = await app.inject({
+      method: "PATCH",
+      url: `/provider-clarifications/${clarificationId}`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        responseText: "Use acute sinusitis.",
+        status: "Responded",
+      },
+    });
+    expect(respond.statusCode).toBe(200);
+
+    const confirmHandoff = await app.inject({
+      method: "POST",
+      url: `/revenue-cases/${revenueCase!.id}/athena-handoff-confirm`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        athenaHandoffNote: "Confirmed manually in Athena for test coverage.",
+      },
+    });
+    expect(confirmHandoff.statusCode).toBe(200);
+
+    const afterRespond = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
+    expect(afterRespond?.currentRevenueStatus).toBe("ProviderClarificationNeeded");
+
+    const resolve = await app.inject({
+      method: "PATCH",
+      url: `/provider-clarifications/${clarificationId}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        status: "Resolved",
+        resolve: true,
+      },
+    });
+    expect(resolve.statusCode).toBe(200);
+
+    const afterResolve = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
+    expect(afterResolve?.athenaHandoffConfirmedAt).toBeTruthy();
+    expect(afterResolve?.currentRevenueStatus).toBe("MonitoringOnly");
+    expect(afterResolve?.currentWorkQueue).toBe("Monitoring");
+  });
+
+  it("blocks revenue closeout until unresolved cases are rolled and persists history rollups", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-CLOSE",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "M54.5",
+        "coding.working_procedure_codes_text": "99214",
+        "coding.documentation_complete": true,
+      },
+    });
+
+    const revenueCase = await prisma.revenueCase.findUnique({ where: { encounterId: finishedEncounter.id } });
+    expect(revenueCase).toBeTruthy();
+
+    const blockedClose = await app.inject({
+      method: "POST",
+      url: "/revenue-closeout",
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        clinicId: ctx.clinic.id,
+        date: DateTime.now().toISODate(),
+      },
+    });
+    expect(blockedClose.statusCode).toBe(400);
+    expect(blockedClose.json().message).toContain("closeout metadata");
+
+    const closed = await app.inject({
+      method: "POST",
+      url: "/revenue-closeout",
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        clinicId: ctx.clinic.id,
+        date: DateTime.now().toISODate(),
+        items: [
+          {
+            revenueCaseId: revenueCase!.id,
+            ownerUserId: ctx.revenue.id,
+            ownerRole: RoleName.RevenueCycle,
+            reasonNotCompleted: "Coding will finish first thing tomorrow morning.",
+            nextAction: "Finish coding review and confirm Athena handoff.",
+            dueAt: DateTime.now().plus({ days: 1 }).toISO(),
+            rollover: true,
+          },
+        ],
+      },
+    });
+    expect(closed.statusCode).toBe(200);
+
+    const reloadedCase = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
+    expect(reloadedCase?.currentDayBucket).toBe("Rolled");
+
+    const history = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle/history?clinicId=${ctx.clinic.id}&from=${DateTime.now().minus({ days: 1 }).toISODate()}&to=${DateTime.now().toISODate()}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().daily.length).toBeGreaterThan(0);
+    expect(history.json().daily[history.json().daily.length - 1]).toEqual(
+      expect.objectContaining({
+        clinicId: ctx.clinic.id,
+        unfinishedQueueCountsJson: expect.any(Object),
+      }),
+    );
+  });
+
+  it("reads and updates facility-scoped revenue settings", async () => {
+    const ctx = await bootstrapCore();
+
+    const readSettings = await app.inject({
+      method: "GET",
+      url: `/admin/revenue-settings?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+    expect(readSettings.statusCode).toBe(200);
+    expect(readSettings.json()).toEqual(
+      expect.objectContaining({
+        facilityId: ctx.facility.id,
+        missedCollectionReasons: expect.any(Array),
+        providerQueryTemplates: expect.any(Array),
+      }),
+    );
+
+    const updateSettings = await app.inject({
+      method: "POST",
+      url: "/admin/revenue-settings",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        facilityId: ctx.facility.id,
+        missedCollectionReasons: ["patient declined", "eligibility/coverage issue", "other"],
+        providerQueryTemplates: ["Please confirm the diagnosis selection."],
+        athenaLinkTemplate: "https://athena.example.com/encounters/{encounterId}",
+      },
+    });
+    expect(updateSettings.statusCode).toBe(200);
+    expect(updateSettings.json()).toEqual(
+      expect.objectContaining({
+        facilityId: ctx.facility.id,
+        athenaLinkTemplate: "https://athena.example.com/encounters/{encounterId}",
+        providerQueryTemplates: ["Please confirm the diagnosis selection."],
+      }),
+    );
   });
 });

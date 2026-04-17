@@ -278,6 +278,8 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       arrivalNotes: raw.arrivalNotes || undefined,
       intakeData: raw.intakeData || null,
       roomingData: raw.roomingData || null,
+      clinicianData: raw.clinicianData || null,
+      checkoutData: raw.checkoutData || null,
       statusEvents,
       closureType: raw.closureType || undefined,
       cardTags: Array.isArray(clinic?.cardTags) ? clinic.cardTags : undefined,
@@ -590,6 +592,9 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       const roomingPayload = extras?.roomingData && typeof extras.roomingData === "object"
         ? (extras.roomingData as Record<string, unknown>)
         : undefined;
+      const clinicianPayload = extras?.clinicianData && typeof extras.clinicianData === "object"
+        ? (extras.clinicianData as Record<string, unknown>)
+        : undefined;
 
       (async () => {
         try {
@@ -599,10 +604,18 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
               ...(roomingPayload ? { data: roomingPayload } : {}),
             });
           }
-          const updated = await encounterApi.updateStatus(id, {
-            toStatus: newStatus,
-            version: current.version,
-          });
+          const updated =
+            current.status === "ReadyForProvider" && newStatus === "Optimizing"
+              ? await encounterApi.startVisit(id, { version: current.version })
+              : current.status === "Optimizing" && newStatus === "CheckOut"
+                ? await encounterApi.endVisit(id, {
+                    version: current.version,
+                    ...(clinicianPayload ? { data: clinicianPayload } : {}),
+                  })
+                : await encounterApi.updateStatus(id, {
+                    toStatus: newStatus,
+                    version: current.version,
+                  });
           const mapped = mapBackendEncounter(updated as any);
           setEncounters((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
           setEncounterCacheEntry(mapped);

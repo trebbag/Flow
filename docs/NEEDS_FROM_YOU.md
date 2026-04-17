@@ -37,6 +37,8 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 - Assign at least one real pilot user the `OfficeManager` role before the final role-by-role staging proof.
 - Keep using `pnpm staging:auth:refresh` from a signed-in Azure CLI session before authenticated staging verification runs if you stay on the current short-lived bearer-token workflow.
 - Confirm the scheduled Entra directory sync behaves as expected after future pilot-user provisioning changes.
+- If you want local authenticated frontend-live checks to run instead of being skipped, set either `VITE_DEV_USER_ID` / `FRONTEND_DEV_USER_ID` or `VITE_BEARER_TOKEN` / `FRONTEND_BEARER_TOKEN` in the shell before running `pnpm frontend:verify-live`.
+- Before real staging proof of the revenue cockpit, configure the AthenaOne connector with the real revenue-monitoring endpoint in `revenuePath` and valid connector credentials for the pilot facility so the new preview/import path can exercise real downstream Athena data.
 
 ## Repository Hygiene Follow-Up
 

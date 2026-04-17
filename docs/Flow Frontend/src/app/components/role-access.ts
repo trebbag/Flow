@@ -2,6 +2,7 @@ import type { Role } from "./types";
 
 export type AppPath =
   | "/"
+  | "/encounter"
   | "/checkin"
   | "/ma-board"
   | "/clinician"
@@ -18,6 +19,7 @@ export type AppPath =
 const ROLE_ROUTE_ACCESS: Record<Role, Set<AppPath>> = {
   Admin: new Set([
     "/",
+    "/encounter",
     "/checkin",
     "/ma-board",
     "/clinician",
@@ -36,10 +38,11 @@ const ROLE_ROUTE_ACCESS: Record<Role, Set<AppPath>> = {
   Clinician: new Set(["/", "/clinician", "/alerts", "/tasks"]),
   FrontDeskCheckOut: new Set(["/", "/checkout", "/closeout", "/alerts", "/tasks"]),
   OfficeManager: new Set(["/", "/rooms", "/office-manager", "/alerts", "/tasks"]),
-  RevenueCycle: new Set(["/", "/revenue-cycle", "/alerts", "/tasks"]),
+  RevenueCycle: new Set(["/", "/encounter", "/revenue-cycle", "/alerts", "/tasks"]),
 };
 
 const ROUTE_PREFIXES: Array<[AppPath, string]> = [
+  ["/encounter", "/encounter"],
   ["/settings", "/settings"],
   ["/analytics", "/analytics"],
   ["/office-manager", "/office-manager"],

@@ -388,8 +388,10 @@ exports.Prisma.TaskScalarFieldEnum = {
   clinicId: 'clinicId',
   encounterId: 'encounterId',
   roomId: 'roomId',
+  revenueCaseId: 'revenueCaseId',
   sourceType: 'sourceType',
   sourceId: 'sourceId',
+  taskCategory: 'taskCategory',
   taskType: 'taskType',
   description: 'description',
   assignedToRole: 'assignedToRole',
@@ -397,6 +399,7 @@ exports.Prisma.TaskScalarFieldEnum = {
   status: 'status',
   priority: 'priority',
   blocking: 'blocking',
+  dueAt: 'dueAt',
   createdAt: 'createdAt',
   createdBy: 'createdBy',
   acknowledgedAt: 'acknowledgedAt',
@@ -405,6 +408,176 @@ exports.Prisma.TaskScalarFieldEnum = {
   completedBy: 'completedBy',
   notes: 'notes',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RevenueCaseScalarFieldEnum = {
+  id: 'id',
+  encounterId: 'encounterId',
+  facilityId: 'facilityId',
+  clinicId: 'clinicId',
+  patientId: 'patientId',
+  providerId: 'providerId',
+  dateOfService: 'dateOfService',
+  currentRevenueStatus: 'currentRevenueStatus',
+  currentWorkQueue: 'currentWorkQueue',
+  currentDayBucket: 'currentDayBucket',
+  priority: 'priority',
+  assignedToUserId: 'assignedToUserId',
+  assignedToRole: 'assignedToRole',
+  currentBlockerCategory: 'currentBlockerCategory',
+  currentBlockerText: 'currentBlockerText',
+  dueAt: 'dueAt',
+  rolledFromDateKey: 'rolledFromDateKey',
+  rollReason: 'rollReason',
+  readyForAthenaAt: 'readyForAthenaAt',
+  athenaHandoffOwnerUserId: 'athenaHandoffOwnerUserId',
+  athenaHandoffStartedAt: 'athenaHandoffStartedAt',
+  athenaHandoffConfirmedAt: 'athenaHandoffConfirmedAt',
+  athenaHandoffConfirmedByUserId: 'athenaHandoffConfirmedByUserId',
+  athenaHandoffNote: 'athenaHandoffNote',
+  athenaChargeEnteredAt: 'athenaChargeEnteredAt',
+  athenaClaimSubmittedAt: 'athenaClaimSubmittedAt',
+  athenaDaysToSubmit: 'athenaDaysToSubmit',
+  athenaDaysInAR: 'athenaDaysInAR',
+  athenaClaimStatus: 'athenaClaimStatus',
+  athenaPatientBalanceCents: 'athenaPatientBalanceCents',
+  athenaLastSyncAt: 'athenaLastSyncAt',
+  closeoutState: 'closeoutState',
+  closedAt: 'closedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FinancialReadinessScalarFieldEnum = {
+  revenueCaseId: 'revenueCaseId',
+  eligibilityStatus: 'eligibilityStatus',
+  verifiedAt: 'verifiedAt',
+  verifiedByUserId: 'verifiedByUserId',
+  primaryPayerName: 'primaryPayerName',
+  primaryPlanName: 'primaryPlanName',
+  secondaryPayerName: 'secondaryPayerName',
+  financialClass: 'financialClass',
+  pointOfServiceAmountDueCents: 'pointOfServiceAmountDueCents',
+  outstandingPriorBalanceCents: 'outstandingPriorBalanceCents',
+  coverageIssueCategory: 'coverageIssueCategory',
+  coverageIssueText: 'coverageIssueText',
+  referralRequired: 'referralRequired',
+  referralStatus: 'referralStatus',
+  priorAuthRequired: 'priorAuthRequired',
+  priorAuthStatus: 'priorAuthStatus',
+  priorAuthNumber: 'priorAuthNumber',
+  notesJson: 'notesJson'
+};
+
+exports.Prisma.CheckoutCollectionTrackingScalarFieldEnum = {
+  revenueCaseId: 'revenueCaseId',
+  collectionExpected: 'collectionExpected',
+  amountDueCents: 'amountDueCents',
+  amountCollectedCents: 'amountCollectedCents',
+  collectionOutcome: 'collectionOutcome',
+  missedCollectionReason: 'missedCollectionReason',
+  trackingNote: 'trackingNote',
+  trackedByUserId: 'trackedByUserId',
+  trackedAt: 'trackedAt',
+  sourceFieldJson: 'sourceFieldJson'
+};
+
+exports.Prisma.ChargeCaptureRecordScalarFieldEnum = {
+  revenueCaseId: 'revenueCaseId',
+  documentationComplete: 'documentationComplete',
+  codingStage: 'codingStage',
+  icd10CodesJson: 'icd10CodesJson',
+  procedureLinesJson: 'procedureLinesJson',
+  cptCodesJson: 'cptCodesJson',
+  modifiersJson: 'modifiersJson',
+  unitsJson: 'unitsJson',
+  codingNote: 'codingNote',
+  reviewedByUserId: 'reviewedByUserId',
+  reviewedAt: 'reviewedAt',
+  readyForAthenaAt: 'readyForAthenaAt'
+};
+
+exports.Prisma.ProviderClarificationScalarFieldEnum = {
+  id: 'id',
+  revenueCaseId: 'revenueCaseId',
+  encounterId: 'encounterId',
+  requestedByUserId: 'requestedByUserId',
+  targetUserId: 'targetUserId',
+  queryType: 'queryType',
+  questionText: 'questionText',
+  responseText: 'responseText',
+  status: 'status',
+  openedAt: 'openedAt',
+  respondedAt: 'respondedAt',
+  resolvedAt: 'resolvedAt'
+};
+
+exports.Prisma.RevenueChecklistItemScalarFieldEnum = {
+  id: 'id',
+  revenueCaseId: 'revenueCaseId',
+  group: 'group',
+  label: 'label',
+  required: 'required',
+  status: 'status',
+  sortOrder: 'sortOrder',
+  dueAt: 'dueAt',
+  completedAt: 'completedAt',
+  completedByUserId: 'completedByUserId',
+  evidenceText: 'evidenceText',
+  payloadJson: 'payloadJson'
+};
+
+exports.Prisma.RevenueCaseEventScalarFieldEnum = {
+  id: 'id',
+  revenueCaseId: 'revenueCaseId',
+  eventType: 'eventType',
+  fromStatus: 'fromStatus',
+  toStatus: 'toStatus',
+  actorUserId: 'actorUserId',
+  eventText: 'eventText',
+  payloadJson: 'payloadJson',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.RevenueCycleSettingsScalarFieldEnum = {
+  facilityId: 'facilityId',
+  missedCollectionReasonsJson: 'missedCollectionReasonsJson',
+  queueSlaJson: 'queueSlaJson',
+  dayCloseDefaultsJson: 'dayCloseDefaultsJson',
+  providerQueryTemplatesJson: 'providerQueryTemplatesJson',
+  athenaLinkTemplate: 'athenaLinkTemplate',
+  athenaChecklistDefaultsJson: 'athenaChecklistDefaultsJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RevenueCloseoutRunScalarFieldEnum = {
+  id: 'id',
+  facilityId: 'facilityId',
+  clinicId: 'clinicId',
+  dateKey: 'dateKey',
+  closedByUserId: 'closedByUserId',
+  unresolvedCount: 'unresolvedCount',
+  rolledCount: 'rolledCount',
+  note: 'note',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.RevenueCloseoutItemScalarFieldEnum = {
+  id: 'id',
+  closeoutRunId: 'closeoutRunId',
+  revenueCaseId: 'revenueCaseId',
+  queue: 'queue',
+  snapshotStatus: 'snapshotStatus',
+  ownerUserId: 'ownerUserId',
+  ownerRole: 'ownerRole',
+  reasonNotCompleted: 'reasonNotCompleted',
+  nextAction: 'nextAction',
+  dueAt: 'dueAt',
+  rollover: 'rollover',
+  patientId: 'patientId',
+  providerId: 'providerId',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.RoomOperationalStateScalarFieldEnum = {
@@ -568,6 +741,34 @@ exports.Prisma.RoomDailyRollupScalarFieldEnum = {
   computedAt: 'computedAt'
 };
 
+exports.Prisma.RevenueCycleDailyRollupScalarFieldEnum = {
+  id: 'id',
+  facilityId: 'facilityId',
+  clinicId: 'clinicId',
+  dateKey: 'dateKey',
+  sameDayCollectionExpectedVisitCount: 'sameDayCollectionExpectedVisitCount',
+  sameDayCollectionCapturedVisitCount: 'sameDayCollectionCapturedVisitCount',
+  sameDayCollectionExpectedCents: 'sameDayCollectionExpectedCents',
+  sameDayCollectionTrackedCents: 'sameDayCollectionTrackedCents',
+  sameDayCollectionVisitRate: 'sameDayCollectionVisitRate',
+  sameDayCollectionDollarRate: 'sameDayCollectionDollarRate',
+  financiallyClearedCount: 'financiallyClearedCount',
+  chargeCaptureCompletedCount: 'chargeCaptureCompletedCount',
+  athenaHandoffConfirmedCount: 'athenaHandoffConfirmedCount',
+  rolledCount: 'rolledCount',
+  avgFlowHandoffHours: 'avgFlowHandoffHours',
+  avgAthenaDaysToSubmit: 'avgAthenaDaysToSubmit',
+  avgAthenaDaysInAR: 'avgAthenaDaysInAR',
+  queueCountsJson: 'queueCountsJson',
+  missedCollectionReasonsJson: 'missedCollectionReasonsJson',
+  rollReasonsJson: 'rollReasonsJson',
+  queryAgingJson: 'queryAgingJson',
+  unfinishedQueueCountsJson: 'unfinishedQueueCountsJson',
+  unfinishedOwnerCountsJson: 'unfinishedOwnerCountsJson',
+  unfinishedProviderCountsJson: 'unfinishedProviderCountsJson',
+  computedAt: 'computedAt'
+};
+
 exports.Prisma.AuditLogScalarFieldEnum = {
   id: 'id',
   requestId: 'requestId',
@@ -690,7 +891,92 @@ exports.TaskSourceType = exports.$Enums.TaskSourceType = {
   Encounter: 'Encounter',
   RoomIssue: 'RoomIssue',
   RoomSupplyFlag: 'RoomSupplyFlag',
-  RoomAudit: 'RoomAudit'
+  RoomAudit: 'RoomAudit',
+  RevenueCase: 'RevenueCase',
+  ProviderClarification: 'ProviderClarification'
+};
+
+exports.RevenueStatus = exports.$Enums.RevenueStatus = {
+  FinancialReadinessNeeded: 'FinancialReadinessNeeded',
+  FinanciallyCleared: 'FinanciallyCleared',
+  CheckoutTrackingNeeded: 'CheckoutTrackingNeeded',
+  ChargeCaptureNeeded: 'ChargeCaptureNeeded',
+  CodingReviewInProgress: 'CodingReviewInProgress',
+  ProviderClarificationNeeded: 'ProviderClarificationNeeded',
+  ReadyForAthenaHandoff: 'ReadyForAthenaHandoff',
+  AthenaHandoffInProgress: 'AthenaHandoffInProgress',
+  AthenaHandoffConfirmed: 'AthenaHandoffConfirmed',
+  MonitoringOnly: 'MonitoringOnly',
+  Closed: 'Closed'
+};
+
+exports.RevenueWorkQueue = exports.$Enums.RevenueWorkQueue = {
+  FinancialReadiness: 'FinancialReadiness',
+  CheckoutTracking: 'CheckoutTracking',
+  ChargeCapture: 'ChargeCapture',
+  ProviderQueries: 'ProviderQueries',
+  AthenaHandoff: 'AthenaHandoff',
+  Monitoring: 'Monitoring'
+};
+
+exports.RevenueDayBucket = exports.$Enums.RevenueDayBucket = {
+  Today: 'Today',
+  Yesterday: 'Yesterday',
+  Rolled: 'Rolled',
+  Monitoring: 'Monitoring'
+};
+
+exports.RevenueCloseoutState = exports.$Enums.RevenueCloseoutState = {
+  Open: 'Open',
+  ClosedResolved: 'ClosedResolved',
+  ClosedUnresolved: 'ClosedUnresolved',
+  RolledOver: 'RolledOver'
+};
+
+exports.FinancialEligibilityStatus = exports.$Enums.FinancialEligibilityStatus = {
+  NotChecked: 'NotChecked',
+  Clear: 'Clear',
+  Blocked: 'Blocked',
+  Pending: 'Pending'
+};
+
+exports.FinancialRequirementStatus = exports.$Enums.FinancialRequirementStatus = {
+  NotRequired: 'NotRequired',
+  Pending: 'Pending',
+  Approved: 'Approved',
+  Expired: 'Expired',
+  UnableToObtain: 'UnableToObtain'
+};
+
+exports.CollectionOutcome = exports.$Enums.CollectionOutcome = {
+  CollectedInFull: 'CollectedInFull',
+  CollectedPartial: 'CollectedPartial',
+  NotCollected: 'NotCollected',
+  NoCollectionExpected: 'NoCollectionExpected',
+  Waived: 'Waived',
+  Deferred: 'Deferred'
+};
+
+exports.CodingStage = exports.$Enums.CodingStage = {
+  NotStarted: 'NotStarted',
+  InProgress: 'InProgress',
+  ReadyForReview: 'ReadyForReview',
+  ReadyForAthena: 'ReadyForAthena'
+};
+
+exports.ProviderClarificationStatus = exports.$Enums.ProviderClarificationStatus = {
+  Open: 'Open',
+  Responded: 'Responded',
+  Resolved: 'Resolved'
+};
+
+exports.RevenueChecklistGroup = exports.$Enums.RevenueChecklistGroup = {
+  financial_readiness: 'financial_readiness',
+  checkout_tracking: 'checkout_tracking',
+  charge_capture: 'charge_capture',
+  athena_handoff: 'athena_handoff',
+  athena_monitoring: 'athena_monitoring',
+  day_close: 'day_close'
 };
 
 exports.RoomOperationalStatus = exports.$Enums.RoomOperationalStatus = {
@@ -787,6 +1073,16 @@ exports.Prisma.ModelName = {
   StatusChangeEvent: 'StatusChangeEvent',
   AlertState: 'AlertState',
   Task: 'Task',
+  RevenueCase: 'RevenueCase',
+  FinancialReadiness: 'FinancialReadiness',
+  CheckoutCollectionTracking: 'CheckoutCollectionTracking',
+  ChargeCaptureRecord: 'ChargeCaptureRecord',
+  ProviderClarification: 'ProviderClarification',
+  RevenueChecklistItem: 'RevenueChecklistItem',
+  RevenueCaseEvent: 'RevenueCaseEvent',
+  RevenueCycleSettings: 'RevenueCycleSettings',
+  RevenueCloseoutRun: 'RevenueCloseoutRun',
+  RevenueCloseoutItem: 'RevenueCloseoutItem',
   RoomOperationalState: 'RoomOperationalState',
   RoomOperationalEvent: 'RoomOperationalEvent',
   RoomIssue: 'RoomIssue',
@@ -797,6 +1093,7 @@ exports.Prisma.ModelName = {
   NotificationPolicy: 'NotificationPolicy',
   OfficeManagerDailyRollup: 'OfficeManagerDailyRollup',
   RoomDailyRollup: 'RoomDailyRollup',
+  RevenueCycleDailyRollup: 'RevenueCycleDailyRollup',
   AuditLog: 'AuditLog',
   EventOutbox: 'EventOutbox',
   IntegrationConnector: 'IntegrationConnector'

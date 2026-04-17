@@ -184,6 +184,12 @@ export function CheckInView() {
   const [appointmentTime, setAppointmentTime] = useState("");
   const [isWalkIn, setIsWalkIn] = useState(false);
   const [insuranceVerified, setInsuranceVerified] = useState(true);
+  const [eligibilityChecked, setEligibilityChecked] = useState(false);
+  const [eligibilityStatus, setEligibilityStatus] = useState<"NotChecked" | "Clear" | "Failed" | "PendingCorrection">("NotChecked");
+  const [coverageIssueFlag, setCoverageIssueFlag] = useState(false);
+  const [expectedCollectionIndicator, setExpectedCollectionIndicator] = useState(false);
+  const [priorAuthRequired, setPriorAuthRequired] = useState(false);
+  const [referralRequired, setReferralRequired] = useState(false);
   const [selectedIncoming, setSelectedIncoming] = useState("");
   const [selectedLobbyEncounterId, setSelectedLobbyEncounterId] = useState("");
   const [templateValues, setTemplateValues] = useState<Record<string, string | boolean>>({});
@@ -434,6 +440,12 @@ export function CheckInView() {
     setAppointmentTime(enc.checkinTime);
     setIsWalkIn(!!enc.walkIn);
     setInsuranceVerified(!!enc.insuranceVerified);
+    setEligibilityChecked(false);
+    setEligibilityStatus(enc.insuranceVerified ? "Clear" : "NotChecked");
+    setCoverageIssueFlag(false);
+    setExpectedCollectionIndicator(false);
+    setPriorAuthRequired(false);
+    setReferralRequired(false);
     setTemplateValues({});
     setEditingIncomingId(null);
   }
@@ -447,6 +459,12 @@ export function CheckInView() {
     setAppointmentTime("");
     setIsWalkIn(false);
     setInsuranceVerified(true);
+    setEligibilityChecked(false);
+    setEligibilityStatus("NotChecked");
+    setCoverageIssueFlag(false);
+    setExpectedCollectionIndicator(false);
+    setPriorAuthRequired(false);
+    setReferralRequired(false);
     setTemplateValues({});
     setEditingIncomingId(null);
   }
@@ -524,7 +542,15 @@ export function CheckInView() {
         incomingId: selectedIncoming || undefined,
         walkIn: isWalkIn,
         insuranceVerified,
-        intakeData: templateValues,
+        intakeData: {
+          ...templateValues,
+          "financial.eligibility_checked": eligibilityChecked,
+          "financial.eligibility_status": eligibilityStatus,
+          "financial.coverage_issue_flag": coverageIssueFlag,
+          "financial.expected_collection_indicator": expectedCollectionIndicator,
+          "financial.prior_auth_required": priorAuthRequired,
+          "financial.referral_required": referralRequired,
+        },
       });
       if (selectedIncoming) {
         setLocalDismissedIncomingIds((prev) => (prev.includes(selectedIncoming) ? prev : [...prev, selectedIncoming]));
@@ -813,6 +839,87 @@ export function CheckInView() {
                 <Shield className="w-3.5 h-3.5 text-gray-400" /> Insurance Verified
               </span>
             </label>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50/50 overflow-hidden">
+            <div className="px-5 py-3 border-b border-emerald-100 flex items-center justify-between">
+              <div>
+                <div className="text-[13px] text-emerald-800" style={{ fontWeight: 700 }}>
+                  Revenue Readiness Signals
+                </div>
+                <div className="text-[11px] text-emerald-700/80 mt-0.5">
+                  Lightweight front-desk visibility only. Detailed revenue work stays in the Revenue Cycle cockpit.
+                </div>
+              </div>
+              <Badge className="border-0 bg-white text-emerald-700 text-[10px]">MVP</Badge>
+            </div>
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-4 py-3 cursor-pointer">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                    Eligibility Checked
+                  </div>
+                  <div className="text-[12px] text-gray-600 mt-1">Was eligibility reviewed before the visit left front desk?</div>
+                </div>
+                <Switch checked={eligibilityChecked} onCheckedChange={setEligibilityChecked} />
+              </label>
+
+              <div>
+                <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
+                  Eligibility Status
+                </label>
+                <select
+                  value={eligibilityStatus}
+                  onChange={(event) => setEligibilityStatus(event.target.value as typeof eligibilityStatus)}
+                  className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="NotChecked">Not checked</option>
+                  <option value="Clear">Clear</option>
+                  <option value="Failed">Failed</option>
+                  <option value="PendingCorrection">Pending correction</option>
+                </select>
+              </div>
+
+              <label className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-4 py-3 cursor-pointer">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                    Coverage Issue Flag
+                  </div>
+                  <div className="text-[12px] text-gray-600 mt-1">Send an early signal when coverage needs follow-up.</div>
+                </div>
+                <Switch checked={coverageIssueFlag} onCheckedChange={setCoverageIssueFlag} />
+              </label>
+
+              <label className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-4 py-3 cursor-pointer">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                    Expected Collection
+                  </div>
+                  <div className="text-[12px] text-gray-600 mt-1">Should staff expect same-day patient responsibility?</div>
+                </div>
+                <Switch checked={expectedCollectionIndicator} onCheckedChange={setExpectedCollectionIndicator} />
+              </label>
+
+              <label className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-4 py-3 cursor-pointer">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                    Prior Auth Required
+                  </div>
+                  <div className="text-[12px] text-gray-600 mt-1">Keep auth blockers visible without building a full auth module here.</div>
+                </div>
+                <Switch checked={priorAuthRequired} onCheckedChange={setPriorAuthRequired} />
+              </label>
+
+              <label className="flex items-center justify-between rounded-lg border border-emerald-100 bg-white px-4 py-3 cursor-pointer">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-emerald-700" style={{ fontWeight: 700 }}>
+                    Referral Required
+                  </div>
+                  <div className="text-[12px] text-gray-600 mt-1">Surface referral needs before checkout and charge capture have to react.</div>
+                </div>
+                <Switch checked={referralRequired} onCheckedChange={setReferralRequired} />
+              </label>
+            </div>
           </div>
 
           {/* ── Template Fields (inline, inside same card) ── */}

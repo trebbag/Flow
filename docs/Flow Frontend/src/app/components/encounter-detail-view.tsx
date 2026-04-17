@@ -41,11 +41,12 @@ import {
   type EncounterStatus,
 } from "./mock-data";
 import { useEncounters } from "./encounter-context";
-import { admin, encounters as encounterApi, rooms as roomsApi, type RoomLiveCard } from "./api-client";
+import { admin, encounters as encounterApi, revenueCases, rooms as roomsApi, type RoomLiveCard } from "./api-client";
 import { loadSession } from "./auth-session";
 import { SafetyAssistModal } from "./safety-assist-modal";
 import { toast } from "sonner";
 import { getEncounterStageSeconds, getEncounterTotalSeconds } from "./encounter-timers";
+import type { RevenueCaseDetail } from "./types";
 
 // ── Status progression ──
 
@@ -469,6 +470,7 @@ export function EncounterDetailView() {
   const ctx = useEncounters();
   const session = loadSession();
   const isAdminUser = session?.role === "Admin";
+  const isRevenueReadOnly = session?.role === "RevenueCycle";
 
   // Find the base encounter from shared context
   const baseEnc = ctx.getEncounter(id!);
@@ -498,6 +500,9 @@ export function EncounterDetailView() {
   });
   const [operationalRooms, setOperationalRooms] = useState<RoomLiveCard[]>([]);
   const [savingRecoveryRoom, setSavingRecoveryRoom] = useState(false);
+  const [revenueCase, setRevenueCase] = useState<RevenueCaseDetail | null>(null);
+  const [clarificationResponses, setClarificationResponses] = useState<Record<string, string>>({});
+  const [savingClarificationId, setSavingClarificationId] = useState<string | null>(null);
   const [roomingLaunch] = useState(() => ({
     preferredRoomId: searchParams.get("preferredRoomId") || "",
     lastReadyRoom: searchParams.get("lastReadyRoom") === "true",
@@ -615,6 +620,31 @@ export function EncounterDetailView() {
       mounted = false;
     };
   }, [baseEnc?.clinicId]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!id) {
+      setRevenueCase(null);
+      return;
+    }
+    revenueCases.list({ encounterId: id })
+      .then((rows) => {
+        if (!mounted) return;
+        const nextRevenueCase = rows?.[0] || null;
+        setRevenueCase(nextRevenueCase);
+        setClarificationResponses(
+          Object.fromEntries(
+            (nextRevenueCase?.providerClarifications || []).map((item) => [item.id, item.responseText || ""]),
+          ),
+        );
+      })
+      .catch(() => {
+        if (mounted) setRevenueCase(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [id, baseEnc?.version, baseEnc?.status]);
 
   // Initialize local state from encounter
   useEffect(() => {
@@ -907,6 +937,12 @@ export function EncounterDetailView() {
   }
 
   function handleAdvance() {
+    if (isRevenueReadOnly) {
+      toast.info("Revenue Cycle review is read-only", {
+        description: "Clinical workflow changes stay with the care team roles.",
+      });
+      return;
+    }
     const next = nextStatusMap[enc.status];
     if (!next) return;
 
@@ -945,7 +981,9 @@ export function EncounterDetailView() {
       next,
       enc.status === "Rooming"
         ? { roomNumber: localRoom, roomingData: roomingDataForSave as Record<string, unknown> }
-        : undefined,
+        : enc.status === "Optimizing"
+          ? { clinicianData: (templateValues["Optimizing"] || {}) as Record<string, unknown> }
+          : undefined,
     );
 
     toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
@@ -955,6 +993,38 @@ export function EncounterDetailView() {
     // When completing the provider visit (Optimizing → CheckOut), return to Clinician Board
     if (enc.status === "Optimizing" && next === "CheckOut") {
       navigate("/clinician");
+    }
+  }
+
+  async function respondToRevenueClarification(clarificationId: string, resolve = false) {
+    const responseText = clarificationResponses[clarificationId]?.trim();
+    if (!responseText) {
+      toast.error("Add a response before sending it back to Revenue Cycle.");
+      return;
+    }
+    setSavingClarificationId(clarificationId);
+    try {
+      await revenueCases.updateProviderClarification(clarificationId, {
+        responseText,
+        resolve,
+      });
+      const refreshedRows = await revenueCases.list({ encounterId: enc.id });
+      const refreshedCase = refreshedRows?.[0] || null;
+      setRevenueCase(refreshedCase);
+      if (refreshedCase) {
+        setClarificationResponses(
+          Object.fromEntries(
+            refreshedCase.providerClarifications.map((item) => [item.id, item.responseText || ""]),
+          ),
+        );
+      }
+      toast.success(resolve ? "Revenue clarification resolved" : "Response sent to Revenue Cycle");
+    } catch (error) {
+      toast.error("Unable to update revenue clarification", {
+        description: (error as Error).message || "Try again.",
+      });
+    } finally {
+      setSavingClarificationId(null);
     }
   }
 
@@ -1018,15 +1088,17 @@ export function EncounterDetailView() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSafetyModal(enc.safetyActive ? "resolve" : "activate")}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-200 text-[12px] hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-100 transition-colors"
-                style={{ fontWeight: 500 }}
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                {enc.safetyActive ? "Turn Off Safety Assist" : "Safety Assist"}
-              </button>
-              {canAdvance && enc.status !== "ReadyForProvider" && enc.status !== "Lobby" && (
+              {!isRevenueReadOnly && (
+                <button
+                  onClick={() => setSafetyModal(enc.safetyActive ? "resolve" : "activate")}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-200 text-[12px] hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-100 transition-colors"
+                  style={{ fontWeight: 500 }}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  {enc.safetyActive ? "Turn Off Safety Assist" : "Safety Assist"}
+                </button>
+              )}
+              {!isRevenueReadOnly && canAdvance && enc.status !== "ReadyForProvider" && enc.status !== "Lobby" && (
                 <button
                   data-advance-btn
                   onClick={handleAdvance}
@@ -1085,7 +1157,7 @@ export function EncounterDetailView() {
             <div className="ml-auto flex items-center gap-1.5 text-[10px] text-gray-400 shrink-0">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-[9px]" style={{ fontFamily: "system-ui" }}>Esc</kbd>
               <span>Back</span>
-              {canAdvance && (
+              {!isRevenueReadOnly && canAdvance && (
                 <div className="contents">
                   <span className="mx-0.5">&middot;</span>
                   <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-[9px]" style={{ fontFamily: "system-ui" }}>&thinsp;&#8984;&#9166;&thinsp;</kbd>
@@ -1094,6 +1166,18 @@ export function EncounterDetailView() {
               )}
             </div>
           </div>
+
+          {isRevenueReadOnly && (
+            <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-[12px] text-cyan-900">
+              <div className="flex items-center gap-2" style={{ fontWeight: 700 }}>
+                <FileText className="w-4 h-4" />
+                Revenue Cycle review
+              </div>
+              <p className="mt-1 text-cyan-800">
+                This encounter detail view is read-only for Revenue Cycle. Use it to review rooming, clinician, and checkout context without changing clinical workflow state.
+              </p>
+            </div>
+          )}
 
           {canEditRecoveryRoom && (
             <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-4">
@@ -1558,7 +1642,8 @@ export function EncounterDetailView() {
                           placeholder="Notes for this rooming session..."
                           value={roomingNotes}
                           onChange={(e) => setRoomingNotes(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] hover:border-violet-300 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none transition-all"
+                          disabled={isRevenueReadOnly}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] hover:border-violet-300 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -1620,6 +1705,7 @@ export function EncounterDetailView() {
                                     field.required &&
                                     !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                                   }
+                                  disabled={isRevenueReadOnly}
                                   onChange={(val) => setFieldValue(fieldKey(field), val)}
                                 />
                               ))}
@@ -1669,6 +1755,7 @@ export function EncounterDetailView() {
                                           field.required &&
                                           !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                                         }
+                                        disabled={isRevenueReadOnly}
                                         onChange={(val) => setFieldValue(fieldKey(field), val)}
                                       />
                                     ))}
@@ -1688,6 +1775,7 @@ export function EncounterDetailView() {
                                     field.required &&
                                     !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                                   }
+                                  disabled={isRevenueReadOnly}
                                   onChange={(val) => setFieldValue(fieldKey(field), val)}
                                 />
                               ))}
@@ -1740,21 +1828,23 @@ export function EncounterDetailView() {
                           {missingRequiredFields.length > 4 ? "..." : ""}
                         </div>
                       )}
-                      <button
-                        data-advance-btn
-                        onClick={handleAdvance}
-                        disabled={!roomingReady}
-                        className={`w-full h-12 rounded-xl text-[14px] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-100 transition-all ${
-                          !roomingReady
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : "bg-violet-600 text-white hover:bg-violet-700 active:bg-violet-800"
-                        }`}
-                        style={{ fontWeight: 500 }}
-                      >
-                        <CheckCircle2 className="w-5 h-5" />
-                        Ready for Provider
-                        <ChevronRight className="w-4 h-4 ml-1" />
-                      </button>
+                      {!isRevenueReadOnly && (
+                        <button
+                          data-advance-btn
+                          onClick={handleAdvance}
+                          disabled={!roomingReady}
+                          className={`w-full h-12 rounded-xl text-[14px] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-100 transition-all ${
+                            !roomingReady
+                              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                              : "bg-violet-600 text-white hover:bg-violet-700 active:bg-violet-800"
+                          }`}
+                          style={{ fontWeight: 500 }}
+                        >
+                          <CheckCircle2 className="w-5 h-5" />
+                          Ready for Provider
+                          <ChevronRight className="w-4 h-4 ml-1" />
+                        </button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1796,7 +1886,8 @@ export function EncounterDetailView() {
                           placeholder={enc.status === "Optimizing" ? "Add notes for MA, front desk, and checkout teams..." : "Add notes..."}
                           value={typeof currentTemplateVals.encounter_notes === "string" ? currentTemplateVals.encounter_notes : ""}
                           onChange={(event) => setFieldValue("encounter_notes", event.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 resize-none"
+                          disabled={isRevenueReadOnly}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </div>
                     </div>
@@ -1839,14 +1930,120 @@ export function EncounterDetailView() {
                               field.required &&
                               !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                             }
+                            disabled={isRevenueReadOnly}
                             onChange={(val) => setFieldValue(fieldKey(field), val)}
                           />
                         ))}
                       </div>
                     </div>
 
-                    {/* ── Task Creation (Optimizing only) ── */}
                     {enc.status === "Optimizing" && (
+                      <div className="mt-6 rounded-xl border border-cyan-100 bg-cyan-50/50 overflow-hidden">
+                        <div className="px-5 py-3.5 border-b border-cyan-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-cyan-100 flex items-center justify-center">
+                              <FileText className="w-3.5 h-3.5 text-cyan-700" />
+                            </div>
+                            <div>
+                              <span className="text-[13px]" style={{ fontWeight: 600 }}>Coding Handoff</span>
+                              <span className="text-[11px] text-muted-foreground ml-2">Revenue prep</span>
+                            </div>
+                          </div>
+                          <Badge className="border-0 bg-white text-cyan-700 text-[10px]">MVP</Badge>
+                        </div>
+                        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <TemplateFieldInput
+                            field={{ key: "coding.working_diagnosis_codes_text", name: "Working Diagnosis Codes", type: "textarea", required: false }}
+                            value={currentTemplateVals["coding.working_diagnosis_codes_text"]}
+                            disabled={isRevenueReadOnly}
+                            onChange={(val) => setFieldValue("coding.working_diagnosis_codes_text", val)}
+                          />
+                          <TemplateFieldInput
+                            field={{ key: "coding.working_procedure_codes_text", name: "Working Procedure Codes", type: "textarea", required: false }}
+                            value={currentTemplateVals["coding.working_procedure_codes_text"]}
+                            disabled={isRevenueReadOnly}
+                            onChange={(val) => setFieldValue("coding.working_procedure_codes_text", val)}
+                          />
+                          <TemplateFieldInput
+                            field={{ key: "coding.documentation_complete", name: "Documentation Complete", type: "yesNo", required: false }}
+                            value={currentTemplateVals["coding.documentation_complete"]}
+                            disabled={isRevenueReadOnly}
+                            onChange={(val) => setFieldValue("coding.documentation_complete", val)}
+                          />
+                          <TemplateFieldInput
+                            field={{ key: "coding.note", name: "Coding Note", type: "textarea", required: false }}
+                            value={currentTemplateVals["coding.note"]}
+                            disabled={isRevenueReadOnly}
+                            onChange={(val) => setFieldValue("coding.note", val)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {session?.role === "Clinician" && revenueCase && revenueCase.providerClarifications.some((item) => item.status !== "Resolved") && (
+                      <div className="mt-6 rounded-xl border border-violet-100 bg-violet-50/60 overflow-hidden">
+                        <div className="px-5 py-3.5 border-b border-violet-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                              <Bell className="w-3.5 h-3.5 text-violet-700" />
+                            </div>
+                            <div>
+                              <span className="text-[13px]" style={{ fontWeight: 600 }}>Revenue Clarifications</span>
+                              <span className="text-[11px] text-muted-foreground ml-2">Respond in Flow</span>
+                            </div>
+                          </div>
+                          <Badge className="border-0 bg-white text-violet-700 text-[10px]">
+                            {revenueCase.providerClarifications.filter((item) => item.status !== "Resolved").length} open
+                          </Badge>
+                        </div>
+                        <div className="p-5 space-y-3">
+                          {revenueCase.providerClarifications.filter((item) => item.status !== "Resolved").map((query) => (
+                            <div key={query.id} className="rounded-xl border border-violet-100 bg-white px-4 py-4 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{query.questionText}</div>
+                                <Badge className="border-0 bg-violet-50 text-violet-700">{query.status}</Badge>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                Opened {new Date(query.openedAt).toLocaleString()}
+                              </div>
+                              <textarea
+                                rows={3}
+                                value={clarificationResponses[query.id] || ""}
+                                onChange={(event) =>
+                                  setClarificationResponses((prev) => ({
+                                    ...prev,
+                                    [query.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Answer only what Revenue Cycle needs to finish charge capture or Athena handoff."
+                                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none"
+                              />
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button
+                                  onClick={() => respondToRevenueClarification(query.id, false)}
+                                  disabled={savingClarificationId === query.id}
+                                  className="px-3 py-2 rounded-lg border border-violet-200 text-violet-700 bg-violet-50 text-[12px] hover:bg-violet-100 disabled:opacity-50"
+                                  style={{ fontWeight: 500 }}
+                                >
+                                  {savingClarificationId === query.id ? "Sending..." : "Send Response"}
+                                </button>
+                                <button
+                                  onClick={() => respondToRevenueClarification(query.id, true)}
+                                  disabled={savingClarificationId === query.id}
+                                  className="px-3 py-2 rounded-lg bg-violet-600 text-white text-[12px] hover:bg-violet-700 disabled:opacity-50"
+                                  style={{ fontWeight: 500 }}
+                                >
+                                  {savingClarificationId === query.id ? "Saving..." : "Send & Resolve"}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Task Creation (Optimizing only) ── */}
+                    {enc.status === "Optimizing" && !isRevenueReadOnly && (
                       <div className="mt-6">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
@@ -2062,7 +2259,7 @@ export function EncounterDetailView() {
                         {missingRequiredFields.length > 4 ? "..." : ""}
                       </div>
                     )}
-                    {canAdvance && (
+                    {!isRevenueReadOnly && canAdvance && (
                       <button
                         data-advance-btn
                         onClick={handleAdvance}
@@ -2097,7 +2294,7 @@ export function EncounterDetailView() {
                 >
                   Configure Template
                 </button>
-                {canAdvance && (
+                {!isRevenueReadOnly && canAdvance && (
                   <button
                     data-advance-btn
                     onClick={handleAdvance}
@@ -2156,11 +2353,13 @@ function TemplateFieldInput({
   field,
   value,
   invalid,
+  disabled,
   onChange,
 }: {
   field: TemplateField;
   value: string | boolean | undefined;
   invalid?: boolean;
+  disabled?: boolean;
   onChange: (val: string | boolean) => void;
 }) {
   const showError = Boolean(invalid);
@@ -2190,6 +2389,7 @@ function TemplateFieldInput({
           checked={!!value}
           onChange={(e) => onChange(e.target.checked)}
           aria-invalid={showError}
+          disabled={disabled}
           className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
         />
         <span className={`text-[13px] flex-1 ${showError ? "text-red-700" : "text-gray-700"}`}>{field.name}</span>
@@ -2220,13 +2420,14 @@ function TemplateFieldInput({
               type="button"
               onClick={() => onChange(option === "yes")}
               aria-invalid={showError}
+              disabled={disabled}
               className={`h-10 rounded-lg border text-[12px] transition-colors ${
                 current === option
                   ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                   : showError
                     ? "border-red-300 bg-white text-red-700"
                     : "border-purple-200/80 bg-white text-gray-700 hover:border-purple-300"
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-60`}
               style={{ fontWeight: 600 }}
             >
               {option === "yes" ? "Yes" : "No"}
@@ -2251,7 +2452,8 @@ function TemplateFieldInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={showError}
-          className={`${textInputClass} resize-none`}
+          disabled={disabled}
+          className={`${textInputClass} resize-none disabled:cursor-not-allowed disabled:opacity-60`}
         />
         {showError && <p className="text-[10px] text-red-600 mt-1">This field is required.</p>}
       </div>
@@ -2269,7 +2471,8 @@ function TemplateFieldInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={showError}
-          className={shortInputClass}
+          disabled={disabled}
+          className={`${shortInputClass} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           <option value="">Select...</option>
           {(field.options ?? []).map((opt) => (
@@ -2304,6 +2507,7 @@ function TemplateFieldInput({
                 checked={value === opt}
                 onChange={() => onChange(opt)}
                 aria-invalid={showError}
+                disabled={disabled}
                 className="w-3.5 h-3.5 rounded-full border-gray-300 text-purple-600"
               />
               <span>{opt}</span>
@@ -2357,7 +2561,8 @@ function TemplateFieldInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={showError}
-          className={shortInputClass}
+          disabled={disabled}
+          className={`${shortInputClass} disabled:cursor-not-allowed disabled:opacity-60`}
         />
         {showError && <p className="text-[10px] text-red-600 mt-1">This field is required.</p>}
       </div>
@@ -2376,7 +2581,8 @@ function TemplateFieldInput({
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={showError}
-        className={shortInputClass}
+        disabled={disabled}
+        className={`${shortInputClass} disabled:cursor-not-allowed disabled:opacity-60`}
       />
       {showError && <p className="text-[10px] text-red-600 mt-1">This field is required.</p>}
     </div>
