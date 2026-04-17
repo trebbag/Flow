@@ -614,59 +614,55 @@ export function EncounterDetailView() {
   useEffect(() => {
     let mounted = true;
     const loadRuntimeTemplates = async () => {
-      try {
-        const facilityId = loadSession()?.facilityId;
-        const [reasonRows, roomingRows, clinicianRows, checkoutRows, revenueSettingsResult] = await Promise.all([
+      const facilityId = loadSession()?.facilityId;
+      const [reasonRowsResult, roomingRowsResult, clinicianRowsResult, checkoutRowsResult, revenueSettingsResult] =
+        await Promise.allSettled([
           admin.listReasons({ facilityId, includeInactive: true, includeArchived: false }),
           admin.listTemplates({ facilityId, type: "rooming" }),
           admin.listTemplates({ facilityId, type: "clinician" }),
           admin.listTemplates({ facilityId, type: "checkout" }),
           admin.getRevenueSettings(facilityId),
         ]);
-        if (!mounted) return;
+      if (!mounted) return;
 
-        const reasonNameById = new Map<string, string>(
-          (reasonRows as any[]).map((reason) => [String(reason.id), String(reason.name)]),
-        );
+      const reasonRows = reasonRowsResult.status === "fulfilled" ? reasonRowsResult.value : [];
+      const roomingRows = roomingRowsResult.status === "fulfilled" ? roomingRowsResult.value : [];
+      const clinicianRows = clinicianRowsResult.status === "fulfilled" ? clinicianRowsResult.value : [];
+      const checkoutRows = checkoutRowsResult.status === "fulfilled" ? checkoutRowsResult.value : [];
 
-        const mapped = {
-          rooming: {} as Record<string, TemplateField[]>,
-          clinician: {} as Record<string, TemplateField[]>,
-          checkout: {} as Record<string, TemplateField[]>,
-        };
+      const reasonNameById = new Map<string, string>(
+        (reasonRows as any[]).map((reason) => [String(reason.id), String(reason.name)]),
+      );
 
-        ([
-          ["rooming", roomingRows],
-          ["clinician", clinicianRows],
-          ["checkout", checkoutRows],
-        ] as const).forEach(([type, rows]) => {
-          (rows as any[]).forEach((template) => {
-            const reasonIds: string[] = Array.isArray(template.reasonIds)
-              ? template.reasonIds
-              : template.reasonForVisitId
-                ? [template.reasonForVisitId]
-                : [];
-            const normalizedFields = normalizeRuntimeTemplateFieldsFromTemplate(template);
-            reasonIds.forEach((reasonId) => {
-              const reasonName = reasonNameById.get(String(reasonId));
-              if (reasonName) {
-                mapped[type][reasonName] = normalizedFields;
-              }
-            });
+      const mapped = {
+        rooming: {} as Record<string, TemplateField[]>,
+        clinician: {} as Record<string, TemplateField[]>,
+        checkout: {} as Record<string, TemplateField[]>,
+      };
+
+      ([
+        ["rooming", roomingRows],
+        ["clinician", clinicianRows],
+        ["checkout", checkoutRows],
+      ] as const).forEach(([type, rows]) => {
+        (rows as any[]).forEach((template) => {
+          const reasonIds: string[] = Array.isArray(template.reasonIds)
+            ? template.reasonIds
+            : template.reasonForVisitId
+              ? [template.reasonForVisitId]
+              : [];
+          const normalizedFields = normalizeRuntimeTemplateFieldsFromTemplate(template);
+          reasonIds.forEach((reasonId) => {
+            const reasonName = reasonNameById.get(String(reasonId));
+            if (reasonName) {
+              mapped[type][reasonName] = normalizedFields;
+            }
           });
         });
+      });
 
-        setRuntimeTemplates(mapped);
-        setRevenueSettings(revenueSettingsResult);
-      } catch {
-        if (!mounted) return;
-        setRuntimeTemplates({
-          rooming: {},
-          clinician: {},
-          checkout: {},
-        });
-        setRevenueSettings(null);
-      }
+      setRuntimeTemplates(mapped);
+      setRevenueSettings(revenueSettingsResult.status === "fulfilled" ? revenueSettingsResult.value : null);
     };
 
     loadRuntimeTemplates().catch(() => undefined);
@@ -1942,9 +1938,8 @@ export function EncounterDetailView() {
                       </div>
                     </div>
 
-                    {/* ── Visit-reason-conditional template (like Front Desk) ── */}
-                    {templateFields.length > 0 && (
-                      <div className="mt-6 rounded-xl border border-purple-100 bg-purple-50/50 overflow-hidden">
+                    {/* ── Rooming requirements ── */}
+                    <div className="mt-6 rounded-xl border border-purple-100 bg-purple-50/50 overflow-hidden">
                         {/* Template header bar */}
                         <div className="px-5 py-3.5 border-b border-purple-100 flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -1953,10 +1948,10 @@ export function EncounterDetailView() {
                             </div>
                             <div>
                               <span className="text-[13px]" style={{ fontWeight: 600 }}>
-                                Rooming Template
+                                Rooming Requirements
                               </span>
                               <span className="text-[11px] text-muted-foreground ml-2">
-                                {enc.visitType}
+                                {templateFields.length > 0 ? enc.visitType : "Standard MA rooming"}
                               </span>
                             </div>
                           </div>
@@ -2005,7 +2000,11 @@ export function EncounterDetailView() {
                               ))}
                             </div>
                           </div>
-                          {hasGroups ? (
+                          {templateFields.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-purple-200 bg-white/80 px-4 py-4 text-[12px] text-purple-900">
+                              No visit-specific rooming template is active for {enc.visitType}. The standard MA rooming fields above are still required.
+                            </div>
+                          ) : hasGroups ? (
                             fieldGroups.map((grp) => {
                               const GrpIcon = groupIcons[grp.group] || FileText;
                               const grpColor = groupColors[grp.group] || "#64748b";
@@ -2077,20 +2076,6 @@ export function EncounterDetailView() {
                           )}
                         </div>
                       </div>
-                    )}
-
-                    {/* Empty state: visit type has no template */}
-                    {templateFields.length === 0 && (
-                      <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 text-center shadow-sm">
-                        <LayoutTemplate className="w-7 h-7 text-gray-300 mx-auto mb-2" />
-                        <p className="text-[13px] text-gray-600" style={{ fontWeight: 600 }}>
-                          No rooming template for {enc.visitType}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          Room assignment and rooming notes can still be captured, then the encounter can move forward.
-                        </p>
-                      </div>
-                    )}
 
                     {/* ── Ready for Provider button (inline, like Check-In) ── */}
                     <div className="mt-6 pt-5 border-t border-gray-100">
@@ -2117,7 +2102,7 @@ export function EncounterDetailView() {
                           Missing required fields:{" "}
                           {missingRequiredFields
                             .slice(0, 4)
-                            .map((field) => field.name)
+                            .map((field) => field.name || field.key)
                             .join(", ")}
                           {missingRequiredFields.length > 4 ? "..." : ""}
                         </div>

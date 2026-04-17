@@ -3084,7 +3084,20 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/admin/revenue-settings", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+  app.get(
+    "/admin/revenue-settings",
+    {
+      preHandler: requireRoles(
+        RoleName.FrontDeskCheckIn,
+        RoleName.MA,
+        RoleName.Clinician,
+        RoleName.FrontDeskCheckOut,
+        RoleName.OfficeManager,
+        RoleName.RevenueCycle,
+        RoleName.Admin,
+      ),
+    },
+    async (request) => {
     const query = request.query as { facilityId?: string };
     const facility = await resolveFacilityForRequest(request, query.facilityId);
     const settings = await getRevenueSettings(prisma, facility.id);
@@ -3109,7 +3122,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         chargeSchedule: [...DEFAULT_REVENUE_SETTINGS.chargeSchedule],
       }
     };
-  });
+    },
+  );
 
   app.post("/admin/revenue-settings", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const dto = revenueSettingsSchema.parse(request.body);

@@ -46,13 +46,28 @@ async function createRevenueWorkflowEncounter(params: {
   expect(toRooming.statusCode).toBe(200);
   encounter = toRooming.json();
 
+  const clinicRoomAssignment = await prisma.clinicRoomAssignment.findFirst({
+    where: {
+      clinicId: params.clinicId,
+      active: true,
+    },
+    select: { roomId: true },
+    orderBy: { createdAt: "asc" },
+  });
+  expect(clinicRoomAssignment?.roomId).toBeTruthy();
+
   const saveRooming = await app.inject({
     method: "PATCH",
     url: `/encounters/${encounter.id}/rooming`,
     headers: authHeaders(params.maUserId, RoleName.MA),
     payload: {
+      roomId: clinicRoomAssignment!.roomId,
       data: {
         vitals: "120/80",
+        allergiesChanged: "No",
+        medicationReconciliationChanged: "No",
+        labChanged: "No",
+        pharmacyChanged: "No",
         "service.capture_items": [
           {
             id: "svc-test-1",
@@ -1057,7 +1072,26 @@ describe("Flow backend core relationships", () => {
       method: "PATCH",
       url: `/encounters/${encounter.id}/rooming`,
       headers: authHeaders(ctx.ma.id, RoleName.MA),
-      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        data: {
+          vitals: "done",
+          allergiesChanged: "No",
+          medicationReconciliationChanged: "No",
+          labChanged: "No",
+          pharmacyChanged: "No",
+          "service.capture_items": [
+            {
+              id: "svc-turnover-1",
+              catalogItemId: "svc-venipuncture",
+              label: "Venipuncture",
+              sourceRole: "MA",
+              quantity: 1,
+              suggestedProcedureCode: "36415",
+            },
+          ],
+        },
+      }
     });
     expect(roomed.statusCode).toBe(200);
 
@@ -1606,6 +1640,12 @@ describe("Flow backend core relationships", () => {
 
   it("enforces required template fields before status transitions", async () => {
     const ctx = await bootstrapCore();
+    const clinicRoomAssignment = await prisma.clinicRoomAssignment.findFirst({
+      where: { clinicId: ctx.clinic.id, active: true },
+      select: { roomId: true },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(clinicRoomAssignment?.roomId).toBeTruthy();
 
     const created = await app.inject({
       method: "POST",
@@ -1650,7 +1690,24 @@ describe("Flow backend core relationships", () => {
       url: `/encounters/${encounter.id}/rooming`,
       headers: authHeaders(ctx.ma.id, RoleName.MA),
       payload: {
-        data: { vitals: "120/80" }
+        roomId: clinicRoomAssignment!.roomId,
+        data: {
+          vitals: "120/80",
+          allergiesChanged: "No",
+          medicationReconciliationChanged: "No",
+          labChanged: "No",
+          pharmacyChanged: "No",
+          "service.capture_items": [
+            {
+              id: "svc-rooming-1",
+              catalogItemId: "svc-venipuncture",
+              label: "Venipuncture",
+              sourceRole: "MA",
+              quantity: 1,
+              suggestedProcedureCode: "36415",
+            },
+          ],
+        }
       }
     });
     expect(roomingDataSaved.statusCode).toBe(200);
@@ -1666,6 +1723,63 @@ describe("Flow backend core relationships", () => {
     });
     expect(toReady.statusCode).toBe(200);
     expect(toReady.json().currentStatus).toBe("ReadyForProvider");
+  });
+
+  it("blocks rooming completion when standard MA rooming requirements are missing", async () => {
+    const ctx = await bootstrapCore();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-ROOM-REQ-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    const encounter = created.json();
+
+    const toRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "Rooming",
+        version: encounter.version,
+      },
+    });
+    expect(toRooming.statusCode).toBe(200);
+
+    const roomingDataSaved = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        data: {
+          vitals: "120/80",
+        },
+      },
+    });
+    expect(roomingDataSaved.statusCode).toBe(200);
+
+    const toReadyBlocked = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "ReadyForProvider",
+        version: encounter.version + 1,
+      },
+    });
+    expect(toReadyBlocked.statusCode).toBe(400);
+    expect(toReadyBlocked.json().message).toContain("Rooming requirements missing");
+    expect(toReadyBlocked.json().message).toContain("room assignment");
+    expect(toReadyBlocked.json().message).toContain("service capture");
+    expect(toReadyBlocked.json().message).toContain("allergiesChanged");
   });
 
   it("persists active facility context and scopes admin data to the selected facility", async () => {
@@ -4306,6 +4420,19 @@ describe("Flow backend core relationships", () => {
         serviceCatalog: expect.any(Array),
         chargeSchedule: expect.any(Array),
         checklistDefaults: expect.any(Object),
+      }),
+    );
+
+    const readSettingsAsMa = await app.inject({
+      method: "GET",
+      url: `/admin/revenue-settings?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+    });
+    expect(readSettingsAsMa.statusCode).toBe(200);
+    expect(readSettingsAsMa.json()).toEqual(
+      expect.objectContaining({
+        facilityId: ctx.facility.id,
+        serviceCatalog: expect.any(Array),
       }),
     );
 

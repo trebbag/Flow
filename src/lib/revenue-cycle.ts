@@ -1030,40 +1030,79 @@ function parseAthenaChecklistDefaults(value: Prisma.JsonValue | null | undefined
   return parseChecklistDefaultRows(value, DEFAULT_ATHENA_CHECKLIST);
 }
 
-export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionClient, facilityId: string) {
-  const settings = await db.revenueCycleSettings.upsert({
-    where: { facilityId },
-    create: {
-      facilityId,
-      missedCollectionReasonsJson: [...DEFAULT_REVENUE_SETTINGS.missedCollectionReasons] as Prisma.InputJsonValue,
-      queueSlaJson: { ...DEFAULT_REVENUE_SETTINGS.queueSla } as Prisma.InputJsonValue,
-      dayCloseDefaultsJson: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults } as Prisma.InputJsonValue,
-      providerQueryTemplatesJson: [...DEFAULT_REVENUE_SETTINGS.providerQueryTemplates] as Prisma.InputJsonValue,
-      athenaLinkTemplate: DEFAULT_REVENUE_SETTINGS.athenaLinkTemplate,
-      athenaChecklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.athenaChecklistDefaults as Prisma.InputJsonValue,
-      checklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.checklistDefaults as Prisma.InputJsonValue,
-      serviceCatalogJson: DEFAULT_REVENUE_SETTINGS.serviceCatalog as Prisma.InputJsonValue,
-      chargeScheduleJson: DEFAULT_REVENUE_SETTINGS.chargeSchedule as Prisma.InputJsonValue,
-    },
-    update: {},
-  });
+function isMissingRevenueSettingsSchemaError(error: unknown) {
+  const code = String((error as { code?: unknown })?.code || "");
+  const message = String((error as { message?: unknown })?.message || "").toLowerCase();
+  return (
+    code === "P2021" ||
+    code === "P2022" ||
+    message.includes("no such table") ||
+    message.includes("no such column")
+  );
+}
 
-  const checklistDefaults = parseChecklistDefaults(settings.checklistDefaultsJson);
-  const athenaChecklistDefaults = parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson);
+function buildDefaultRevenueSettings(facilityId: string) {
+  const checklistDefaults = parseChecklistDefaults(DEFAULT_REVENUE_SETTINGS.checklistDefaults as Prisma.JsonValue);
+  const athenaChecklistDefaults = parseAthenaChecklistDefaults(
+    DEFAULT_REVENUE_SETTINGS.athenaChecklistDefaults as Prisma.JsonValue,
+  );
   checklistDefaults[RevenueChecklistGroup.athena_handoff] = athenaChecklistDefaults;
 
   return {
-    facilityId: settings.facilityId,
-    missedCollectionReasons: parseSettingsArray(settings.missedCollectionReasonsJson, DEFAULT_MISSED_COLLECTION_REASONS),
-    queueSla: asRecord(settings.queueSlaJson),
-    dayCloseDefaults: asRecord(settings.dayCloseDefaultsJson),
-    providerQueryTemplates: parseSettingsArray(settings.providerQueryTemplatesJson, DEFAULT_PROVIDER_QUERY_TEMPLATES),
-    athenaLinkTemplate: settings.athenaLinkTemplate || "",
+    facilityId,
+    missedCollectionReasons: [...DEFAULT_MISSED_COLLECTION_REASONS],
+    queueSla: { ...DEFAULT_REVENUE_SETTINGS.queueSla },
+    dayCloseDefaults: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults },
+    providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
+    athenaLinkTemplate: DEFAULT_REVENUE_SETTINGS.athenaLinkTemplate || "",
     athenaChecklistDefaults,
     checklistDefaults,
-    serviceCatalog: parseServiceCatalog(settings.serviceCatalogJson),
-    chargeSchedule: parseChargeSchedule(settings.chargeScheduleJson),
+    serviceCatalog: DEFAULT_REVENUE_SETTINGS.serviceCatalog.map((item) => ({ ...item })),
+    chargeSchedule: DEFAULT_REVENUE_SETTINGS.chargeSchedule.map((item) => ({ ...item })),
   };
+}
+
+export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionClient, facilityId: string) {
+  try {
+    const settings = await db.revenueCycleSettings.upsert({
+      where: { facilityId },
+      create: {
+        facilityId,
+        missedCollectionReasonsJson: [...DEFAULT_REVENUE_SETTINGS.missedCollectionReasons] as Prisma.InputJsonValue,
+        queueSlaJson: { ...DEFAULT_REVENUE_SETTINGS.queueSla } as Prisma.InputJsonValue,
+        dayCloseDefaultsJson: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults } as Prisma.InputJsonValue,
+        providerQueryTemplatesJson: [...DEFAULT_REVENUE_SETTINGS.providerQueryTemplates] as Prisma.InputJsonValue,
+        athenaLinkTemplate: DEFAULT_REVENUE_SETTINGS.athenaLinkTemplate,
+        athenaChecklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.athenaChecklistDefaults as Prisma.InputJsonValue,
+        checklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.checklistDefaults as Prisma.InputJsonValue,
+        serviceCatalogJson: DEFAULT_REVENUE_SETTINGS.serviceCatalog as Prisma.InputJsonValue,
+        chargeScheduleJson: DEFAULT_REVENUE_SETTINGS.chargeSchedule as Prisma.InputJsonValue,
+      },
+      update: {},
+    });
+
+    const checklistDefaults = parseChecklistDefaults(settings.checklistDefaultsJson);
+    const athenaChecklistDefaults = parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson);
+    checklistDefaults[RevenueChecklistGroup.athena_handoff] = athenaChecklistDefaults;
+
+    return {
+      facilityId: settings.facilityId,
+      missedCollectionReasons: parseSettingsArray(settings.missedCollectionReasonsJson, DEFAULT_MISSED_COLLECTION_REASONS),
+      queueSla: asRecord(settings.queueSlaJson),
+      dayCloseDefaults: asRecord(settings.dayCloseDefaultsJson),
+      providerQueryTemplates: parseSettingsArray(settings.providerQueryTemplatesJson, DEFAULT_PROVIDER_QUERY_TEMPLATES),
+      athenaLinkTemplate: settings.athenaLinkTemplate || "",
+      athenaChecklistDefaults,
+      checklistDefaults,
+      serviceCatalog: parseServiceCatalog(settings.serviceCatalogJson),
+      chargeSchedule: parseChargeSchedule(settings.chargeScheduleJson),
+    };
+  } catch (error) {
+    if (isMissingRevenueSettingsSchemaError(error)) {
+      return buildDefaultRevenueSettings(facilityId);
+    }
+    throw error;
+  }
 }
 
 type RevenueEncounter = Prisma.EncounterGetPayload<{

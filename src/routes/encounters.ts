@@ -326,6 +326,86 @@ async function findActiveTemplateForReason(params: {
   return templates[0] || null;
 }
 
+const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items";
+const STANDARD_ROOMING_REQUIRED_FIELDS = [
+  "allergiesChanged",
+  "medicationReconciliationChanged",
+  "labChanged",
+  "pharmacyChanged",
+] as const;
+
+type TemplateFieldDefinition = {
+  key?: string;
+  name?: string;
+  label?: string;
+  type?: string;
+};
+
+function getTemplateFieldDefinitions(fieldsJson: Prisma.JsonValue | null | undefined) {
+  if (!Array.isArray(fieldsJson)) return [] as TemplateFieldDefinition[];
+  return fieldsJson.map((field) => {
+    const raw =
+      typeof field === "object" && field !== null && !Array.isArray(field)
+        ? (field as Record<string, unknown>)
+        : {};
+    return {
+      key: typeof raw.key === "string" ? raw.key : undefined,
+      name: typeof raw.name === "string" ? raw.name : undefined,
+      label: typeof raw.label === "string" ? raw.label : undefined,
+      type: typeof raw.type === "string" ? raw.type : undefined,
+    };
+  });
+}
+
+function isTemplateFieldValueMissing(fieldType: string | undefined, value: unknown) {
+  const normalizedType = String(fieldType || "").trim().toLowerCase();
+  if (normalizedType === "checkbox") {
+    return value !== true;
+  }
+  if (normalizedType === "yesno") {
+    if (value === undefined || value === null) return true;
+    if (typeof value === "string") return value.trim().length === 0;
+    return false;
+  }
+  if (typeof value === "string") return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "number") return Number.isNaN(value);
+  return value === undefined || value === null;
+}
+
+function getRoomingDataMap(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function ensureStandardRoomingRequirements(encounter: {
+  roomId: string | null;
+  roomingData: unknown;
+}) {
+  const roomingData = getRoomingDataMap(encounter.roomingData);
+  const missing: string[] = [];
+
+  if (!encounter.roomId) {
+    missing.push("room assignment");
+  }
+
+  for (const fieldKey of STANDARD_ROOMING_REQUIRED_FIELDS) {
+    if (isTemplateFieldValueMissing("yesNo", roomingData[fieldKey])) {
+      missing.push(fieldKey);
+    }
+  }
+
+  const serviceCaptureValue = roomingData[ROOMING_SERVICE_CAPTURE_KEY];
+  if (!Array.isArray(serviceCaptureValue) || serviceCaptureValue.length === 0) {
+    missing.push("service capture");
+  }
+
+  if (missing.length > 0) {
+    throw new ApiError(400, `Rooming requirements missing: ${missing.join(", ")}`);
+  }
+}
+
 async function resolveActiveReasonForClinic(params: {
   clinicId: string;
   reasonForVisitId?: string | null;
@@ -392,6 +472,14 @@ async function ensureRequiredFields(
   }
 
   const required = Array.isArray(template.requiredFields) ? (template.requiredFields as string[]) : [];
+  const fieldDefinitions = getTemplateFieldDefinitions(template.fieldsJson);
+  const fieldDefinitionsByKey = new Map<string, TemplateFieldDefinition>();
+  fieldDefinitions.forEach((field) => {
+    const key = field.key || field.name;
+    if (key) {
+      fieldDefinitionsByKey.set(key, field);
+    }
+  });
 
   const dataMap =
     overrideData ||
@@ -401,7 +489,11 @@ async function ensureRequiredFields(
         ? (encounter.clinicianData as Record<string, unknown> | null)
         : (encounter.checkoutData as Record<string, unknown> | null));
 
-  const missing = required.filter((field) => !dataMap || !dataMap[field]);
+  const missing = required.filter((field) => {
+    const fieldType = fieldDefinitionsByKey.get(field)?.type;
+    const value = dataMap ? dataMap[field] : undefined;
+    return isTemplateFieldValueMissing(fieldType, value);
+  });
   if (missing.length > 0) {
     throw new ApiError(400, `Required fields missing: ${missing.join(", ")}`);
   }
@@ -892,6 +984,9 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     }
 
     await ensureRequiredFields(encounter, dto.toStatus);
+    if (dto.toStatus === "ReadyForProvider") {
+      ensureStandardRoomingRequirements(encounter);
+    }
 
     const updates: Prisma.EncounterUpdateInput = {
       currentStatus: dto.toStatus,
