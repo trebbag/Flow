@@ -4205,6 +4205,47 @@ describe("Flow backend core relationships", () => {
     );
   });
 
+  it("allows checkout with documentation incomplete and flags the revenue case for documentation follow-up", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-DOC-INCOMPLETE",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "J01.90",
+        "coding.working_procedure_codes_text": "99213",
+        "coding.documentation_complete": false,
+        "coding.note": "Visit closed before final documentation was complete.",
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 2200,
+        "billing.amount_collected_cents": 2200,
+        "billing.collection_outcome": "CollectedInFull",
+        disposition: "Discharged",
+      },
+    });
+
+    expect(finishedEncounter.currentStatus).toBe("Optimized");
+
+    const revenueCase = await prisma.revenueCase.findUnique({
+      where: { encounterId: finishedEncounter.id },
+      include: { chargeCaptureRecord: true },
+    });
+    expect(revenueCase).toBeTruthy();
+    expect(revenueCase?.chargeCaptureRecord?.documentationComplete).toBe(false);
+    expect(revenueCase?.currentRevenueStatus).toBe("CodingReviewInProgress");
+    expect(revenueCase?.currentWorkQueue).toBe("ChargeCapture");
+    expect(revenueCase?.currentBlockerCategory).toBe("documentation_incomplete");
+    expect(revenueCase?.currentBlockerText).toContain("documentation incomplete");
+    expect(revenueCase?.readyForAthenaAt).toBeNull();
+  });
+
   it("builds expected gross charge visibility from MA service capture without Athena data", async () => {
     const ctx = await bootstrapCore();
     await createRevenueWorkflowEncounter({

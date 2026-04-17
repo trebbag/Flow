@@ -1154,12 +1154,10 @@ export function EncounterDetailView() {
 
     if (
       enc.status === "Optimizing" &&
-      (clinicianDiagnosisCodes.length === 0 ||
-        clinicianProcedureCodes.length === 0 ||
-        currentTemplateVals["coding.documentation_complete"] !== true)
+      (clinicianDiagnosisCodes.length === 0 || clinicianProcedureCodes.length === 0)
     ) {
       toast.error("Complete the structured coding handoff before checkout", {
-        description: "Add diagnosis, procedure, and documentation-complete before checkout.",
+        description: "Add at least one diagnosis code and one procedure code before checkout.",
       });
       return;
     }
@@ -1190,8 +1188,13 @@ export function EncounterDetailView() {
           : undefined,
     );
 
+    const advanceDescription =
+      enc.status === "Optimizing" && currentTemplateVals["coding.documentation_complete"] !== true
+        ? "Moved to checkout. Revenue will keep documentation incomplete flagged until the clinician finishes it."
+        : `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`;
+
     toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
-      description: `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`,
+      description: advanceDescription,
     });
 
     // When completing the provider visit (Optimizing → CheckOut), return to Clinician Board
@@ -2301,6 +2304,11 @@ export function EncounterDetailView() {
                                 disabled={isRevenueReadOnly}
                                 onChange={(val) => setFieldValue("coding.documentation_complete", val)}
                               />
+                              {currentTemplateVals["coding.documentation_complete"] !== true && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
+                                  Checkout can continue before documentation is complete, but Revenue Cycle will keep this encounter flagged until documentation is finished.
+                                </div>
+                              )}
                               <TemplateFieldInput
                                 field={{ key: "coding.note", name: "Coding Note", type: "textarea", required: false }}
                                 value={currentTemplateVals["coding.note"]}

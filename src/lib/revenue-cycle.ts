@@ -966,12 +966,19 @@ function computeCaseState(params: {
         ? RevenueStatus.CodingReviewInProgress
         : RevenueStatus.ChargeCaptureNeeded;
     currentWorkQueue = RevenueWorkQueue.ChargeCapture;
-    blockerCategory = "charge_capture";
-    blockerText = params.expectation.serviceCaptureCompleted
-      ? params.expectation.clinicianCodingEntered
-        ? "Final coding verification or documentation is incomplete for Athena handoff."
-        : "Clinician working codes have not been entered yet."
-      : "MA service capture is incomplete for charge capture.";
+    if (!params.expectation.serviceCaptureCompleted) {
+      blockerCategory = "charge_capture";
+      blockerText = "MA service capture is incomplete for charge capture.";
+    } else if (!params.expectation.clinicianCodingEntered) {
+      blockerCategory = "charge_capture";
+      blockerText = "Clinician working codes have not been entered yet.";
+    } else if (!params.chargeCapture.documentationComplete) {
+      blockerCategory = "documentation_incomplete";
+      blockerText = "Clinician marked documentation incomplete. Revenue cannot fully close Athena handoff until documentation is complete.";
+    } else {
+      blockerCategory = "charge_capture";
+      blockerText = "Final coding verification is still incomplete for Athena handoff.";
+    }
   } else if (chargeReady && !hasAthenaConfirmation) {
     currentRevenueStatus =
       params.athenaChecklistCompletedCount > 0 || params.revenueCase?.athenaHandoffStartedAt || params.revenueCase?.athenaHandoffOwnerUserId

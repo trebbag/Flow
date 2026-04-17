@@ -176,11 +176,20 @@ function defaultCloseoutDraft(
 ): DayCloseDraft {
   const due = new Date();
   due.setHours(due.getHours() + defaultDueHours);
+  const defaultReason = row.currentBlockerText || row.rollReason || "";
+  const defaultNextAction =
+    row.currentBlockerCategory === "documentation_incomplete"
+      ? "Follow up with the clinician to complete documentation, then finish Athena handoff."
+      : row.currentWorkQueue === "AthenaHandoff"
+        ? "Complete Athena handoff and confirm it back in Flow."
+        : row.currentWorkQueue === "ChargeCapture"
+          ? "Finish charge capture review and move the case toward Athena handoff."
+          : "";
   return {
     ownerUserId: row.assignedToUserId || currentUserId || "",
     ownerRole: row.assignedToRole || "RevenueCycle",
-    reasonNotCompleted: row.rollReason || row.currentBlockerText || "",
-    nextAction: "",
+    reasonNotCompleted: defaultReason,
+    nextAction: defaultNextAction,
     dueAt: due.toISOString().slice(0, 16),
     rollover: true,
   };
@@ -228,10 +237,12 @@ function queueRowSubsummary(row: RevenueCaseDetail, settings: RevenueSettings | 
   const procedureCount = row.chargeCaptureRecord?.procedureLinesJson?.length || 0;
   const expectation = getRevenueExpectation(row, settings);
   const codingReady = row.chargeCaptureRecord?.documentationComplete && diagnosisCount > 0 && procedureCount > 0;
+  const documentationIncomplete = diagnosisCount > 0 && procedureCount > 0 && row.chargeCaptureRecord?.documentationComplete === false;
   return {
     diagnosisCount,
     procedureCount,
     codingReady,
+    documentationIncomplete,
     serviceCaptureComplete: expectation.serviceCaptureComplete,
     expectedGrossChargeCents: expectation.expectedGrossChargeCents,
     missingChargeMapping: expectation.missingChargeMapping,
@@ -1026,7 +1037,13 @@ export function RevenueCycleView() {
                             <span>{queueRowSubsummary(row, settings).serviceCaptureComplete ? "Service capture complete" : "Service capture missing"}</span>
                             <span>Dx {queueRowSubsummary(row, settings).diagnosisCount}</span>
                             <span>Proc {queueRowSubsummary(row, settings).procedureCount}</span>
-                            <span>{queueRowSubsummary(row, settings).codingReady ? "Coding ready" : "Coding incomplete"}</span>
+                            <span>
+                              {queueRowSubsummary(row, settings).codingReady
+                                ? "Coding ready"
+                                : queueRowSubsummary(row, settings).documentationIncomplete
+                                  ? "Documentation incomplete"
+                                  : "Coding incomplete"}
+                            </span>
                             <span>
                               {queueRowSubsummary(row, settings).expectedGrossChargeCents > 0
                                 ? `Expected ${formatCurrency(queueRowSubsummary(row, settings).expectedGrossChargeCents)}`
@@ -1653,6 +1670,7 @@ function RevenueCaseDetailPane({
                   { label: "Service capture items", value: String(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson.length || 0) },
                   { label: "Diagnoses", value: String(revenueCase.chargeCaptureRecord?.icd10CodesJson.length || 0) },
                   { label: "Procedure lines", value: String(revenueCase.chargeCaptureRecord?.procedureLinesJson.length || 0) },
+                  { label: "Documentation complete", value: revenueCase.chargeCaptureRecord?.documentationComplete ? "Yes" : "No - still blocks handoff" },
                   { label: "Expected gross", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedGrossChargeCents) },
                 ]} />
                 <SummaryBox title="Athena-observed" rows={[
