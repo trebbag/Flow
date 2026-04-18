@@ -95,6 +95,13 @@ async function createRevenueWorkflowEncounter(params: {
             quantity: 1,
             suggestedProcedureCode: "36415",
             expectedChargeCents: 1800,
+            detailSchemaKey: "specimen_collection",
+            detailJson: {
+              specimenType: "Blood",
+              collectionMethod: "Venipuncture",
+              sentToLab: "Yes",
+            },
+            detailComplete: true,
           },
         ],
         ...(params.roomingData || {}),
@@ -1172,6 +1179,13 @@ describe("Flow backend core relationships", () => {
               sourceRole: "MA",
               quantity: 1,
               suggestedProcedureCode: "36415",
+              detailSchemaKey: "specimen_collection",
+              detailJson: {
+                specimenType: "Blood",
+                collectionMethod: "Venipuncture",
+                sentToLab: "Yes",
+              },
+              detailComplete: true,
             },
           ],
         },
@@ -1800,12 +1814,26 @@ describe("Flow backend core relationships", () => {
               sourceRole: "MA",
               quantity: 1,
               suggestedProcedureCode: "36415",
+              detailSchemaKey: "specimen_collection",
+              detailJson: {
+                specimenType: "Blood",
+                collectionMethod: "Venipuncture",
+                sentToLab: "Yes",
+              },
+              detailComplete: true,
             },
           ],
         }
       }
     });
     expect(roomingDataSaved.statusCode).toBe(200);
+    expect(roomingDataSaved.json()).toEqual(
+      expect.objectContaining({
+        providerId: ctx.provider.id,
+        providerName: ctx.provider.name,
+        roomId: clinicRoomAssignment!.roomId,
+      }),
+    );
 
     const toReady = await app.inject({
       method: "PATCH",
@@ -1817,7 +1845,29 @@ describe("Flow backend core relationships", () => {
       }
     });
     expect(toReady.statusCode).toBe(200);
-    expect(toReady.json().currentStatus).toBe("ReadyForProvider");
+    expect(toReady.json()).toEqual(
+      expect.objectContaining({
+        currentStatus: "ReadyForProvider",
+        providerId: ctx.provider.id,
+        providerName: ctx.provider.name,
+        roomId: clinicRoomAssignment!.roomId,
+      }),
+    );
+
+    const syncedRevenueCase = await prisma.revenueCase.findUnique({
+      where: { encounterId: encounter.id },
+      include: { chargeCaptureRecord: true },
+    });
+    expect(syncedRevenueCase).toBeTruthy();
+    expect(syncedRevenueCase?.chargeCaptureRecord?.serviceCaptureItemsJson).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Venipuncture",
+          detailSchemaKey: "specimen_collection",
+          detailComplete: true,
+        }),
+      ]),
+    );
   });
 
   it("blocks rooming completion when standard MA rooming requirements are missing", async () => {
@@ -1928,6 +1978,13 @@ describe("Flow backend core relationships", () => {
               quantity: 1,
               suggestedProcedureCode: "36415",
               expectedChargeCents: 1800,
+              detailSchemaKey: "specimen_collection",
+              detailJson: {
+                specimenType: "Blood",
+                collectionMethod: "Venipuncture",
+                sentToLab: "Yes",
+              },
+              detailComplete: true,
             },
           ],
         },
@@ -4519,6 +4576,73 @@ describe("Flow backend core relationships", () => {
     expect(dashboard.json().kpis.serviceCaptureCompletedVisitCount).toBeGreaterThanOrEqual(1);
   });
 
+  it("returns owner analytics from a single aggregate endpoint", async () => {
+    const ctx = await bootstrapCore();
+    await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-OWNER-ANALYTICS",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "J01.90",
+        "coding.working_procedure_codes_text": "99213",
+        "coding.documentation_complete": false,
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 3200,
+        "billing.amount_collected_cents": 1600,
+        "billing.collection_outcome": "CollectedPartial",
+        "billing.missed_reason": "Patient requested payment plan",
+        disposition: "Discharged",
+      },
+    });
+
+    const ownerAnalytics = await app.inject({
+      method: "GET",
+      url: `/dashboard/owner-analytics?clinicId=${ctx.clinic.id}&from=${DateTime.now().minus({ days: 1 }).toISODate()}&to=${DateTime.now().toISODate()}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(ownerAnalytics.statusCode).toBe(200);
+    expect(ownerAnalytics.json()).toEqual(
+      expect.objectContaining({
+        scope: expect.objectContaining({
+          clinicId: ctx.clinic.id,
+        }),
+        overview: expect.objectContaining({
+          expectedGrossChargeCents: expect.any(Number),
+          expectedNetReimbursementCents: expect.any(Number),
+        }),
+        throughput: expect.objectContaining({
+          daily: expect.any(Array),
+          stageCounts: expect.any(Object),
+        }),
+        revenue: expect.objectContaining({
+          daily: expect.any(Array),
+          collectionOutcomes: expect.any(Array),
+          mappingGaps: expect.any(Object),
+        }),
+        providersAndStaff: expect.objectContaining({
+          providers: expect.any(Array),
+          staff: expect.any(Array),
+        }),
+        roomsAndCapacity: expect.objectContaining({
+          daily: expect.any(Array),
+        }),
+        exceptionsAndRisk: expect.objectContaining({
+          documentationIncompleteCount: expect.any(Number),
+          rolloverReasons: expect.any(Array),
+        }),
+      }),
+    );
+    expect(ownerAnalytics.json().exceptionsAndRisk.documentationIncompleteCount).toBeGreaterThanOrEqual(1);
+  });
+
   it("supports provider clarification and returns the case to Athena handoff once resolved", async () => {
     const ctx = await bootstrapCore();
     const finishedEncounter = await createRevenueWorkflowEncounter({
@@ -4730,6 +4854,7 @@ describe("Flow backend core relationships", () => {
             label: "Custom MA service",
             suggestedProcedureCode: "99000",
             expectedChargeCents: 5600,
+            detailSchemaKey: "generic_service",
             active: true,
           },
         ],
@@ -4763,21 +4888,21 @@ describe("Flow backend core relationships", () => {
           defaultPosCollectionPercent: 40,
           explainEstimateByDefault: false,
         }),
+        serviceCatalog: expect.arrayContaining([
+          expect.objectContaining({
+            id: "svc-custom",
+            detailSchemaKey: "generic_service",
+          }),
+          expect.objectContaining({
+            id: "svc-custom",
+            label: "Custom MA service",
+          }),
+        ]),
         reimbursementRules: expect.arrayContaining([
           expect.objectContaining({
             payerName: "Aetna",
             financialClass: "Commercial",
             expectedPercent: 72,
-          }),
-        ]),
-        serviceCatalog: expect.arrayContaining([
-          expect.objectContaining({
-            id: "svc-venipuncture",
-            suggestedProcedureCode: "36415",
-          }),
-          expect.objectContaining({
-            id: "svc-custom",
-            label: "Custom MA service",
           }),
         ]),
         chargeSchedule: expect.arrayContaining([

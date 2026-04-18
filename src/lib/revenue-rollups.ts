@@ -175,12 +175,6 @@ export async function computeRevenueDailyRollup(
         serviceCaptureItemsJson: Array.isArray(item.chargeCaptureRecord?.serviceCaptureItemsJson)
           ? (item.chargeCaptureRecord?.serviceCaptureItemsJson as any[])
           : [],
-        documentationSummaryJson:
-          item.chargeCaptureRecord?.documentationSummaryJson &&
-          typeof item.chargeCaptureRecord.documentationSummaryJson === "object" &&
-          !Array.isArray(item.chargeCaptureRecord.documentationSummaryJson)
-            ? (item.chargeCaptureRecord.documentationSummaryJson as any)
-            : undefined,
       },
       chargeSchedule: settings?.chargeSchedule || [],
       reimbursementRules: settings?.reimbursementRules || [],

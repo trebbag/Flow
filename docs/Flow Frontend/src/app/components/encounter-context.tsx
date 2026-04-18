@@ -206,17 +206,20 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
   }, [encounters]);
 
   const mapBackendEncounter = useCallback((raw: any): Encounter => {
+    const cachedEncounter =
+      encounterCacheRef.current[String(raw.id || "")] ||
+      encountersRef.current.find((entry) => entry.id === String(raw.id || ""));
     const clinicId = raw.clinicId || raw.clinic?.id || "";
     const reasonId = raw.reasonForVisitId || raw.reason?.id || "";
     const roomId = raw.roomId || raw.room?.id || "";
 
     const clinic = raw.clinic || clinicsRef.current[clinicId] || null;
     const providerName = labelProviderName(
-      raw.providerName || raw.provider?.name || "Unassigned",
+      raw.providerName || raw.provider?.name || cachedEncounter?.provider || "Unassigned",
       raw.provider?.active,
     );
     const reasonName = labelReasonName(
-      raw.reasonForVisit || raw.reasonText || raw.reason?.name || reasonsRef.current[reasonId]?.name || "Visit",
+      raw.reasonForVisit || raw.reasonText || raw.reason?.name || reasonsRef.current[reasonId]?.name || cachedEncounter?.visitType || "Visit",
       raw.reason?.status,
     );
     const assignedMaUser = usersByIdRef.current[raw.assignedMaUserId || ""];
@@ -225,7 +228,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       raw.assignedMaStatus || assignedMaUser?.status,
     );
     const roomName = labelRoomName(
-      raw.roomName || raw.room?.name || roomsByIdRef.current[roomId]?.name || "",
+      raw.roomName || raw.room?.name || roomsByIdRef.current[roomId]?.name || cachedEncounter?.roomNumber || "",
       raw.room?.status,
     );
     const alertLevel = (raw.alertLevel || raw.alertState?.currentAlertLevel || "Green") as Encounter["alertLevel"];

@@ -639,6 +639,9 @@ export interface RevenueServiceCaptureItem {
   capturedByUserId: string | null;
   suggestedProcedureCode: string | null;
   expectedChargeCents: number | null;
+  detailSchemaKey: string;
+  detailJson: Record<string, unknown> | null;
+  detailComplete: boolean;
 }
 
 export interface RevenueServiceCatalogItem {
@@ -646,6 +649,7 @@ export interface RevenueServiceCatalogItem {
   label: string;
   suggestedProcedureCode: string | null;
   expectedChargeCents: number | null;
+  detailSchemaKey?: string | null;
   active: boolean;
   allowCustomNote?: boolean;
 }
@@ -849,6 +853,101 @@ export interface RevenueReimbursementRuleItem {
   expectedPercent: number;
   active: boolean;
   note?: string | null;
+}
+
+export interface OwnerAnalyticsSnapshot {
+  scope: {
+    clinicId?: string | null;
+    from: string;
+    to: string;
+  };
+  overview: {
+    encounterCount: number;
+    inProgressCount: number;
+    avgCycleTimeMins: number;
+    sameDayCollectionExpectedCents: number;
+    sameDayCollectionTrackedCents: number;
+    sameDayCollectionDollarRate: number;
+    expectedGrossChargeCents: number;
+    expectedNetReimbursementCents: number;
+    unresolvedBlockers: number;
+  };
+  throughput: {
+    stageCounts: Record<string, number>;
+    stageDurations: Array<{ status: string; count: number; avgMinutes: number }>;
+    daily: Array<{
+      dateKey: string;
+      encounterCount: number;
+      avgCycleTimeMins: number;
+      inProgressCount: number;
+      rolledCount: number;
+    }>;
+    hourOfDay: Array<{ label: string; count: number }>;
+    leakage: {
+      rolledCount: number;
+      providerQueriesOpen: number;
+    };
+  };
+  revenue: {
+    daily: Array<{
+      dateKey: string;
+      expectedGrossChargeCents: number;
+      expectedNetReimbursementCents: number;
+      sameDayCollectionExpectedCents: number;
+      sameDayCollectionTrackedCents: number;
+      sameDayCollectionVisitRate: number;
+      sameDayCollectionDollarRate: number;
+    }>;
+    queueCounts: Record<string, number>;
+    missedCollectionReasons: Array<{ label: string; count: number }>;
+    collectionOutcomes: Array<{ label: string; count: number }>;
+    mappingGaps: {
+      missingChargeMappingCount: number;
+      missingReimbursementMappingCount: number;
+    };
+  };
+  providersAndStaff: {
+    providers: Array<{
+      providerName: string;
+      encounterCount: number;
+      activeCount: number;
+      completedCount: number;
+      avgOptimizingMins: number;
+    }>;
+    staff: Array<{
+      label: string;
+      role: string;
+      encounterCount: number;
+    }>;
+  };
+  roomsAndCapacity: {
+    current: {
+      roomCount: number;
+      avgOccupiedMins: number;
+      avgTurnoverMins: number;
+      turnoverCount: number;
+      holdCount: number;
+      issueCount: number;
+    };
+    daily: Array<{
+      dateKey: string;
+      roomCount: number;
+      avgOccupiedMins: number;
+      avgTurnoverMins: number;
+      turnoverCount: number;
+      holdCount: number;
+      issueCount: number;
+    }>;
+    issueTypes: Array<{ label: string; count: number }>;
+  };
+  exceptionsAndRisk: {
+    documentationIncompleteCount: number;
+    providerQueriesOpen: number;
+    rolloverReasons: Array<{ label: string; count: number }>;
+    staleUnresolvedCount: number;
+    activeSafetyCount: number;
+    blockingTaskCount: number;
+  };
 }
 
 /** Day closeout row */

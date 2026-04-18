@@ -108,6 +108,15 @@ function readServiceCaptureItems(value: Prisma.JsonValue | null | undefined): Re
             ? item.suggestedProcedureCode.trim()
             : null,
         expectedChargeCents: Number.isFinite(Number(item.expectedChargeCents)) ? Number(item.expectedChargeCents) : null,
+        detailSchemaKey:
+          typeof item.detailSchemaKey === "string" && item.detailSchemaKey.trim()
+            ? item.detailSchemaKey.trim()
+            : "generic_service",
+        detailJson:
+          item.detailJson && typeof item.detailJson === "object" && !Array.isArray(item.detailJson)
+            ? (item.detailJson as Record<string, unknown>)
+            : null,
+        detailComplete: item.detailComplete !== false,
       } satisfies RevenueServiceCaptureItem;
     })
     .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
@@ -436,12 +445,6 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           icd10CodesJson: readStringArray(row.chargeCaptureRecord?.icd10CodesJson),
           procedureLinesJson: readProcedureLines(row.chargeCaptureRecord?.procedureLinesJson),
           serviceCaptureItemsJson: readServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson),
-          documentationSummaryJson:
-            row.chargeCaptureRecord?.documentationSummaryJson &&
-            typeof row.chargeCaptureRecord.documentationSummaryJson === "object" &&
-            !Array.isArray(row.chargeCaptureRecord.documentationSummaryJson)
-              ? (row.chargeCaptureRecord.documentationSummaryJson as any)
-              : undefined,
         },
         chargeSchedule: settings.chargeSchedule,
         reimbursementRules: settings.reimbursementRules,

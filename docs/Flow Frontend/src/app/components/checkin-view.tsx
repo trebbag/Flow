@@ -19,6 +19,7 @@ import {
   Save,
   CalendarDays,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -164,6 +165,13 @@ function normalizeTemplateFieldsFromTemplate(template: any): TemplateField[] {
   return derived.length > 0
     ? derived
     : [{ key: "notes", label: "Notes", type: "textarea", required: false }];
+}
+
+function parseCurrencyInputToCents(value: string) {
+  const normalized = value.replace(/[^0-9.-]/g, "").trim();
+  if (!normalized) return 0;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
 }
 
 // ── Component ──
@@ -593,14 +601,14 @@ export function CheckInView() {
           "financial.coverage_issue_flag": coverageIssueFlag,
           "financial.benefits_summary": benefitsSummary,
           "financial.expected_collection_indicator": expectedCollectionIndicator,
-          "financial.patient_estimate_amount_cents": patientEstimateAmount,
-          "financial.expected_pos_collection_amount_cents": expectedPosCollectionAmount,
+          "financial.patient_estimate_amount_cents": parseCurrencyInputToCents(patientEstimateAmount),
+          "financial.expected_pos_collection_amount_cents": parseCurrencyInputToCents(expectedPosCollectionAmount),
           "financial.estimate_explained_to_patient": estimateExplainedToPatient,
           "financial.primary_payer_name": primaryPayerName,
           "financial.primary_plan_name": primaryPlanName,
           "financial.secondary_payer_name": secondaryPayerName,
           "financial.financial_class": financialClass,
-          "financial.outstanding_prior_balance_cents": outstandingPriorBalance,
+          "financial.outstanding_prior_balance_cents": parseCurrencyInputToCents(outstandingPriorBalance),
           "financial.prior_auth_required": priorAuthRequired,
           "financial.prior_auth_status": priorAuthStatus,
           "financial.prior_auth_number": priorAuthNumber,
@@ -977,16 +985,19 @@ export function CheckInView() {
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
                     Eligibility Status
                   </label>
-                  <select
-                    value={eligibilityStatus}
-                    onChange={(event) => setEligibilityStatus(event.target.value as typeof eligibilityStatus)}
-                    className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                  >
-                    <option value="NotChecked">Not checked</option>
-                    <option value="Clear">Clear</option>
-                    <option value="Blocked">Blocked</option>
-                    <option value="Pending">Pending</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={eligibilityStatus}
+                      onChange={(event) => setEligibilityStatus(event.target.value as typeof eligibilityStatus)}
+                      className="w-full h-10 rounded-lg border border-gray-200 bg-white px-4 pr-10 text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="NotChecked">Not checked</option>
+                      <option value="Clear">Clear</option>
+                      <option value="Blocked">Blocked</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-400" />
+                  </div>
                 </div>
 
                 <div>
@@ -1039,37 +1050,43 @@ export function CheckInView() {
 
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
-                    Prior Balance
+                    Prior Balance (USD)
                   </label>
                   <input
+                    type="text"
+                    inputMode="decimal"
                     value={outstandingPriorBalance}
                     onChange={(event) => setOutstandingPriorBalance(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                    placeholder="0"
+                    placeholder="0.00"
                   />
                 </div>
 
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
-                    Patient Estimate Amount
+                    Patient Estimate (USD)
                   </label>
                   <input
+                    type="text"
+                    inputMode="decimal"
                     value={patientEstimateAmount}
                     onChange={(event) => setPatientEstimateAmount(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                    placeholder="0"
+                    placeholder="0.00"
                   />
                 </div>
 
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
-                    Expected POS Collection
+                    Expected POS Collection (USD)
                   </label>
                   <input
+                    type="text"
+                    inputMode="decimal"
                     value={expectedPosCollectionAmount}
                     onChange={(event) => setExpectedPosCollectionAmount(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                    placeholder="0"
+                    placeholder="0.00"
                   />
                 </div>
               </div>
@@ -1130,36 +1147,42 @@ export function CheckInView() {
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
                     Prior Auth Status
                   </label>
-                  <select
-                    value={priorAuthStatus}
-                    onChange={(event) => setPriorAuthStatus(event.target.value as typeof priorAuthStatus)}
-                    className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                    disabled={!priorAuthRequired}
-                  >
-                    <option value="NotRequired">Not required</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Expired">Expired</option>
-                    <option value="UnableToObtain">Unable to obtain</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={priorAuthStatus}
+                      onChange={(event) => setPriorAuthStatus(event.target.value as typeof priorAuthStatus)}
+                      className="w-full h-10 rounded-lg border border-gray-200 bg-white px-4 pr-10 text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
+                      disabled={!priorAuthRequired}
+                    >
+                      <option value="NotRequired">Not required</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Expired">Expired</option>
+                      <option value="UnableToObtain">Unable to obtain</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-400" />
+                  </div>
                 </div>
 
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
                     Referral Status
                   </label>
-                  <select
-                    value={referralStatus}
-                    onChange={(event) => setReferralStatus(event.target.value as typeof referralStatus)}
-                    className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                    disabled={!referralRequired}
-                  >
-                    <option value="NotRequired">Not required</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Expired">Expired</option>
-                    <option value="UnableToObtain">Unable to obtain</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={referralStatus}
+                      onChange={(event) => setReferralStatus(event.target.value as typeof referralStatus)}
+                      className="w-full h-10 rounded-lg border border-gray-200 bg-white px-4 pr-10 text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60"
+                      disabled={!referralRequired}
+                    >
+                      <option value="NotRequired">Not required</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Expired">Expired</option>
+                      <option value="UnableToObtain">Unable to obtain</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-400" />
+                  </div>
                 </div>
 
                 <div className="md:col-span-2">
@@ -1505,16 +1528,19 @@ function TemplateFieldInput({
           {field.label}
           {field.required && <span className="text-red-400">*</span>}
         </label>
-        <select
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full h-10 px-3 rounded-lg border border-purple-200/80 bg-white shadow-sm text-[13px] appearance-none focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-        >
-          <option value="">Select...</option>
-          {(field.options ?? []).map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={typeof value === "string" ? value : ""}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full h-10 rounded-lg border border-purple-200/80 bg-white px-3 pr-10 shadow-sm text-[13px] appearance-none focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+          >
+            <option value="">Select...</option>
+            {(field.options ?? []).map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-500" />
+        </div>
       </div>
     );
   }
@@ -1552,10 +1578,12 @@ function TemplateFieldInput({
           {field.required && <span className="text-red-400">*</span>}
         </label>
         <input
-          type={field.type}
+          type={field.type === "date" || field.type === "time" ? field.type : "text"}
+          inputMode={field.type === "number" ? "numeric" : undefined}
           placeholder={field.label}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
+          onWheel={(event) => event.currentTarget.blur()}
           className="w-full h-10 px-3 rounded-lg border border-purple-200/80 bg-white shadow-sm text-[13px] focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
         />
       </div>

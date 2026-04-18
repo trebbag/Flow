@@ -46,7 +46,7 @@ import { loadSession } from "./auth-session";
 import { SafetyAssistModal } from "./safety-assist-modal";
 import { toast } from "sonner";
 import { getEncounterStageSeconds, getEncounterTotalSeconds } from "./encounter-timers";
-import { searchClinicalCodes, type ClinicalCodeReference } from "./clinical-code-reference";
+import { getClinicalCodeReference, searchClinicalCodes, type ClinicalCodeReference } from "./clinical-code-reference";
 import type { RevenueCaseDetail, RevenueServiceCaptureItem, RevenueSettings } from "./types";
 
 // ── Status progression ──
@@ -88,14 +88,130 @@ const nextStatusActionLabel: Record<string, string> = {
 };
 
 const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items";
-const CLINICIAN_DOCUMENTATION_KEYS = {
-  chiefConcernSummary: "documentation.chief_concern_summary",
-  assessmentSummary: "documentation.assessment_summary",
-  planFollowUp: "documentation.plan_follow_up",
-  ordersOrProcedures: "documentation.orders_or_procedures",
-} as const;
+const CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY = "documentation.athena_attestation_note";
 const ICD10_CODE_PATTERN = /^[A-TV-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?$/i;
 const CPT_HCPCS_CODE_PATTERN = /^(?:\d{5}|[A-Z]\d{4})$/i;
+
+type ServiceDetailFieldDefinition = {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "select" | "date" | "number";
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+  inputMode?: "text" | "numeric" | "decimal";
+};
+
+const SERVICE_DETAIL_SCHEMAS: Record<
+  string,
+  {
+    label: string;
+    description: string;
+    fields: ServiceDetailFieldDefinition[];
+  }
+> = {
+  vaccine: {
+    label: "Vaccine detail",
+    description: "Capture the safety and billing fields needed for vaccine administration.",
+    fields: [
+      { key: "productServiceLabel", label: "Vaccine / product", type: "text", required: true, placeholder: "Influenza vaccine" },
+      { key: "site", label: "Site", type: "select", required: true, options: ["Left deltoid", "Right deltoid", "Left thigh", "Right thigh", "Other"] },
+      { key: "route", label: "Route", type: "select", required: true, options: ["IM", "SQ", "PO", "Intradermal", "Other"] },
+      { key: "lotNumber", label: "Lot number", type: "text", required: true, placeholder: "Lot #" },
+      { key: "expirationDate", label: "Expiration date", type: "date", required: true },
+      { key: "dose", label: "Dose", type: "text", required: true, placeholder: "0.5 mL" },
+      { key: "visDate", label: "VIS date", type: "date", required: false },
+    ],
+  },
+  injection_medication: {
+    label: "Injection detail",
+    description: "Capture medication-administration details for safe practice and billing support.",
+    fields: [
+      { key: "productServiceLabel", label: "Medication / service", type: "text", required: true, placeholder: "Ketorolac injection" },
+      { key: "dose", label: "Dose", type: "text", required: true, placeholder: "30 mg" },
+      { key: "unit", label: "Unit", type: "text", required: true, placeholder: "mg" },
+      { key: "route", label: "Route", type: "select", required: true, options: ["IM", "IV", "SQ", "Other"] },
+      { key: "site", label: "Site", type: "select", required: true, options: ["Left deltoid", "Right deltoid", "Left glute", "Right glute", "Other"] },
+      { key: "lotNumber", label: "Lot number", type: "text", required: true, placeholder: "Lot #" },
+      { key: "expirationDate", label: "Expiration date", type: "date", required: true },
+    ],
+  },
+  point_of_care_test: {
+    label: "Point-of-care test detail",
+    description: "Record specimen, result, and device details needed for test support.",
+    fields: [
+      { key: "testName", label: "Test name", type: "text", required: true, placeholder: "Rapid strep" },
+      { key: "specimenSource", label: "Specimen / source", type: "text", required: true, placeholder: "Throat swab" },
+      { key: "result", label: "Result", type: "text", required: true, placeholder: "Negative" },
+      { key: "deviceLot", label: "Device / lot", type: "text", required: false, placeholder: "Device or lot" },
+      { key: "expirationDate", label: "Expiration date", type: "date", required: false },
+    ],
+  },
+  specimen_collection: {
+    label: "Specimen collection detail",
+    description: "Document specimen collection details that support downstream lab and billing review.",
+    fields: [
+      { key: "specimenType", label: "Specimen type", type: "text", required: true, placeholder: "Blood" },
+      { key: "collectionMethodSite", label: "Collection method / site", type: "text", required: true, placeholder: "Venipuncture, left AC" },
+      { key: "sentToLab", label: "Sent to lab", type: "select", required: true, options: ["Yes", "No"] },
+    ],
+  },
+  procedure_performed: {
+    label: "Procedure detail",
+    description: "Capture the performed procedure summary and supporting clinical detail.",
+    fields: [
+      { key: "procedureSummary", label: "Procedure summary", type: "textarea", required: true, placeholder: "Performed simple wound repair" },
+      { key: "siteLaterality", label: "Site / laterality", type: "text", required: false, placeholder: "Left forearm" },
+      { key: "suppliesUsed", label: "Supplies used", type: "textarea", required: false, placeholder: "Sutures, dressing" },
+    ],
+  },
+  generic_service: {
+    label: "Service detail",
+    description: "Capture a billing-supporting note when there is no curated schema.",
+    fields: [
+      { key: "billingNote", label: "Billing support note", type: "textarea", required: true, placeholder: "Describe what was performed and what supports billing." },
+      { key: "supportingDetail", label: "Supporting detail", type: "textarea", required: false, placeholder: "Any optional supporting context" },
+    ],
+  },
+};
+
+function getServiceDetailSchema(schemaKey?: string | null) {
+  return SERVICE_DETAIL_SCHEMAS[schemaKey || ""] || SERVICE_DETAIL_SCHEMAS.generic_service;
+}
+
+function parseDetailJson(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function detailValueToString(value: unknown) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return "";
+}
+
+function serviceDetailComplete(detailSchemaKey?: string | null, detailJson?: Record<string, unknown> | null) {
+  const schema = getServiceDetailSchema(detailSchemaKey);
+  return schema.fields
+    .filter((field) => field.required)
+    .every((field) => detailValueToString(detailJson?.[field.key]).trim().length > 0);
+}
+
+function buildInitialServiceDetail(detailSchemaKey: string, label: string, note?: string | null) {
+  const schema = getServiceDetailSchema(detailSchemaKey);
+  const detail: Record<string, unknown> = {};
+  if (detailSchemaKey === "vaccine" || detailSchemaKey === "injection_medication") {
+    detail.productServiceLabel = label;
+  } else if (detailSchemaKey === "point_of_care_test") {
+    detail.testName = label;
+  } else if (detailSchemaKey === "procedure_performed") {
+    detail.procedureSummary = label;
+  } else if (detailSchemaKey === "generic_service") {
+    detail.billingNote = note?.trim() || label;
+  }
+  return schema.fields.some((field) => Object.prototype.hasOwnProperty.call(detail, field.key)) ? detail : null;
+}
 
 function fmtTimer(totalSec: number): string {
   if (totalSec < 0) return "0:00";
@@ -132,6 +248,18 @@ function parseServiceCaptureItems(value: unknown): RevenueServiceCaptureItem[] {
         capturedByUserId: typeof source.capturedByUserId === "string" ? source.capturedByUserId : null,
         suggestedProcedureCode: typeof source.suggestedProcedureCode === "string" ? source.suggestedProcedureCode : null,
         expectedChargeCents: Number.isFinite(Number(source.expectedChargeCents)) ? Number(source.expectedChargeCents) : null,
+        detailSchemaKey:
+          typeof source.detailSchemaKey === "string" && source.detailSchemaKey.trim()
+            ? source.detailSchemaKey.trim()
+            : "generic_service",
+        detailJson: parseDetailJson(source.detailJson),
+        detailComplete:
+          typeof source.detailComplete === "boolean"
+            ? source.detailComplete
+            : serviceDetailComplete(
+                typeof source.detailSchemaKey === "string" ? source.detailSchemaKey : "generic_service",
+                parseDetailJson(source.detailJson),
+              ),
       } satisfies RevenueServiceCaptureItem;
     })
     .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
@@ -395,69 +523,6 @@ function normalizeRuntimeTemplateFieldsFromTemplate(template: any): TemplateFiel
   return derived;
 }
 
-const clinicianTemplates: Record<string, TemplateField[]> = {
-  "Follow-up": [
-    { name: "Interval History", type: "textarea", required: true },
-    { name: "Physical Exam Performed", type: "checkbox", required: true },
-    { name: "Assessment", type: "textarea", required: true },
-    { name: "Plan", type: "textarea", required: true },
-    { name: "Medication Changes Made", type: "checkbox", required: false },
-    { name: "Labs Ordered", type: "checkbox", required: false },
-    { name: "Referrals Made", type: "checkbox", required: false },
-    { name: "Follow-up Interval", type: "select", required: true, options: ["1 week", "2 weeks", "1 month", "3 months", "6 months", "PRN"] },
-    { name: "Clinician Notes", type: "textarea", required: false },
-  ],
-  "Annual Physical": [
-    { name: "Review of Systems", type: "textarea", required: true },
-    { name: "Physical Exam", type: "textarea", required: true },
-    { name: "Preventive Screenings Reviewed", type: "checkbox", required: true },
-    { name: "Immunizations Updated", type: "checkbox", required: true },
-    { name: "Assessment", type: "textarea", required: true },
-    { name: "Plan", type: "textarea", required: true },
-    { name: "Health Maintenance Orders", type: "textarea", required: false },
-    { name: "Follow-up Interval", type: "select", required: true, options: ["6 months", "1 year"] },
-    { name: "Clinician Notes", type: "textarea", required: false },
-  ],
-  "Sick Visit": [
-    { name: "History of Present Illness", type: "textarea", required: true },
-    { name: "Physical Exam", type: "textarea", required: true },
-    { name: "Assessment / Diagnosis", type: "textarea", required: true },
-    { name: "Plan", type: "textarea", required: true },
-    { name: "Prescriptions Written", type: "checkbox", required: false },
-    { name: "Labs Ordered", type: "checkbox", required: false },
-    { name: "Return Precautions Given", type: "checkbox", required: true },
-    { name: "Follow-up Interval", type: "select", required: true, options: ["If worsens", "2-3 days", "1 week", "PRN"] },
-    { name: "Clinician Notes", type: "textarea", required: false },
-  ],
-  "New Patient": [
-    { name: "Comprehensive History", type: "textarea", required: true },
-    { name: "Physical Exam", type: "textarea", required: true },
-    { name: "Past Medical History Reviewed", type: "checkbox", required: true },
-    { name: "Family History Reviewed", type: "checkbox", required: true },
-    { name: "Social History Reviewed", type: "checkbox", required: true },
-    { name: "Assessment", type: "textarea", required: true },
-    { name: "Plan", type: "textarea", required: true },
-    { name: "Orders Placed", type: "textarea", required: false },
-    { name: "Follow-up Interval", type: "select", required: true, options: ["1 week", "2 weeks", "1 month", "3 months"] },
-    { name: "Clinician Notes", type: "textarea", required: false },
-  ],
-  Procedure: [
-    { name: "Informed Consent Confirmed", type: "checkbox", required: true },
-    { name: "Time Out Performed", type: "checkbox", required: true },
-    { name: "Procedure Note", type: "textarea", required: true },
-    { name: "Complications", type: "select", required: true, options: ["None", "Minor", "Major"] },
-    { name: "Post-procedure Instructions Given", type: "checkbox", required: true },
-    { name: "Follow-up Interval", type: "select", required: true, options: ["Next day", "1 week", "2 weeks"] },
-    { name: "Clinician Notes", type: "textarea", required: false },
-  ],
-  "Lab Work": [
-    { name: "Results Reviewed", type: "checkbox", required: true },
-    { name: "Findings Summary", type: "textarea", required: true },
-    { name: "Actions Taken", type: "textarea", required: false },
-    { name: "Clinician Notes", type: "textarea", required: false },
-  ],
-};
-
 const checkoutTemplates: TemplateField[] = [
   { name: "Follow-up Scheduled", type: "checkbox", required: true },
   { name: "Visit Summary Printed", type: "checkbox", required: true },
@@ -482,7 +547,7 @@ function getTemplateForStatus(
     return { label: "Rooming Template", fields: runtimeTemplates.rooming[visitType] ?? [] };
   }
   if (status === "Optimizing" || status === "ReadyForProvider") {
-    return { label: "Clinician Template", fields: runtimeTemplates.clinician[visitType] ?? clinicianTemplates[visitType] ?? [] };
+    return { label: "Clinician Workflow", fields: [] };
   }
   if (status === "CheckOut") {
     return { label: "Checkout Template", fields: runtimeTemplates.checkout[visitType] ?? checkoutTemplates };
@@ -854,13 +919,8 @@ export function EncounterDetailView() {
   );
   const diagnosisSearchResults = useMemo(() => searchClinicalCodes("diagnosis", diagnosisInput), [diagnosisInput]);
   const procedureSearchResults = useMemo(() => searchClinicalCodes("procedure", procedureInput), [procedureInput]);
-  const documentationSummary = {
-    chiefConcernSummary: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary] || ""),
-    assessmentSummary: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary] || ""),
-    planFollowUp: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.planFollowUp] || ""),
-    ordersOrProcedures: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures] || ""),
-  };
-  const documentationSummaryCompletedCount = Object.values(documentationSummary).filter((value) => value.trim().length > 0).length;
+  const documentationAttested = safeTemplateVals["coding.documentation_complete"] === true;
+  const documentationAttestationNote = String(safeTemplateVals[CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY] || "");
 
   if (!baseEnc && loadingEncounter) {
     return (
@@ -980,7 +1040,8 @@ export function EncounterDetailView() {
   );
 
   // For rooming: also need room assigned
-  const roomingReady = enc.status === "Rooming" ? allRequiredComplete && !!localRoom && serviceCaptureItems.length > 0 : allRequiredComplete;
+  const serviceCaptureComplete = serviceCaptureItems.length > 0 && serviceCaptureItems.every((item) => item.detailComplete);
+  const roomingReady = enc.status === "Rooming" ? allRequiredComplete && !!localRoom && serviceCaptureComplete : allRequiredComplete;
 
   const stageSec = getEncounterStageSeconds(enc, nowMs);
 
@@ -1096,6 +1157,8 @@ export function EncounterDetailView() {
   function addServiceCaptureFromCatalog(catalogItemId: string) {
     const catalogItem = (revenueSettings?.serviceCatalog || []).find((item) => item.id === catalogItemId);
     if (!catalogItem) return;
+    const detailSchemaKey = catalogItem.detailSchemaKey || (catalogItem.allowCustomNote ? "generic_service" : "procedure_performed");
+    const detailJson = buildInitialServiceDetail(detailSchemaKey, catalogItem.label, null);
     setServiceCaptureItems((prev) => [
       ...prev,
       {
@@ -1110,6 +1173,9 @@ export function EncounterDetailView() {
         capturedByUserId: session?.userId || null,
         suggestedProcedureCode: catalogItem.suggestedProcedureCode,
         expectedChargeCents: catalogItem.expectedChargeCents,
+        detailSchemaKey,
+        detailJson,
+        detailComplete: serviceDetailComplete(detailSchemaKey, detailJson),
       },
     ]);
   }
@@ -1133,6 +1199,9 @@ export function EncounterDetailView() {
         capturedByUserId: session?.userId || null,
         suggestedProcedureCode: null,
         expectedChargeCents: null,
+        detailSchemaKey: "generic_service",
+        detailJson: buildInitialServiceDetail("generic_service", customServiceLabel.trim(), customServiceNote.trim() || null),
+        detailComplete: Boolean((customServiceNote.trim() || customServiceLabel.trim()).trim()),
       },
     ]);
     setCustomServiceLabel("");
@@ -1141,6 +1210,29 @@ export function EncounterDetailView() {
 
   function removeServiceCaptureItem(itemId: string) {
     setServiceCaptureItems((prev) => prev.filter((item) => item.id !== itemId));
+  }
+
+  function updateServiceCaptureItem(itemId: string, updater: (item: RevenueServiceCaptureItem) => RevenueServiceCaptureItem) {
+    setServiceCaptureItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const next = updater(item);
+        return {
+          ...next,
+          detailComplete: serviceDetailComplete(next.detailSchemaKey, next.detailJson),
+        };
+      }),
+    );
+  }
+
+  function updateServiceCaptureDetail(itemId: string, detailKey: string, value: string) {
+    updateServiceCaptureItem(itemId, (item) => ({
+      ...item,
+      detailJson: {
+        ...(item.detailJson || {}),
+        [detailKey]: value,
+      },
+    }));
   }
 
   function handleAdvance() {
@@ -1165,7 +1257,7 @@ export function EncounterDetailView() {
     if (enc.status === "Rooming" && !roomingReady) {
       setShowRequiredFieldErrors(true);
       toast.error("Complete all required fields before advancing", {
-        description: `${completedCount}/${requiredCount} required fields complete${!localRoom ? ", room not assigned" : ""}${serviceCaptureItems.length === 0 ? ", service capture not documented" : ""}`,
+        description: `${completedCount}/${requiredCount} required fields complete${!localRoom ? ", room not assigned" : ""}${serviceCaptureItems.length === 0 ? ", service capture not documented" : !serviceCaptureComplete ? ", service capture details incomplete" : ""}`,
       });
       return;
     }
@@ -1208,7 +1300,7 @@ export function EncounterDetailView() {
 
     const advanceDescription =
       enc.status === "Optimizing" && currentTemplateVals["coding.documentation_complete"] !== true
-        ? "Moved to checkout. Revenue will keep documentation incomplete flagged until the clinician finishes it."
+        ? "Moved to checkout. Revenue will keep documentation incomplete flagged until Athena documentation is finished."
         : `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`;
 
     toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
@@ -1884,13 +1976,13 @@ export function EncounterDetailView() {
                             <span className="text-[11px] text-muted-foreground ml-2">Time-of-service revenue evidence</span>
                           </div>
                         </div>
-                        <Badge className="border-0 bg-white text-cyan-700 text-[10px]">
-                          {serviceCaptureItems.length > 0 ? `${serviceCaptureItems.length} captured` : "Required"}
+                        <Badge className={`border-0 text-[10px] ${serviceCaptureComplete ? "bg-emerald-100 text-emerald-700" : "bg-white text-cyan-700"}`}>
+                          {serviceCaptureItems.length > 0 ? `${serviceCaptureItems.filter((item) => item.detailComplete).length}/${serviceCaptureItems.length} complete` : "Required"}
                         </Badge>
                       </div>
                       <div className="p-5 space-y-4">
                         <div className="text-[12px] text-slate-600">
-                          Capture the performed MA services here so Revenue Cycle can build the same-day charge expectation in Flow without waiting on Athena data.
+                          Capture the performed MA services here so Revenue Cycle can build the same-day charge expectation in Flow without waiting on Athena data. Each service opens the billing and safety details needed to support the encounter.
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {(revenueSettings?.serviceCatalog || []).filter((item) => item.active !== false && !item.allowCustomNote).map((item) => (
@@ -1939,20 +2031,130 @@ export function EncounterDetailView() {
                             </div>
                           )}
                           {serviceCaptureItems.map((item) => (
-                            <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-cyan-100 bg-white px-4 py-3">
-                              <div>
-                                <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{item.label}</div>
-                                <div className="mt-1 text-[11px] text-muted-foreground">
-                                  Qty {item.quantity}
-                                  {item.suggestedProcedureCode ? ` · Suggested CPT ${item.suggestedProcedureCode}` : ""}
-                                  {item.note ? ` · ${item.note}` : ""}
+                            <div key={item.id} className="rounded-xl border border-cyan-100 bg-white px-4 py-4 space-y-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>{item.label}</div>
+                                    <Badge className={`border-0 ${item.detailComplete ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+                                      {item.detailComplete ? "Detail complete" : "Detail required"}
+                                    </Badge>
+                                    <Badge className="border-0 bg-cyan-50 text-cyan-700">
+                                      {getServiceDetailSchema(item.detailSchemaKey).label}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-1 text-[11px] text-muted-foreground">
+                                    {item.suggestedProcedureCode ? `Suggested CPT ${item.suggestedProcedureCode}` : "No suggested CPT"}
+                                    {item.expectedChargeCents != null ? ` · Expected ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.expectedChargeCents / 100)}` : " · Charge mapping needed"}
+                                  </div>
+                                </div>
+                                {!isEncounterReadOnly && (
+                                  <button onClick={() => removeServiceCaptureItem(item.id)} className="text-rose-500">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <div>
+                                  <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 600 }}>
+                                    Quantity
+                                  </label>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={String(item.quantity || 1)}
+                                    onChange={(event) =>
+                                      updateServiceCaptureItem(item.id, (current) => ({
+                                        ...current,
+                                        quantity: Math.max(1, Number(event.target.value.replace(/[^0-9]/g, "") || 1)),
+                                      }))
+                                    }
+                                    disabled={isEncounterReadOnly}
+                                    className="h-10 w-full rounded-lg border border-cyan-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 600 }}>
+                                    MA note
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={item.note || ""}
+                                    onChange={(event) =>
+                                      updateServiceCaptureItem(item.id, (current) => ({
+                                        ...current,
+                                        note: event.target.value,
+                                      }))
+                                    }
+                                    disabled={isEncounterReadOnly}
+                                    className="h-10 w-full rounded-lg border border-cyan-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
+                                    placeholder="Optional MA note"
+                                  />
                                 </div>
                               </div>
-                              {!isEncounterReadOnly && (
-                                <button onClick={() => removeServiceCaptureItem(item.id)} className="text-rose-500">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              )}
+                              <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 px-4 py-4">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-700" style={{ fontWeight: 700 }}>
+                                  {getServiceDetailSchema(item.detailSchemaKey).label}
+                                </div>
+                                <div className="mt-1 text-[12px] text-slate-600">
+                                  {getServiceDetailSchema(item.detailSchemaKey).description}
+                                </div>
+                                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                  {getServiceDetailSchema(item.detailSchemaKey).fields.map((field) => {
+                                    const fieldValue = detailValueToString(item.detailJson?.[field.key]);
+                                    const invalid = showRequiredFieldErrors && !item.detailComplete && field.required && !fieldValue.trim();
+                                    return (
+                                      <div key={`${item.id}:${field.key}`} className={field.type === "textarea" ? "md:col-span-2" : ""}>
+                                        <label className={`mb-1.5 block text-[11px] uppercase tracking-wider ${invalid ? "text-red-600" : "text-muted-foreground"}`} style={{ fontWeight: 600 }}>
+                                          {field.label}
+                                          {field.required && <span className="text-red-400"> *</span>}
+                                        </label>
+                                        {field.type === "textarea" ? (
+                                          <textarea
+                                            rows={3}
+                                            value={fieldValue}
+                                            onChange={(event) => updateServiceCaptureDetail(item.id, field.key, event.target.value)}
+                                            disabled={isEncounterReadOnly}
+                                            placeholder={field.placeholder || field.label}
+                                            className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[12px] resize-none focus:outline-none focus:ring-2 ${
+                                              invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-cyan-200 focus:border-cyan-300 focus:ring-cyan-100"
+                                            } disabled:opacity-60`}
+                                          />
+                                        ) : field.type === "select" ? (
+                                          <div className="relative">
+                                            <select
+                                              value={fieldValue}
+                                              onChange={(event) => updateServiceCaptureDetail(item.id, field.key, event.target.value)}
+                                              disabled={isEncounterReadOnly}
+                                              className={`h-10 w-full rounded-lg border bg-white px-3 pr-9 text-[12px] appearance-none focus:outline-none focus:ring-2 ${
+                                                invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-cyan-200 focus:border-cyan-300 focus:ring-cyan-100"
+                                              } disabled:opacity-60`}
+                                            >
+                                              <option value="">Select…</option>
+                                              {(field.options || []).map((option) => (
+                                                <option key={option} value={option}>{option}</option>
+                                              ))}
+                                            </select>
+                                            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500" />
+                                          </div>
+                                        ) : (
+                                          <input
+                                            type={field.type === "date" ? "date" : "text"}
+                                            inputMode={field.inputMode || (field.type === "number" ? "numeric" : "text")}
+                                            value={fieldValue}
+                                            onChange={(event) => updateServiceCaptureDetail(item.id, field.key, event.target.value)}
+                                            disabled={isEncounterReadOnly}
+                                            placeholder={field.placeholder || field.label}
+                                            className={`h-10 w-full rounded-lg border bg-white px-3 text-[12px] focus:outline-none focus:ring-2 ${
+                                              invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-cyan-200 focus:border-cyan-300 focus:ring-cyan-100"
+                                            } disabled:opacity-60`}
+                                          />
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1960,6 +2162,7 @@ export function EncounterDetailView() {
                     </div>
 
                     {/* ── Rooming requirements ── */}
+                    {enc.status !== "Optimizing" && (
                     <div className="mt-6 rounded-xl border border-purple-100 bg-purple-50/50 overflow-hidden">
                         {/* Template header bar */}
                         <div className="px-5 py-3.5 border-b border-purple-100 flex items-center justify-between">
@@ -2097,6 +2300,7 @@ export function EncounterDetailView() {
                           )}
                         </div>
                       </div>
+                    )}
 
                     {/* ── Ready for Provider button (inline, like Check-In) ── */}
                     <div className="mt-6 pt-5 border-t border-gray-100">
@@ -2309,58 +2513,39 @@ export function EncounterDetailView() {
                                     <span style={{ fontWeight: 700 }}>{clinicianProcedureCodes.length}</span>
                                   </div>
                                   <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
-                                    <span>Documentation complete</span>
+                                    <span>Documentation completed in Athena</span>
                                     <span style={{ fontWeight: 700 }}>
-                                      {currentTemplateVals["coding.documentation_complete"] === true ? "Yes" : "No"}
+                                      {documentationAttested ? "Yes" : "No"}
                                     </span>
                                   </div>
                                   <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
-                                    <span>Structured documentation fields</span>
-                                    <span style={{ fontWeight: 700 }}>{documentationSummaryCompletedCount}/4</span>
+                                    <span>Documentation attestation note</span>
+                                    <span style={{ fontWeight: 700 }}>{documentationAttestationNote.trim() ? "Added" : "Optional"}</span>
                                   </div>
                                 </div>
                               </div>
                               <div className="rounded-xl border border-cyan-100 bg-white px-4 py-4 space-y-3">
                                 <div>
-                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-700">Encounter documentation</div>
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-700">Athena documentation status</div>
                                   <div className="mt-1 text-[12px] text-slate-600">
-                                    Flow owns time-of-service documentation guidance here. Athena can stay out of the loop until later handoff.
+                                    Use this to tell Revenue whether the clinician finished Athena documentation yet. Flow is keeping the blocker and rollover logic, but the actual documentation stays in Athena for now.
                                   </div>
                                 </div>
                                 <TemplateFieldInput
-                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary, name: "Chief Concern / Visit Summary", type: "textarea", required: false }}
-                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary]}
+                                  field={{ key: "coding.documentation_complete", name: "Documentation completed in Athena", type: "yesNo", required: false }}
+                                  value={currentTemplateVals["coding.documentation_complete"]}
                                   disabled={isEncounterReadOnly}
-                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary, val)}
+                                  onChange={(val) => setFieldValue("coding.documentation_complete", val)}
                                 />
                                 <TemplateFieldInput
-                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary, name: "Assessment Summary", type: "textarea", required: false }}
-                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary]}
+                                  field={{ key: CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY, name: "Documentation attestation note", type: "textarea", required: false }}
+                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY]}
                                   disabled={isEncounterReadOnly}
-                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary, val)}
+                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY, val)}
                                 />
-                                <TemplateFieldInput
-                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.planFollowUp, name: "Plan / Follow-up", type: "textarea", required: false }}
-                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.planFollowUp]}
-                                  disabled={isEncounterReadOnly}
-                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.planFollowUp, val)}
-                                />
-                                <TemplateFieldInput
-                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures, name: "Orders / Procedures Performed", type: "textarea", required: false }}
-                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures]}
-                                  disabled={isEncounterReadOnly}
-                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures, val)}
-                                />
-                              </div>
-                              <TemplateFieldInput
-                                field={{ key: "coding.documentation_complete", name: "Documentation Complete", type: "yesNo", required: false }}
-                                value={currentTemplateVals["coding.documentation_complete"]}
-                                disabled={isEncounterReadOnly}
-                                onChange={(val) => setFieldValue("coding.documentation_complete", val)}
-                              />
                               {currentTemplateVals["coding.documentation_complete"] !== true && (
                                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
-                                  Checkout can continue before documentation is complete, but Revenue Cycle will keep this encounter flagged until documentation is finished.
+                                  Checkout can continue before Athena documentation is complete, but Revenue Cycle will keep this encounter flagged until documentation is finished.
                                 </div>
                               )}
                               <TemplateFieldInput
@@ -2369,6 +2554,7 @@ export function EncounterDetailView() {
                                 disabled={isEncounterReadOnly}
                                 onChange={(val) => setFieldValue("coding.note", val)}
                               />
+                            </div>
                             </div>
                           </div>
                         </div>
@@ -2767,6 +2953,7 @@ function StructuredCodeComposer({
   suggestionCodes?: string[];
   onSuggestionClick?: (code: string) => void;
 }) {
+  const codeKind = label.toLowerCase().includes("diagnosis") ? "diagnosis" : "procedure";
   return (
     <div className="rounded-xl border border-cyan-100 bg-white px-4 py-4">
       <div className="flex items-center justify-between gap-3">
@@ -2809,7 +2996,10 @@ function StructuredCodeComposer({
                 disabled={disabled}
                 className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700 disabled:opacity-50"
               >
-                {code}
+                {(() => {
+                  const reference = getClinicalCodeReference(codeKind, code);
+                  return reference ? `${reference.code} — ${reference.label}` : code;
+                })()}
               </button>
             ))}
           </div>
@@ -2820,16 +3010,19 @@ function StructuredCodeComposer({
           <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Matches</div>
           <div className="space-y-2">
             {searchResults
-              .filter((entry) => !codes.includes(entry))
+              .filter((entry) => !codes.includes(entry.code))
               .map((entry) => (
                 <button
-                  key={entry}
+                  key={entry.code}
                   type="button"
-                  onClick={() => onSuggestionClick(entry)}
+                  onClick={() => onSuggestionClick(entry.code)}
                   disabled={disabled}
                   className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left disabled:opacity-50"
                 >
-                  <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{entry}</div>
+                  <div>
+                    <div className="text-[12px] text-slate-900" style={{ fontWeight: 700 }}>{entry.code}</div>
+                    <div className="text-[11px] text-slate-500">{entry.label}</div>
+                  </div>
                   <div className="text-[11px] text-cyan-700" style={{ fontWeight: 700 }}>Use</div>
                 </button>
               ))}
@@ -2845,7 +3038,12 @@ function StructuredCodeComposer({
             disabled={disabled}
             className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700 disabled:opacity-50"
           >
-            <span>{code}</span>
+            <span>
+              {(() => {
+                const reference = getClinicalCodeReference(codeKind, code);
+                return reference ? `${reference.code} — ${reference.label}` : code;
+              })()}
+            </span>
             <X className="w-3 h-3" />
           </button>
         ))}
@@ -2974,18 +3172,21 @@ function TemplateFieldInput({
           {field.name}
           {field.required && <span className="text-red-400">*</span>}
         </label>
-        <select
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-          aria-invalid={showError}
-          disabled={disabled}
-          className={`${shortInputClass} disabled:cursor-not-allowed disabled:opacity-60`}
-        >
-          <option value="">Select...</option>
-          {(field.options ?? []).map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={typeof value === "string" ? value : ""}
+            onChange={(e) => onChange(e.target.value)}
+            aria-invalid={showError}
+            disabled={disabled}
+            className={`${shortInputClass} pr-10 disabled:cursor-not-allowed disabled:opacity-60`}
+          >
+            <option value="">Select...</option>
+            {(field.options ?? []).map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-500" />
+        </div>
         {showError && <p className="text-[10px] text-red-600 mt-1">Select one option to continue.</p>}
       </div>
     );
@@ -3049,13 +3250,9 @@ function TemplateFieldInput({
       weight: "165 lb",
       painScore: "0-10",
     };
-    const numericVitalTypes = new Set<TemplateField["type"]>(["temperature", "pulse", "respirations", "oxygenSaturation", "painScore"]);
-    const inputType =
-      field.type === "date" || field.type === "time" || field.type === "number"
-        ? field.type
-        : numericVitalTypes.has(field.type)
-          ? "number"
-          : "text";
+    const numericVitalTypes = new Set<TemplateField["type"]>(["number", "temperature", "pulse", "respirations", "oxygenSaturation", "painScore"]);
+    const inputType = field.type === "date" || field.type === "time" ? field.type : "text";
+    const inputMode = numericVitalTypes.has(field.type) ? "numeric" : "text";
     return (
       <div>
         <label className={labelClass} style={{ fontWeight: 500 }}>
@@ -3067,8 +3264,10 @@ function TemplateFieldInput({
           placeholder={vitalPlaceholders[field.type] || field.name}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
+          inputMode={inputMode}
           aria-invalid={showError}
           disabled={disabled}
+          onWheel={(event) => event.currentTarget.blur()}
           className={`${shortInputClass} disabled:cursor-not-allowed disabled:opacity-60`}
         />
         {showError && <p className="text-[10px] text-red-600 mt-1">This field is required.</p>}

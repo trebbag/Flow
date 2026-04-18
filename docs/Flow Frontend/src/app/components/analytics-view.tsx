@@ -1,68 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  AlertTriangle,
   BarChart3,
-  TrendingUp,
   Clock,
+  DollarSign,
+  Layers3,
+  ShieldAlert,
+  Stethoscope,
+  TrendingUp,
   Users,
-  Activity,
 } from "lucide-react";
 import {
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  Legend,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { defaultThresholds } from "./mock-data";
-import { useEncounters } from "./encounter-context";
 import { dashboards } from "./api-client";
-import { labelProviderName } from "./display-names";
-
-type WeeklyTrendPoint = {
-  day: string;
-  cycleTime: number;
-  encounters: number;
-  sla: number;
-};
-
-type DailyHistoryPoint = {
-  date: string;
-  queueByStatus: Record<string, number>;
-  alertsByLevel: Record<string, number>;
-  encounterCount: number;
-  avgLobbyWaitMins: number;
-  avgRoomingWaitMins: number;
-  avgProviderVisitMins: number;
-  stageRollups: Array<{ status: string; count: number; avgMinutes: number }>;
-  providerRollups: Array<{
-    providerName: string;
-    encounterCount: number;
-    activeCount: number;
-    completedCount: number;
-    stageAverages: Record<string, number>;
-  }>;
-};
-
-const STAGE_ORDER = ["Lobby", "Rooming", "ReadyForProvider", "Optimizing", "CheckOut"] as const;
-
-const STAGE_LABELS: Record<string, string> = {
-  Lobby: "Lobby",
-  Rooming: "Rooming",
-  ReadyForProvider: "Ready",
-  Optimizing: "Optimizing",
-  CheckOut: "Checkout",
-};
+import type { OwnerAnalyticsSnapshot } from "./types";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Badge } from "./ui/badge";
 
 function isoDateDaysAgo(daysAgo: number) {
   const d = new Date();
@@ -70,465 +33,558 @@ function isoDateDaysAgo(daysAgo: number) {
   return d.toISOString().slice(0, 10);
 }
 
-function shortDayName(dateIso: string) {
-  return new Date(`${dateIso}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+function formatCurrency(cents: number | null | undefined) {
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format((Number(cents) || 0) / 100);
 }
 
-function hourLabelFromCheckin(checkinTime: string) {
-  const [hourRaw] = checkinTime.split(":");
-  const hour = Number(hourRaw);
-  if (!Number.isFinite(hour)) return "Unknown";
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const twelveHour = hour % 12 === 0 ? 12 : hour % 12;
-  return `${twelveHour} ${ampm}`;
+function formatPercent(value: number | null | undefined) {
+  return `${Math.round(Number(value) || 0)}%`;
+}
+
+function formatDateLabel(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function humanizeLabel(value: string) {
+  return String(value || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function SafePanel({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <Card className="border-0 shadow-sm overflow-hidden">
+      <div className="h-1 bg-gradient-to-r from-slate-900 via-slate-700 to-slate-500" />
+      <CardHeader className="pb-3">
+        <CardTitle className="text-[15px] tracking-tight" style={{ fontWeight: 700 }}>
+          {title}
+        </CardTitle>
+        {description ? <div className="text-[12px] text-muted-foreground">{description}</div> : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  subvalue,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  subvalue?: string;
+  icon: React.ElementType;
+  tone: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+          <div className="mt-2 text-[22px] text-slate-900" style={{ fontWeight: 700 }}>
+            {value}
+          </div>
+          {subvalue ? <div className="mt-1 text-[12px] text-slate-500">{subvalue}</div> : null}
+        </div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function AnalyticsView() {
-  const { encounters } = useEncounters();
-  const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrendPoint[]>([]);
-  const [historicalDaily, setHistoricalDaily] = useState<DailyHistoryPoint[]>([]);
+  const [snapshot, setSnapshot] = useState<OwnerAnalyticsSnapshot | null>(null);
+  const [lastGoodSnapshot, setLastGoodSnapshot] = useState<OwnerAnalyticsSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    const loadWeeklyTrend = async () => {
+    const load = async (background = false) => {
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
       try {
-        const to = isoDateDaysAgo(0);
-        const from = isoDateDaysAgo(4);
-        const history = (await dashboards.officeManagerHistory({ from, to })) as any;
-        const days = Array.isArray(history?.daily) ? (history.daily as DailyHistoryPoint[]) : [];
-
-        const points = days.map((day) => {
-          const encounterCount = Number(day.encounterCount || 0);
-          const cycleTime =
-            Number(day.avgLobbyWaitMins || 0) +
-            Number(day.avgRoomingWaitMins || 0) +
-            Number(day.avgProviderVisitMins || 0);
-          const alertCount =
-            Number(day.alertsByLevel?.Yellow || 0) + Number(day.alertsByLevel?.Red || 0);
-          const sla =
-            encounterCount > 0
-              ? Math.max(0, Math.min(100, Math.round((1 - alertCount / encounterCount) * 100)))
-              : 100;
-
-          return {
-            day: shortDayName(day.date),
-            cycleTime: Math.round(cycleTime),
-            encounters: encounterCount,
-            sla,
-          };
+        const data = await dashboards.ownerAnalytics({
+          from: isoDateDaysAgo(6),
+          to: isoDateDaysAgo(0),
         });
-
-        if (mounted) {
-          setHistoricalDaily(days);
-          setWeeklyTrend(points);
-        }
-      } catch {
-        const active = encounters.filter((encounter) => encounter.status !== "Incoming");
-        const avgCycle = active.length
-          ? Math.round(
-              active.reduce((sum, encounter) => sum + Math.max(0, encounter.minutesInStage), 0) /
-                active.length,
-            )
-          : 0;
-        const breached = active.filter((encounter) => {
-          const threshold = defaultThresholds.find((item) => item.status === encounter.status);
-          return threshold ? encounter.minutesInStage > threshold.redMinutes : false;
-        }).length;
-        const fallbackSla =
-          active.length > 0
-            ? Math.max(0, Math.round(((active.length - breached) / active.length) * 100))
-            : 100;
-
-        if (mounted) {
-          setHistoricalDaily([]);
-          setWeeklyTrend([
-            {
-              day: "Today",
-              cycleTime: avgCycle,
-              encounters: active.length,
-              sla: fallbackSla,
-            },
-          ]);
-        }
+        if (!mounted) return;
+        setSnapshot(data);
+        setLastGoodSnapshot(data);
+      } catch (loadError) {
+        if (!mounted) return;
+        setError((loadError as Error).message || "Unable to load analytics.");
+      } finally {
+        if (!mounted) return;
+        setLoading(false);
+        setRefreshing(false);
       }
     };
 
-    loadWeeklyTrend().catch(() => undefined);
+    load(false).catch(() => undefined);
     return () => {
       mounted = false;
     };
-  }, [encounters]);
+  }, []);
 
-  const activeEncounters = useMemo(
-    () => encounters.filter((encounter) => encounter.status !== "Incoming"),
-    [encounters],
-  );
+  const data = snapshot || lastGoodSnapshot;
 
-  const stageMetrics = useMemo(
-    () => {
-      const latestDaily = historicalDaily[historicalDaily.length - 1];
-      if (latestDaily?.stageRollups?.length) {
-        return STAGE_ORDER.map((status) => {
-          const rollup = latestDaily.stageRollups.find((entry) => entry.status === status);
-          const threshold = defaultThresholds.find((item) => item.status === status);
-          return {
-            stage: STAGE_LABELS[status],
-            avgMinutes: Number(rollup?.avgMinutes || 0),
-            target: threshold?.yellowMinutes || 0,
-            count: Number(rollup?.count || 0),
-            slaCompliance:
-              Number(rollup?.count || 0) > 0 && threshold
-                ? Math.max(
-                    0,
-                    Math.min(
-                      100,
-                      Math.round(
-                        ((Number(rollup?.count || 0) - Number(latestDaily.alertsByLevel?.Red || 0)) /
-                          Number(rollup?.count || 1)) *
-                          100,
-                      ),
-                    ),
-                  )
-                : 100,
-          };
-        });
-      }
-
-      return STAGE_ORDER.map((status) => {
-        const rows = encounters.filter((encounter) => encounter.status === status);
-        const avgMinutes =
-          rows.length > 0
-            ? Math.round(
-                rows.reduce((sum, encounter) => sum + Math.max(0, encounter.minutesInStage), 0) /
-                  rows.length,
-              )
-            : 0;
-        const threshold = defaultThresholds.find((item) => item.status === status);
-        const withinTarget =
-          threshold
-            ? rows.filter((encounter) => encounter.minutesInStage <= threshold.yellowMinutes).length
-            : rows.length;
-        const slaCompliance =
-          rows.length > 0 ? Math.round((withinTarget / rows.length) * 100) : 100;
-
-        return {
-          stage: STAGE_LABELS[status],
-          avgMinutes,
-          target: threshold?.yellowMinutes || 0,
-          count: rows.length,
-          slaCompliance,
-        };
-      });
-    },
-    [encounters, historicalDaily],
-  );
-
-  const providerComparison = useMemo(() => {
-    if (historicalDaily.length > 0) {
-      const aggregate = new Map<
-        string,
-        { encounterCount: number; activeCount: number; completedCount: number; cycleTotal: number; cycleCount: number }
-      >();
-
-      historicalDaily.forEach((day) => {
-        (day.providerRollups || []).forEach((provider) => {
-          const providerName = labelProviderName(String(provider.providerName || "").trim(), true);
-          if (!aggregate.has(providerName)) {
-            aggregate.set(providerName, {
-              encounterCount: 0,
-              activeCount: 0,
-              completedCount: 0,
-              cycleTotal: 0,
-              cycleCount: 0,
-            });
-          }
-          const row = aggregate.get(providerName)!;
-          row.encounterCount += Number(provider.encounterCount || 0);
-          row.activeCount += Number(provider.activeCount || 0);
-          row.completedCount += Number(provider.completedCount || 0);
-          const stageValues = Object.values(provider.stageAverages || {}).filter((value) => Number(value) > 0);
-          if (stageValues.length > 0) {
-            row.cycleTotal += stageValues.reduce((sum, value) => sum + Number(value), 0);
-            row.cycleCount += stageValues.length;
-          }
-        });
-      });
-
-      return Array.from(aggregate.entries())
-        .map(([providerName, row]) => {
-          const initials = providerName
-            .split(/\s+/)
-            .filter(Boolean)
-            .slice(-2)
-            .map((part) => part[0]?.toUpperCase() || "")
-            .join("");
-          return {
-            name: initials || providerName.slice(0, 2).toUpperCase(),
-            fullName: providerName,
-            cycleTime: row.cycleCount > 0 ? Math.round(row.cycleTotal / row.cycleCount) : 0,
-            utilization:
-              row.encounterCount > 0 ? Math.round((row.activeCount / row.encounterCount) * 100) : 0,
-            completed: row.completedCount,
-          };
-        })
-        .sort((a, b) => b.completed - a.completed || a.fullName.localeCompare(b.fullName));
-    }
-
-    const grouped = new Map<
-      string,
-      {
-        name: string;
-        cycleMinutesTotal: number;
-        count: number;
-        activeCount: number;
-        completedCount: number;
-      }
-    >();
-
-    activeEncounters.forEach((encounter) => {
-      const key = labelProviderName(encounter.provider || "Unassigned", true);
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          name: key,
-          cycleMinutesTotal: 0,
-          count: 0,
-          activeCount: 0,
-          completedCount: 0,
-        });
-      }
-      const row = grouped.get(key)!;
-      row.cycleMinutesTotal += Math.max(0, encounter.minutesInStage);
-      row.count += 1;
-      if (["ReadyForProvider", "Optimizing", "CheckOut"].includes(encounter.status)) row.activeCount += 1;
-      if (encounter.status === "Optimized") row.completedCount += 1;
-    });
-
-    return Array.from(grouped.values())
-      .map((row) => {
-        const initials = row.name
-          .split(/\s+/)
-          .filter(Boolean)
-          .slice(-2)
-          .map((part) => part[0]?.toUpperCase() || "")
-          .join("");
-        const avgCycle = row.count > 0 ? Math.round(row.cycleMinutesTotal / row.count) : 0;
-        return {
-          name: initials || row.name.slice(0, 2).toUpperCase(),
-          fullName: row.name,
-          cycleTime: avgCycle,
-          utilization: row.count > 0 ? Math.round((row.activeCount / row.count) * 100) : 0,
-          completed: row.completedCount,
-        };
-      })
-      .sort((a, b) => b.completed - a.completed || a.fullName.localeCompare(b.fullName));
-  }, [activeEncounters, historicalDaily]);
-
-  const bottleneckData = useMemo(() => {
-    const rows = new Map<
-      string,
-      { hour: string; lobby: number; rooming: number; ready: number; checkout: number }
-    >();
-
-    encounters.forEach((encounter) => {
-      const label = hourLabelFromCheckin(encounter.checkinTime);
-      if (!rows.has(label)) {
-        rows.set(label, { hour: label, lobby: 0, rooming: 0, ready: 0, checkout: 0 });
-      }
-      const target = rows.get(label)!;
-      if (encounter.status === "Lobby") target.lobby += 1;
-      if (encounter.status === "Rooming") target.rooming += 1;
-      if (encounter.status === "ReadyForProvider" || encounter.status === "Optimizing") target.ready += 1;
-      if (encounter.status === "CheckOut" || encounter.status === "Optimized") target.checkout += 1;
-    });
-
-    return Array.from(rows.values()).sort((a, b) => a.hour.localeCompare(b.hour));
-  }, [encounters]);
-
-  const radarData = useMemo(
+  const throughputDaily = useMemo(
     () =>
-      stageMetrics.map((metric) => ({
-        stage: metric.stage,
-        current: metric.slaCompliance,
-        target: 95,
+      (data?.throughput.daily || []).map((row) => ({
+        ...row,
+        dateLabel: formatDateLabel(row.dateKey),
       })),
-    [stageMetrics],
+    [data],
   );
 
-  const avgDailyVolume = activeEncounters.length;
-  const avgCycleTime = stageMetrics.length
-    ? Math.round(
-        stageMetrics.reduce((sum, metric) => sum + metric.avgMinutes, 0) / stageMetrics.length,
-      )
-    : 0;
-  const slaCompliance = stageMetrics.length
-    ? Math.round(
-        stageMetrics.reduce((sum, metric) => sum + metric.slaCompliance, 0) / stageMetrics.length,
-      )
-    : 100;
-  const providerUtilization = providerComparison.length
-    ? Math.round(
-        providerComparison.reduce((sum, provider) => sum + provider.utilization, 0) /
-          providerComparison.length,
-      )
-    : 0;
+  const revenueDaily = useMemo(
+    () =>
+      (data?.revenue.daily || []).map((row) => ({
+        ...row,
+        dateLabel: formatDateLabel(row.dateKey),
+        expectedGrossK: Math.round((row.expectedGrossChargeCents || 0) / 1000) / 100,
+        expectedNetK: Math.round((row.expectedNetReimbursementCents || 0) / 1000) / 100,
+      })),
+    [data],
+  );
+
+  const stageCounts = useMemo(
+    () =>
+      Object.entries(data?.throughput.stageCounts || {})
+        .map(([label, count]) => ({ label: humanizeLabel(label), count: Number(count) || 0 }))
+        .sort((a, b) => b.count - a.count),
+    [data],
+  );
+
+  const stageDurations = useMemo(
+    () =>
+      (data?.throughput.stageDurations || []).map((row) => ({
+        label: humanizeLabel(row.status),
+        avgMinutes: Number(row.avgMinutes) || 0,
+        count: Number(row.count) || 0,
+      })),
+    [data],
+  );
+
+  const hourOfDay = useMemo(
+    () => (data?.throughput.hourOfDay || []).map((row) => ({ label: row.label, count: row.count })),
+    [data],
+  );
+
+  const providerRows = useMemo(() => data?.providersAndStaff.providers || [], [data]);
+  const staffRows = useMemo(() => data?.providersAndStaff.staff || [], [data]);
+  const roomDaily = useMemo(
+    () =>
+      (data?.roomsAndCapacity.daily || []).map((row) => ({
+        ...row,
+        dateLabel: formatDateLabel(row.dateKey),
+      })),
+    [data],
+  );
+
+  if (loading && !data) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="text-[20px] text-slate-900" style={{ fontWeight: 700 }}>
+          Analytics
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-[13px] text-slate-500 shadow-sm">
+          Loading clinic-owner analytics...
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="text-[20px] text-slate-900" style={{ fontWeight: 700 }}>
+          Analytics
+        </div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-[13px] text-rose-700 shadow-sm">
+          {error || "Analytics could not be loaded."}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-6 max-w-[1440px] mx-auto">
-      <div>
-        <h1 className="text-[22px] tracking-tight" style={{ fontWeight: 700 }}>
-          <BarChart3 className="w-6 h-6 inline-block mr-2 text-cyan-500 -mt-1" />
-          Analytics
-        </h1>
-        <p className="text-[13px] text-muted-foreground mt-0.5">
-          Live operational analytics aggregated from current encounter data
-        </p>
+    <div className="p-4 sm:p-6 space-y-6 max-w-[1400px] mx-auto">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-slate-500">
+            <BarChart3 className="h-4 w-4" />
+            Clinic Owner Analytics
+          </div>
+          <h1 className="mt-2 text-[24px] tracking-tight text-slate-900" style={{ fontWeight: 700 }}>
+            Flow-controlled operations, projections, and risk in one view
+          </h1>
+          <p className="mt-2 max-w-[880px] text-[13px] text-slate-600">
+            This cockpit shows what Flow can actively control today: encounter throughput, same-day collections, expected charges,
+            expected reimbursement, staffing load, room capacity, and unresolved blockers. Athena-observed downstream results stay
+            separate and optional.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start lg:self-auto">
+          <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+            Flow-controlled primary
+          </Badge>
+          <Badge className="border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50">
+            {data.scope.from} to {data.scope.to}
+          </Badge>
+          {refreshing ? <Badge className="border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50">Refreshing</Badge> : null}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-              <Activity className="w-5 h-5 text-indigo-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">Active Volume</p>
-              <p className="text-[20px]" style={{ fontWeight: 700, lineHeight: 1.2 }}>{avgDailyVolume}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-purple-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">Avg Stage Time</p>
-              <p className="text-[20px]" style={{ fontWeight: 700, lineHeight: 1.2 }}>{avgCycleTime}m</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">SLA Compliance</p>
-              <p className="text-[20px]" style={{ fontWeight: 700, lineHeight: 1.2 }}>{slaCompliance}%</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-              <Users className="w-5 h-5 text-amber-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground">Provider Utilization</p>
-              <p className="text-[20px]" style={{ fontWeight: 700, lineHeight: 1.2 }}>{providerUtilization}%</p>
-            </div>
-          </CardContent>
-        </Card>
+      {error ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 shadow-sm">
+          Analytics refresh hit a problem, but the last good dataset is still on screen. {error}
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <MetricCard
+          label="Encounters In Scope"
+          value={String(data.overview.encounterCount)}
+          subvalue={`${data.overview.inProgressCount} currently active`}
+          icon={Users}
+          tone="bg-slate-900"
+        />
+        <MetricCard
+          label="Average Cycle Time"
+          value={`${data.overview.avgCycleTimeMins} min`}
+          subvalue="Lobby + rooming + provider"
+          icon={Clock}
+          tone="bg-blue-600"
+        />
+        <MetricCard
+          label="Expected Gross Charges"
+          value={formatCurrency(data.overview.expectedGrossChargeCents)}
+          subvalue={`Expected net ${formatCurrency(data.overview.expectedNetReimbursementCents)}`}
+          icon={TrendingUp}
+          tone="bg-emerald-600"
+        />
+        <MetricCard
+          label="POS Collections Tracked"
+          value={formatCurrency(data.overview.sameDayCollectionTrackedCents)}
+          subvalue={`${formatPercent(data.overview.sameDayCollectionDollarRate)} of expected ${formatCurrency(data.overview.sameDayCollectionExpectedCents)}`}
+          icon={DollarSign}
+          tone="bg-amber-500"
+        />
+        <MetricCard
+          label="Unresolved Blockers"
+          value={String(data.overview.unresolvedBlockers)}
+          subvalue={`${data.exceptionsAndRisk.documentationIncompleteCount} documentation blockers`}
+          icon={AlertTriangle}
+          tone="bg-rose-600"
+        />
+        <MetricCard
+          label="Safety + Blocking Tasks"
+          value={String((data.exceptionsAndRisk.activeSafetyCount || 0) + (data.exceptionsAndRisk.blockingTaskCount || 0))}
+          subvalue={`${data.exceptionsAndRisk.activeSafetyCount} safety, ${data.exceptionsAndRisk.blockingTaskCount} blocking tasks`}
+          icon={ShieldAlert}
+          tone="bg-violet-600"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2 pt-5 px-5">
-            <CardTitle className="text-[14px] flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-indigo-500" />
-              Daily Trend
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5">
-            <div className="h-[240px]">
+      <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
+        <SafePanel
+          title="Throughput"
+          description="Daily volume and cycle time trends, plus the current queue distribution and where the day is bunching up."
+        >
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weeklyTrend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <RechartsTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                  <Line type="monotone" dataKey="cycleTime" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1" }} name="Cycle Time (min)" />
-                  <Line type="monotone" dataKey="sla" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={false} name="SLA %" />
+                <LineChart data={throughputDaily}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
+                  <RechartsTooltip />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="encounterCount" fill="#0f172a" radius={[6, 6, 0, 0]} name="Encounters" />
+                  <Line yAxisId="right" type="monotone" dataKey="avgCycleTimeMins" stroke="#0ea5e9" strokeWidth={3} dot={false} name="Avg cycle mins" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2 pt-5 px-5">
-            <CardTitle className="text-[14px] flex items-center gap-2">
-              <Users className="w-4 h-4 text-amber-500" />
-              Provider Comparison
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5">
-            <div className="h-[240px]">
+            <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={providerComparison} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <RechartsTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                  <Bar dataKey="cycleTime" fill="#6366f1" radius={[4, 4, 0, 0]} name="Cycle Time" />
-                  <Bar dataKey="utilization" fill="#10b981" radius={[4, 4, 0, 0]} name="Utilization %" />
+                <BarChart data={stageCounts} layout="vertical" margin={{ left: 12, right: 12 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} width={110} />
+                  <RechartsTooltip />
+                  <Bar dataKey="count" fill="#334155" radius={[0, 6, 6, 0]} name="Stage count" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stageDurations}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={60} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <RechartsTooltip />
+                  <Bar dataKey="avgMinutes" fill="#8b5cf6" radius={[6, 6, 0, 0]} name="Avg minutes" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourOfDay}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <RechartsTooltip />
+                  <Bar dataKey="count" fill="#14b8a6" radius={[6, 6, 0, 0]} name="Check-ins" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </SafePanel>
+
+        <SafePanel
+          title="Revenue Projections"
+          description="Expected same-day cash, gross charges, net reimbursement, and the configuration gaps that keep projections from being complete."
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-700">Expected Gross</div>
+                <div className="mt-2 text-[22px] text-emerald-900" style={{ fontWeight: 700 }}>
+                  {formatCurrency(data.overview.expectedGrossChargeCents)}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-blue-700">Expected Net</div>
+                <div className="mt-2 text-[22px] text-blue-900" style={{ fontWeight: 700 }}>
+                  {formatCurrency(data.overview.expectedNetReimbursementCents)}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-amber-700">POS Tracked</div>
+                <div className="mt-2 text-[22px] text-amber-900" style={{ fontWeight: 700 }}>
+                  {formatCurrency(data.overview.sameDayCollectionTrackedCents)}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-rose-700">Mapping Gaps</div>
+                <div className="mt-2 text-[22px] text-rose-900" style={{ fontWeight: 700 }}>
+                  {data.revenue.mappingGaps.missingChargeMappingCount + data.revenue.mappingGaps.missingReimbursementMappingCount}
+                </div>
+              </div>
+            </div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={revenueDaily}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <RechartsTooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="expectedGrossK" stroke="#059669" strokeWidth={3} dot={false} name="Gross ($K)" />
+                  <Line type="monotone" dataKey="expectedNetK" stroke="#2563eb" strokeWidth={3} dot={false} name="Net ($K)" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>Missed collection reasons</div>
+                <div className="mt-3 space-y-2">
+                  {(data.revenue.missedCollectionReasons || []).slice(0, 5).map((row) => (
+                    <div key={row.label} className="flex items-center justify-between text-[12px]">
+                      <span className="text-slate-600">{humanizeLabel(row.label)}</span>
+                      <span style={{ fontWeight: 600 }}>{row.count}</span>
+                    </div>
+                  ))}
+                  {data.revenue.missedCollectionReasons.length === 0 ? <div className="text-[12px] text-slate-400">No missed collection reasons in range.</div> : null}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>Collection outcomes</div>
+                <div className="mt-3 space-y-2">
+                  {(data.revenue.collectionOutcomes || []).slice(0, 5).map((row) => (
+                    <div key={row.label} className="flex items-center justify-between text-[12px]">
+                      <span className="text-slate-600">{humanizeLabel(row.label)}</span>
+                      <span style={{ fontWeight: 600 }}>{row.count}</span>
+                    </div>
+                  ))}
+                  {data.revenue.collectionOutcomes.length === 0 ? <div className="text-[12px] text-slate-400">No collection outcomes captured in range.</div> : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        </SafePanel>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2 pt-5 px-5">
-            <CardTitle className="text-[14px] flex items-center gap-2">
-              <Clock className="w-4 h-4 text-red-500" />
-              Bottleneck Analysis (Volume by Hour)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5">
-            <div className="h-[240px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bottleneckData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="hour" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <RechartsTooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="lobby" stackId="a" fill="#6366f1" name="Lobby" />
-                  <Bar dataKey="rooming" stackId="a" fill="#8b5cf6" name="Rooming" />
-                  <Bar dataKey="ready" stackId="a" fill="#f59e0b" name="Ready/In Visit" />
-                  <Bar dataKey="checkout" stackId="a" fill="#10b981" name="Checkout/Done" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_1fr]">
+        <SafePanel
+          title="Providers & Staff"
+          description="Who is carrying volume, how fast optimizing is moving, and where MA workload is clustering."
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center gap-2 text-[13px] text-slate-800" style={{ fontWeight: 600 }}>
+                <Stethoscope className="h-4 w-4 text-slate-500" /> Providers
+              </div>
+              <div className="space-y-3">
+                {providerRows.map((provider) => (
+                  <div key={provider.providerName} className="rounded-xl border border-white bg-white p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{provider.providerName}</div>
+                      <Badge className="border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-50">{provider.encounterCount} visits</Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-slate-500">
+                      <div>Active<br /><span className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{provider.activeCount}</span></div>
+                      <div>Completed<br /><span className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{provider.completedCount}</span></div>
+                      <div>Optimizing avg<br /><span className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>{provider.avgOptimizingMins}m</span></div>
+                    </div>
+                  </div>
+                ))}
+                {providerRows.length === 0 ? <div className="text-[12px] text-slate-400">No provider activity in range.</div> : null}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex items-center gap-2 text-[13px] text-slate-800" style={{ fontWeight: 600 }}>
+                <Users className="h-4 w-4 text-slate-500" /> Staff load
+              </div>
+              <div className="space-y-3">
+                {staffRows.map((staff) => (
+                  <div key={`${staff.role}-${staff.label}`} className="flex items-center justify-between rounded-xl border border-white bg-white px-3 py-3 shadow-sm text-[12px]">
+                    <div>
+                      <div className="text-slate-900" style={{ fontWeight: 600 }}>{staff.label}</div>
+                      <div className="text-slate-500">{staff.role}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[16px] text-slate-900" style={{ fontWeight: 700 }}>{staff.encounterCount}</div>
+                      <div className="text-slate-500">encounters</div>
+                    </div>
+                  </div>
+                ))}
+                {staffRows.length === 0 ? <div className="text-[12px] text-slate-400">No staff activity in range.</div> : null}
+              </div>
+            </div>
+          </div>
+        </SafePanel>
 
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2 pt-5 px-5">
-            <CardTitle className="text-[14px] flex items-center gap-2">
-              <Activity className="w-4 h-4 text-purple-500" />
-              SLA Compliance by Stage
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5">
+        <SafePanel
+          title="Rooms & Capacity"
+          description="Room inventory, turnover behavior, and room issues that affect clinic throughput capacity."
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Rooms</div>
+                <div className="mt-2 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{data.roomsAndCapacity.current.roomCount}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Avg Occupied</div>
+                <div className="mt-2 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{data.roomsAndCapacity.current.avgOccupiedMins}m</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Avg Turnover</div>
+                <div className="mt-2 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{data.roomsAndCapacity.current.avgTurnoverMins}m</div>
+              </div>
+            </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-                  <PolarGrid stroke="#e2e8f0" />
-                  <PolarAngleAxis dataKey="stage" tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 9, fill: "#94a3b8" }} />
-                  <Radar name="Current" dataKey="current" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} strokeWidth={2} />
-                  <Radar name="Target" dataKey="target" stroke="#10b981" fill="none" strokeDasharray="4 4" strokeWidth={1.5} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                </RadarChart>
+                <LineChart data={roomDaily}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <RechartsTooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="avgOccupiedMins" stroke="#0f766e" strokeWidth={3} dot={false} name="Avg occupied mins" />
+                  <Line type="monotone" dataKey="avgTurnoverMins" stroke="#b45309" strokeWidth={3} dot={false} name="Avg turnover mins" />
+                </LineChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>Issue mix</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(data.roomsAndCapacity.issueTypes || []).map((issue) => (
+                  <Badge key={issue.label} className="border border-slate-200 bg-white text-slate-700 hover:bg-white">
+                    {humanizeLabel(issue.label)} · {issue.count}
+                  </Badge>
+                ))}
+                {data.roomsAndCapacity.issueTypes.length === 0 ? <div className="text-[12px] text-slate-400">No room issues recorded in range.</div> : null}
+              </div>
+            </div>
+          </div>
+        </SafePanel>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <SafePanel
+          title="Exceptions & Risk"
+          description="The unresolved work and blockers most likely to turn into next-day rollover, rework, or clinic-owner headaches."
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-rose-700">Documentation Incomplete</div>
+              <div className="mt-2 text-[22px] text-rose-900" style={{ fontWeight: 700 }}>{data.exceptionsAndRisk.documentationIncompleteCount}</div>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-amber-700">Provider Queries Open</div>
+              <div className="mt-2 text-[22px] text-amber-900" style={{ fontWeight: 700 }}>{data.exceptionsAndRisk.providerQueriesOpen}</div>
+            </div>
+            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-700">Stale Unresolved</div>
+              <div className="mt-2 text-[22px] text-violet-900" style={{ fontWeight: 700 }}>{data.exceptionsAndRisk.staleUnresolvedCount}</div>
+            </div>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-blue-700">Blocking Tasks</div>
+              <div className="mt-2 text-[22px] text-blue-900" style={{ fontWeight: 700 }}>{data.exceptionsAndRisk.blockingTaskCount}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-700">Active Safety</div>
+              <div className="mt-2 text-[22px] text-slate-900" style={{ fontWeight: 700 }}>{data.exceptionsAndRisk.activeSafetyCount}</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-700">Rolled Today</div>
+              <div className="mt-2 text-[22px] text-emerald-900" style={{ fontWeight: 700 }}>{data.throughput.leakage.rolledCount}</div>
+            </div>
+          </div>
+        </SafePanel>
+
+        <SafePanel
+          title="Rollover Drivers"
+          description="What is actually pushing cases into next-day work, so owners can see whether the clinic needs staffing, training, or configuration fixes."
+        >
+          <div className="space-y-3">
+            {(data.exceptionsAndRisk.rolloverReasons || []).slice(0, 8).map((row) => (
+              <div key={row.label} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[12px]">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Layers3 className="h-4 w-4 text-slate-400" />
+                  {humanizeLabel(row.label)}
+                </div>
+                <div className="text-slate-900" style={{ fontWeight: 700 }}>{row.count}</div>
+              </div>
+            ))}
+            {data.exceptionsAndRisk.rolloverReasons.length === 0 ? <div className="text-[12px] text-slate-400">No rollover reasons recorded in range.</div> : null}
+          </div>
+        </SafePanel>
       </div>
     </div>
   );

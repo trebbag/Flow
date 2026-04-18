@@ -40,6 +40,10 @@ export const CLINICIAN_CODING_KEYS = {
   note: "coding.note",
 } as const;
 
+export const CLINICIAN_DOCUMENTATION_ATTESTATION_KEYS = {
+  note: "documentation.athena_attestation_note",
+} as const;
+
 export const CLINICIAN_DOCUMENTATION_KEYS = {
   chiefConcernSummary: "documentation.chief_concern_summary",
   assessmentSummary: "documentation.assessment_summary",
@@ -107,6 +111,7 @@ export type RevenueServiceCatalogItem = {
   label: string;
   suggestedProcedureCode: string | null;
   expectedChargeCents: number | null;
+  detailSchemaKey?: string | null;
   active: boolean;
   allowCustomNote?: boolean;
 };
@@ -145,6 +150,9 @@ export type RevenueServiceCaptureItem = {
   capturedByUserId: string | null;
   suggestedProcedureCode: string | null;
   expectedChargeCents: number | null;
+  detailSchemaKey: string;
+  detailJson: Record<string, unknown> | null;
+  detailComplete: boolean;
 };
 
 export const DEFAULT_REVENUE_CHECKLIST_DEFAULTS: Record<string, RevenueChecklistDefaultItem[]> = {
@@ -173,11 +181,8 @@ export const DEFAULT_REVENUE_CHECKLIST_DEFAULTS: Record<string, RevenueChecklist
     { label: "Follow-up ownership captured if not fully collected", sortOrder: 40 },
   ],
   encounter_documentation: [
-    { label: "Chief concern / visit summary captured", sortOrder: 10 },
-    { label: "Assessment summary captured", sortOrder: 20 },
-    { label: "Plan / follow-up captured", sortOrder: 30 },
-    { label: "Orders / procedures documented", sortOrder: 40 },
-    { label: "Documentation complete enough for handoff", sortOrder: 50 },
+    { label: "Documentation completed in Athena", sortOrder: 10 },
+    { label: "Documentation attestation note recorded", sortOrder: 20, required: false },
   ],
   charge_capture_coding: [
     { label: "MA service capture complete", sortOrder: 10 },
@@ -191,16 +196,17 @@ export const DEFAULT_REVENUE_CHECKLIST_DEFAULTS: Record<string, RevenueChecklist
 };
 
 export const DEFAULT_SERVICE_CATALOG: RevenueServiceCatalogItem[] = [
-  { id: "svc-venipuncture", label: "Venipuncture", suggestedProcedureCode: "36415", expectedChargeCents: 1800, active: true },
-  { id: "svc-ekg", label: "EKG", suggestedProcedureCode: "93000", expectedChargeCents: 9500, active: true },
-  { id: "svc-injection", label: "Injection administration", suggestedProcedureCode: "96372", expectedChargeCents: 4200, active: true },
-  { id: "svc-nebulizer", label: "Nebulizer treatment", suggestedProcedureCode: "94640", expectedChargeCents: 6700, active: true },
-  { id: "svc-spirometry", label: "Spirometry", suggestedProcedureCode: "94010", expectedChargeCents: 7900, active: true },
-  { id: "svc-urinalysis", label: "Urinalysis", suggestedProcedureCode: "81002", expectedChargeCents: 1600, active: true },
-  { id: "svc-rapid-strep", label: "Rapid strep test", suggestedProcedureCode: "87880", expectedChargeCents: 2800, active: true },
-  { id: "svc-covid-pcr", label: "COVID PCR test", suggestedProcedureCode: "87635", expectedChargeCents: 5100, active: true },
-  { id: "svc-wound-care", label: "Simple wound repair", suggestedProcedureCode: "12001", expectedChargeCents: 12500, active: true },
-  { id: "svc-other", label: "Other service", suggestedProcedureCode: null, expectedChargeCents: null, active: true, allowCustomNote: true },
+  { id: "svc-venipuncture", label: "Venipuncture", suggestedProcedureCode: "36415", expectedChargeCents: 1800, detailSchemaKey: "specimen_collection", active: true },
+  { id: "svc-ekg", label: "EKG", suggestedProcedureCode: "93000", expectedChargeCents: 9500, detailSchemaKey: "procedure_performed", active: true },
+  { id: "svc-injection", label: "Injection administration", suggestedProcedureCode: "96372", expectedChargeCents: 4200, detailSchemaKey: "injection_medication", active: true },
+  { id: "svc-nebulizer", label: "Nebulizer treatment", suggestedProcedureCode: "94640", expectedChargeCents: 6700, detailSchemaKey: "procedure_performed", active: true },
+  { id: "svc-spirometry", label: "Spirometry", suggestedProcedureCode: "94010", expectedChargeCents: 7900, detailSchemaKey: "procedure_performed", active: true },
+  { id: "svc-urinalysis", label: "Urinalysis", suggestedProcedureCode: "81002", expectedChargeCents: 1600, detailSchemaKey: "point_of_care_test", active: true },
+  { id: "svc-rapid-strep", label: "Rapid strep test", suggestedProcedureCode: "87880", expectedChargeCents: 2800, detailSchemaKey: "point_of_care_test", active: true },
+  { id: "svc-covid-pcr", label: "COVID PCR test", suggestedProcedureCode: "87635", expectedChargeCents: 5100, detailSchemaKey: "point_of_care_test", active: true },
+  { id: "svc-wound-care", label: "Simple wound repair", suggestedProcedureCode: "12001", expectedChargeCents: 12500, detailSchemaKey: "procedure_performed", active: true },
+  { id: "svc-vaccine", label: "Vaccine administration", suggestedProcedureCode: "90471", expectedChargeCents: 3800, detailSchemaKey: "vaccine", active: true },
+  { id: "svc-other", label: "Other service", suggestedProcedureCode: null, expectedChargeCents: null, detailSchemaKey: "generic_service", active: true, allowCustomNote: true },
 ];
 
 export const DEFAULT_CHARGE_SCHEDULE: RevenueChargeScheduleItem[] = [
@@ -272,6 +278,11 @@ export type RevenueDocumentationSummary = {
   assessmentSummary: string | null;
   planFollowUp: string | null;
   ordersOrProcedures: string | null;
+};
+
+export type RevenueDocumentationAttestation = {
+  completedInAthena: boolean;
+  attestationNote: string | null;
 };
 
 export type RevenueExpectationSummary = {
@@ -492,6 +503,10 @@ function parseServiceCatalog(value: Prisma.JsonValue | null | undefined) {
       label,
       suggestedProcedureCode: asString(source.suggestedProcedureCode),
       expectedChargeCents: asInt(source.expectedChargeCents),
+      detailSchemaKey: normalizeServiceDetailSchemaKey(
+        source.detailSchemaKey,
+        asBoolean(source.allowCustomNote) ? "generic_service" : "procedure_performed",
+      ),
       active: asBoolean(source.active) ?? true,
       allowCustomNote: asBoolean(source.allowCustomNote) ?? false,
     });
@@ -591,6 +606,81 @@ function documentationSummaryComplete(summary: RevenueDocumentationSummary) {
   );
 }
 
+function buildDocumentationAttestation(source: Record<string, unknown>): RevenueDocumentationAttestation {
+  return {
+    completedInAthena: asBoolean(source[CLINICIAN_CODING_KEYS.documentationComplete]) ?? false,
+    attestationNote: asString(source[CLINICIAN_DOCUMENTATION_ATTESTATION_KEYS.note]),
+  };
+}
+
+function normalizeServiceDetailSchemaKey(value: unknown, fallback = "generic_service") {
+  const raw = asString(value)?.trim().toLowerCase();
+  const allowed = new Set([
+    "vaccine",
+    "injection_medication",
+    "point_of_care_test",
+    "specimen_collection",
+    "procedure_performed",
+    "generic_service",
+  ]);
+  return raw && allowed.has(raw) ? raw : fallback;
+}
+
+function isNonEmptyValue(value: unknown) {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "boolean") return true;
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== null && value !== undefined;
+}
+
+function areServiceDetailFieldsComplete(detail: Record<string, unknown>, requiredKeys: string[]) {
+  return requiredKeys.every((key) => isNonEmptyValue(detail[key]));
+}
+
+export function isServiceCaptureDetailComplete(item: {
+  label?: string | null;
+  note?: string | null;
+  detailSchemaKey?: string | null;
+  detailJson?: Record<string, unknown> | null;
+}) {
+  const schemaKey = normalizeServiceDetailSchemaKey(item.detailSchemaKey);
+  const detail = item.detailJson && typeof item.detailJson === "object" && !Array.isArray(item.detailJson)
+    ? item.detailJson
+    : {};
+  switch (schemaKey) {
+    case "vaccine":
+      return areServiceDetailFieldsComplete(detail, ["productLabel", "site", "route", "lotNumber", "expirationDate", "dose"]);
+    case "injection_medication":
+      return areServiceDetailFieldsComplete(detail, ["medicationLabel", "dose", "doseUnit", "route", "site", "lotNumber", "expirationDate"]);
+    case "point_of_care_test":
+      return areServiceDetailFieldsComplete(detail, ["testName", "specimenSource", "result"]);
+    case "specimen_collection":
+      return areServiceDetailFieldsComplete(detail, ["specimenType", "collectionMethod"]);
+    case "procedure_performed":
+      return areServiceDetailFieldsComplete(detail, ["procedureSummary"]);
+    case "generic_service":
+    default:
+      return Boolean((item.note || "").trim() || Object.values(detail).some((value) => isNonEmptyValue(value)));
+  }
+}
+
+export function serviceCaptureItemsAreComplete(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) return false;
+  return value.every((entry) => {
+    const source = asRecord(entry);
+    const label = asString(source.label) || asString(source.name);
+    if (!label) return false;
+    const detailJson = asRecord(source.detailJson);
+    return isServiceCaptureDetailComplete({
+      label,
+      note: asString(source.note),
+      detailSchemaKey: asString(source.detailSchemaKey),
+      detailJson,
+    });
+  });
+}
+
 function matchReimbursementRule(
   rules: RevenueReimbursementRuleItem[],
   params: { payerName?: string | null; financialClass?: string | null },
@@ -633,6 +723,11 @@ function normalizeServiceCaptureItems(
       const catalogItem = catalogItemId ? catalogById.get(catalogItemId) : null;
       const label = asString(source.label) || catalogItem?.label || asString(source.name);
       if (!label) return null;
+      const detailJson = asRecord(source.detailJson);
+      const detailSchemaKey = normalizeServiceDetailSchemaKey(
+        source.detailSchemaKey,
+        catalogItem?.detailSchemaKey || (catalogItem?.allowCustomNote ? "generic_service" : "procedure_performed"),
+      );
       return {
         id: asString(source.id) || `service-item-${index + 1}`,
         catalogItemId,
@@ -645,6 +740,16 @@ function normalizeServiceCaptureItems(
         capturedByUserId: asString(source.capturedByUserId),
         suggestedProcedureCode: asString(source.suggestedProcedureCode) || catalogItem?.suggestedProcedureCode || null,
         expectedChargeCents: asInt(source.expectedChargeCents) ?? catalogItem?.expectedChargeCents ?? null,
+        detailSchemaKey,
+        detailJson: Object.keys(detailJson).length > 0 ? detailJson : null,
+        detailComplete:
+          asBoolean(source.detailComplete) ??
+          isServiceCaptureDetailComplete({
+            label,
+            note: asString(source.note),
+            detailSchemaKey,
+            detailJson,
+          }),
       } satisfies RevenueServiceCaptureItem;
     })
     .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
@@ -656,7 +761,6 @@ export function buildRevenueExpectationSummary(params: {
     icd10CodesJson: string[];
     procedureLinesJson: RevenueProcedureLine[];
     serviceCaptureItemsJson?: RevenueServiceCaptureItem[];
-    documentationSummaryJson?: RevenueDocumentationSummary;
   };
   chargeSchedule: RevenueChargeScheduleItem[];
   reimbursementRules?: RevenueReimbursementRuleItem[];
@@ -667,16 +771,12 @@ export function buildRevenueExpectationSummary(params: {
 }) {
   const scheduleByCode = buildChargeScheduleMap(params.chargeSchedule);
   const serviceItems = params.chargeCapture.serviceCaptureItemsJson || [];
-  const documentationSummary = params.chargeCapture.documentationSummaryJson;
-  const documentationStructured =
-    documentationSummary ? documentationSummaryComplete(documentationSummary) : params.chargeCapture.documentationComplete;
   const clinicianCodingEntered =
     params.chargeCapture.icd10CodesJson.length > 0 || params.chargeCapture.procedureLinesJson.length > 0;
-  const serviceCaptureCompleted = serviceItems.length > 0;
+  const serviceCaptureCompleted = serviceItems.length > 0 && serviceItems.every((item) => item.detailComplete !== false);
   const chargeCaptureReady =
     serviceCaptureCompleted &&
     params.chargeCapture.documentationComplete &&
-    documentationStructured &&
     params.chargeCapture.icd10CodesJson.length > 0 &&
     params.chargeCapture.procedureLinesJson.length > 0;
 
@@ -954,7 +1054,8 @@ function parseChargeCapture(
   const roomingSource = asRecord(encounter.roomingData);
   const diagnosisText = asString(source[CLINICIAN_CODING_KEYS.diagnosisText]);
   const procedureText = asString(source[CLINICIAN_CODING_KEYS.procedureText]);
-  const documentationComplete = asBoolean(source[CLINICIAN_CODING_KEYS.documentationComplete]) ?? false;
+  const documentationAttestation = buildDocumentationAttestation(source);
+  const documentationComplete = documentationAttestation.completedInAthena;
   const codingNote = asString(source[CLINICIAN_CODING_KEYS.note]);
   const diagnoses = splitCodes(diagnosisText);
   const serviceCaptureItemsJson = normalizeServiceCaptureItems(roomingSource[ROOMING_SERVICE_CAPTURE_KEY], serviceCatalog);
@@ -979,6 +1080,7 @@ function parseChargeCapture(
     modifiersJson: legacyCodingArrays.modifiers,
     unitsJson: legacyCodingArrays.units,
     codingNote,
+    documentationAttestation,
   };
 }
 
@@ -1207,13 +1309,10 @@ function computeCaseState(params: {
     currentWorkQueue = RevenueWorkQueue.ChargeCapture;
     if (!params.expectation.serviceCaptureCompleted) {
       blockerCategory = "charge_capture";
-      blockerText = "MA service capture is incomplete for charge capture.";
+      blockerText = "MA service capture details are incomplete for charge capture.";
     } else if (!params.expectation.clinicianCodingEntered) {
       blockerCategory = "charge_capture";
       blockerText = "Clinician working codes have not been entered yet.";
-    } else if (!documentationSummaryComplete(params.chargeCapture.documentationSummaryJson)) {
-      blockerCategory = "encounter_documentation";
-      blockerText = "Structured encounter documentation is still incomplete in Flow.";
     } else if (!params.chargeCapture.documentationComplete) {
       blockerCategory = "documentation_incomplete";
       blockerText = "Clinician marked documentation incomplete. Revenue cannot fully close Athena handoff until documentation is complete.";
@@ -1708,29 +1807,14 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
   });
   await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.encounter_documentation, [
     {
-      label: "Chief concern / visit summary captured",
-      completed: Boolean(chargeCapture.documentationSummaryJson.chiefConcernSummary),
-      evidenceText: chargeCapture.documentationSummaryJson.chiefConcernSummary,
-    },
-    {
-      label: "Assessment summary captured",
-      completed: Boolean(chargeCapture.documentationSummaryJson.assessmentSummary),
-      evidenceText: chargeCapture.documentationSummaryJson.assessmentSummary,
-    },
-    {
-      label: "Plan / follow-up captured",
-      completed: Boolean(chargeCapture.documentationSummaryJson.planFollowUp),
-      evidenceText: chargeCapture.documentationSummaryJson.planFollowUp,
-    },
-    {
-      label: "Orders / procedures documented",
-      completed: Boolean(chargeCapture.documentationSummaryJson.ordersOrProcedures),
-      evidenceText: chargeCapture.documentationSummaryJson.ordersOrProcedures,
-    },
-    {
-      label: "Documentation complete enough for handoff",
+      label: "Documentation completed in Athena",
       completed: chargeCapture.documentationComplete,
-      evidenceText: chargeCapture.documentationComplete ? "Clinician marked documentation complete" : null,
+      evidenceText: chargeCapture.documentationComplete ? "Clinician attested documentation completed in Athena" : null,
+    },
+    {
+      label: "Documentation attestation note recorded",
+      completed: Boolean(chargeCapture.documentationAttestation.attestationNote),
+      evidenceText: chargeCapture.documentationAttestation.attestationNote,
     },
   ]);
   await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.charge_capture_coding, [

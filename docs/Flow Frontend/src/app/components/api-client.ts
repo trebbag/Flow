@@ -54,6 +54,7 @@ import type {
   CodingStage,
   RevenueProcedureLine,
   RevenueSettings,
+  OwnerAnalyticsSnapshot,
 } from "./types";
 export type { AdminEncounterRecoveryRow } from "./types";
 import { buildHeaders, getCurrentSession } from "./auth-session";
@@ -1543,6 +1544,7 @@ export const admin = {
       label: string;
       suggestedProcedureCode?: string | null;
       expectedChargeCents?: number | null;
+      detailSchemaKey?: string | null;
       active?: boolean;
       allowCustomNote?: boolean;
     }>;
@@ -1765,6 +1767,16 @@ export const dashboards = {
       `/dashboard/rooms/history${q ? `?${q}` : ""}`,
       { cacheTtlMs: 30_000 },
     );
+  },
+  ownerAnalytics(params?: { clinicId?: string; from?: string; to?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.clinicId) qs.set("clinicId", params.clinicId);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const q = qs.toString();
+    return apiFetch<OwnerAnalyticsSnapshot>(`/dashboard/owner-analytics${q ? `?${q}` : ""}`, {
+      cacheTtlMs: 30_000,
+    });
   },
   revenueCycle(params?: {
     clinicId?: string;
@@ -2060,7 +2072,7 @@ export async function primeRouteData(path: string) {
       break;
     case "/analytics":
       requests = [
-        dashboards.officeManagerHistory({
+        dashboards.ownerAnalytics({
           from: isoDateDaysAgo(4),
           to: isoDateDaysAgo(0),
         }),

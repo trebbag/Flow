@@ -261,6 +261,7 @@ const revenueSettingsSchema = z.object({
       label: z.string().trim().min(1),
       suggestedProcedureCode: z.string().trim().nullable().optional(),
       expectedChargeCents: z.number().int().nullable().optional(),
+      detailSchemaKey: z.string().trim().nullable().optional(),
       active: z.boolean().optional(),
       allowCustomNote: z.boolean().optional()
     })

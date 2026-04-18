@@ -115,6 +115,13 @@ function normalizeRuntimeTemplateFieldsFromTemplate(template: any): TemplateFiel
   });
 }
 
+function parseCurrencyInputToCents(value: string) {
+  const normalized = value.replace(/[^0-9.-]/g, "").trim();
+  if (!normalized) return 0;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
+}
+
 // Visit-type-conditional checkout templates
 const checkoutTemplates: Record<string, TemplateField[]> = {
   "Follow-up": [
@@ -724,44 +731,53 @@ function CheckoutCard({
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
                     Collection Outcome
                   </label>
-                  <select
-                    value={collectionOutcome}
-                    onChange={(event) => setCollectionOutcome(event.target.value)}
-                    className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                  >
-                    <option value="CollectedInFull">Collected in full</option>
-                    <option value="CollectedPartial">Collected partial</option>
-                    <option value="NotCollected">Not collected</option>
-                    <option value="NoCollectionExpected">No collection expected</option>
-                    <option value="Waived">Waived</option>
-                    <option value="Deferred">Deferred</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={collectionOutcome}
+                      onChange={(event) => setCollectionOutcome(event.target.value)}
+                      className="w-full h-10 rounded-lg border border-gray-200 bg-white px-4 pr-10 text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="CollectedInFull">Collected in full</option>
+                      <option value="CollectedPartial">Collected partial</option>
+                      <option value="NotCollected">Not collected</option>
+                      <option value="NoCollectionExpected">No collection expected</option>
+                      <option value="Waived">Waived</option>
+                      <option value="Deferred">Deferred</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
+                  </div>
                 </div>
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
-                    Amount Due (cents)
+                    Amount Due (USD)
                   </label>
                   <div className="relative">
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={amountDueCents}
                       onChange={(event) => setAmountDueCents(event.target.value)}
+                      onWheel={(event) => event.currentTarget.blur()}
                       className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
-                    Amount Collected (cents)
+                    Amount Collected (USD)
                   </label>
                   <div className="relative">
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={amountCollectedCents}
                       onChange={(event) => setAmountCollectedCents(event.target.value)}
+                      onWheel={(event) => event.currentTarget.blur()}
                       className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
@@ -942,8 +958,8 @@ function CheckoutCard({
                 onComplete(e, checked, {
                   ...templateValues,
                   "billing.collection_expected": collectionExpected,
-                  "billing.amount_due_cents": amountDueCents,
-                  "billing.amount_collected_cents": amountCollectedCents,
+                  "billing.amount_due_cents": parseCurrencyInputToCents(amountDueCents),
+                  "billing.amount_collected_cents": parseCurrencyInputToCents(amountCollectedCents),
                   "billing.collection_outcome": collectionOutcome,
                   "billing.missed_reason": missedCollectionReason,
                   "billing.tracking_note": collectionNote,
@@ -1277,16 +1293,19 @@ function TemplateFieldInput({
           {field.name}
           {field.required && <span className="text-red-400 ml-1">*</span>}
         </label>
-        <select
-          value={(value as string) || ""}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full h-9 px-3 rounded-lg border border-purple-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-        >
-          <option value="">Select...</option>
-          {field.options?.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={(value as string) || ""}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-full h-9 rounded-lg border border-purple-200 bg-white px-3 pr-9 text-[13px] appearance-none focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+          >
+            <option value="">Select...</option>
+            {field.options?.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-500" />
+        </div>
       </div>
     );
   }
@@ -1324,10 +1343,12 @@ function TemplateFieldInput({
           {field.required && <span className="text-red-400 ml-1">*</span>}
         </label>
         <input
-          type={field.type}
+          type={field.type === "date" || field.type === "time" ? field.type : "text"}
+          inputMode={field.type === "number" ? "numeric" : undefined}
           placeholder={`Enter ${field.name.toLowerCase()}...`}
           value={(value as string) || ""}
           onChange={(e) => onChange(e.target.value)}
+          onWheel={(event) => event.currentTarget.blur()}
           className="w-full h-9 px-3 rounded-lg border border-purple-200 bg-white text-[13px] focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
         />
       </div>

@@ -36,7 +36,6 @@ import {
   Activity,
   GripVertical,
   Info,
-  Minus,
   ChevronRight,
   Download,
   Upload,
@@ -543,17 +542,12 @@ function NumberStepperControl({
   };
   return (
     <div className={`h-8 rounded-lg border border-gray-200 bg-white flex items-center overflow-hidden ${className || ""}`}>
-      <button
-        type="button"
-        onClick={() => onChange(clamp(Number(value || 0) - step))}
-        className="h-full w-8 inline-flex items-center justify-center text-gray-500 hover:bg-gray-50 border-r border-gray-100"
-      >
-        <Minus className="w-3.5 h-3.5" />
-      </button>
       <input
         type="text"
         inputMode="numeric"
+        data-step={step}
         value={String(Number.isFinite(value) ? value : min)}
+        onWheel={(event) => event.currentTarget.blur()}
         onChange={(event) => {
           const digits = event.target.value.replace(/[^\d]/g, "");
           if (!digits) {
@@ -562,17 +556,21 @@ function NumberStepperControl({
           }
           onChange(clamp(Number(digits)));
         }}
-        className="h-full w-full text-center text-[12px] focus:outline-none"
+        className="h-full w-full px-3 text-[12px] focus:outline-none"
       />
-      <button
-        type="button"
-        onClick={() => onChange(clamp(Number(value || 0) + step))}
-        className="h-full w-8 inline-flex items-center justify-center text-gray-500 hover:bg-gray-50 border-l border-gray-100"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
+}
+
+function formatCurrencyInput(value: number | null | undefined) {
+  return ((Number(value) || 0) / 100).toFixed(2);
+}
+
+function parseCurrencyInputToCents(value: string) {
+  const normalized = String(value || "").replace(/[^0-9.]/g, "");
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed * 100)) : 0;
 }
 
 function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
@@ -2985,7 +2983,13 @@ function ArchivedEncountersTab() {
   );
 }
 
-function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: string }) {
+function IncomingIntegrationsTab({
+  selectedFacilityId,
+  mode = "incoming",
+}: {
+  selectedFacilityId: string;
+  mode?: "incoming" | "revenue";
+}) {
   const { clinics: mockClinics } = useAdminConsoleData();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [dateOfService, setDateOfService] = useState(todayIsoDate());
@@ -3130,6 +3134,8 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
         .sort((a, b) => a.name.localeCompare(b.name)),
     [mockClinics],
   );
+  const showIncoming = mode === "incoming";
+  const showRevenue = mode === "revenue";
 
   const pendingFieldErrors = (errors: string[]) => {
     const map: Record<"clinicId" | "patientId" | "dateOfService" | "appointmentTime" | "providerLastName" | "reasonText", string[]> = {
@@ -3684,11 +3690,19 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
     patient_estimate_pos: "Patient estimate and POS expectation",
     referral_prior_auth: "Referral and prior authorization",
     checkout_tracking: "Checkout tracking",
-    encounter_documentation: "Encounter documentation",
+    encounter_documentation: "Athena documentation attestation",
     charge_capture_coding: "Charge capture and coding",
     athena_handoff_attestation: "Athena handoff attestation",
     day_close: "Day close",
   };
+  const revenueServiceDetailSchemaOptions = [
+    { value: "generic_service", label: "Generic service" },
+    { value: "vaccine", label: "Vaccine" },
+    { value: "injection_medication", label: "Injection medication" },
+    { value: "point_of_care_test", label: "Point-of-care test" },
+    { value: "specimen_collection", label: "Specimen collection" },
+    { value: "procedure_performed", label: "Procedure performed" },
+  ];
 
   const saveRevenueOperationsSettings = async () => {
     if (!revenueSettings) return;
@@ -3730,6 +3744,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             label: item.label.trim(),
             suggestedProcedureCode: item.suggestedProcedureCode?.trim() || null,
             expectedChargeCents: item.expectedChargeCents ?? null,
+            detailSchemaKey: item.detailSchemaKey?.trim() || null,
             active: item.active !== false,
             allowCustomNote: Boolean(item.allowCustomNote),
           }))
@@ -3765,15 +3780,66 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
   };
 
   return (
-    <TabPanel accentColor="bg-sky-500">
+    <TabPanel accentColor={showRevenue ? "bg-emerald-500" : "bg-sky-500"}>
       <div className="space-y-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Rows Loaded" value={rows.length} icon={FileText} color="bg-sky-500" />
-          <StatCard label="Valid Rows" value={validCount} icon={Check} color="bg-emerald-500" />
-          <StatCard label="Needs Review" value={invalidCount} icon={AlertTriangle} color="bg-amber-500" />
-          <StatCard label="Checked In" value={checkedInCount} icon={Activity} color="bg-violet-500" />
-        </div>
+        {showIncoming ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Rows Loaded" value={rows.length} icon={FileText} color="bg-sky-500" />
+            <StatCard label="Valid Rows" value={validCount} icon={Check} color="bg-emerald-500" />
+            <StatCard label="Needs Review" value={invalidCount} icon={AlertTriangle} color="bg-amber-500" />
+            <StatCard label="Checked In" value={checkedInCount} icon={Activity} color="bg-violet-500" />
+          </div>
+        ) : null}
 
+        {showRevenue ? (
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
+            <CardContent className="p-5 space-y-4">
+              <SectionHeader
+                icon={DollarSign}
+                title="Revenue Ops Scope"
+                iconColor="text-emerald-500"
+                secondaryAction={
+                  <button
+                    onClick={() => refreshSchedule().catch(() => undefined)}
+                    className="h-8 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+                  </button>
+                }
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1.5 block">Date of service</label>
+                  <input
+                    type="date"
+                    value={dateOfService}
+                    onChange={(event) => setDateOfService(event.target.value)}
+                    className="h-9 w-full px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1.5 block">Clinic scope</label>
+                  <select
+                    value={selectedClinicId}
+                    onChange={(event) => setSelectedClinicId(event.target.value)}
+                    className="h-9 w-full px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                  >
+                    <option value="">All clinics in facility</option>
+                    {activeClinics.map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>
+                        {clinic.name} ({clinic.shortCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {showIncoming ? (
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-sky-500 to-cyan-400" />
           <CardContent className="p-5 space-y-4">
@@ -3949,7 +4015,10 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             </div>
           </CardContent>
         </Card>
+        ) : null}
 
+        {showRevenue ? (
+        <>
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-indigo-500 to-violet-400" />
           <CardContent className="p-5 space-y-4">
@@ -4350,25 +4419,27 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <div>
-                      <label className="text-[11px] text-muted-foreground mb-1.5 block">Default patient estimate (cents)</label>
-                      <NumberStepperControl
-                        value={Number(revenueSettings.estimateDefaults?.defaultPatientEstimateCents || 0)}
-                        min={0}
-                        step={100}
-                        onChange={(nextValue) =>
+                      <label className="text-[11px] text-muted-foreground mb-1.5 block">Default patient estimate (USD)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={formatCurrencyInput(revenueSettings.estimateDefaults?.defaultPatientEstimateCents)}
+                        onWheel={(event) => event.currentTarget.blur()}
+                        onChange={(event) =>
                           setRevenueSettings((prev) =>
                             prev
                               ? {
                                   ...prev,
                                   estimateDefaults: {
                                     ...prev.estimateDefaults,
-                                    defaultPatientEstimateCents: nextValue,
+                                    defaultPatientEstimateCents: parseCurrencyInputToCents(event.target.value),
                                   },
                                 }
                               : prev,
                           )
                         }
-                        className="h-9"
+                        className="h-9 w-full px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                        placeholder="0.00"
                       />
                     </div>
                     <div>
@@ -4889,26 +4960,52 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                               <X className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <NumberStepperControl
-                              value={Number(item.expectedChargeCents || 0)}
-                              min={0}
-                              step={100}
-                              onChange={(nextValue) =>
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                            <select
+                              value={item.detailSchemaKey || "generic_service"}
+                              onChange={(event) =>
                                 setRevenueSettings((prev) =>
                                   prev
                                     ? {
                                         ...prev,
                                         serviceCatalog: prev.serviceCatalog.map((entry, itemIndex) =>
-                                          itemIndex === index ? { ...entry, expectedChargeCents: nextValue } : entry,
+                                          itemIndex === index ? { ...entry, detailSchemaKey: event.target.value } : entry,
                                         ),
                                       }
                                     : prev,
                                 )
                               }
-                              className="h-9"
+                              className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                            >
+                              {revenueServiceDetailSchemaOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={formatCurrencyInput(item.expectedChargeCents)}
+                              onWheel={(event) => event.currentTarget.blur()}
+                              onChange={(event) =>
+                                setRevenueSettings((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        serviceCatalog: prev.serviceCatalog.map((entry, itemIndex) =>
+                                          itemIndex === index
+                                            ? { ...entry, expectedChargeCents: parseCurrencyInputToCents(event.target.value) }
+                                            : entry,
+                                        ),
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                              placeholder="Expected charge (USD)"
                             />
-                            <label className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                            <label className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-slate-600 md:col-span-2">
                               Other / note path
                               <Switch
                                 checked={Boolean(item.allowCustomNote)}
@@ -4936,8 +5033,16 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                               ? {
                                   ...prev,
                                   serviceCatalog: [
-                                    ...prev.serviceCatalog,
-                                    { id: `service-${prev.serviceCatalog.length + 1}`, label: "New service", suggestedProcedureCode: "", expectedChargeCents: 0, active: true, allowCustomNote: false },
+                                  ...prev.serviceCatalog,
+                                    {
+                                      id: `service-${prev.serviceCatalog.length + 1}`,
+                                      label: "New service",
+                                      suggestedProcedureCode: "",
+                                      expectedChargeCents: 0,
+                                      detailSchemaKey: "generic_service",
+                                      active: true,
+                                      allowCustomNote: false,
+                                    },
                                   ],
                                 }
                               : prev,
@@ -4953,7 +5058,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                     <div className="space-y-3">
                       <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>Charge schedule</div>
                       {(revenueSettings.chargeSchedule || []).map((item, index) => (
-                        <div key={`${item.code}-${index}`} className="grid grid-cols-[120px_140px_minmax(0,1fr)_auto] gap-2 items-center rounded-xl border border-gray-200 bg-slate-50/60 p-3">
+                        <div key={`${item.code}-${index}`} className="grid grid-cols-[120px_160px_minmax(0,1fr)_auto] gap-2 items-center rounded-xl border border-gray-200 bg-slate-50/60 p-3">
                           <input
                             value={item.code}
                             onChange={(event) =>
@@ -4971,23 +5076,27 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                             className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
                             placeholder="Code"
                           />
-                          <NumberStepperControl
-                            value={Number(item.amountCents || 0)}
-                            min={0}
-                            step={100}
-                            onChange={(nextValue) =>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={formatCurrencyInput(item.amountCents)}
+                            onWheel={(event) => event.currentTarget.blur()}
+                            onChange={(event) =>
                               setRevenueSettings((prev) =>
                                 prev
                                   ? {
                                       ...prev,
                                       chargeSchedule: prev.chargeSchedule.map((entry, itemIndex) =>
-                                        itemIndex === index ? { ...entry, amountCents: nextValue } : entry,
+                                        itemIndex === index
+                                          ? { ...entry, amountCents: parseCurrencyInputToCents(event.target.value) }
+                                          : entry,
                                       ),
                                     }
                                   : prev,
                               )
                             }
-                            className="h-9"
+                            className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                            placeholder="Amount (USD)"
                           />
                           <input
                             value={item.description || ""}
@@ -5060,7 +5169,10 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             )}
           </CardContent>
         </Card>
+        </>
+        ) : null}
 
+        {showIncoming ? (
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-cyan-500 to-sky-400" />
           <CardContent className="p-5">
@@ -5268,7 +5380,9 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             )}
           </CardContent>
         </Card>
+        ) : null}
 
+        {showIncoming ? (
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-400" />
           <CardContent className="p-5">
@@ -5439,7 +5553,9 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             )}
           </CardContent>
         </Card>
+        ) : null}
 
+        {showIncoming ? (
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-indigo-500 to-blue-400" />
           <CardContent className="p-5">
@@ -5470,6 +5586,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             )}
           </CardContent>
         </Card>
+        ) : null}
       </div>
     </TabPanel>
   );
@@ -6244,6 +6361,14 @@ export function AdminConsole() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
+                <button onClick={() => setActiveTab("revenue")} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                  <DollarSign className="w-4 h-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-[11px]">Revenue Ops</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <button onClick={() => toast.info("Exporting all configuration...")} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
                   <Download className="w-4 h-4" />
                 </button>
@@ -6273,6 +6398,7 @@ export function AdminConsole() {
             <TabsTrigger value="assignments" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-cyan-200 transition-all"><Link2 className="w-3.5 h-3.5 mr-1.5" /> Assignments</TabsTrigger>
             <TabsTrigger value="encounters" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-indigo-200 transition-all"><History className="w-3.5 h-3.5 mr-1.5" /> Archived Encounters</TabsTrigger>
             <TabsTrigger value="incoming" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-sky-50 data-[state=active]:text-sky-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-sky-200 transition-all"><Upload className="w-3.5 h-3.5 mr-1.5" /> Incoming Uploads</TabsTrigger>
+            <TabsTrigger value="revenue" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-emerald-200 transition-all"><DollarSign className="w-3.5 h-3.5 mr-1.5" /> Revenue Ops</TabsTrigger>
             <TabsTrigger value="templates" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-violet-200 transition-all"><LayoutTemplate className="w-3.5 h-3.5 mr-1.5" /> Reasons & Templates</TabsTrigger>
             <TabsTrigger value="thresholds" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-orange-200 transition-all"><Clock className="w-3.5 h-3.5 mr-1.5" /> Thresholds</TabsTrigger>
             <TabsTrigger value="notifications" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-rose-200 transition-all"><Bell className="w-3.5 h-3.5 mr-1.5" /> Notifications</TabsTrigger>
@@ -6322,7 +6448,10 @@ export function AdminConsole() {
             <TabsContent value="assignments"><AssignmentsTab /></TabsContent>
             <TabsContent value="encounters"><ArchivedEncountersTab /></TabsContent>
             <TabsContent value="incoming">
-              <IncomingIntegrationsTab selectedFacilityId={activeFacilityId || facility.id} />
+              <IncomingIntegrationsTab selectedFacilityId={activeFacilityId || facility.id} mode="incoming" />
+            </TabsContent>
+            <TabsContent value="revenue">
+              <IncomingIntegrationsTab selectedFacilityId={activeFacilityId || facility.id} mode="revenue" />
             </TabsContent>
             <TabsContent value="templates">
               <ReasonsTemplatesTab

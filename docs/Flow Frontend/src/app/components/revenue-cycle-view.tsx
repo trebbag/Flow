@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   TrendingUp,
   UserCircle2,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "./ui/card";
@@ -27,6 +28,7 @@ import { Badge } from "./ui/badge";
 import { Switch } from "./ui/switch";
 import { admin, dashboards, revenueCases } from "./api-client";
 import { loadSession } from "./auth-session";
+import { getClinicalCodeReference } from "./clinical-code-reference";
 import type {
   CollectionOutcome,
   FinancialRequirementStatus,
@@ -119,6 +121,18 @@ function formatHours(value: number | null | undefined) {
 function formatCurrency(cents?: number | null) {
   const amount = Number(cents || 0) / 100;
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+
+function parseCurrencyInputToCents(value: string) {
+  const normalized = value.replace(/[^0-9.-]/g, "").trim();
+  if (!normalized) return 0;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
+}
+
+function formatCurrencyInput(cents?: number | null) {
+  const amount = Number(cents || 0) / 100;
+  return amount === 0 ? "0.00" : amount.toFixed(2);
 }
 
 function formatNullableAthenaMetric(value?: number | null) {
@@ -261,24 +275,16 @@ function queueRowSubsummary(row: RevenueCaseDetail, settings: RevenueSettings | 
   const diagnosisCount = row.chargeCaptureRecord?.icd10CodesJson?.length || 0;
   const procedureCount = row.chargeCaptureRecord?.procedureLinesJson?.length || 0;
   const expectation = getRevenueExpectation(row, settings);
-  const documentationSummary = row.chargeCaptureRecord?.documentationSummaryJson;
-  const documentationStructured = documentationSummary
-    ? Boolean(
-        documentationSummary.chiefConcernSummary &&
-          documentationSummary.assessmentSummary &&
-          documentationSummary.planFollowUp &&
-          documentationSummary.ordersOrProcedures,
-      )
-    : Boolean(row.chargeCaptureRecord?.documentationComplete);
-  const codingReady = row.chargeCaptureRecord?.documentationComplete && documentationStructured && diagnosisCount > 0 && procedureCount > 0;
+  const serviceDetailComplete = (row.chargeCaptureRecord?.serviceCaptureItemsJson || []).every((item) => item.detailComplete !== false);
+  const codingReady = row.chargeCaptureRecord?.documentationComplete && serviceDetailComplete && diagnosisCount > 0 && procedureCount > 0;
   const documentationIncomplete = diagnosisCount > 0 && procedureCount > 0 && row.chargeCaptureRecord?.documentationComplete === false;
   return {
     diagnosisCount,
     procedureCount,
     codingReady,
     documentationIncomplete,
-    documentationStructured,
-    serviceCaptureComplete: expectation.serviceCaptureComplete,
+    documentationStructured: row.chargeCaptureRecord?.documentationComplete ?? false,
+    serviceCaptureComplete: expectation.serviceCaptureComplete && serviceDetailComplete,
     expectedGrossChargeCents: expectation.expectedGrossChargeCents,
     expectedNetReimbursementCents: expectation.expectedNetReimbursementCents,
     missingChargeMapping: expectation.missingChargeMapping,
@@ -395,56 +401,70 @@ export function RevenueCycleView() {
     setLoading(true);
     try {
       const facilityId = session?.facilityId;
-      const [dashboardResult, queueResult, historyResult, todayCloseoutRows, userRows] = await Promise.all([
+      const [dashboardResult, queueResult, historyResult, todayCloseoutRowsResult, userRowsResult] = await Promise.allSettled([
         dashboards.revenueCycle({ dayBucket, workQueue, mine: mineOnly, search }),
         revenueCases.list({ dayBucket, workQueue, mine: mineOnly, search }),
         dashboards.revenueCycleHistory({ from: historyFrom, to: historyTo }),
         revenueCases.list({ dayBucket: "Today", from: isoDate(0), to: isoDate(0) }),
         admin.listUsers(facilityId),
       ]);
-      setDashboard(dashboardResult);
-      const nextSettings: RevenueSettings = {
-        facilityId: session?.facilityId || "",
-        missedCollectionReasons: dashboardResult.settings?.missedCollectionReasons || [],
-        providerQueryTemplates: dashboardResult.settings?.providerQueryTemplates || [],
-        athenaLinkTemplate: dashboardResult.settings?.athenaLinkTemplate || "",
-        queueSla: {},
-        dayCloseDefaults: { defaultDueHours: 18, requireNextAction: true },
-        estimateDefaults: dashboardResult.settings?.estimateDefaults || {
-          defaultPatientEstimateCents: 0,
-          defaultPosCollectionPercent: 100,
-          explainEstimateByDefault: true,
-        },
-        athenaChecklistDefaults: dashboardResult.settings?.checklistDefaults?.athena_handoff_attestation || [],
-        checklistDefaults: dashboardResult.settings?.checklistDefaults || {},
-        serviceCatalog: dashboardResult.settings?.serviceCatalog || [],
-        chargeSchedule: dashboardResult.settings?.chargeSchedule || [],
-        reimbursementRules: dashboardResult.settings?.reimbursementRules || [],
-      };
-      setSettings(nextSettings);
-      setQueueRows(queueResult);
-      setHistory(historyResult.daily || []);
-      setHistorySummary(historyResult.summary || null);
-      setDayCloseRows(
-        todayCloseoutRows.filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus)),
-      );
-      setUserOptions((userRows || []).filter((row) => row.status !== "archived"));
 
-      const candidateId = selectedCaseId && [...queueResult, ...todayCloseoutRows].some((row) => row.id === selectedCaseId)
-        ? selectedCaseId
-        : queueResult[0]?.id || dashboardResult.cases[0]?.id || todayCloseoutRows[0]?.id || null;
-      setSelectedCaseId(candidateId);
-      setRollDrafts((prev) => {
-        const next = { ...prev };
-        todayCloseoutRows.forEach((row) => {
-          next[row.id] = next[row.id] || defaultCloseoutDraft(row, session?.userId, nextSettings.dayCloseDefaults?.defaultDueHours || 18);
+      const failures = [dashboardResult, queueResult, historyResult, todayCloseoutRowsResult, userRowsResult]
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => result.reason instanceof Error ? result.reason.message : "Request failed");
+
+      const dashboardValue = dashboardResult.status === "fulfilled" ? dashboardResult.value : dashboard;
+      const queueValue = queueResult.status === "fulfilled" ? queueResult.value : queueRows;
+      const historyValue = historyResult.status === "fulfilled" ? historyResult.value : { daily: history, summary: historySummary };
+      const dayCloseValue = todayCloseoutRowsResult.status === "fulfilled" ? todayCloseoutRowsResult.value : dayCloseRows;
+      const userValue = userRowsResult.status === "fulfilled" ? userRowsResult.value : userOptions;
+
+      if (dashboardValue) {
+        setDashboard(dashboardValue);
+        const nextSettings: RevenueSettings = {
+          facilityId: session?.facilityId || "",
+          missedCollectionReasons: dashboardValue.settings?.missedCollectionReasons || [],
+          providerQueryTemplates: dashboardValue.settings?.providerQueryTemplates || [],
+          athenaLinkTemplate: dashboardValue.settings?.athenaLinkTemplate || "",
+          queueSla: {},
+          dayCloseDefaults: { defaultDueHours: 18, requireNextAction: true },
+          estimateDefaults: dashboardValue.settings?.estimateDefaults || {
+            defaultPatientEstimateCents: 0,
+            defaultPosCollectionPercent: 100,
+            explainEstimateByDefault: true,
+          },
+          athenaChecklistDefaults: dashboardValue.settings?.checklistDefaults?.athena_handoff_attestation || [],
+          checklistDefaults: dashboardValue.settings?.checklistDefaults || {},
+          serviceCatalog: dashboardValue.settings?.serviceCatalog || [],
+          chargeSchedule: dashboardValue.settings?.chargeSchedule || [],
+          reimbursementRules: dashboardValue.settings?.reimbursementRules || [],
+        };
+        setSettings(nextSettings);
+        setRollDrafts((prev) => {
+          const next = { ...prev };
+          (dayCloseValue || []).forEach((row) => {
+            next[row.id] = next[row.id] || defaultCloseoutDraft(row, session?.userId, nextSettings.dayCloseDefaults?.defaultDueHours || 18);
+          });
+          return next;
         });
-        return next;
-      });
-    } catch (error) {
-      toast.error("Unable to load Revenue Cycle", {
-        description: (error as Error).message || "Refresh the page and try again.",
-      });
+      }
+
+      setQueueRows(queueValue || []);
+      setHistory(historyValue?.daily || []);
+      setHistorySummary(historyValue?.summary || null);
+      setDayCloseRows((dayCloseValue || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus)));
+      setUserOptions((userValue || []).filter((row) => row.status !== "archived"));
+
+      const candidateId = selectedCaseId && [...(queueValue || []), ...(dayCloseValue || [])].some((row) => row.id === selectedCaseId)
+        ? selectedCaseId
+        : queueValue?.[0]?.id || dashboardValue?.cases?.[0]?.id || dayCloseValue?.[0]?.id || null;
+      setSelectedCaseId(candidateId);
+
+      if (failures.length > 0) {
+        toast.error("Some Revenue Cycle data did not refresh", {
+          description: failures[0],
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -499,10 +519,10 @@ export function RevenueCycleView() {
       secondaryPayerName: selectedCase.financialReadiness?.secondaryPayerName || "",
       financialClass: selectedCase.financialReadiness?.financialClass || "",
       benefitsSummaryText: selectedCase.financialReadiness?.benefitsSummaryText || "",
-      patientEstimateAmountCents: String(selectedCase.financialReadiness?.patientEstimateAmountCents || 0),
-      pointOfServiceAmountDueCents: String(selectedCase.financialReadiness?.pointOfServiceAmountDueCents || 0),
+      patientEstimateAmountCents: formatCurrencyInput(selectedCase.financialReadiness?.patientEstimateAmountCents || 0),
+      pointOfServiceAmountDueCents: formatCurrencyInput(selectedCase.financialReadiness?.pointOfServiceAmountDueCents || 0),
       estimateExplainedToPatient: Boolean(selectedCase.financialReadiness?.estimateExplainedToPatient),
-      outstandingPriorBalanceCents: String(selectedCase.financialReadiness?.outstandingPriorBalanceCents || 0),
+      outstandingPriorBalanceCents: formatCurrencyInput(selectedCase.financialReadiness?.outstandingPriorBalanceCents || 0),
       priorAuthRequired: Boolean(selectedCase.financialReadiness?.priorAuthRequired),
       priorAuthStatus: selectedCase.financialReadiness?.priorAuthStatus || "NotRequired",
       priorAuthNumber: selectedCase.financialReadiness?.priorAuthNumber || "",
@@ -511,8 +531,8 @@ export function RevenueCycleView() {
     });
     setCheckoutDraft({
       collectionExpected: Boolean(selectedCase.checkoutCollectionTracking?.collectionExpected),
-      amountDueCents: String(selectedCase.checkoutCollectionTracking?.amountDueCents || 0),
-      amountCollectedCents: String(selectedCase.checkoutCollectionTracking?.amountCollectedCents || 0),
+      amountDueCents: formatCurrencyInput(selectedCase.checkoutCollectionTracking?.amountDueCents || 0),
+      amountCollectedCents: formatCurrencyInput(selectedCase.checkoutCollectionTracking?.amountCollectedCents || 0),
       collectionOutcome: selectedCase.checkoutCollectionTracking?.collectionOutcome || "NoCollectionExpected",
       missedCollectionReason: selectedCase.checkoutCollectionTracking?.missedCollectionReason || "",
       trackingNote: selectedCase.checkoutCollectionTracking?.trackingNote || "",
@@ -595,10 +615,10 @@ export function RevenueCycleView() {
           secondaryPayerName: financialDraft.secondaryPayerName || null,
           financialClass: financialDraft.financialClass || null,
           benefitsSummaryText: financialDraft.benefitsSummaryText || null,
-          patientEstimateAmountCents: Number(financialDraft.patientEstimateAmountCents || 0),
-          pointOfServiceAmountDueCents: Number(financialDraft.pointOfServiceAmountDueCents || 0),
+          patientEstimateAmountCents: parseCurrencyInputToCents(financialDraft.patientEstimateAmountCents || "0"),
+          pointOfServiceAmountDueCents: parseCurrencyInputToCents(financialDraft.pointOfServiceAmountDueCents || "0"),
           estimateExplainedToPatient: financialDraft.estimateExplainedToPatient,
-          outstandingPriorBalanceCents: Number(financialDraft.outstandingPriorBalanceCents || 0),
+          outstandingPriorBalanceCents: parseCurrencyInputToCents(financialDraft.outstandingPriorBalanceCents || "0"),
           priorAuthRequired: financialDraft.priorAuthRequired,
           priorAuthStatus: (financialDraft.priorAuthStatus || "NotRequired") as FinancialRequirementStatus,
           priorAuthNumber: financialDraft.priorAuthNumber || null,
@@ -629,8 +649,8 @@ export function RevenueCycleView() {
       await revenueCases.update(selectedCase.id, {
         checkoutTracking: {
           collectionExpected: checkoutDraft.collectionExpected,
-          amountDueCents: Number(checkoutDraft.amountDueCents || 0),
-          amountCollectedCents: Number(checkoutDraft.amountCollectedCents || 0),
+          amountDueCents: parseCurrencyInputToCents(checkoutDraft.amountDueCents || "0"),
+          amountCollectedCents: parseCurrencyInputToCents(checkoutDraft.amountCollectedCents || "0"),
           collectionOutcome: outcome as any,
           missedCollectionReason: checkoutDraft.missedCollectionReason || null,
           trackingNote: checkoutDraft.trackingNote || null,
@@ -1041,7 +1061,7 @@ export function RevenueCycleView() {
                     </div>
                     <div className="space-y-3 text-[12px] text-slate-600">
                       <BoundaryRow title="Pre-service in Flow" body="Check-In plus Revenue guide registration checks, eligibility, patient estimate capture, POS expectation, and auth/referral follow-through even without Athena configured." />
-                      <BoundaryRow title="Time-of-service in Flow" body="Flow directly owns service capture, encounter documentation summary, clinician working codes, checkout tracking, revenue verification, and Athena handoff attestation." />
+                      <BoundaryRow title="Time-of-service in Flow" body="Flow directly owns service capture, clinician working codes, checkout tracking, revenue verification, and Athena documentation plus handoff attestation." />
                       <BoundaryRow title="Post-service stays in Athena" body="Claim edits, submission, adjudication, payment posting, denials, patient billing, collections, and payment truth remain Athena-only in this MVP." />
                     </div>
                   </CardContent>
@@ -1782,16 +1802,19 @@ function RevenueCaseDetailPane({
                 <ToggleField label="Registration verified" checked={financialDraft.registrationVerified} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, registrationVerified: checked }))} />
                 <ToggleField label="Contact info verified" checked={financialDraft.contactInfoVerified} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, contactInfoVerified: checked }))} />
                 <Field label="Eligibility status">
-                  <select
-                    value={financialDraft.eligibilityStatus}
-                    onChange={(event) => setFinancialDraft((prev) => ({ ...prev, eligibilityStatus: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
-                  >
-                    <option value="NotChecked">Not checked</option>
-                    <option value="Clear">Clear</option>
-                    <option value="Blocked">Blocked</option>
-                    <option value="Pending">Pending</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={financialDraft.eligibilityStatus}
+                      onChange={(event) => setFinancialDraft((prev) => ({ ...prev, eligibilityStatus: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 pr-9 text-[12px] outline-none appearance-none focus:border-slate-300"
+                    >
+                      <option value="NotChecked">Not checked</option>
+                      <option value="Clear">Clear</option>
+                      <option value="Blocked">Blocked</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
                 </Field>
                 <Field label="Primary payer">
                   <input
@@ -1821,24 +1844,33 @@ function RevenueCaseDetailPane({
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                   />
                 </Field>
-                <Field label="Point-of-service amount due (cents)">
+                <Field label="Point-of-service amount due (USD)">
                   <input
                     value={financialDraft.pointOfServiceAmountDueCents}
                     onChange={(event) => setFinancialDraft((prev) => ({ ...prev, pointOfServiceAmountDueCents: event.target.value }))}
+                    type="text"
+                    inputMode="decimal"
+                    onWheel={(event) => event.currentTarget.blur()}
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                   />
                 </Field>
-                <Field label="Prior balance (cents)">
+                <Field label="Prior balance (USD)">
                   <input
                     value={financialDraft.outstandingPriorBalanceCents}
                     onChange={(event) => setFinancialDraft((prev) => ({ ...prev, outstandingPriorBalanceCents: event.target.value }))}
+                    type="text"
+                    inputMode="decimal"
+                    onWheel={(event) => event.currentTarget.blur()}
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                   />
                 </Field>
-                <Field label="Patient estimate (cents)">
+                <Field label="Patient estimate (USD)">
                   <input
                     value={financialDraft.patientEstimateAmountCents}
                     onChange={(event) => setFinancialDraft((prev) => ({ ...prev, patientEstimateAmountCents: event.target.value }))}
+                    type="text"
+                    inputMode="decimal"
+                    onWheel={(event) => event.currentTarget.blur()}
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                   />
                 </Field>
@@ -1866,15 +1898,18 @@ function RevenueCaseDetailPane({
                 </Field>
                 <ToggleField label="Prior auth required" checked={financialDraft.priorAuthRequired} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, priorAuthRequired: checked }))} />
                 <Field label="Prior auth status">
-                  <select
-                    value={financialDraft.priorAuthStatus}
-                    onChange={(event) => setFinancialDraft((prev) => ({ ...prev, priorAuthStatus: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
-                  >
-                    {financialRequirementStatuses.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={financialDraft.priorAuthStatus}
+                      onChange={(event) => setFinancialDraft((prev) => ({ ...prev, priorAuthStatus: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 pr-9 text-[12px] outline-none appearance-none focus:border-slate-300"
+                    >
+                      {financialRequirementStatuses.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
                 </Field>
                 <Field label="Prior auth number">
                   <input
@@ -1885,15 +1920,18 @@ function RevenueCaseDetailPane({
                 </Field>
                 <ToggleField label="Referral required" checked={financialDraft.referralRequired} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, referralRequired: checked }))} />
                 <Field label="Referral status">
-                  <select
-                    value={financialDraft.referralStatus}
-                    onChange={(event) => setFinancialDraft((prev) => ({ ...prev, referralStatus: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
-                  >
-                    {financialRequirementStatuses.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={financialDraft.referralStatus}
+                      onChange={(event) => setFinancialDraft((prev) => ({ ...prev, referralStatus: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 pr-9 text-[12px] outline-none appearance-none focus:border-slate-300"
+                    >
+                      {financialRequirementStatuses.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
                 </Field>
               </section>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] text-slate-600">
@@ -1915,35 +1953,41 @@ function RevenueCaseDetailPane({
               <div className="grid gap-3 md:grid-cols-2">
                 <ToggleField label="Collection expected" checked={checkoutDraft.collectionExpected} onChange={(checked) => setCheckoutDraft((prev) => ({ ...prev, collectionExpected: checked }))} />
                 <Field label="Collection outcome">
-                  <select
-                    value={checkoutDraft.collectionOutcome}
-                    onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, collectionOutcome: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
-                  >
-                    {collectionOutcomes.map((outcome) => (
-                      <option key={outcome} value={outcome}>{outcome}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={checkoutDraft.collectionOutcome}
+                      onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, collectionOutcome: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 pr-9 text-[12px] outline-none appearance-none focus:border-slate-300"
+                    >
+                      {collectionOutcomes.map((outcome) => (
+                        <option key={outcome} value={outcome}>{outcome}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
                 </Field>
-                <Field label="Amount due (cents)">
-                  <input value={checkoutDraft.amountDueCents} onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, amountDueCents: event.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300" />
+                <Field label="Amount due (USD)">
+                  <input value={checkoutDraft.amountDueCents} onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, amountDueCents: event.target.value }))} type="text" inputMode="decimal" onWheel={(event) => event.currentTarget.blur()} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300" />
                 </Field>
-                <Field label="Amount collected (cents)">
-                  <input value={checkoutDraft.amountCollectedCents} onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, amountCollectedCents: event.target.value }))} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300" />
+                <Field label="Amount collected (USD)">
+                  <input value={checkoutDraft.amountCollectedCents} onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, amountCollectedCents: event.target.value }))} type="text" inputMode="decimal" onWheel={(event) => event.currentTarget.blur()} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300" />
                 </Field>
               </div>
               <Field label="Missed collection reason">
                 <div className="space-y-3">
-                  <select
-                    value={checkoutDraft.missedCollectionReason}
-                    onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, missedCollectionReason: event.target.value }))}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
-                  >
-                    <option value="">Select a reason</option>
-                    {(settings?.missedCollectionReasons || []).map((reason) => (
-                      <option key={reason} value={reason}>{reason}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={checkoutDraft.missedCollectionReason}
+                      onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, missedCollectionReason: event.target.value }))}
+                      className="h-10 w-full rounded-xl border border-slate-200 px-3 pr-9 text-[12px] outline-none appearance-none focus:border-slate-300"
+                    >
+                      <option value="">Select a reason</option>
+                      {(settings?.missedCollectionReasons || []).map((reason) => (
+                        <option key={reason} value={reason}>{reason}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {(settings?.missedCollectionReasons || []).map((reason) => (
                       <button
@@ -1973,31 +2017,31 @@ function RevenueCaseDetailPane({
           {activeDrawerTab === "Coding" && (
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] text-slate-600">
-                Clinicians provide a lightweight coding handoff upstream. Revenue finalizes the structured codes and documentation readiness here.
+                Clinicians provide the structured code handoff upstream. Revenue finalizes codes here and uses an Athena documentation attestation instead of Flow-side encounter documentation fields.
               </div>
               <ChecklistGroupCard
                 title="Documentation and coding checklist"
                 items={checklistItemsFor(revenueCase, ["encounter_documentation", "charge_capture_coding"])}
               />
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">Encounter documentation summary</div>
+                <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">Documentation attestation and projection quality</div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <SummaryBox title="Structured documentation" rows={[
+                  <SummaryBox title="Documentation status" rows={[
                     {
-                      label: "Chief concern / visit summary",
-                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.chiefConcernSummary || "Not entered",
+                      label: "Documentation completed in Athena",
+                      value: revenueCase.chargeCaptureRecord?.documentationComplete ? "Yes" : "No",
                     },
                     {
-                      label: "Assessment summary",
-                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.assessmentSummary || "Not entered",
+                      label: "Attestation note",
+                      value:
+                        typeof revenueCase.encounter.clinicianData?.["documentation.athena_attestation_note"] === "string" &&
+                        revenueCase.encounter.clinicianData?.["documentation.athena_attestation_note"]
+                          ? String(revenueCase.encounter.clinicianData?.["documentation.athena_attestation_note"])
+                          : "Not entered",
                     },
                     {
-                      label: "Plan / follow-up",
-                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.planFollowUp || "Not entered",
-                    },
-                    {
-                      label: "Orders / procedures performed",
-                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.ordersOrProcedures || "Not entered",
+                      label: "Current blocker",
+                      value: revenueCase.currentBlockerText || "No blocker",
                     },
                   ]} />
                   <SummaryBox title="Projection quality" rows={[
@@ -2029,15 +2073,27 @@ function RevenueCaseDetailPane({
                           {item.suggestedProcedureCode ? ` · suggested CPT ${item.suggestedProcedureCode}` : ""}
                           {item.note ? ` · ${item.note}` : ""}
                         </div>
+                        {item.detailJson && (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {Object.entries(item.detailJson)
+                              .filter(([, value]) => String(value || "").trim().length > 0)
+                              .slice(0, 3)
+                              .map(([key, value]) => `${key}: ${String(value)}`)
+                              .join(" · ")}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right text-slate-600">
+                        <div className={`mb-1 text-[10px] ${item.detailComplete ? "text-emerald-700" : "text-amber-700"}`} style={{ fontWeight: 700 }}>
+                          {item.detailComplete ? "Detail complete" : "Detail incomplete"}
+                        </div>
                         {item.expectedChargeCents == null ? "Needs mapping" : formatCurrency(item.expectedChargeCents * Math.max(1, item.quantity || 1))}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <ToggleField label="Documentation complete" checked={codingDraft.documentationComplete} onChange={(checked) => setCodingDraft((prev) => ({ ...prev, documentationComplete: checked }))} />
+              <ToggleField label="Documentation completed in Athena" checked={codingDraft.documentationComplete} onChange={(checked) => setCodingDraft((prev) => ({ ...prev, documentationComplete: checked }))} />
               <Field label="Diagnosis codes">
                 <div className="rounded-2xl border border-slate-200 p-3">
                   <div className="flex gap-2">
@@ -2066,7 +2122,10 @@ function RevenueCaseDetailPane({
                         onClick={() => onRemoveDiagnosis(code)}
                         className="rounded-full bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700"
                       >
-                        {code} <span className="ml-1 text-cyan-500">×</span>
+                        {(() => {
+                          const reference = getClinicalCodeReference("diagnosis", code);
+                          return reference ? `${reference.code} — ${reference.label}` : code;
+                        })()} <span className="ml-1 text-cyan-500">×</span>
                       </button>
                     ))}
                   </div>
@@ -2088,12 +2147,19 @@ function RevenueCaseDetailPane({
                             onChange={(event) => onUpdateProcedureLine(line.lineId, { cptCode: event.target.value })}
                             className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                           />
+                          {(() => {
+                            const reference = getClinicalCodeReference("procedure", line.cptCode);
+                            return reference ? (
+                              <div className="mt-1 text-[11px] text-slate-500">{reference.label}</div>
+                            ) : null;
+                          })()}
                         </Field>
                         <Field label="Units">
                           <input
-                            type="number"
-                            min={1}
+                            type="text"
+                            inputMode="numeric"
                             value={line.units}
+                            onWheel={(event) => event.currentTarget.blur()}
                             onChange={(event) => onUpdateProcedureLine(line.lineId, { units: Number(event.target.value || 1) })}
                             className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                           />

@@ -9,6 +9,8 @@ import { requireRoles } from "../lib/auth.js";
 import { getDailyHistoryRollups, listDateKeys } from "../lib/office-manager-rollups.js";
 import { getRoomDailyHistoryRollups } from "../lib/room-rollups.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
+import { getRevenueDailyHistoryRollups } from "../lib/revenue-rollups.js";
+import { buildRevenueExpectationSummary, getRevenueSettings } from "../lib/revenue-cycle.js";
 
 const dashboardQuerySchema = z.object({
   clinicId: z.string().uuid().optional(),
@@ -93,6 +95,31 @@ function averageMinutes(values: number[]) {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function readNumber(value: unknown) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function accumulateRecord(target: Record<string, number>, source: Record<string, number> | null | undefined) {
+  Object.entries(source || {}).forEach(([key, value]) => {
+    target[key] = (target[key] || 0) + readNumber(value);
+  });
+}
+
+function topEntries(value: Record<string, number> | null | undefined, limit = 8) {
+  return Object.entries(value || {})
+    .map(([label, count]) => ({ label, count: readNumber(count) }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, limit);
+}
+
+function dateRangeBounds(fromDate: string, toDate: string) {
+  return {
+    start: DateTime.fromISO(fromDate, { zone: "utc" }).startOf("day").toJSDate(),
+    end: DateTime.fromISO(toDate, { zone: "utc" }).plus({ days: 1 }).startOf("day").toJSDate(),
+  };
+}
+
 export async function registerDashboardRoutes(app: FastifyInstance) {
   const officeGuard = requireRoles(
     RoleName.FrontDeskCheckIn,
@@ -102,6 +129,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
     RoleName.OfficeManager,
     RoleName.Admin
   );
+  const ownerAnalyticsGuard = requireRoles(RoleName.OfficeManager, RoleName.Admin);
 
   app.get("/dashboard/office-manager", { preHandler: officeGuard }, async (request) => {
     const query = dashboardQuerySchema.parse(request.query);
@@ -266,6 +294,318 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
         to: effectiveTo
       },
       daily
+    };
+  });
+
+  app.get("/dashboard/owner-analytics", { preHandler: ownerAnalyticsGuard }, async (request) => {
+    const query = dashboardHistoryQuerySchema.parse(request.query);
+    const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
+    await refreshEncounterAlertStates(prisma, {
+      facilityId: request.user!.facilityId,
+      clinicIds: clinics.map((clinic) => clinic.id),
+    });
+
+    const effectiveTo = (query.to || DateTime.now().toISODate() || "").trim();
+    if (!effectiveTo) {
+      throw new ApiError(400, "to is required");
+    }
+    const effectiveFrom = (
+      query.from || DateTime.fromISO(effectiveTo).minus({ days: 6 }).toISODate() || ""
+    ).trim();
+    if (!effectiveFrom) {
+      throw new ApiError(400, "from is required");
+    }
+
+    let dateKeys: string[];
+    try {
+      dateKeys = listDateKeys(effectiveFrom, effectiveTo);
+    } catch (error) {
+      throw new ApiError(400, error instanceof Error ? error.message : "Invalid date range");
+    }
+
+    const todayMatchers = await resolveEncounterMatchers(request.user!, query.clinicId, DateTime.now().toISODate() || undefined);
+    const { start, end } = dateRangeBounds(effectiveFrom, effectiveTo);
+    const facilityId = request.user!.facilityId || clinics[0]?.facilityId || null;
+    const settings = facilityId ? await getRevenueSettings(prisma, facilityId) : null;
+
+    const [officeDaily, roomDaily, revenueDaily, currentEncounters, rangeRevenueCases, activeSafetyCount, blockingTaskCount] = await Promise.all([
+      getDailyHistoryRollups(prisma, clinics, dateKeys, { persist: true, forceRecompute: true }),
+      getRoomDailyHistoryRollups(prisma, clinics, dateKeys, { persist: true, forceRecompute: true }),
+      getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, { persist: true, forceRecompute: true }),
+      prisma.encounter.findMany({
+        where: { OR: todayMatchers },
+        select: {
+          id: true,
+          currentStatus: true,
+          checkInAt: true,
+          providerStartAt: true,
+          providerEndAt: true,
+          checkoutCompleteAt: true,
+          assignedMaUserId: true,
+          provider: { select: { name: true } },
+        },
+      }),
+      prisma.revenueCase.findMany({
+        where: {
+          clinicId: { in: clinics.map((clinic) => clinic.id) },
+          dateOfService: { gte: start, lt: end },
+        },
+        include: {
+          financialReadiness: true,
+          checkoutCollectionTracking: true,
+          chargeCaptureRecord: true,
+          providerClarifications: {
+            where: { status: { not: "Resolved" as any } },
+            select: { id: true },
+          },
+        },
+      }),
+      prisma.safetyEvent.count({
+        where: {
+          resolvedAt: null,
+          encounter: { OR: todayMatchers },
+        },
+      }),
+      prisma.task.count({
+        where: {
+          blocking: true,
+          status: { not: "completed" },
+          encounter: { OR: todayMatchers },
+        },
+      }),
+    ]);
+
+    const latestOffice = officeDaily[officeDaily.length - 1] || null;
+    const latestRoom = roomDaily[roomDaily.length - 1] || null;
+    const latestRevenue = revenueDaily[revenueDaily.length - 1] || null;
+    const maUserIds = Array.from(
+      new Set(currentEncounters.map((encounter) => encounter.assignedMaUserId).filter((value): value is string => Boolean(value))),
+    );
+    const maUsers = maUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: maUserIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const maById = new Map(maUsers.map((row) => [row.id, row.name]));
+
+    const avgCycleTimeMins =
+      officeDaily.length > 0
+        ? Math.round(
+            officeDaily.reduce(
+              (sum, day) => sum + day.avgLobbyWaitMins + day.avgRoomingWaitMins + day.avgProviderVisitMins,
+              0,
+            ) / officeDaily.length,
+          )
+        : 0;
+
+    const throughputDaily = officeDaily.map((day, index) => ({
+      dateKey: day.date,
+      encounterCount: day.encounterCount,
+      avgCycleTimeMins: day.avgLobbyWaitMins + day.avgRoomingWaitMins + day.avgProviderVisitMins,
+      inProgressCount:
+        readNumber(day.queueByStatus.Lobby) +
+        readNumber(day.queueByStatus.Rooming) +
+        readNumber(day.queueByStatus.ReadyForProvider) +
+        readNumber(day.queueByStatus.Optimizing) +
+        readNumber(day.queueByStatus.CheckOut),
+      rolledCount: readNumber(revenueDaily[index]?.rolledCount),
+    }));
+
+    const revenueDailySeries = revenueDaily.map((day) => ({
+      dateKey: day.date,
+      expectedGrossChargeCents: day.expectedGrossChargeCents,
+      expectedNetReimbursementCents: day.expectedNetReimbursementCents,
+      sameDayCollectionExpectedCents: day.sameDayCollectionExpectedCents,
+      sameDayCollectionTrackedCents: day.sameDayCollectionTrackedCents,
+      sameDayCollectionVisitRate: day.sameDayCollectionVisitRate,
+      sameDayCollectionDollarRate: day.sameDayCollectionDollarRate,
+    }));
+
+    const missedCollectionReasons: Record<string, number> = {};
+    const collectionOutcomes: Record<string, number> = {};
+    const rolloverReasons: Record<string, number> = {};
+    revenueDaily.forEach((day) => {
+      accumulateRecord(missedCollectionReasons, day.missedCollectionReasons);
+      accumulateRecord(rolloverReasons, day.rollReasons);
+    });
+
+    const hourOfDay: Record<string, number> = {};
+    currentEncounters.forEach((encounter) => {
+      if (!encounter.checkInAt) return;
+      const label = DateTime.fromJSDate(encounter.checkInAt).toFormat("ha");
+      hourOfDay[label] = (hourOfDay[label] || 0) + 1;
+    });
+
+    const providerAggregate = new Map<
+      string,
+      { encounterCount: number; activeCount: number; completedCount: number; optimizingTotal: number; optimizingSamples: number }
+    >();
+    officeDaily.forEach((day) => {
+      day.providerRollups.forEach((provider) => {
+        const key = provider.providerName || "Unassigned";
+        if (!providerAggregate.has(key)) {
+          providerAggregate.set(key, {
+            encounterCount: 0,
+            activeCount: 0,
+            completedCount: 0,
+            optimizingTotal: 0,
+            optimizingSamples: 0,
+          });
+        }
+        const row = providerAggregate.get(key)!;
+        row.encounterCount += provider.encounterCount;
+        row.activeCount += provider.activeCount;
+        row.completedCount += provider.completedCount;
+        const optimizing = readNumber(provider.stageAverages?.Optimizing);
+        if (optimizing > 0) {
+          row.optimizingTotal += optimizing;
+          row.optimizingSamples += 1;
+        }
+      });
+    });
+
+    const providerSummaries = Array.from(providerAggregate.entries())
+      .map(([providerName, row]) => ({
+        providerName,
+        encounterCount: row.encounterCount,
+        activeCount: row.activeCount,
+        completedCount: row.completedCount,
+        avgOptimizingMins: row.optimizingSamples > 0 ? Math.round(row.optimizingTotal / row.optimizingSamples) : 0,
+      }))
+      .sort((a, b) => b.encounterCount - a.encounterCount)
+      .slice(0, 8);
+
+    const maVolume = new Map<string, number>();
+    currentEncounters.forEach((encounter) => {
+      const maName = maById.get(encounter.assignedMaUserId || "")?.trim();
+      if (!maName) return;
+      maVolume.set(maName, (maVolume.get(maName) || 0) + 1);
+    });
+    const staffSummaries = Array.from(maVolume.entries())
+      .map(([label, count]) => ({ label, role: "MA", encounterCount: count }))
+      .sort((a, b) => b.encounterCount - a.encounterCount)
+      .slice(0, 8);
+
+    let missingChargeMappingCount = 0;
+    let missingReimbursementMappingCount = 0;
+    let documentationIncompleteCount = 0;
+    let providerQueriesOpen = 0;
+    let staleUnresolvedCount = 0;
+    rangeRevenueCases.forEach((row) => {
+      const outcomeLabel = row.checkoutCollectionTracking?.collectionOutcome || null;
+      if (outcomeLabel) {
+        collectionOutcomes[outcomeLabel] = (collectionOutcomes[outcomeLabel] || 0) + 1;
+      }
+      const expectation = buildRevenueExpectationSummary({
+        chargeCapture: {
+          documentationComplete: Boolean(row.chargeCaptureRecord?.documentationComplete),
+          icd10CodesJson: Array.isArray(row.chargeCaptureRecord?.icd10CodesJson) ? (row.chargeCaptureRecord?.icd10CodesJson as string[]) : [],
+          procedureLinesJson: Array.isArray(row.chargeCaptureRecord?.procedureLinesJson) ? (row.chargeCaptureRecord?.procedureLinesJson as any[]) : [],
+          serviceCaptureItemsJson: Array.isArray(row.chargeCaptureRecord?.serviceCaptureItemsJson) ? (row.chargeCaptureRecord?.serviceCaptureItemsJson as any[]) : [],
+        },
+        chargeSchedule: settings?.chargeSchedule || [],
+        reimbursementRules: settings?.reimbursementRules || [],
+        financialReadiness: row.financialReadiness
+          ? {
+              primaryPayerName: row.financialReadiness.primaryPayerName,
+              financialClass: row.financialReadiness.financialClass,
+            }
+          : null,
+      });
+      if (expectation.missingChargeMapping) missingChargeMappingCount += 1;
+      if (expectation.missingReimbursementMapping) missingReimbursementMappingCount += 1;
+      if (row.currentBlockerCategory === "documentation_incomplete") documentationIncompleteCount += 1;
+      providerQueriesOpen += row.providerClarifications.length;
+      if (row.dueAt && row.currentBlockerText && row.dueAt.getTime() < Date.now()) staleUnresolvedCount += 1;
+    });
+
+    return {
+      scope: {
+        clinicId: query.clinicId || request.user!.clinicId,
+        from: effectiveFrom,
+        to: effectiveTo,
+      },
+      overview: {
+        encounterCount: latestOffice?.encounterCount || 0,
+        inProgressCount:
+          readNumber(latestOffice?.queueByStatus?.Lobby) +
+          readNumber(latestOffice?.queueByStatus?.Rooming) +
+          readNumber(latestOffice?.queueByStatus?.ReadyForProvider) +
+          readNumber(latestOffice?.queueByStatus?.Optimizing) +
+          readNumber(latestOffice?.queueByStatus?.CheckOut),
+        avgCycleTimeMins,
+        sameDayCollectionExpectedCents: latestRevenue?.sameDayCollectionExpectedCents || 0,
+        sameDayCollectionTrackedCents: latestRevenue?.sameDayCollectionTrackedCents || 0,
+        sameDayCollectionDollarRate: latestRevenue?.sameDayCollectionDollarRate || 0,
+        expectedGrossChargeCents: latestRevenue?.expectedGrossChargeCents || 0,
+        expectedNetReimbursementCents: latestRevenue?.expectedNetReimbursementCents || 0,
+        unresolvedBlockers: rangeRevenueCases.filter((row) => Boolean(row.currentBlockerText)).length,
+      },
+      throughput: {
+        stageCounts: latestOffice?.queueByStatus || {},
+        stageDurations: latestOffice?.stageRollups || [],
+        daily: throughputDaily,
+        hourOfDay: topEntries(hourOfDay, 12),
+        leakage: {
+          rolledCount: latestRevenue?.rolledCount || 0,
+          providerQueriesOpen,
+        },
+      },
+      revenue: {
+        daily: revenueDailySeries,
+        queueCounts: latestRevenue?.queueCounts || {},
+        missedCollectionReasons: topEntries(missedCollectionReasons),
+        collectionOutcomes: topEntries(collectionOutcomes),
+        mappingGaps: {
+          missingChargeMappingCount,
+          missingReimbursementMappingCount,
+        },
+      },
+      providersAndStaff: {
+        providers: providerSummaries,
+        staff: staffSummaries,
+      },
+      roomsAndCapacity: {
+        current: latestRoom
+          ? {
+              roomCount: latestRoom.roomCount,
+              avgOccupiedMins: latestRoom.avgOccupiedMins,
+              avgTurnoverMins: latestRoom.avgTurnoverMins,
+              turnoverCount: latestRoom.turnoverCount,
+              holdCount: latestRoom.holdCount,
+              issueCount: latestRoom.issueCount,
+            }
+          : {
+              roomCount: 0,
+              avgOccupiedMins: 0,
+              avgTurnoverMins: 0,
+              turnoverCount: 0,
+              holdCount: 0,
+              issueCount: 0,
+            },
+        daily: roomDaily.map((day) => ({
+          dateKey: day.date,
+          roomCount: day.roomCount,
+          avgOccupiedMins: day.avgOccupiedMins,
+          avgTurnoverMins: day.avgTurnoverMins,
+          turnoverCount: day.turnoverCount,
+          holdCount: day.holdCount,
+          issueCount: day.issueCount,
+        })),
+        issueTypes: latestRoom?.issueRollups?.map((issue) => ({
+          label: issue.issueType,
+          count: issue.count,
+        })) || [],
+      },
+      exceptionsAndRisk: {
+        documentationIncompleteCount,
+        providerQueriesOpen,
+        rolloverReasons: topEntries(rolloverReasons),
+        staleUnresolvedCount,
+        activeSafetyCount,
+        blockingTaskCount,
+      },
     };
   });
 }

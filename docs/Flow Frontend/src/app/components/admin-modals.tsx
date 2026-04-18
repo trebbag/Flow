@@ -272,31 +272,15 @@ function NumberStepper({
   };
   return (
     <div className="h-10 flex items-center rounded-lg border border-gray-200 bg-gray-50 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => onChange(clamp(Number(value || 0) - step))}
-        className="w-10 h-full border-r border-gray-200 text-[18px] leading-none text-gray-600 hover:bg-gray-100 transition-colors"
-        aria-label="Decrease value"
-      >
-        -
-      </button>
       <input
         value={value}
         onChange={(event) => onChange(clamp(Number(event.target.value || 0)))}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        className="flex-1 h-full px-2 text-center bg-transparent text-[13px] focus:outline-none"
+        type="text"
+        inputMode="numeric"
+        data-step={step}
+        onWheel={(event) => event.currentTarget.blur()}
+        className="flex-1 h-full px-3 bg-transparent text-[13px] focus:outline-none"
       />
-      <button
-        type="button"
-        onClick={() => onChange(clamp(Number(value || 0) + step))}
-        className="w-10 h-full border-l border-gray-200 text-[18px] leading-none text-gray-600 hover:bg-gray-100 transition-colors"
-        aria-label="Increase value"
-      >
-        +
-      </button>
     </div>
   );
 }
