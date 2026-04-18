@@ -199,6 +199,10 @@ function buildChargeScheduleMap(settings: RevenueSettings | null) {
   return new Map((settings?.chargeSchedule || []).filter((item) => item.active !== false).map((item) => [item.code.toUpperCase(), item]));
 }
 
+function checklistItemsFor(revenueCase: RevenueCaseDetail, groups: string[]) {
+  return revenueCase.checklistItems.filter((item) => groups.includes(item.group));
+}
+
 function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings | null) {
   const chargeSchedule = buildChargeScheduleMap(settings);
   const serviceItems = row.chargeCaptureRecord?.serviceCaptureItemsJson || [];
@@ -225,9 +229,30 @@ function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings
     });
   }
 
+  const reimbursementRules = (settings?.reimbursementRules || []).filter((item) => item.active !== false);
+  const payerName = row.financialReadiness?.primaryPayerName?.trim().toLowerCase() || "";
+  const financialClass = row.financialReadiness?.financialClass?.trim().toLowerCase() || "";
+  const matchedRule =
+    reimbursementRules.find(
+      (item) =>
+        (item.payerName?.trim().toLowerCase() || "") === payerName &&
+        (item.financialClass?.trim().toLowerCase() || "") === financialClass,
+    ) ||
+    reimbursementRules.find(
+      (item) => !item.payerName && Boolean(item.financialClass) && item.financialClass!.trim().toLowerCase() === financialClass,
+    ) ||
+    reimbursementRules.find(
+      (item) => Boolean(item.payerName) && item.payerName!.trim().toLowerCase() === payerName && !item.financialClass,
+    ) ||
+    null;
+  const expectedNetReimbursementCents = matchedRule ? Math.round(expectedGrossChargeCents * (matchedRule.expectedPercent / 100)) : 0;
+  const missingReimbursementMapping = expectedGrossChargeCents > 0 && !matchedRule;
+
   return {
     expectedGrossChargeCents,
+    expectedNetReimbursementCents,
     missingChargeMapping,
+    missingReimbursementMapping,
     serviceCaptureComplete: serviceItems.length > 0,
   };
 }
@@ -236,16 +261,28 @@ function queueRowSubsummary(row: RevenueCaseDetail, settings: RevenueSettings | 
   const diagnosisCount = row.chargeCaptureRecord?.icd10CodesJson?.length || 0;
   const procedureCount = row.chargeCaptureRecord?.procedureLinesJson?.length || 0;
   const expectation = getRevenueExpectation(row, settings);
-  const codingReady = row.chargeCaptureRecord?.documentationComplete && diagnosisCount > 0 && procedureCount > 0;
+  const documentationSummary = row.chargeCaptureRecord?.documentationSummaryJson;
+  const documentationStructured = documentationSummary
+    ? Boolean(
+        documentationSummary.chiefConcernSummary &&
+          documentationSummary.assessmentSummary &&
+          documentationSummary.planFollowUp &&
+          documentationSummary.ordersOrProcedures,
+      )
+    : Boolean(row.chargeCaptureRecord?.documentationComplete);
+  const codingReady = row.chargeCaptureRecord?.documentationComplete && documentationStructured && diagnosisCount > 0 && procedureCount > 0;
   const documentationIncomplete = diagnosisCount > 0 && procedureCount > 0 && row.chargeCaptureRecord?.documentationComplete === false;
   return {
     diagnosisCount,
     procedureCount,
     codingReady,
     documentationIncomplete,
+    documentationStructured,
     serviceCaptureComplete: expectation.serviceCaptureComplete,
     expectedGrossChargeCents: expectation.expectedGrossChargeCents,
+    expectedNetReimbursementCents: expectation.expectedNetReimbursementCents,
     missingChargeMapping: expectation.missingChargeMapping,
+    missingReimbursementMapping: expectation.missingReimbursementMapping,
     athenaStatus: row.athenaClaimStatus || (row.athenaHandoffConfirmedAt ? "Handoff confirmed" : "Not yet synced from Athena"),
   };
 }
@@ -303,13 +340,18 @@ export function RevenueCycleView() {
   const [settings, setSettings] = useState<RevenueSettings | null>(null);
   const [financialDraft, setFinancialDraft] = useState({
     eligibilityStatus: "NotChecked",
+    registrationVerified: false,
+    contactInfoVerified: false,
     coverageIssueCategory: "",
     coverageIssueText: "",
     primaryPayerName: "",
     primaryPlanName: "",
     secondaryPayerName: "",
     financialClass: "",
+    benefitsSummaryText: "",
+    patientEstimateAmountCents: "0",
     pointOfServiceAmountDueCents: "0",
+    estimateExplainedToPatient: false,
     outstandingPriorBalanceCents: "0",
     priorAuthRequired: false,
     priorAuthStatus: "NotRequired",
@@ -368,10 +410,16 @@ export function RevenueCycleView() {
         athenaLinkTemplate: dashboardResult.settings?.athenaLinkTemplate || "",
         queueSla: {},
         dayCloseDefaults: { defaultDueHours: 18, requireNextAction: true },
-        athenaChecklistDefaults: dashboardResult.settings?.checklistDefaults?.athena_handoff || [],
+        estimateDefaults: dashboardResult.settings?.estimateDefaults || {
+          defaultPatientEstimateCents: 0,
+          defaultPosCollectionPercent: 100,
+          explainEstimateByDefault: true,
+        },
+        athenaChecklistDefaults: dashboardResult.settings?.checklistDefaults?.athena_handoff_attestation || [],
         checklistDefaults: dashboardResult.settings?.checklistDefaults || {},
         serviceCatalog: dashboardResult.settings?.serviceCatalog || [],
         chargeSchedule: dashboardResult.settings?.chargeSchedule || [],
+        reimbursementRules: dashboardResult.settings?.reimbursementRules || [],
       };
       setSettings(nextSettings);
       setQueueRows(queueResult);
@@ -442,13 +490,18 @@ export function RevenueCycleView() {
     if (!selectedCase) return;
     setFinancialDraft({
       eligibilityStatus: selectedCase.financialReadiness?.eligibilityStatus || "NotChecked",
+      registrationVerified: Boolean(selectedCase.financialReadiness?.registrationVerified),
+      contactInfoVerified: Boolean(selectedCase.financialReadiness?.contactInfoVerified),
       coverageIssueCategory: selectedCase.financialReadiness?.coverageIssueCategory || "",
       coverageIssueText: selectedCase.financialReadiness?.coverageIssueText || "",
       primaryPayerName: selectedCase.financialReadiness?.primaryPayerName || "",
       primaryPlanName: selectedCase.financialReadiness?.primaryPlanName || "",
       secondaryPayerName: selectedCase.financialReadiness?.secondaryPayerName || "",
       financialClass: selectedCase.financialReadiness?.financialClass || "",
+      benefitsSummaryText: selectedCase.financialReadiness?.benefitsSummaryText || "",
+      patientEstimateAmountCents: String(selectedCase.financialReadiness?.patientEstimateAmountCents || 0),
       pointOfServiceAmountDueCents: String(selectedCase.financialReadiness?.pointOfServiceAmountDueCents || 0),
+      estimateExplainedToPatient: Boolean(selectedCase.financialReadiness?.estimateExplainedToPatient),
       outstandingPriorBalanceCents: String(selectedCase.financialReadiness?.outstandingPriorBalanceCents || 0),
       priorAuthRequired: Boolean(selectedCase.financialReadiness?.priorAuthRequired),
       priorAuthStatus: selectedCase.financialReadiness?.priorAuthStatus || "NotRequired",
@@ -533,13 +586,18 @@ export function RevenueCycleView() {
       await revenueCases.update(selectedCase.id, {
         financialReadiness: {
           eligibilityStatus: financialDraft.eligibilityStatus as any,
+          registrationVerified: financialDraft.registrationVerified,
+          contactInfoVerified: financialDraft.contactInfoVerified,
           coverageIssueCategory: financialDraft.coverageIssueCategory || null,
           coverageIssueText: financialDraft.coverageIssueText || null,
           primaryPayerName: financialDraft.primaryPayerName || null,
           primaryPlanName: financialDraft.primaryPlanName || null,
           secondaryPayerName: financialDraft.secondaryPayerName || null,
           financialClass: financialDraft.financialClass || null,
+          benefitsSummaryText: financialDraft.benefitsSummaryText || null,
+          patientEstimateAmountCents: Number(financialDraft.patientEstimateAmountCents || 0),
           pointOfServiceAmountDueCents: Number(financialDraft.pointOfServiceAmountDueCents || 0),
+          estimateExplainedToPatient: financialDraft.estimateExplainedToPatient,
           outstandingPriorBalanceCents: Number(financialDraft.outstandingPriorBalanceCents || 0),
           priorAuthRequired: financialDraft.priorAuthRequired,
           priorAuthStatus: (financialDraft.priorAuthStatus || "NotRequired") as FinancialRequirementStatus,
@@ -650,7 +708,7 @@ export function RevenueCycleView() {
       await revenueCases.confirmAthenaHandoff(selectedCase.id, {
         athenaHandoffNote: athenaReference || null,
         checklistUpdates: selectedCase.checklistItems
-          .filter((item) => item.group === "athena_handoff" && item.status !== "completed")
+          .filter((item) => item.group === "athena_handoff_attestation" && item.status !== "completed")
           .map((item) => ({
             id: item.id,
             status: "completed",
@@ -851,7 +909,7 @@ export function RevenueCycleView() {
 
           {activeView === "Overview" && dashboard && (
             <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <KpiCard
                   title="Visits collected"
                   value={`${dashboard.kpis.sameDayCollectionCapturedVisitCount}/${dashboard.kpis.sameDayCollectionExpectedVisitCount || 0}`}
@@ -870,6 +928,13 @@ export function RevenueCycleView() {
                   title="Expected gross charges"
                   value={formatCurrency(dashboard.kpis.expectedGrossChargeCents)}
                   hint="Flow-estimated from service capture and coded charge lines"
+                  icon={TrendingUp}
+                  tone="#0f766e"
+                />
+                <KpiCard
+                  title="Expected net reimbursement"
+                  value={formatCurrency(dashboard.kpis.expectedNetReimbursementCents)}
+                  hint="Flow projection from payer-class reimbursement rules"
                   icon={TrendingUp}
                   tone="#0f766e"
                 />
@@ -975,9 +1040,9 @@ export function RevenueCycleView() {
                       </h2>
                     </div>
                     <div className="space-y-3 text-[12px] text-slate-600">
-                      <BoundaryRow title="Flow owns" body="Eligibility visibility, checkout collection tracking, charge prep, provider clarification, Athena handoff timestamps, and revenue closeout." />
-                      <BoundaryRow title="Athena owns" body="Charge entry, claim submission, denials, payment posting, patient accounting, and downstream billing truth." />
-                      <BoundaryRow title="This MVP does not do" body="No claim engine, no denial workbench, no remittance posting, and no Athena status import beyond nullable read-only monitoring." />
+                      <BoundaryRow title="Pre-service in Flow" body="Check-In plus Revenue guide registration checks, eligibility, patient estimate capture, POS expectation, and auth/referral follow-through even without Athena configured." />
+                      <BoundaryRow title="Time-of-service in Flow" body="Flow directly owns service capture, encounter documentation summary, clinician working codes, checkout tracking, revenue verification, and Athena handoff attestation." />
+                      <BoundaryRow title="Post-service stays in Athena" body="Claim edits, submission, adjudication, payment posting, denials, patient billing, collections, and payment truth remain Athena-only in this MVP." />
                     </div>
                   </CardContent>
                 </Card>
@@ -1050,6 +1115,13 @@ export function RevenueCycleView() {
                                 : queueRowSubsummary(row, settings).missingChargeMapping
                                   ? "Missing charge mapping"
                                   : "No expected charge yet"}
+                            </span>
+                            <span>
+                              {queueRowSubsummary(row, settings).expectedNetReimbursementCents > 0
+                                ? `Net ${formatCurrency(queueRowSubsummary(row, settings).expectedNetReimbursementCents)}`
+                                : queueRowSubsummary(row, settings).missingReimbursementMapping
+                                  ? "Missing reimbursement mapping"
+                                  : "No net projection yet"}
                             </span>
                             <span>{queueRowSubsummary(row, settings).athenaStatus}</span>
                           </div>
@@ -1320,9 +1392,16 @@ export function RevenueCycleView() {
                 <KpiCard
                   title="Expected gross charges"
                   value={history.length ? formatCurrency(history[history.length - 1].expectedGrossChargeCents) : formatCurrency(0)}
-                  hint="Flow-estimated"
+                  hint="Flow-controlled"
                   icon={TrendingUp}
                   tone="#0f766e"
+                />
+                <KpiCard
+                  title="Expected net reimbursement"
+                  value={history.length ? formatCurrency(history[history.length - 1].expectedNetReimbursementCents) : formatCurrency(0)}
+                  hint="Flow projection"
+                  icon={TrendingUp}
+                  tone="#0d9488"
                 />
                 <KpiCard
                   title="Avg handoff lag"
@@ -1379,6 +1458,7 @@ export function RevenueCycleView() {
                         <MetricMini label="Visit rate" value={formatPercent(entry.sameDayCollectionVisitRate)} />
                         <MetricMini label="Dollar rate" value={formatPercent(entry.sameDayCollectionDollarRate)} />
                         <MetricMini label="Expected gross" value={formatCurrency(entry.expectedGrossChargeCents)} />
+                        <MetricMini label="Expected net" value={formatCurrency(entry.expectedNetReimbursementCents)} />
                         <MetricMini label="Service capture" value={String(entry.serviceCaptureCompletedVisitCount)} />
                         <MetricMini label="Clinician coding" value={String(entry.clinicianCodingEnteredVisitCount)} />
                         <MetricMini label="Charge capture done" value={String(entry.chargeCaptureCompletedCount)} />
@@ -1665,13 +1745,17 @@ function RevenueCaseDetailPane({
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <SummaryBox title="Flow-controlled" rows={[
+                  { label: "Registration verified", value: revenueCase.financialReadiness?.registrationVerified ? "Yes" : "No" },
+                  { label: "Contact verified", value: revenueCase.financialReadiness?.contactInfoVerified ? "Yes" : "No" },
                   { label: "Eligibility", value: revenueCase.financialReadiness?.eligibilityStatus || "Not checked" },
+                  { label: "Benefits summary", value: revenueCase.financialReadiness?.benefitsSummaryText || "Not captured" },
                   { label: "Collection outcome", value: revenueCase.checkoutCollectionTracking?.collectionOutcome || "Not tracked" },
                   { label: "Service capture items", value: String(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson.length || 0) },
                   { label: "Diagnoses", value: String(revenueCase.chargeCaptureRecord?.icd10CodesJson.length || 0) },
                   { label: "Procedure lines", value: String(revenueCase.chargeCaptureRecord?.procedureLinesJson.length || 0) },
                   { label: "Documentation complete", value: revenueCase.chargeCaptureRecord?.documentationComplete ? "Yes" : "No - still blocks handoff" },
                   { label: "Expected gross", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedGrossChargeCents) },
+                  { label: "Expected net", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedNetReimbursementCents) },
                 ]} />
                 <SummaryBox title="Athena-observed" rows={[
                   { label: "Charge entered", value: revenueCase.athenaChargeEnteredAt ? formatDateTime(revenueCase.athenaChargeEnteredAt) : "Not yet synced from Athena" },
@@ -1686,10 +1770,17 @@ function RevenueCaseDetailPane({
           {activeDrawerTab === "Insurance" && (
             <div className="space-y-4">
               <ChecklistGroupCard
-                title="Financial readiness checklist"
-                items={revenueCase.checklistItems.filter((item) => item.group === "financial_readiness")}
+                title="Pre-service checklist"
+                items={checklistItemsFor(revenueCase, [
+                  "registration_demographics",
+                  "eligibility_benefits",
+                  "patient_estimate_pos",
+                  "referral_prior_auth",
+                ])}
               />
               <section className="grid gap-3 md:grid-cols-2">
+                <ToggleField label="Registration verified" checked={financialDraft.registrationVerified} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, registrationVerified: checked }))} />
+                <ToggleField label="Contact info verified" checked={financialDraft.contactInfoVerified} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, contactInfoVerified: checked }))} />
                 <Field label="Eligibility status">
                   <select
                     value={financialDraft.eligibilityStatus}
@@ -1744,6 +1835,14 @@ function RevenueCaseDetailPane({
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
                   />
                 </Field>
+                <Field label="Patient estimate (cents)">
+                  <input
+                    value={financialDraft.patientEstimateAmountCents}
+                    onChange={(event) => setFinancialDraft((prev) => ({ ...prev, patientEstimateAmountCents: event.target.value }))}
+                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
+                  />
+                </Field>
+                <ToggleField label="Estimate explained to patient" checked={financialDraft.estimateExplainedToPatient} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, estimateExplainedToPatient: checked }))} />
                 <Field label="Coverage issue category">
                   <input
                     value={financialDraft.coverageIssueCategory}
@@ -1756,6 +1855,13 @@ function RevenueCaseDetailPane({
                     value={financialDraft.coverageIssueText}
                     onChange={(event) => setFinancialDraft((prev) => ({ ...prev, coverageIssueText: event.target.value }))}
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[12px] outline-none focus:border-slate-300"
+                  />
+                </Field>
+                <Field label="Benefits summary">
+                  <textarea
+                    value={financialDraft.benefitsSummaryText}
+                    onChange={(event) => setFinancialDraft((prev) => ({ ...prev, benefitsSummaryText: event.target.value }))}
+                    className="min-h-[96px] w-full rounded-2xl border border-slate-200 px-3 py-3 text-[12px] outline-none focus:border-slate-300"
                   />
                 </Field>
                 <ToggleField label="Prior auth required" checked={financialDraft.priorAuthRequired} onChange={(checked) => setFinancialDraft((prev) => ({ ...prev, priorAuthRequired: checked }))} />
@@ -1791,7 +1897,7 @@ function RevenueCaseDetailPane({
                 </Field>
               </section>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-[12px] text-slate-600">
-                Prior auth and referral stay quiet by default. They only become queue drivers when required and incomplete.
+                Flow guides pre-service steps here even without Athena. Registration, eligibility, estimate capture, and auth/referral stay visible until they are either completed or explicitly categorized.
               </div>
               <ActionRow>
                 <button onClick={onAssignToMe} className="rounded-full border border-slate-200 px-3 py-2 text-[11px] text-slate-600" style={{ fontWeight: 700 }}>Assign to me</button>
@@ -1870,9 +1976,44 @@ function RevenueCaseDetailPane({
                 Clinicians provide a lightweight coding handoff upstream. Revenue finalizes the structured codes and documentation readiness here.
               </div>
               <ChecklistGroupCard
-                title="Charge capture checklist"
-                items={revenueCase.checklistItems.filter((item) => item.group === "charge_capture")}
+                title="Documentation and coding checklist"
+                items={checklistItemsFor(revenueCase, ["encounter_documentation", "charge_capture_coding"])}
               />
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">Encounter documentation summary</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <SummaryBox title="Structured documentation" rows={[
+                    {
+                      label: "Chief concern / visit summary",
+                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.chiefConcernSummary || "Not entered",
+                    },
+                    {
+                      label: "Assessment summary",
+                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.assessmentSummary || "Not entered",
+                    },
+                    {
+                      label: "Plan / follow-up",
+                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.planFollowUp || "Not entered",
+                    },
+                    {
+                      label: "Orders / procedures performed",
+                      value: revenueCase.chargeCaptureRecord?.documentationSummaryJson?.ordersOrProcedures || "Not entered",
+                    },
+                  ]} />
+                  <SummaryBox title="Projection quality" rows={[
+                    { label: "Expected gross", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedGrossChargeCents) },
+                    { label: "Expected net", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedNetReimbursementCents) },
+                    {
+                      label: "Charge schedule mapping",
+                      value: getRevenueExpectation(revenueCase, settings).missingChargeMapping ? "Missing mapping" : "Mapped",
+                    },
+                    {
+                      label: "Reimbursement mapping",
+                      value: getRevenueExpectation(revenueCase, settings).missingReimbursementMapping ? "Missing mapping" : "Mapped",
+                    },
+                  ]} />
+                </div>
+              </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">MA service capture</div>
                 <div className="space-y-2">
@@ -2060,7 +2201,7 @@ function RevenueCaseDetailPane({
               <div className="space-y-2">
                 <ChecklistGroupCard
                   title="Athena handoff checklist"
-                  items={revenueCase.checklistItems.filter((item) => item.group === "athena_handoff")}
+                  items={checklistItemsFor(revenueCase, ["athena_handoff_attestation"])}
                 />
               </div>
               <Field label="Athena note / reference">

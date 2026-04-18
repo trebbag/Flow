@@ -94,13 +94,22 @@ const requiresRebuild =
   !hasColumn("RevenueCase", "closeoutState") ||
   !hasColumn("ChargeCaptureRecord", "procedureLinesJson") ||
   !hasColumn("ChargeCaptureRecord", "serviceCaptureItemsJson") ||
+  !hasColumn("ChargeCaptureRecord", "documentationSummaryJson") ||
+  !hasColumn("FinancialReadiness", "registrationVerified") ||
+  !hasColumn("FinancialReadiness", "contactInfoVerified") ||
+  !hasColumn("FinancialReadiness", "benefitsSummaryText") ||
+  !hasColumn("FinancialReadiness", "patientEstimateAmountCents") ||
+  !hasColumn("FinancialReadiness", "estimateExplainedToPatient") ||
   !hasColumn("RevenueCycleSettings", "checklistDefaultsJson") ||
+  !hasColumn("RevenueCycleSettings", "estimateDefaultsJson") ||
+  !hasColumn("RevenueCycleSettings", "reimbursementRulesJson") ||
   !hasColumn("RevenueCycleSettings", "serviceCatalogJson") ||
   !hasColumn("RevenueCycleSettings", "chargeScheduleJson") ||
   !hasColumn("RevenueCycleDailyRollup", "facilityId") ||
   !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionExpectedVisitCount") ||
   !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionVisitRate") ||
   !hasColumn("RevenueCycleDailyRollup", "expectedGrossChargeCents") ||
+  !hasColumn("RevenueCycleDailyRollup", "expectedNetReimbursementCents") ||
   !hasColumn("RevenueCycleDailyRollup", "serviceCaptureCompletedVisitCount") ||
   !hasColumn("RevenueCycleDailyRollup", "clinicianCodingEnteredVisitCount") ||
   !hasColumn("RevenueCycleDailyRollup", "chargeCaptureReadyVisitCount");
@@ -692,11 +701,16 @@ CREATE TABLE IF NOT EXISTS FinancialReadiness (
   eligibilityStatus TEXT NOT NULL DEFAULT 'NotChecked',
   verifiedAt TEXT,
   verifiedByUserId TEXT,
+  registrationVerified INTEGER NOT NULL DEFAULT 0,
+  contactInfoVerified INTEGER NOT NULL DEFAULT 0,
   primaryPayerName TEXT,
   primaryPlanName TEXT,
   secondaryPayerName TEXT,
   financialClass TEXT,
+  benefitsSummaryText TEXT,
+  patientEstimateAmountCents INTEGER NOT NULL DEFAULT 0,
   pointOfServiceAmountDueCents INTEGER NOT NULL DEFAULT 0,
+  estimateExplainedToPatient INTEGER NOT NULL DEFAULT 0,
   outstandingPriorBalanceCents INTEGER NOT NULL DEFAULT 0,
   coverageIssueCategory TEXT,
   coverageIssueText TEXT,
@@ -730,6 +744,7 @@ CREATE TABLE IF NOT EXISTS ChargeCaptureRecord (
   icd10CodesJson TEXT NOT NULL DEFAULT '[]',
   procedureLinesJson TEXT NOT NULL DEFAULT '[]',
   serviceCaptureItemsJson TEXT NOT NULL DEFAULT '[]',
+  documentationSummaryJson TEXT,
   cptCodesJson TEXT NOT NULL DEFAULT '[]',
   modifiersJson TEXT NOT NULL DEFAULT '[]',
   unitsJson TEXT NOT NULL DEFAULT '[]',
@@ -795,8 +810,10 @@ CREATE TABLE IF NOT EXISTS RevenueCycleSettings (
   athenaLinkTemplate TEXT,
   athenaChecklistDefaultsJson TEXT NOT NULL DEFAULT '[]',
   checklistDefaultsJson TEXT NOT NULL DEFAULT '{}',
+  estimateDefaultsJson TEXT NOT NULL DEFAULT '{}',
   serviceCatalogJson TEXT NOT NULL DEFAULT '[]',
   chargeScheduleJson TEXT NOT NULL DEFAULT '[]',
+  reimbursementRulesJson TEXT NOT NULL DEFAULT '[]',
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE
@@ -867,6 +884,7 @@ CREATE TABLE IF NOT EXISTS RevenueCycleDailyRollup (
   sameDayCollectionVisitRate REAL NOT NULL DEFAULT 0,
   sameDayCollectionDollarRate REAL NOT NULL DEFAULT 0,
   expectedGrossChargeCents INTEGER NOT NULL DEFAULT 0,
+  expectedNetReimbursementCents INTEGER NOT NULL DEFAULT 0,
   serviceCaptureCompletedVisitCount INTEGER NOT NULL DEFAULT 0,
   clinicianCodingEnteredVisitCount INTEGER NOT NULL DEFAULT 0,
   chargeCaptureReadyVisitCount INTEGER NOT NULL DEFAULT 0,

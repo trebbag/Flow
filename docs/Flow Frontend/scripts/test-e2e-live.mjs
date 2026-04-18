@@ -627,6 +627,44 @@ async function main() {
   });
   assertTimerProgress(checkoutEntered, optimizedSnapshot?.alertState?.enteredStatusAt, "CheckOut->Optimized");
 
+  const roomCardsAfterCheckout = await request(`/rooms/live?clinicId=${clinic.id}`, {
+    auth: { ...adminAuth, facilityId: originalFacilityId },
+  });
+  const roomAfterCheckout = Array.isArray(roomCardsAfterCheckout)
+    ? roomCardsAfterCheckout.find((row) => row.roomId === room.roomId)
+    : null;
+  assert.ok(roomAfterCheckout, "room should remain visible after checkout");
+  assert.equal(
+    roomAfterCheckout.operationalStatus,
+    "NeedsTurnover",
+    "checkout completion should release the room into NeedsTurnover",
+  );
+  assert.ok(
+    !roomAfterCheckout.currentEncounter,
+    "released room should no longer show an occupied encounter after checkout",
+  );
+
+  await request(`/rooms/${room.roomId}/actions/mark-ready`, {
+    method: "POST",
+    auth: { ...adminAuth, facilityId: originalFacilityId },
+    body: {
+      clinicId: clinic.id,
+    },
+  });
+
+  const roomCardsAfterReady = await request(`/rooms/live?clinicId=${clinic.id}`, {
+    auth: { ...adminAuth, facilityId: originalFacilityId },
+  });
+  const roomAfterReady = Array.isArray(roomCardsAfterReady)
+    ? roomCardsAfterReady.find((row) => row.roomId === room.roomId)
+    : null;
+  assert.ok(roomAfterReady, "room should remain visible after mark-ready");
+  assert.equal(
+    roomAfterReady.operationalStatus,
+    "Ready",
+    "mark-ready should return the released room to Ready status",
+  );
+
   const officeDashboard = await request(`/dashboard/office-manager?clinicId=${clinic.id}&date=${today}`, {
     auth: { ...adminAuth, facilityId: originalFacilityId },
   });

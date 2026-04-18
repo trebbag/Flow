@@ -228,6 +228,13 @@ const revenueSettingsSchema = z.object({
       requireNextAction: z.boolean().optional()
     })
     .optional(),
+  estimateDefaults: z
+    .object({
+      defaultPatientEstimateCents: z.number().int().min(0).optional(),
+      defaultPosCollectionPercent: z.number().int().min(0).max(100).optional(),
+      explainEstimateByDefault: z.boolean().optional(),
+    })
+    .optional(),
   providerQueryTemplates: z.array(z.string().trim().min(1)).optional(),
   athenaLinkTemplate: z.string().trim().nullable().optional(),
   athenaChecklistDefaults: z
@@ -265,7 +272,17 @@ const revenueSettingsSchema = z.object({
       description: z.string().trim().nullable().optional(),
       active: z.boolean().optional()
     })
-  ).optional()
+  ).optional(),
+  reimbursementRules: z.array(
+    z.object({
+      id: z.string().trim().min(1),
+      payerName: z.string().trim().nullable().optional(),
+      financialClass: z.string().trim().nullable().optional(),
+      expectedPercent: z.number().int().min(0).max(100),
+      active: z.boolean().optional(),
+      note: z.string().trim().nullable().optional(),
+    }),
+  ).optional(),
 });
 
 const notificationSchema = z.object({
@@ -3106,20 +3123,24 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       missedCollectionReasons: settings.missedCollectionReasons,
       queueSla: settings.queueSla,
       dayCloseDefaults: settings.dayCloseDefaults,
+      estimateDefaults: settings.estimateDefaults,
       providerQueryTemplates: settings.providerQueryTemplates,
       athenaLinkTemplate: settings.athenaLinkTemplate,
       athenaChecklistDefaults: settings.athenaChecklistDefaults,
       checklistDefaults: settings.checklistDefaults,
       serviceCatalog: settings.serviceCatalog,
       chargeSchedule: settings.chargeSchedule,
+      reimbursementRules: settings.reimbursementRules,
       defaults: {
         missedCollectionReasons: [...DEFAULT_MISSED_COLLECTION_REASONS],
         providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
         queueSla: { ...DEFAULT_REVENUE_SETTINGS.queueSla },
         dayCloseDefaults: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults },
+        estimateDefaults: { ...DEFAULT_REVENUE_SETTINGS.estimateDefaults },
         checklistDefaults: { ...DEFAULT_REVENUE_SETTINGS.checklistDefaults },
         serviceCatalog: [...DEFAULT_REVENUE_SETTINGS.serviceCatalog],
         chargeSchedule: [...DEFAULT_REVENUE_SETTINGS.chargeSchedule],
+        reimbursementRules: [...DEFAULT_REVENUE_SETTINGS.reimbursementRules],
       }
     };
     },
@@ -3139,12 +3160,16 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         dayCloseDefaultsJson: (
           dto.dayCloseDefaults ? { ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } : existing.dayCloseDefaults
         ) as Prisma.InputJsonValue,
+        estimateDefaultsJson: (
+          dto.estimateDefaults ? { ...existing.estimateDefaults, ...dto.estimateDefaults } : existing.estimateDefaults
+        ) as Prisma.InputJsonValue,
         providerQueryTemplatesJson: (dto.providerQueryTemplates || existing.providerQueryTemplates) as Prisma.InputJsonValue,
         athenaLinkTemplate: dto.athenaLinkTemplate ?? existing.athenaLinkTemplate,
         athenaChecklistDefaultsJson: (dto.athenaChecklistDefaults || existing.athenaChecklistDefaults) as Prisma.InputJsonValue,
         checklistDefaultsJson: (dto.checklistDefaults || existing.checklistDefaults) as Prisma.InputJsonValue,
         serviceCatalogJson: (dto.serviceCatalog || existing.serviceCatalog) as Prisma.InputJsonValue,
-        chargeScheduleJson: (dto.chargeSchedule || existing.chargeSchedule) as Prisma.InputJsonValue
+        chargeScheduleJson: (dto.chargeSchedule || existing.chargeSchedule) as Prisma.InputJsonValue,
+        reimbursementRulesJson: (dto.reimbursementRules || existing.reimbursementRules) as Prisma.InputJsonValue,
       },
       update: {
         missedCollectionReasonsJson: dto.missedCollectionReasons
@@ -3153,6 +3178,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         queueSlaJson: dto.queueSla ? (dto.queueSla as Prisma.InputJsonValue) : undefined,
         dayCloseDefaultsJson: dto.dayCloseDefaults
           ? ({ ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } as Prisma.InputJsonValue)
+          : undefined,
+        estimateDefaultsJson: dto.estimateDefaults
+          ? ({ ...existing.estimateDefaults, ...dto.estimateDefaults } as Prisma.InputJsonValue)
           : undefined,
         providerQueryTemplatesJson: dto.providerQueryTemplates
           ? (dto.providerQueryTemplates as Prisma.InputJsonValue)
@@ -3169,7 +3197,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
           : undefined,
         chargeScheduleJson: dto.chargeSchedule
           ? (dto.chargeSchedule as Prisma.InputJsonValue)
-          : undefined
+          : undefined,
+        reimbursementRulesJson: dto.reimbursementRules
+          ? (dto.reimbursementRules as Prisma.InputJsonValue)
+          : undefined,
       }
     });
 
@@ -3179,12 +3210,14 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       missedCollectionReasons: settings.missedCollectionReasons,
       queueSla: settings.queueSla,
       dayCloseDefaults: settings.dayCloseDefaults,
+      estimateDefaults: settings.estimateDefaults,
       providerQueryTemplates: settings.providerQueryTemplates,
       athenaLinkTemplate: settings.athenaLinkTemplate,
       athenaChecklistDefaults: settings.athenaChecklistDefaults,
       checklistDefaults: settings.checklistDefaults,
       serviceCatalog: settings.serviceCatalog,
-      chargeSchedule: settings.chargeSchedule
+      chargeSchedule: settings.chargeSchedule,
+      reimbursementRules: settings.reimbursementRules,
     };
   });
 

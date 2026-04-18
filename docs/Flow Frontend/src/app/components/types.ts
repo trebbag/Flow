@@ -565,11 +565,16 @@ export interface RevenueFinancialReadiness {
   eligibilityStatus: FinancialEligibilityStatus;
   verifiedAt?: string | null;
   verifiedByUserId?: string | null;
+  registrationVerified: boolean;
+  contactInfoVerified: boolean;
   primaryPayerName?: string | null;
   primaryPlanName?: string | null;
   secondaryPayerName?: string | null;
   financialClass?: string | null;
+  benefitsSummaryText?: string | null;
+  patientEstimateAmountCents: number;
   pointOfServiceAmountDueCents: number;
+  estimateExplainedToPatient: boolean;
   outstandingPriorBalanceCents?: number;
   coverageIssueCategory?: string | null;
   coverageIssueText?: string | null;
@@ -597,6 +602,7 @@ export interface RevenueChargeCaptureRecord {
   icd10CodesJson: string[];
   procedureLinesJson: RevenueProcedureLine[];
   serviceCaptureItemsJson: RevenueServiceCaptureItem[];
+  documentationSummaryJson?: RevenueDocumentationSummary | null;
   cptCodesJson: string[];
   modifiersJson: string[];
   unitsJson: string[];
@@ -604,6 +610,13 @@ export interface RevenueChargeCaptureRecord {
   readyForAthenaAt?: string | null;
   reviewedByUserId?: string | null;
   reviewedAt?: string | null;
+}
+
+export interface RevenueDocumentationSummary {
+  chiefConcernSummary?: string | null;
+  assessmentSummary?: string | null;
+  planFollowUp?: string | null;
+  ordersOrProcedures?: string | null;
 }
 
 export interface RevenueProcedureLine {
@@ -715,6 +728,7 @@ export interface RevenueDashboardSnapshot {
     sameDayCollectionVisitRate: number;
     sameDayCollectionDollarRate: number;
     expectedGrossChargeCents: number;
+    expectedNetReimbursementCents: number;
     serviceCaptureCompletedVisitCount: number;
     clinicianCodingEnteredVisitCount: number;
     chargeCaptureReadyVisitCount: number;
@@ -737,6 +751,8 @@ export interface RevenueDashboardSnapshot {
     athenaLinkTemplate: string;
     serviceCatalog: RevenueServiceCatalogItem[];
     chargeSchedule: RevenueChargeScheduleItem[];
+    estimateDefaults: RevenueEstimateDefaults;
+    reimbursementRules: RevenueReimbursementRuleItem[];
     checklistDefaults: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
   };
   cases: RevenueCaseDetail[];
@@ -753,6 +769,7 @@ export interface RevenueDailyHistoryRollup {
   sameDayCollectionVisitRate: number;
   sameDayCollectionDollarRate: number;
   expectedGrossChargeCents: number;
+  expectedNetReimbursementCents: number;
   serviceCaptureCompletedVisitCount: number;
   clinicianCodingEnteredVisitCount: number;
   chargeCaptureReadyVisitCount: number;
@@ -798,21 +815,40 @@ export interface RevenueSettings {
     defaultDueHours?: number;
     requireNextAction?: boolean;
   };
+  estimateDefaults: RevenueEstimateDefaults;
   providerQueryTemplates: string[];
   athenaLinkTemplate: string;
   athenaChecklistDefaults: Array<{ label: string; sortOrder: number }>;
   checklistDefaults: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
   serviceCatalog: RevenueServiceCatalogItem[];
   chargeSchedule: RevenueChargeScheduleItem[];
+  reimbursementRules: RevenueReimbursementRuleItem[];
   defaults?: {
     missedCollectionReasons: string[];
     providerQueryTemplates: string[];
     queueSla: Record<string, number>;
     dayCloseDefaults: Record<string, unknown>;
+    estimateDefaults?: RevenueEstimateDefaults;
     checklistDefaults?: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
     serviceCatalog?: RevenueServiceCatalogItem[];
     chargeSchedule?: RevenueChargeScheduleItem[];
+    reimbursementRules?: RevenueReimbursementRuleItem[];
   };
+}
+
+export interface RevenueEstimateDefaults {
+  defaultPatientEstimateCents: number;
+  defaultPosCollectionPercent: number;
+  explainEstimateByDefault: boolean;
+}
+
+export interface RevenueReimbursementRuleItem {
+  id: string;
+  payerName?: string | null;
+  financialClass?: string | null;
+  expectedPercent: number;
+  active: boolean;
+  note?: string | null;
 }
 
 /** Day closeout row */

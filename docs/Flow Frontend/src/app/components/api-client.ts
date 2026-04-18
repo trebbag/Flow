@@ -1535,6 +1535,11 @@ export const admin = {
       defaultDueHours?: number;
       requireNextAction?: boolean;
     };
+    estimateDefaults?: {
+      defaultPatientEstimateCents?: number;
+      defaultPosCollectionPercent?: number;
+      explainEstimateByDefault?: boolean;
+    };
     providerQueryTemplates?: string[];
     athenaLinkTemplate?: string | null;
     athenaChecklistDefaults?: Array<{ label: string; sortOrder?: number }>;
@@ -1552,6 +1557,14 @@ export const admin = {
       amountCents: number;
       description?: string | null;
       active?: boolean;
+    }>;
+    reimbursementRules?: Array<{
+      id: string;
+      payerName?: string | null;
+      financialClass?: string | null;
+      expectedPercent: number;
+      active?: boolean;
+      note?: string | null;
     }>;
   }) {
     return apiFetch<RevenueSettings>("/admin/revenue-settings", {
@@ -1837,18 +1850,23 @@ export const revenueCases = {
       athenaHandoffNote?: string | null;
       financialReadiness?: {
         eligibilityStatus?: FinancialEligibilityStatus;
+        registrationVerified?: boolean;
+        contactInfoVerified?: boolean;
         coverageIssueCategory?: string | null;
         coverageIssueText?: string | null;
         primaryPayerName?: string | null;
         primaryPlanName?: string | null;
         secondaryPayerName?: string | null;
         financialClass?: string | null;
+        benefitsSummaryText?: string | null;
+        patientEstimateAmountCents?: number;
         referralRequired?: boolean;
         referralStatus?: FinancialRequirementStatus | null;
         priorAuthRequired?: boolean;
         priorAuthStatus?: FinancialRequirementStatus | null;
         priorAuthNumber?: string | null;
         pointOfServiceAmountDueCents?: number;
+        estimateExplainedToPatient?: boolean;
         outstandingPriorBalanceCents?: number;
       };
       checkoutTracking?: {

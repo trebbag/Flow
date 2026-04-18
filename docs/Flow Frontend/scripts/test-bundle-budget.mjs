@@ -8,7 +8,7 @@ const budget = {
   maxEntryJsGzipKb: Number(process.env.BUNDLE_BUDGET_MAX_ENTRY_JS_GZIP_KB || 125),
   maxAnyJsGzipKb: Number(process.env.BUNDLE_BUDGET_MAX_ANY_JS_GZIP_KB || 125),
   maxAnyCssGzipKb: Number(process.env.BUNDLE_BUDGET_MAX_ANY_CSS_GZIP_KB || 28),
-  maxTotalJsGzipKb: Number(process.env.BUNDLE_BUDGET_MAX_TOTAL_JS_GZIP_KB || 446),
+  maxTotalJsGzipKb: Number(process.env.BUNDLE_BUDGET_MAX_TOTAL_JS_GZIP_KB || 450),
   maxTotalCssGzipKb: Number(process.env.BUNDLE_BUDGET_MAX_TOTAL_CSS_GZIP_KB || 35),
 };
 

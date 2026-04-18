@@ -26,6 +26,13 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
    - practice ID
    - authentication method and credentials
    - department scope
+   - main-facility staging connector is still unconfigured as of April 18, 2026:
+     - `enabled = false`
+     - empty `baseUrl`
+     - empty `practiceId`
+     - empty `previewPath`
+     - empty `revenuePath`
+   - until those values are configured, Athena connector test validation and revenue-monitoring preview/import cannot be proven in staging
 
 5. Governance and go-live inputs
    - retention and audit expectations
@@ -35,7 +42,9 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 6. Time-of-service RCM pilot content
    - finalize the facility-level service catalog that MAs should capture in Flow
    - finalize the facility-level charge schedule used for expected gross-charge estimation in Flow
+   - finalize the facility-level payer / financial-class reimbursement rules used for expected net-reimbursement projection in Flow
    - confirm any clinic-specific services or CPT mappings that should differ from the seeded defaults
+   - confirm any clinic-specific payer-name or financial-class taxonomy differences that should differ from the seeded defaults
    - confirm whether any pilot clinics need custom missed-collection reasons beyond the seeded taxonomy
 
 ## Operational Follow-Ups
@@ -47,6 +56,7 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 - Before real staging proof of the revenue cockpit, configure the AthenaOne connector with the real revenue-monitoring endpoint in `revenuePath` and valid connector credentials for the pilot facility so the new preview/import path can exercise real downstream Athena data.
 - Before real staging proof of the time-of-service RCM workflow, review and confirm the seeded MA service catalog and charge schedule in `Admin -> Revenue Operations Settings` so expected-money totals reflect your pilot operating model rather than demo defaults.
 - Before clinician-role staging proof of the new optimizing flow, confirm whether the seeded bundled ICD-10/CPT lookup list is sufficient for pilot use or whether you want a larger reference dataset loaded for broader code coverage.
+- Staging proof on April 18, 2026 also exposed a room-operations follow-up: proof encounters that were advanced and then cleaned up remained marked as occupying Room 2 and Room 3, so room-release behavior still needs live validation during broader staging proof.
 
 ## Repository Hygiene Follow-Up
 

@@ -124,21 +124,26 @@ const updateRevenueCaseSchema = z.object({
   athenaHandoffConfirmed: z.boolean().optional(),
   athenaHandoffStarted: z.boolean().optional(),
   athenaHandoffNote: z.string().nullable().optional(),
-  financialReadiness: z
+      financialReadiness: z
     .object({
       eligibilityStatus: z.nativeEnum(FinancialEligibilityStatus).optional(),
+      registrationVerified: z.boolean().optional(),
+      contactInfoVerified: z.boolean().optional(),
       coverageIssueCategory: z.string().nullable().optional(),
       coverageIssueText: z.string().nullable().optional(),
       primaryPayerName: z.string().nullable().optional(),
       primaryPlanName: z.string().nullable().optional(),
       secondaryPayerName: z.string().nullable().optional(),
       financialClass: z.string().nullable().optional(),
+      benefitsSummaryText: z.string().nullable().optional(),
+      patientEstimateAmountCents: z.number().int().optional(),
       referralRequired: z.boolean().optional(),
       referralStatus: z.nativeEnum(FinancialRequirementStatus).nullable().optional(),
       priorAuthRequired: z.boolean().optional(),
       priorAuthStatus: z.nativeEnum(FinancialRequirementStatus).nullable().optional(),
       priorAuthNumber: z.string().nullable().optional(),
       pointOfServiceAmountDueCents: z.number().int().optional(),
+      estimateExplainedToPatient: z.boolean().optional(),
       outstandingPriorBalanceCents: z.number().int().optional(),
     })
     .optional(),
@@ -431,11 +436,25 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           icd10CodesJson: readStringArray(row.chargeCaptureRecord?.icd10CodesJson),
           procedureLinesJson: readProcedureLines(row.chargeCaptureRecord?.procedureLinesJson),
           serviceCaptureItemsJson: readServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson),
+          documentationSummaryJson:
+            row.chargeCaptureRecord?.documentationSummaryJson &&
+            typeof row.chargeCaptureRecord.documentationSummaryJson === "object" &&
+            !Array.isArray(row.chargeCaptureRecord.documentationSummaryJson)
+              ? (row.chargeCaptureRecord.documentationSummaryJson as any)
+              : undefined,
         },
         chargeSchedule: settings.chargeSchedule,
+        reimbursementRules: settings.reimbursementRules,
+        financialReadiness: row.financialReadiness
+          ? {
+              primaryPayerName: row.financialReadiness.primaryPayerName,
+              financialClass: row.financialReadiness.financialClass,
+            }
+          : null,
       }),
     );
     const expectedGrossChargeCents = expectationRows.reduce((sum, row) => sum + row.expectedGrossChargeCents, 0);
+    const expectedNetReimbursementCents = expectationRows.reduce((sum, row) => sum + row.expectedNetReimbursementCents, 0);
     const serviceCaptureCompletedVisitCount = expectationRows.filter((row) => row.serviceCaptureCompleted).length;
     const clinicianCodingEnteredVisitCount = expectationRows.filter((row) => row.clinicianCodingEntered).length;
     const chargeCaptureReadyVisitCount = expectationRows.filter((row) => row.chargeCaptureReady).length;
@@ -469,6 +488,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         sameDayCollectionVisitRate,
         sameDayCollectionDollarRate,
         expectedGrossChargeCents,
+        expectedNetReimbursementCents,
         serviceCaptureCompletedVisitCount,
         clinicianCodingEnteredVisitCount,
         chargeCaptureReadyVisitCount,
@@ -493,6 +513,8 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         athenaLinkTemplate: settings.athenaLinkTemplate,
         serviceCatalog: settings.serviceCatalog,
         chargeSchedule: settings.chargeSchedule,
+        estimateDefaults: settings.estimateDefaults,
+        reimbursementRules: settings.reimbursementRules,
         checklistDefaults: settings.checklistDefaults,
       },
       cases: rows.map(mapRevenueCaseRow),
@@ -576,6 +598,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         sameDayCollectionVisitRate: entry.sameDayCollectionVisitRate,
         sameDayCollectionDollarRate: entry.sameDayCollectionDollarRate,
         expectedGrossChargeCents: entry.expectedGrossChargeCents,
+        expectedNetReimbursementCents: entry.expectedNetReimbursementCents,
         serviceCaptureCompletedVisitCount: entry.serviceCaptureCompletedVisitCount,
         clinicianCodingEnteredVisitCount: entry.clinicianCodingEnteredVisitCount,
         chargeCaptureReadyVisitCount: entry.chargeCaptureReadyVisitCount,

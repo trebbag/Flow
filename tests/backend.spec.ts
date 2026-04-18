@@ -29,6 +29,24 @@ async function createRevenueWorkflowEncounter(params: {
       providerId: params.providerId,
       reasonForVisitId: params.reasonForVisitId,
       walkIn: true,
+      intakeData: {
+        "financial.registration_demographics_verified": true,
+        "financial.contact_info_verified": true,
+        "financial.eligibility_checked": true,
+        "financial.eligibility_status": "Clear",
+        "financial.primary_payer_name": "Aetna",
+        "financial.primary_plan_name": "Open Access",
+        "financial.financial_class": "Commercial",
+        "financial.benefits_summary": "Benefits verified for same-day visit.",
+        "financial.patient_estimate_amount_cents": 3200,
+        "financial.expected_pos_collection_amount_cents": 3200,
+        "financial.estimate_explained_to_patient": true,
+        "financial.prior_balance_cents": 0,
+        "financial.prior_auth_required": false,
+        "financial.prior_auth_status": "NotRequired",
+        "financial.referral_required": false,
+        "financial.referral_status": "NotRequired",
+      },
     },
   });
   expect(created.statusCode).toBe(200);
@@ -116,6 +134,10 @@ async function createRevenueWorkflowEncounter(params: {
       version: encounter.version,
       data: {
         assessment: "Visit complete",
+        "documentation.chief_concern_summary": "Follow-up visit review",
+        "documentation.assessment_summary": "Assessment documented for revenue handoff.",
+        "documentation.plan_follow_up": "Plan documented and follow-up instructions provided.",
+        "documentation.orders_or_procedures": "Orders and performed procedures documented.",
         ...(params.clinicianData || {}),
       },
     },
@@ -1202,6 +1224,8 @@ describe("Flow backend core relationships", () => {
           sameDayCollectionCapturedCents: expect.any(Number),
           sameDayCollectionVisitRate: expect.any(Number),
           sameDayCollectionDollarRate: expect.any(Number),
+          expectedGrossChargeCents: expect.any(Number),
+          expectedNetReimbursementCents: expect.any(Number),
           averageFlowHandoffLagHours: expect.any(Number),
           athenaDaysToSubmit: null,
           athenaDaysInAR: null
@@ -1210,6 +1234,8 @@ describe("Flow backend core relationships", () => {
           missedCollectionReasons: expect.any(Array),
           providerQueryTemplates: expect.any(Array),
           athenaLinkTemplate: expect.any(String),
+          estimateDefaults: expect.any(Object),
+          reimbursementRules: expect.any(Array),
         }),
         queueCounts: expect.any(Object),
         cases: expect.any(Array)
@@ -4279,6 +4305,7 @@ describe("Flow backend core relationships", () => {
     expect(dashboard.json().kpis).toEqual(
       expect.objectContaining({
         expectedGrossChargeCents: expect.any(Number),
+        expectedNetReimbursementCents: expect.any(Number),
         serviceCaptureCompletedVisitCount: expect.any(Number),
         clinicianCodingEnteredVisitCount: expect.any(Number),
         chargeCaptureReadyVisitCount: expect.any(Number),
@@ -4458,6 +4485,8 @@ describe("Flow backend core relationships", () => {
         facilityId: ctx.facility.id,
         missedCollectionReasons: expect.any(Array),
         providerQueryTemplates: expect.any(Array),
+        estimateDefaults: expect.any(Object),
+        reimbursementRules: expect.any(Array),
         serviceCatalog: expect.any(Array),
         chargeSchedule: expect.any(Array),
         checklistDefaults: expect.any(Object),
@@ -4486,6 +4515,11 @@ describe("Flow backend core relationships", () => {
         missedCollectionReasons: ["patient declined", "eligibility/coverage issue", "other"],
         providerQueryTemplates: ["Please confirm the diagnosis selection."],
         athenaLinkTemplate: "https://athena.example.com/encounters/{encounterId}",
+        estimateDefaults: {
+          defaultPatientEstimateCents: 4200,
+          defaultPosCollectionPercent: 40,
+          explainEstimateByDefault: false,
+        },
         serviceCatalog: [
           {
             id: "svc-custom",
@@ -4503,6 +4537,15 @@ describe("Flow backend core relationships", () => {
             active: true,
           },
         ],
+        reimbursementRules: [
+          {
+            id: "rule-aetna-commercial",
+            payerName: "Aetna",
+            financialClass: "Commercial",
+            expectedPercent: 72,
+            active: true,
+          },
+        ],
       },
     });
     expect(updateSettings.statusCode).toBe(200);
@@ -4511,6 +4554,18 @@ describe("Flow backend core relationships", () => {
         facilityId: ctx.facility.id,
         athenaLinkTemplate: "https://athena.example.com/encounters/{encounterId}",
         providerQueryTemplates: ["Please confirm the diagnosis selection."],
+        estimateDefaults: expect.objectContaining({
+          defaultPatientEstimateCents: 4200,
+          defaultPosCollectionPercent: 40,
+          explainEstimateByDefault: false,
+        }),
+        reimbursementRules: expect.arrayContaining([
+          expect.objectContaining({
+            payerName: "Aetna",
+            financialClass: "Commercial",
+            expectedPercent: 72,
+          }),
+        ]),
         serviceCatalog: expect.arrayContaining([
           expect.objectContaining({
             id: "svc-venipuncture",

@@ -526,20 +526,26 @@ function NumberStepperControl({
   value,
   onChange,
   min = 0,
+  max,
   step = 1,
   className,
 }: {
   value: number;
   onChange: (value: number) => void;
   min?: number;
+  max?: number;
   step?: number;
   className?: string;
 }) {
+  const clamp = (nextValue: number) => {
+    const boundedMin = Math.max(min, nextValue);
+    return max == null ? boundedMin : Math.min(max, boundedMin);
+  };
   return (
     <div className={`h-8 rounded-lg border border-gray-200 bg-white flex items-center overflow-hidden ${className || ""}`}>
       <button
         type="button"
-        onClick={() => onChange(Math.max(min, Number(value || 0) - step))}
+        onClick={() => onChange(clamp(Number(value || 0) - step))}
         className="h-full w-8 inline-flex items-center justify-center text-gray-500 hover:bg-gray-50 border-r border-gray-100"
       >
         <Minus className="w-3.5 h-3.5" />
@@ -554,13 +560,13 @@ function NumberStepperControl({
             onChange(min);
             return;
           }
-          onChange(Math.max(min, Number(digits)));
+          onChange(clamp(Number(digits)));
         }}
         className="h-full w-full text-center text-[12px] focus:outline-none"
       />
       <button
         type="button"
-        onClick={() => onChange(Math.max(min, Number(value || 0) + step))}
+        onClick={() => onChange(clamp(Number(value || 0) + step))}
         className="h-full w-8 inline-flex items-center justify-center text-gray-500 hover:bg-gray-50 border-l border-gray-100"
       >
         <Plus className="w-3.5 h-3.5" />
@@ -3672,6 +3678,18 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
     }
   };
 
+  const revenueChecklistGroupLabels: Record<string, string> = {
+    registration_demographics: "Registration and demographics",
+    eligibility_benefits: "Eligibility and benefits",
+    patient_estimate_pos: "Patient estimate and POS expectation",
+    referral_prior_auth: "Referral and prior authorization",
+    checkout_tracking: "Checkout tracking",
+    encounter_documentation: "Encounter documentation",
+    charge_capture_coding: "Charge capture and coding",
+    athena_handoff_attestation: "Athena handoff attestation",
+    day_close: "Day close",
+  };
+
   const saveRevenueOperationsSettings = async () => {
     if (!revenueSettings) return;
     setSavingRevenueSettings(true);
@@ -3701,6 +3719,11 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
               .filter((row) => row.label),
           ]),
         ),
+        estimateDefaults: {
+          defaultPatientEstimateCents: Number(revenueSettings.estimateDefaults?.defaultPatientEstimateCents || 0),
+          defaultPosCollectionPercent: Number(revenueSettings.estimateDefaults?.defaultPosCollectionPercent || 0),
+          explainEstimateByDefault: Boolean(revenueSettings.estimateDefaults?.explainEstimateByDefault),
+        },
         serviceCatalog: (revenueSettings.serviceCatalog || [])
           .map((item) => ({
             id: item.id.trim(),
@@ -3718,7 +3741,17 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
             description: item.description?.trim() || null,
             active: item.active !== false,
           }))
-          .filter((item) => item.code),
+              .filter((item) => item.code),
+        reimbursementRules: (revenueSettings.reimbursementRules || [])
+          .map((item) => ({
+            id: item.id.trim(),
+            payerName: item.payerName?.trim() || null,
+            financialClass: item.financialClass?.trim() || null,
+            expectedPercent: Number(item.expectedPercent || 0),
+            active: item.active !== false,
+            note: item.note?.trim() || null,
+          }))
+          .filter((item) => item.id && (item.payerName || item.financialClass)),
       });
       setRevenueSettings(saved);
       toast.success("Revenue operations settings saved");
@@ -4239,7 +4272,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
           <CardContent className="p-5 space-y-4">
             <SectionHeader icon={DollarSign} title="Revenue Operations Settings" iconColor="text-emerald-500" />
             <p className="text-[12px] text-muted-foreground">
-              Facility-scoped taxonomy and defaults for the Revenue Operations cockpit. This is where we keep missed-collection reasons, queue SLAs, provider query shortcuts, and Athena handoff defaults configurable instead of hardcoded.
+              Facility-scoped taxonomy and defaults for the Revenue Operations cockpit. This is where we keep pre-service guidance, time-of-service projections, missed-collection reasons, and Athena handoff defaults configurable instead of hardcoded.
             </p>
             {!revenueSettings ? (
               <EmptyState icon={Settings} message="Revenue settings are loading for this facility." />
@@ -4249,7 +4282,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                   <div>
                     <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Revenue settings</div>
                     <div className="text-[12px] text-muted-foreground mt-1">
-                      These defaults drive the revenue cockpit, checkout taxonomy, soft day close, and Athena handoff checklist.
+                      These defaults drive the revenue cockpit, pre-service guidance, Flow-side projections, soft day close, and Athena handoff checklist.
                     </div>
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -4305,6 +4338,200 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                         />
                       </label>
                     </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                  <div>
+                    <div className="text-[13px] text-slate-900" style={{ fontWeight: 600 }}>Estimate and reimbursement defaults</div>
+                    <div className="text-[12px] text-muted-foreground mt-1">
+                      Flow uses these values to project expected patient responsibility and net reimbursement without needing Athena.
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] text-muted-foreground mb-1.5 block">Default patient estimate (cents)</label>
+                      <NumberStepperControl
+                        value={Number(revenueSettings.estimateDefaults?.defaultPatientEstimateCents || 0)}
+                        min={0}
+                        step={100}
+                        onChange={(nextValue) =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  estimateDefaults: {
+                                    ...prev.estimateDefaults,
+                                    defaultPatientEstimateCents: nextValue,
+                                  },
+                                }
+                              : prev,
+                          )
+                        }
+                        className="h-9"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-muted-foreground mb-1.5 block">Default POS collection percent</label>
+                      <NumberStepperControl
+                        value={Number(revenueSettings.estimateDefaults?.defaultPosCollectionPercent || 0)}
+                        min={0}
+                        max={100}
+                        onChange={(nextValue) =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  estimateDefaults: {
+                                    ...prev.estimateDefaults,
+                                    defaultPosCollectionPercent: nextValue,
+                                  },
+                                }
+                              : prev,
+                          )
+                        }
+                        className="h-9"
+                      />
+                    </div>
+                    <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-[12px]">
+                      <span>Explain estimate by default</span>
+                      <Switch
+                        checked={Boolean(revenueSettings.estimateDefaults?.explainEstimateByDefault)}
+                        onCheckedChange={(checked) =>
+                          setRevenueSettings((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  estimateDefaults: {
+                                    ...prev.estimateDefaults,
+                                    explainEstimateByDefault: checked,
+                                  },
+                                }
+                              : prev,
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>Payer / financial class reimbursement rules</div>
+                    <div className="text-[12px] text-muted-foreground">
+                      These rules power the Flow-side expected net reimbursement projection. Unmapped cases stay visible as missing configuration instead of silently distorting totals.
+                    </div>
+                    {(revenueSettings.reimbursementRules || []).map((rule, index) => (
+                      <div key={`${rule.payerName || "any"}-${rule.financialClass || "any"}-${index}`} className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_120px_auto] gap-2 items-center rounded-xl border border-gray-200 bg-slate-50/60 p-3">
+                        <input
+                          value={rule.payerName || ""}
+                          onChange={(event) =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    reimbursementRules: prev.reimbursementRules.map((entry, ruleIndex) =>
+                                      ruleIndex === index ? { ...entry, payerName: event.target.value } : entry,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                          placeholder="Payer name (optional)"
+                        />
+                        <input
+                          value={rule.financialClass || ""}
+                          onChange={(event) =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    reimbursementRules: prev.reimbursementRules.map((entry, ruleIndex) =>
+                                      ruleIndex === index ? { ...entry, financialClass: event.target.value } : entry,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                          placeholder="Financial class"
+                        />
+                        <NumberStepperControl
+                          value={Number(rule.expectedPercent || 0)}
+                          min={0}
+                          max={100}
+                          onChange={(nextValue) =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    reimbursementRules: prev.reimbursementRules.map((entry, ruleIndex) =>
+                                      ruleIndex === index ? { ...entry, expectedPercent: nextValue } : entry,
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="h-9"
+                        />
+                        <label className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                          Active
+                          <Switch
+                            checked={rule.active !== false}
+                            onCheckedChange={(checked) =>
+                              setRevenueSettings((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      reimbursementRules: prev.reimbursementRules.map((entry, ruleIndex) =>
+                                        ruleIndex === index ? { ...entry, active: checked } : entry,
+                                      ),
+                                    }
+                                  : prev,
+                              )
+                            }
+                          />
+                        </label>
+                        <button
+                          onClick={() =>
+                            setRevenueSettings((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    reimbursementRules: prev.reimbursementRules.filter((_, ruleIndex) => ruleIndex !== index),
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="text-rose-500"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() =>
+                        setRevenueSettings((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                reimbursementRules: [
+                                  ...prev.reimbursementRules,
+                                  {
+                                    id: `rule-${prev.reimbursementRules.length + 1}`,
+                                    payerName: "",
+                                    financialClass: "",
+                                    expectedPercent: 65,
+                                    active: true,
+                                  },
+                                ],
+                              }
+                            : prev,
+                        )
+                      }
+                      className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] text-slate-600 hover:bg-slate-50 transition-colors"
+                      style={{ fontWeight: 500 }}
+                    >
+                      Add reimbursement rule
+                    </button>
                   </div>
                 </div>
 
@@ -4520,7 +4747,7 @@ function IncomingIntegrationsTab({ selectedFacilityId }: { selectedFacilityId: s
                   <div className="space-y-4">
                     {Object.entries(revenueSettings.checklistDefaults || {}).map(([group, rows]) => (
                       <div key={group} className="rounded-xl border border-gray-200 bg-slate-50/60 p-3 space-y-3">
-                        <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>{group.replaceAll("_", " ")}</div>
+                        <div className="text-[12px] text-slate-800" style={{ fontWeight: 600 }}>{revenueChecklistGroupLabels[group] || group.replaceAll("_", " ")}</div>
                         {rows.map((row, index) => (
                           <div key={`${group}-${index}`} className="grid grid-cols-[minmax(0,1fr)_120px_auto] gap-2 items-center">
                             <input

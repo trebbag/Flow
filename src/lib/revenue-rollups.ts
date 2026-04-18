@@ -41,6 +41,7 @@ export type RevenueDailyHistoryPoint = {
   sameDayCollectionVisitRate: number;
   sameDayCollectionDollarRate: number;
   expectedGrossChargeCents: number;
+  expectedNetReimbursementCents: number;
   serviceCaptureCompletedVisitCount: number;
   clinicianCodingEnteredVisitCount: number;
   chargeCaptureReadyVisitCount: number;
@@ -88,6 +89,7 @@ export async function computeRevenueDailyRollup(
     include: {
       checkoutCollectionTracking: true,
       chargeCaptureRecord: true,
+      financialReadiness: true,
       providerClarifications: {
         where: { status: { not: ProviderClarificationStatus.Resolved } },
       },
@@ -112,6 +114,7 @@ export async function computeRevenueDailyRollup(
   let expected = 0;
   let tracked = 0;
   let expectedGrossChargeCents = 0;
+  let expectedNetReimbursementCents = 0;
   let serviceCaptureCompletedVisitCount = 0;
   let clinicianCodingEnteredVisitCount = 0;
   let chargeCaptureReadyVisitCount = 0;
@@ -172,10 +175,24 @@ export async function computeRevenueDailyRollup(
         serviceCaptureItemsJson: Array.isArray(item.chargeCaptureRecord?.serviceCaptureItemsJson)
           ? (item.chargeCaptureRecord?.serviceCaptureItemsJson as any[])
           : [],
+        documentationSummaryJson:
+          item.chargeCaptureRecord?.documentationSummaryJson &&
+          typeof item.chargeCaptureRecord.documentationSummaryJson === "object" &&
+          !Array.isArray(item.chargeCaptureRecord.documentationSummaryJson)
+            ? (item.chargeCaptureRecord.documentationSummaryJson as any)
+            : undefined,
       },
       chargeSchedule: settings?.chargeSchedule || [],
+      reimbursementRules: settings?.reimbursementRules || [],
+      financialReadiness: item.financialReadiness
+        ? {
+            primaryPayerName: item.financialReadiness.primaryPayerName,
+            financialClass: item.financialReadiness.financialClass,
+          }
+        : null,
     });
     expectedGrossChargeCents += expectation.expectedGrossChargeCents;
+    expectedNetReimbursementCents += expectation.expectedNetReimbursementCents;
     if (expectation.serviceCaptureCompleted) serviceCaptureCompletedVisitCount += 1;
     if (expectation.clinicianCodingEntered) clinicianCodingEnteredVisitCount += 1;
     if (expectation.chargeCaptureReady) chargeCaptureReadyVisitCount += 1;
@@ -214,6 +231,7 @@ export async function computeRevenueDailyRollup(
     sameDayCollectionVisitRate,
     sameDayCollectionDollarRate,
     expectedGrossChargeCents,
+    expectedNetReimbursementCents,
     serviceCaptureCompletedVisitCount,
     clinicianCodingEnteredVisitCount,
     chargeCaptureReadyVisitCount,
@@ -262,6 +280,7 @@ export async function getRevenueDailyHistoryRollups(
           sameDayCollectionVisitRate: existing.sameDayCollectionVisitRate,
           sameDayCollectionDollarRate: existing.sameDayCollectionDollarRate,
           expectedGrossChargeCents: existing.expectedGrossChargeCents,
+          expectedNetReimbursementCents: existing.expectedNetReimbursementCents,
           serviceCaptureCompletedVisitCount: existing.serviceCaptureCompletedVisitCount,
           clinicianCodingEnteredVisitCount: existing.clinicianCodingEnteredVisitCount,
           chargeCaptureReadyVisitCount: existing.chargeCaptureReadyVisitCount,
@@ -299,6 +318,7 @@ export async function getRevenueDailyHistoryRollups(
             sameDayCollectionVisitRate: computed.sameDayCollectionVisitRate,
             sameDayCollectionDollarRate: computed.sameDayCollectionDollarRate,
             expectedGrossChargeCents: computed.expectedGrossChargeCents,
+            expectedNetReimbursementCents: computed.expectedNetReimbursementCents,
             serviceCaptureCompletedVisitCount: computed.serviceCaptureCompletedVisitCount,
             clinicianCodingEnteredVisitCount: computed.clinicianCodingEnteredVisitCount,
             chargeCaptureReadyVisitCount: computed.chargeCaptureReadyVisitCount,
@@ -324,6 +344,8 @@ export async function getRevenueDailyHistoryRollups(
             sameDayCollectionTrackedCents: computed.sameDayCollectionTrackedCents,
             sameDayCollectionVisitRate: computed.sameDayCollectionVisitRate,
             sameDayCollectionDollarRate: computed.sameDayCollectionDollarRate,
+            expectedGrossChargeCents: computed.expectedGrossChargeCents,
+            expectedNetReimbursementCents: computed.expectedNetReimbursementCents,
             financiallyClearedCount: computed.financiallyClearedCount,
             chargeCaptureCompletedCount: computed.chargeCaptureCompletedCount,
             athenaHandoffConfirmedCount: computed.athenaHandoffConfirmedCount,

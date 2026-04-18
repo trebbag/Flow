@@ -322,6 +322,17 @@ async function main() {
 
     await page.goto(`${frontendBaseUrl}/checkout`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Front Desk Check-Out" }).waitFor({ timeout: 10_000 });
+    const checkoutQueueCards = page.locator('div[class*="cursor-pointer"]').filter({ hasText: "In checkout" });
+    if ((await checkoutQueueCards.count()) > 0) {
+      await checkoutQueueCards.first().click();
+      await page.waitForTimeout(500);
+      const checkoutBodyText = await page.locator("body").innerText();
+      assert.ok(
+        !checkoutBodyText.includes("Unexpected Application Error"),
+        "expanding a checkout encounter should not trigger the route error screen",
+      );
+      await page.getByText("Collection Tracking", { exact: false }).waitFor({ timeout: 10_000 });
+    }
 
     await page.goto(`${frontendBaseUrl}/settings`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Admin Console" }).waitFor({ timeout: 10_000 });

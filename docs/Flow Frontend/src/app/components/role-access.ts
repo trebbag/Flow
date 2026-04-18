@@ -36,7 +36,7 @@ const ROLE_ROUTE_ACCESS: Record<Role, Set<AppPath>> = {
   FrontDeskCheckIn: new Set(["/", "/checkin", "/alerts", "/tasks"]),
   MA: new Set(["/", "/ma-board", "/rooms", "/alerts", "/tasks"]),
   Clinician: new Set(["/", "/clinician", "/alerts", "/tasks"]),
-  FrontDeskCheckOut: new Set(["/", "/checkout", "/closeout", "/alerts", "/tasks"]),
+  FrontDeskCheckOut: new Set(["/", "/encounter", "/checkout", "/closeout", "/alerts", "/tasks"]),
   OfficeManager: new Set(["/", "/rooms", "/office-manager", "/alerts", "/tasks"]),
   RevenueCycle: new Set(["/", "/encounter", "/revenue-cycle", "/alerts", "/tasks"]),
 };

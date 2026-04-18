@@ -88,6 +88,12 @@ const nextStatusActionLabel: Record<string, string> = {
 };
 
 const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items";
+const CLINICIAN_DOCUMENTATION_KEYS = {
+  chiefConcernSummary: "documentation.chief_concern_summary",
+  assessmentSummary: "documentation.assessment_summary",
+  planFollowUp: "documentation.plan_follow_up",
+  ordersOrProcedures: "documentation.orders_or_procedures",
+} as const;
 const ICD10_CODE_PATTERN = /^[A-TV-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?$/i;
 const CPT_HCPCS_CODE_PATTERN = /^(?:\d{5}|[A-Z]\d{4})$/i;
 
@@ -533,7 +539,7 @@ export function EncounterDetailView() {
   const ctx = useEncounters();
   const session = loadSession();
   const isAdminUser = session?.role === "Admin";
-  const isRevenueReadOnly = session?.role === "RevenueCycle";
+  const isEncounterReadOnly = session?.role === "RevenueCycle" || session?.role === "FrontDeskCheckOut";
 
   // Find the base encounter from shared context
   const baseEnc = ctx.getEncounter(id!);
@@ -848,6 +854,13 @@ export function EncounterDetailView() {
   );
   const diagnosisSearchResults = useMemo(() => searchClinicalCodes("diagnosis", diagnosisInput), [diagnosisInput]);
   const procedureSearchResults = useMemo(() => searchClinicalCodes("procedure", procedureInput), [procedureInput]);
+  const documentationSummary = {
+    chiefConcernSummary: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary] || ""),
+    assessmentSummary: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary] || ""),
+    planFollowUp: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.planFollowUp] || ""),
+    ordersOrProcedures: String(safeTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures] || ""),
+  };
+  const documentationSummaryCompletedCount = Object.values(documentationSummary).filter((value) => value.trim().length > 0).length;
 
   if (!baseEnc && loadingEncounter) {
     return (
@@ -1131,9 +1144,9 @@ export function EncounterDetailView() {
   }
 
   function handleAdvance() {
-    if (isRevenueReadOnly) {
-      toast.info("Revenue Cycle review is read-only", {
-        description: "Clinical workflow changes stay with the care team roles.",
+    if (isEncounterReadOnly) {
+      toast.info("Encounter review is read-only", {
+        description: "Workflow changes stay with the role-specific working boards.",
       });
       return;
     }
@@ -1300,7 +1313,7 @@ export function EncounterDetailView() {
             </div>
 
             <div className="flex items-center gap-2">
-              {!isRevenueReadOnly && (
+              {!isEncounterReadOnly && (
                 <button
                   onClick={() => setSafetyModal(enc.safetyActive ? "resolve" : "activate")}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-200 text-[12px] hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-100 transition-colors"
@@ -1310,7 +1323,7 @@ export function EncounterDetailView() {
                   {enc.safetyActive ? "Turn Off Safety Assist" : "Safety Assist"}
                 </button>
               )}
-              {!isRevenueReadOnly && canAdvance && enc.status !== "ReadyForProvider" && enc.status !== "Lobby" && (
+              {!isEncounterReadOnly && canAdvance && enc.status !== "ReadyForProvider" && enc.status !== "Lobby" && (
                 <button
                   data-advance-btn
                   onClick={handleAdvance}
@@ -1369,7 +1382,7 @@ export function EncounterDetailView() {
             <div className="ml-auto flex items-center gap-1.5 text-[10px] text-gray-400 shrink-0">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-[9px]" style={{ fontFamily: "system-ui" }}>Esc</kbd>
               <span>Back</span>
-              {!isRevenueReadOnly && canAdvance && (
+              {!isEncounterReadOnly && canAdvance && (
                 <div className="contents">
                   <span className="mx-0.5">&middot;</span>
                   <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-[9px]" style={{ fontFamily: "system-ui" }}>&thinsp;&#8984;&#9166;&thinsp;</kbd>
@@ -1379,14 +1392,14 @@ export function EncounterDetailView() {
             </div>
           </div>
 
-          {isRevenueReadOnly && (
+          {isEncounterReadOnly && (
             <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-[12px] text-cyan-900">
               <div className="flex items-center gap-2" style={{ fontWeight: 700 }}>
                 <FileText className="w-4 h-4" />
-                Revenue Cycle review
+                Read-only encounter review
               </div>
               <p className="mt-1 text-cyan-800">
-                This encounter detail view is read-only for Revenue Cycle. Use it to review rooming, clinician, and checkout context without changing clinical workflow state.
+                This encounter detail view is read-only for this role. Use it to review rooming, clinician, and checkout context without changing clinical workflow state.
               </p>
             </div>
           )}
@@ -1854,7 +1867,7 @@ export function EncounterDetailView() {
                           placeholder="Notes for this rooming session..."
                           value={roomingNotes}
                           onChange={(e) => setRoomingNotes(e.target.value)}
-                          disabled={isRevenueReadOnly}
+                          disabled={isEncounterReadOnly}
                           className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] hover:border-violet-300 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </div>
@@ -1885,7 +1898,7 @@ export function EncounterDetailView() {
                               key={item.id}
                               type="button"
                               onClick={() => addServiceCaptureFromCatalog(item.id)}
-                              disabled={isRevenueReadOnly}
+                              disabled={isEncounterReadOnly}
                               className="rounded-full border border-cyan-200 bg-white px-3 py-1.5 text-[11px] text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
                               style={{ fontWeight: 600 }}
                             >
@@ -1899,20 +1912,20 @@ export function EncounterDetailView() {
                             value={customServiceLabel}
                             onChange={(event) => setCustomServiceLabel(event.target.value)}
                             placeholder="Other service label"
-                            disabled={isRevenueReadOnly}
+                            disabled={isEncounterReadOnly}
                             className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
                           />
                           <input
                             value={customServiceNote}
                             onChange={(event) => setCustomServiceNote(event.target.value)}
                             placeholder="Optional note for other service"
-                            disabled={isRevenueReadOnly}
+                            disabled={isEncounterReadOnly}
                             className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
                           />
                           <button
                             type="button"
                             onClick={addCustomServiceCapture}
-                            disabled={isRevenueReadOnly}
+                            disabled={isEncounterReadOnly}
                             className="h-10 px-3 rounded-lg bg-cyan-600 text-white text-[12px] hover:bg-cyan-700 transition-colors disabled:opacity-50"
                             style={{ fontWeight: 600 }}
                           >
@@ -1935,7 +1948,7 @@ export function EncounterDetailView() {
                                   {item.note ? ` · ${item.note}` : ""}
                                 </div>
                               </div>
-                              {!isRevenueReadOnly && (
+                              {!isEncounterReadOnly && (
                                 <button onClick={() => removeServiceCaptureItem(item.id)} className="text-rose-500">
                                   <X className="w-4 h-4" />
                                 </button>
@@ -2002,7 +2015,7 @@ export function EncounterDetailView() {
                                     field.required &&
                                     !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                                   }
-                                  disabled={isRevenueReadOnly}
+                                  disabled={isEncounterReadOnly}
                                   onChange={(val) => setFieldValue(fieldKey(field), val)}
                                 />
                               ))}
@@ -2056,7 +2069,7 @@ export function EncounterDetailView() {
                                           field.required &&
                                           !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                                         }
-                                        disabled={isRevenueReadOnly}
+                                        disabled={isEncounterReadOnly}
                                         onChange={(val) => setFieldValue(fieldKey(field), val)}
                                       />
                                     ))}
@@ -2076,7 +2089,7 @@ export function EncounterDetailView() {
                                     field.required &&
                                     !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                                   }
-                                  disabled={isRevenueReadOnly}
+                                  disabled={isEncounterReadOnly}
                                   onChange={(val) => setFieldValue(fieldKey(field), val)}
                                 />
                               ))}
@@ -2115,7 +2128,7 @@ export function EncounterDetailView() {
                           {missingRequiredFields.length > 4 ? "..." : ""}
                         </div>
                       )}
-                      {!isRevenueReadOnly && (
+                      {!isEncounterReadOnly && (
                         <button
                           data-advance-btn
                           onClick={handleAdvance}
@@ -2173,7 +2186,7 @@ export function EncounterDetailView() {
                           placeholder={enc.status === "Optimizing" ? "Add notes for MA, front desk, and checkout teams..." : "Add notes..."}
                           value={typeof currentTemplateVals.encounter_notes === "string" ? currentTemplateVals.encounter_notes : ""}
                           onChange={(event) => setFieldValue("encounter_notes", event.target.value)}
-                          disabled={isRevenueReadOnly}
+                          disabled={isEncounterReadOnly}
                           className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </div>
@@ -2217,7 +2230,7 @@ export function EncounterDetailView() {
                               field.required &&
                               !isTemplateFieldComplete(field, currentTemplateVals[fieldKey(field)])
                             }
-                            disabled={isRevenueReadOnly}
+                            disabled={isEncounterReadOnly}
                             onChange={(val) => setFieldValue(fieldKey(field), val)}
                           />
                         ))}
@@ -2263,7 +2276,7 @@ export function EncounterDetailView() {
                                 codes={clinicianDiagnosisCodes}
                                 inputValue={diagnosisInput}
                                 searchResults={diagnosisSearchResults}
-                                disabled={isRevenueReadOnly}
+                                disabled={isEncounterReadOnly}
                                 onInputChange={setDiagnosisInput}
                                 onAdd={() => addStructuredCode("diagnosis")}
                                 onRemove={(code) => removeStructuredCode("diagnosis", code)}
@@ -2275,7 +2288,7 @@ export function EncounterDetailView() {
                                 codes={clinicianProcedureCodes}
                                 inputValue={procedureInput}
                                 searchResults={procedureSearchResults}
-                                disabled={isRevenueReadOnly}
+                                disabled={isEncounterReadOnly}
                                 onInputChange={setProcedureInput}
                                 onAdd={() => addStructuredCode("procedure")}
                                 onRemove={(code) => removeStructuredCode("procedure", code)}
@@ -2301,12 +2314,48 @@ export function EncounterDetailView() {
                                       {currentTemplateVals["coding.documentation_complete"] === true ? "Yes" : "No"}
                                     </span>
                                   </div>
+                                  <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
+                                    <span>Structured documentation fields</span>
+                                    <span style={{ fontWeight: 700 }}>{documentationSummaryCompletedCount}/4</span>
+                                  </div>
                                 </div>
+                              </div>
+                              <div className="rounded-xl border border-cyan-100 bg-white px-4 py-4 space-y-3">
+                                <div>
+                                  <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-700">Encounter documentation</div>
+                                  <div className="mt-1 text-[12px] text-slate-600">
+                                    Flow owns time-of-service documentation guidance here. Athena can stay out of the loop until later handoff.
+                                  </div>
+                                </div>
+                                <TemplateFieldInput
+                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary, name: "Chief Concern / Visit Summary", type: "textarea", required: false }}
+                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary]}
+                                  disabled={isEncounterReadOnly}
+                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary, val)}
+                                />
+                                <TemplateFieldInput
+                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary, name: "Assessment Summary", type: "textarea", required: false }}
+                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary]}
+                                  disabled={isEncounterReadOnly}
+                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary, val)}
+                                />
+                                <TemplateFieldInput
+                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.planFollowUp, name: "Plan / Follow-up", type: "textarea", required: false }}
+                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.planFollowUp]}
+                                  disabled={isEncounterReadOnly}
+                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.planFollowUp, val)}
+                                />
+                                <TemplateFieldInput
+                                  field={{ key: CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures, name: "Orders / Procedures Performed", type: "textarea", required: false }}
+                                  value={currentTemplateVals[CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures]}
+                                  disabled={isEncounterReadOnly}
+                                  onChange={(val) => setFieldValue(CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures, val)}
+                                />
                               </div>
                               <TemplateFieldInput
                                 field={{ key: "coding.documentation_complete", name: "Documentation Complete", type: "yesNo", required: false }}
                                 value={currentTemplateVals["coding.documentation_complete"]}
-                                disabled={isRevenueReadOnly}
+                                disabled={isEncounterReadOnly}
                                 onChange={(val) => setFieldValue("coding.documentation_complete", val)}
                               />
                               {currentTemplateVals["coding.documentation_complete"] !== true && (
@@ -2317,7 +2366,7 @@ export function EncounterDetailView() {
                               <TemplateFieldInput
                                 field={{ key: "coding.note", name: "Coding Note", type: "textarea", required: false }}
                                 value={currentTemplateVals["coding.note"]}
-                                disabled={isRevenueReadOnly}
+                                disabled={isEncounterReadOnly}
                                 onChange={(val) => setFieldValue("coding.note", val)}
                               />
                             </div>
@@ -2389,7 +2438,7 @@ export function EncounterDetailView() {
                     )}
 
                     {/* ── Task Creation (Optimizing only) ── */}
-                    {enc.status === "Optimizing" && !isRevenueReadOnly && (
+                    {enc.status === "Optimizing" && !isEncounterReadOnly && (
                       <div className="mt-6">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
@@ -2605,7 +2654,7 @@ export function EncounterDetailView() {
                         {missingRequiredFields.length > 4 ? "..." : ""}
                       </div>
                     )}
-                    {!isRevenueReadOnly && canAdvance && (
+                    {!isEncounterReadOnly && canAdvance && (
                       <button
                         data-advance-btn
                         onClick={handleAdvance}
@@ -2640,7 +2689,7 @@ export function EncounterDetailView() {
                 >
                   Configure Template
                 </button>
-                {!isRevenueReadOnly && canAdvance && (
+                {!isEncounterReadOnly && canAdvance && (
                   <button
                     data-advance-btn
                     onClick={handleAdvance}

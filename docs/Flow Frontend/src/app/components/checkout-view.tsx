@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
+import { Switch } from "./ui/switch";
 import { statusColors, type Encounter } from "./mock-data";
 import { useEncounters, type CompletedCheckout } from "./encounter-context";
 import { admin, tasks as tasksApi } from "./api-client";
@@ -736,22 +737,34 @@ function CheckoutCard({
                     <option value="Deferred">Deferred</option>
                   </select>
                 </div>
-                <FormField label="Amount Due (cents)" icon={CreditCard}>
-                  <input
-                    type="number"
-                    value={amountDueCents}
-                    onChange={(event) => setAmountDueCents(event.target.value)}
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </FormField>
-                <FormField label="Amount Collected (cents)" icon={CreditCard}>
-                  <input
-                    type="number"
-                    value={amountCollectedCents}
-                    onChange={(event) => setAmountCollectedCents(event.target.value)}
-                    className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                  />
-                </FormField>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
+                    Amount Due (cents)
+                  </label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <input
+                      type="number"
+                      value={amountDueCents}
+                      onChange={(event) => setAmountDueCents(event.target.value)}
+                      className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>
+                    Amount Collected (cents)
+                  </label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <input
+                      type="number"
+                      value={amountCollectedCents}
+                      onChange={(event) => setAmountCollectedCents(event.target.value)}
+                      className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="text-[11px] text-muted-foreground mb-1.5 block uppercase tracking-wider" style={{ fontWeight: 500 }}>

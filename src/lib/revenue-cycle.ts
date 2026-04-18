@@ -40,11 +40,24 @@ export const CLINICIAN_CODING_KEYS = {
   note: "coding.note",
 } as const;
 
+export const CLINICIAN_DOCUMENTATION_KEYS = {
+  chiefConcernSummary: "documentation.chief_concern_summary",
+  assessmentSummary: "documentation.assessment_summary",
+  planFollowUp: "documentation.plan_follow_up",
+  ordersOrProcedures: "documentation.orders_or_procedures",
+} as const;
+
 export const CHECKIN_FINANCIAL_KEYS = {
+  registrationVerified: "financial.registration_demographics_verified",
+  contactInfoVerified: "financial.contact_info_verified",
   eligibilityChecked: "financial.eligibility_checked",
   eligibilityStatus: "financial.eligibility_status",
   coverageIssueFlag: "financial.coverage_issue_flag",
+  benefitsSummary: "financial.benefits_summary",
   expectedCollectionIndicator: "financial.expected_collection_indicator",
+  patientEstimateAmountCents: "financial.patient_estimate_amount_cents",
+  expectedPosCollectionAmountCents: "financial.expected_pos_collection_amount_cents",
+  estimateExplainedToPatient: "financial.estimate_explained_to_patient",
   primaryPayerName: "financial.primary_payer_name",
   primaryPlanName: "financial.primary_plan_name",
   secondaryPayerName: "financial.secondary_payer_name",
@@ -105,6 +118,21 @@ export type RevenueChargeScheduleItem = {
   active: boolean;
 };
 
+export type RevenueReimbursementRuleItem = {
+  id: string;
+  payerName: string | null;
+  financialClass: string | null;
+  expectedPercent: number;
+  active: boolean;
+  note?: string | null;
+};
+
+export type RevenueEstimateDefaults = {
+  defaultPatientEstimateCents: number;
+  defaultPosCollectionPercent: number;
+  explainEstimateByDefault: boolean;
+};
+
 export type RevenueServiceCaptureItem = {
   id: string;
   catalogItemId: string | null;
@@ -120,11 +148,23 @@ export type RevenueServiceCaptureItem = {
 };
 
 export const DEFAULT_REVENUE_CHECKLIST_DEFAULTS: Record<string, RevenueChecklistDefaultItem[]> = {
-  financial_readiness: [
+  registration_demographics: [
+    { label: "Registration / demographics verified", sortOrder: 10 },
+    { label: "Contact info verified", sortOrder: 20 },
+  ],
+  eligibility_benefits: [
     { label: "Eligibility checked", sortOrder: 10 },
     { label: "Payer / plan snapshot confirmed", sortOrder: 20 },
-    { label: "Expected POS amount recorded", sortOrder: 30 },
-    { label: "Prior auth / referral addressed", sortOrder: 40 },
+    { label: "Benefits summary captured", sortOrder: 30 },
+  ],
+  patient_estimate_pos: [
+    { label: "Patient estimate amount recorded", sortOrder: 10 },
+    { label: "Expected POS collection amount recorded", sortOrder: 20 },
+    { label: "Estimate explained to patient", sortOrder: 30 },
+  ],
+  referral_prior_auth: [
+    { label: "Prior auth addressed", sortOrder: 10 },
+    { label: "Referral addressed", sortOrder: 20 },
   ],
   checkout_tracking: [
     { label: "Amount due recorded", sortOrder: 10 },
@@ -132,13 +172,19 @@ export const DEFAULT_REVENUE_CHECKLIST_DEFAULTS: Record<string, RevenueChecklist
     { label: "Missed reason recorded when needed", sortOrder: 30 },
     { label: "Follow-up ownership captured if not fully collected", sortOrder: 40 },
   ],
-  charge_capture: [
+  encounter_documentation: [
+    { label: "Chief concern / visit summary captured", sortOrder: 10 },
+    { label: "Assessment summary captured", sortOrder: 20 },
+    { label: "Plan / follow-up captured", sortOrder: 30 },
+    { label: "Orders / procedures documented", sortOrder: 40 },
+    { label: "Documentation complete enough for handoff", sortOrder: 50 },
+  ],
+  charge_capture_coding: [
     { label: "MA service capture complete", sortOrder: 10 },
     { label: "Clinician working codes entered", sortOrder: 20 },
     { label: "Final diagnosis / procedure set verified", sortOrder: 30 },
-    { label: "Documentation complete enough for handoff", sortOrder: 40 },
   ],
-  athena_handoff: DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item })),
+  athena_handoff_attestation: DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item })),
   day_close: [
     { label: "Unfinished work routed with owner, next action, and due date", sortOrder: 10 },
   ],
@@ -192,6 +238,11 @@ export const DEFAULT_REVENUE_SETTINGS = {
     defaultDueHours: 24,
     requireNextAction: true,
   },
+  estimateDefaults: {
+    defaultPatientEstimateCents: 0,
+    defaultPosCollectionPercent: 100,
+    explainEstimateByDefault: true,
+  },
   providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
   athenaLinkTemplate: "",
   athenaChecklistDefaults: DEFAULT_ATHENA_CHECKLIST.map((item) => ({ ...item })),
@@ -200,6 +251,12 @@ export const DEFAULT_REVENUE_SETTINGS = {
   ),
   serviceCatalog: DEFAULT_SERVICE_CATALOG.map((item) => ({ ...item })),
   chargeSchedule: DEFAULT_CHARGE_SCHEDULE.map((item) => ({ ...item })),
+  reimbursementRules: [
+    { id: "rule-commercial", payerName: null, financialClass: "Commercial", expectedPercent: 62, active: true, note: "Default commercial projection" },
+    { id: "rule-medicare", payerName: null, financialClass: "Medicare", expectedPercent: 58, active: true, note: "Default Medicare projection" },
+    { id: "rule-medicaid", payerName: null, financialClass: "Medicaid", expectedPercent: 45, active: true, note: "Default Medicaid projection" },
+    { id: "rule-selfpay", payerName: null, financialClass: "SelfPay", expectedPercent: 35, active: true, note: "Default self-pay projection" },
+  ] satisfies RevenueReimbursementRuleItem[],
 } as const;
 
 export type RevenueProcedureLine = {
@@ -210,10 +267,20 @@ export type RevenueProcedureLine = {
   diagnosisPointers: number[];
 };
 
+export type RevenueDocumentationSummary = {
+  chiefConcernSummary: string | null;
+  assessmentSummary: string | null;
+  planFollowUp: string | null;
+  ordersOrProcedures: string | null;
+};
+
 export type RevenueExpectationSummary = {
   expectedGrossChargeCents: number;
+  expectedNetReimbursementCents: number;
   missingChargeMapping: boolean;
   missingChargeMappingCount: number;
+  missingReimbursementMapping: boolean;
+  missingReimbursementMappingCount: number;
   serviceCaptureCompleted: boolean;
   clinicianCodingEntered: boolean;
   chargeCaptureReady: boolean;
@@ -391,10 +458,24 @@ function parseChecklistDefaultRows(
 
 function parseChecklistDefaults(value: Prisma.JsonValue | null | undefined) {
   const source = asRecord(value);
+  const legacyAliases: Record<string, string[]> = {
+    registration_demographics: ["financial_readiness"],
+    eligibility_benefits: ["financial_readiness"],
+    patient_estimate_pos: ["financial_readiness"],
+    referral_prior_auth: ["financial_readiness"],
+    encounter_documentation: ["charge_capture"],
+    charge_capture_coding: ["charge_capture"],
+    athena_handoff_attestation: ["athena_handoff"],
+    day_close: ["day_close"],
+  };
   return Object.fromEntries(
     Object.entries(DEFAULT_REVENUE_CHECKLIST_DEFAULTS).map(([group, fallback]) => [
       group,
-      parseChecklistDefaultRows(source[group] as Prisma.JsonValue | null | undefined, fallback),
+      parseChecklistDefaultRows(
+        (source[group] ??
+          legacyAliases[group]?.map((alias) => source[alias]).find((entry) => entry !== undefined)) as Prisma.JsonValue | null | undefined,
+        fallback,
+      ),
     ]),
   ) as Record<string, RevenueChecklistDefaultItem[]>;
 }
@@ -449,12 +530,94 @@ function parseChargeSchedule(value: Prisma.JsonValue | null | undefined) {
   return merged;
 }
 
+function parseEstimateDefaults(value: Prisma.JsonValue | null | undefined): RevenueEstimateDefaults {
+  const source = asRecord(value);
+  return {
+    defaultPatientEstimateCents: Math.max(0, asInt(source.defaultPatientEstimateCents) ?? DEFAULT_REVENUE_SETTINGS.estimateDefaults.defaultPatientEstimateCents),
+    defaultPosCollectionPercent: Math.max(0, Math.min(100, asInt(source.defaultPosCollectionPercent) ?? DEFAULT_REVENUE_SETTINGS.estimateDefaults.defaultPosCollectionPercent)),
+    explainEstimateByDefault: asBoolean(source.explainEstimateByDefault) ?? DEFAULT_REVENUE_SETTINGS.estimateDefaults.explainEstimateByDefault,
+  };
+}
+
+function parseReimbursementRules(value: Prisma.JsonValue | null | undefined) {
+  if (!Array.isArray(value)) return DEFAULT_REVENUE_SETTINGS.reimbursementRules.map((item) => ({ ...item }));
+  const parsed = value
+    .map((entry, index) => {
+      const source = asRecord(entry);
+      const expectedPercent = asInt(source.expectedPercent);
+      if (expectedPercent === null) return null;
+      return {
+        id: asString(source.id) || `rule-${index + 1}`,
+        payerName: asString(source.payerName),
+        financialClass: asString(source.financialClass),
+        expectedPercent: Math.max(0, Math.min(100, expectedPercent)),
+        active: asBoolean(source.active) ?? true,
+        note: asString(source.note),
+      } satisfies RevenueReimbursementRuleItem;
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  if (parsed.length === 0) return DEFAULT_REVENUE_SETTINGS.reimbursementRules.map((item) => ({ ...item }));
+  const seenIds = new Set(parsed.map((item) => item.id));
+  const merged = [...parsed];
+  DEFAULT_REVENUE_SETTINGS.reimbursementRules.forEach((item) => {
+    if (!seenIds.has(item.id)) merged.push({ ...item });
+  });
+  return merged;
+}
+
 function buildServiceCatalogMap(serviceCatalog: RevenueServiceCatalogItem[]) {
   return new Map(serviceCatalog.map((item) => [item.id, item]));
 }
 
 function buildChargeScheduleMap(chargeSchedule: RevenueChargeScheduleItem[]) {
   return new Map(chargeSchedule.filter((item) => item.active).map((item) => [item.code.toUpperCase(), item]));
+}
+
+function buildDocumentationSummary(source: Record<string, unknown>): RevenueDocumentationSummary {
+  return {
+    chiefConcernSummary: asString(source[CLINICIAN_DOCUMENTATION_KEYS.chiefConcernSummary]),
+    assessmentSummary: asString(source[CLINICIAN_DOCUMENTATION_KEYS.assessmentSummary]),
+    planFollowUp: asString(source[CLINICIAN_DOCUMENTATION_KEYS.planFollowUp]),
+    ordersOrProcedures: asString(source[CLINICIAN_DOCUMENTATION_KEYS.ordersOrProcedures]),
+  };
+}
+
+function documentationSummaryComplete(summary: RevenueDocumentationSummary) {
+  return Boolean(
+    summary.chiefConcernSummary &&
+      summary.assessmentSummary &&
+      summary.planFollowUp &&
+      summary.ordersOrProcedures,
+  );
+}
+
+function matchReimbursementRule(
+  rules: RevenueReimbursementRuleItem[],
+  params: { payerName?: string | null; financialClass?: string | null },
+) {
+  const activeRules = rules.filter((item) => item.active !== false);
+  const payerName = params.payerName?.trim().toLowerCase() || "";
+  const financialClass = params.financialClass?.trim().toLowerCase() || "";
+  return (
+    activeRules.find(
+      (item) =>
+        (item.payerName?.trim().toLowerCase() || "") === payerName &&
+        (item.financialClass?.trim().toLowerCase() || "") === financialClass,
+    ) ||
+    activeRules.find(
+      (item) =>
+        !item.payerName &&
+        Boolean(item.financialClass) &&
+        item.financialClass!.trim().toLowerCase() === financialClass,
+    ) ||
+    activeRules.find(
+      (item) =>
+        Boolean(item.payerName) &&
+        item.payerName!.trim().toLowerCase() === payerName &&
+        !item.financialClass,
+    ) ||
+    null
+  );
 }
 
 function normalizeServiceCaptureItems(
@@ -493,22 +656,34 @@ export function buildRevenueExpectationSummary(params: {
     icd10CodesJson: string[];
     procedureLinesJson: RevenueProcedureLine[];
     serviceCaptureItemsJson?: RevenueServiceCaptureItem[];
+    documentationSummaryJson?: RevenueDocumentationSummary;
   };
   chargeSchedule: RevenueChargeScheduleItem[];
+  reimbursementRules?: RevenueReimbursementRuleItem[];
+  financialReadiness?: {
+    primaryPayerName?: string | null;
+    financialClass?: string | null;
+  } | null;
 }) {
   const scheduleByCode = buildChargeScheduleMap(params.chargeSchedule);
   const serviceItems = params.chargeCapture.serviceCaptureItemsJson || [];
+  const documentationSummary = params.chargeCapture.documentationSummaryJson;
+  const documentationStructured =
+    documentationSummary ? documentationSummaryComplete(documentationSummary) : params.chargeCapture.documentationComplete;
   const clinicianCodingEntered =
     params.chargeCapture.icd10CodesJson.length > 0 || params.chargeCapture.procedureLinesJson.length > 0;
   const serviceCaptureCompleted = serviceItems.length > 0;
   const chargeCaptureReady =
     serviceCaptureCompleted &&
     params.chargeCapture.documentationComplete &&
+    documentationStructured &&
     params.chargeCapture.icd10CodesJson.length > 0 &&
     params.chargeCapture.procedureLinesJson.length > 0;
 
   let expectedGrossChargeCents = 0;
   let missingChargeMappingCount = 0;
+  let expectedNetReimbursementCents = 0;
+  let missingReimbursementMappingCount = 0;
   if (params.chargeCapture.procedureLinesJson.length > 0) {
     params.chargeCapture.procedureLinesJson.forEach((line) => {
       const scheduleRow = scheduleByCode.get(line.cptCode.toUpperCase());
@@ -528,10 +703,25 @@ export function buildRevenueExpectationSummary(params: {
     });
   }
 
+  if (expectedGrossChargeCents > 0) {
+    const reimbursementRule = matchReimbursementRule(params.reimbursementRules || [], {
+      payerName: params.financialReadiness?.primaryPayerName,
+      financialClass: params.financialReadiness?.financialClass,
+    });
+    if (reimbursementRule) {
+      expectedNetReimbursementCents = Math.round(expectedGrossChargeCents * (reimbursementRule.expectedPercent / 100));
+    } else {
+      missingReimbursementMappingCount = 1;
+    }
+  }
+
   return {
     expectedGrossChargeCents,
+    expectedNetReimbursementCents,
     missingChargeMapping: missingChargeMappingCount > 0,
     missingChargeMappingCount,
+    missingReimbursementMapping: missingReimbursementMappingCount > 0,
+    missingReimbursementMappingCount,
     serviceCaptureCompleted,
     clinicianCodingEntered,
     chargeCaptureReady,
@@ -684,16 +874,25 @@ function parseCheckoutTracking(encounter: {
 function parseFinancialReadiness(encounter: {
   intakeData: Prisma.JsonValue | null;
   insuranceVerified: boolean;
-}) {
+}, estimateDefaults: RevenueEstimateDefaults = DEFAULT_REVENUE_SETTINGS.estimateDefaults) {
   const source = asRecord(encounter.intakeData);
   const rawEligibilityStatus = asString(source[CHECKIN_FINANCIAL_KEYS.eligibilityStatus]);
   const eligibilityChecked = asBoolean(source[CHECKIN_FINANCIAL_KEYS.eligibilityChecked]);
   const coverageIssueFlag = asBoolean(source[CHECKIN_FINANCIAL_KEYS.coverageIssueFlag]) === true;
   const expectedCollectionIndicator = asBoolean(source[CHECKIN_FINANCIAL_KEYS.expectedCollectionIndicator]);
+  const registrationVerified = asBoolean(source[CHECKIN_FINANCIAL_KEYS.registrationVerified]) ?? false;
+  const contactInfoVerified = asBoolean(source[CHECKIN_FINANCIAL_KEYS.contactInfoVerified]) ?? false;
   const referralRequired = asBoolean(source[CHECKIN_FINANCIAL_KEYS.referralRequired]) ?? false;
   const priorAuthRequired = asBoolean(source[CHECKIN_FINANCIAL_KEYS.priorAuthRequired]) ?? false;
   const referralStatus = toRequirementStatus(asString(source[CHECKIN_FINANCIAL_KEYS.referralStatus]), referralRequired);
   const priorAuthStatus = toRequirementStatus(asString(source[CHECKIN_FINANCIAL_KEYS.priorAuthStatus]), priorAuthRequired);
+  const patientEstimateAmountCents =
+    currencyToCents(source[CHECKIN_FINANCIAL_KEYS.patientEstimateAmountCents]) || estimateDefaults.defaultPatientEstimateCents;
+  const pointOfServiceAmountDueCents =
+    currencyToCents(source[CHECKIN_FINANCIAL_KEYS.expectedPosCollectionAmountCents] ?? source[BILLING_FIELD_KEYS.amountDueCents]) ||
+    (expectedCollectionIndicator ? estimateDefaults.defaultPatientEstimateCents : 0);
+  const estimateExplainedToPatient =
+    asBoolean(source[CHECKIN_FINANCIAL_KEYS.estimateExplainedToPatient]) ?? estimateDefaults.explainEstimateByDefault;
   const hasExplicitReadinessSignal =
     encounter.insuranceVerified ||
     rawEligibilityStatus !== null ||
@@ -722,10 +921,13 @@ function parseFinancialReadiness(encounter: {
 
   return {
     eligibilityStatus,
+    registrationVerified,
+    contactInfoVerified,
     primaryPayerName: asString(source[CHECKIN_FINANCIAL_KEYS.primaryPayerName]),
     primaryPlanName: asString(source[CHECKIN_FINANCIAL_KEYS.primaryPlanName]),
     secondaryPayerName: asString(source[CHECKIN_FINANCIAL_KEYS.secondaryPayerName]),
     financialClass: asString(source[CHECKIN_FINANCIAL_KEYS.financialClass]),
+    benefitsSummaryText: asString(source[CHECKIN_FINANCIAL_KEYS.benefitsSummary]),
     coverageIssueCategory: coverageIssueFlag ? "coverage_issue" : null,
     coverageIssueText: coverageIssueFlag ? "Coverage issue flagged at check-in" : null,
     referralRequired,
@@ -733,8 +935,9 @@ function parseFinancialReadiness(encounter: {
     priorAuthRequired,
     priorAuthStatus,
     priorAuthNumber: asString(source[CHECKIN_FINANCIAL_KEYS.priorAuthNumber]),
-    pointOfServiceAmountDueCents:
-      (expectedCollectionIndicator ?? false) ? currencyToCents(source[BILLING_FIELD_KEYS.amountDueCents]) : 0,
+    patientEstimateAmountCents,
+    pointOfServiceAmountDueCents,
+    estimateExplainedToPatient,
     outstandingPriorBalanceCents: currencyToCents(source[CHECKIN_FINANCIAL_KEYS.outstandingPriorBalanceCents]),
     notesJson: source,
   };
@@ -755,6 +958,7 @@ function parseChargeCapture(
   const codingNote = asString(source[CLINICIAN_CODING_KEYS.note]);
   const diagnoses = splitCodes(diagnosisText);
   const serviceCaptureItemsJson = normalizeServiceCaptureItems(roomingSource[ROOMING_SERVICE_CAPTURE_KEY], serviceCatalog);
+  const documentationSummaryJson = buildDocumentationSummary(source);
   const procedureLines = normalizeProcedureLines({
     diagnoses,
     cptCodes: splitCodes(procedureText),
@@ -770,6 +974,7 @@ function parseChargeCapture(
     icd10CodesJson: diagnoses,
     procedureLinesJson: procedureLines,
     serviceCaptureItemsJson,
+    documentationSummaryJson,
     cptCodesJson: legacyCodingArrays.cptCodes,
     modifiersJson: legacyCodingArrays.modifiers,
     unitsJson: legacyCodingArrays.units,
@@ -890,7 +1095,19 @@ function computeCaseState(params: {
   };
   financialReadiness: Pick<
     FinancialReadiness,
-    "eligibilityStatus" | "coverageIssueText" | "priorAuthRequired" | "priorAuthStatus" | "referralRequired" | "referralStatus"
+    | "eligibilityStatus"
+    | "registrationVerified"
+    | "contactInfoVerified"
+    | "primaryPayerName"
+    | "primaryPlanName"
+    | "secondaryPayerName"
+    | "benefitsSummaryText"
+    | "coverageIssueText"
+    | "estimateExplainedToPatient"
+    | "priorAuthRequired"
+    | "priorAuthStatus"
+    | "referralRequired"
+    | "referralStatus"
   >;
   checkoutTracking: ReturnType<typeof parseCheckoutTracking>;
   chargeCapture: ReturnType<typeof parseChargeCapture> & { readyForAthenaAt?: Date | null };
@@ -908,8 +1125,19 @@ function computeCaseState(params: {
   openClarifications: number;
   earliestOpenQueryAt: Date | null;
 }) {
+  const payerSnapshotConfirmed = Boolean(
+    params.financialReadiness.primaryPayerName ||
+      params.financialReadiness.primaryPlanName ||
+      params.financialReadiness.secondaryPayerName,
+  );
+  const benefitsCaptured = Boolean(params.financialReadiness.benefitsSummaryText || params.financialReadiness.coverageIssueText);
   const financialClear =
+    params.financialReadiness.registrationVerified &&
+    params.financialReadiness.contactInfoVerified &&
+    payerSnapshotConfirmed &&
+    benefitsCaptured &&
     params.financialReadiness.eligibilityStatus === FinancialEligibilityStatus.Clear &&
+    params.financialReadiness.estimateExplainedToPatient &&
     isRequirementSatisfied(params.financialReadiness.priorAuthStatus, params.financialReadiness.priorAuthRequired) &&
     isRequirementSatisfied(params.financialReadiness.referralStatus, params.financialReadiness.referralRequired);
   const checkoutComplete = isCollectionTrackingComplete({
@@ -934,14 +1162,25 @@ function computeCaseState(params: {
     currentWorkQueue = RevenueWorkQueue.FinancialReadiness;
     blockerCategory = "financial_readiness";
     blockerText =
-      params.financialReadiness.coverageIssueText ||
-      (params.financialReadiness.priorAuthRequired &&
+      (!params.financialReadiness.registrationVerified
+        ? "Registration and demographics are not yet verified in Flow."
+        : !params.financialReadiness.contactInfoVerified
+          ? "Contact information still needs to be verified in Flow."
+          : !payerSnapshotConfirmed
+            ? "Payer and plan snapshot still need to be captured in Flow."
+            : !benefitsCaptured
+              ? "Benefits summary or coverage issue detail still needs to be captured in Flow."
+              : params.financialReadiness.coverageIssueText
+                ? params.financialReadiness.coverageIssueText
+                : !params.financialReadiness.estimateExplainedToPatient
+                  ? "Patient estimate and expected point-of-service collection still need to be reviewed in Flow."
+                  : params.financialReadiness.priorAuthRequired &&
       !isRequirementSatisfied(params.financialReadiness.priorAuthStatus, true)
-        ? "Prior authorization is still incomplete."
-        : params.financialReadiness.referralRequired &&
-            !isRequirementSatisfied(params.financialReadiness.referralStatus, true)
-          ? "Referral status is still incomplete."
-          : "Eligibility is not yet cleared.");
+                    ? "Prior authorization is still incomplete."
+                    : params.financialReadiness.referralRequired &&
+                        !isRequirementSatisfied(params.financialReadiness.referralStatus, true)
+                      ? "Referral status is still incomplete."
+                      : "Eligibility is not yet cleared.");
   } else if (
     (params.encounter.currentStatus === EncounterStatus.CheckOut ||
       params.encounter.currentStatus === EncounterStatus.Optimized) &&
@@ -972,6 +1211,9 @@ function computeCaseState(params: {
     } else if (!params.expectation.clinicianCodingEntered) {
       blockerCategory = "charge_capture";
       blockerText = "Clinician working codes have not been entered yet.";
+    } else if (!documentationSummaryComplete(params.chargeCapture.documentationSummaryJson)) {
+      blockerCategory = "encounter_documentation";
+      blockerText = "Structured encounter documentation is still incomplete in Flow.";
     } else if (!params.chargeCapture.documentationComplete) {
       blockerCategory = "documentation_incomplete";
       blockerText = "Clinician marked documentation incomplete. Revenue cannot fully close Athena handoff until documentation is complete.";
@@ -988,7 +1230,9 @@ function computeCaseState(params: {
     blockerCategory = "athena_handoff";
     blockerText = params.expectation.missingChargeMapping
       ? `Athena handoff is pending and ${params.expectation.missingChargeMappingCount} charge mapping${params.expectation.missingChargeMappingCount === 1 ? " is" : "s are"} missing in Flow.`
-      : "Athena handoff is not yet confirmed.";
+      : params.expectation.missingReimbursementMapping
+        ? "Athena handoff is pending and Flow projections still need reimbursement mapping for this payer or financial class."
+        : "Athena handoff is not yet confirmed.";
   } else if (hasAthenaConfirmation) {
     currentRevenueStatus = RevenueStatus.MonitoringOnly;
     currentWorkQueue = RevenueWorkQueue.Monitoring;
@@ -1053,19 +1297,21 @@ function buildDefaultRevenueSettings(facilityId: string) {
   const athenaChecklistDefaults = parseAthenaChecklistDefaults(
     DEFAULT_REVENUE_SETTINGS.athenaChecklistDefaults as Prisma.JsonValue,
   );
-  checklistDefaults[RevenueChecklistGroup.athena_handoff] = athenaChecklistDefaults;
+  checklistDefaults[RevenueChecklistGroup.athena_handoff_attestation] = athenaChecklistDefaults;
 
   return {
     facilityId,
     missedCollectionReasons: [...DEFAULT_MISSED_COLLECTION_REASONS],
     queueSla: { ...DEFAULT_REVENUE_SETTINGS.queueSla },
     dayCloseDefaults: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults },
+    estimateDefaults: { ...DEFAULT_REVENUE_SETTINGS.estimateDefaults },
     providerQueryTemplates: [...DEFAULT_PROVIDER_QUERY_TEMPLATES],
     athenaLinkTemplate: DEFAULT_REVENUE_SETTINGS.athenaLinkTemplate || "",
     athenaChecklistDefaults,
     checklistDefaults,
     serviceCatalog: DEFAULT_REVENUE_SETTINGS.serviceCatalog.map((item) => ({ ...item })),
     chargeSchedule: DEFAULT_REVENUE_SETTINGS.chargeSchedule.map((item) => ({ ...item })),
+    reimbursementRules: DEFAULT_REVENUE_SETTINGS.reimbursementRules.map((item) => ({ ...item })),
   };
 }
 
@@ -1078,31 +1324,35 @@ export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionCl
         missedCollectionReasonsJson: [...DEFAULT_REVENUE_SETTINGS.missedCollectionReasons] as Prisma.InputJsonValue,
         queueSlaJson: { ...DEFAULT_REVENUE_SETTINGS.queueSla } as Prisma.InputJsonValue,
         dayCloseDefaultsJson: { ...DEFAULT_REVENUE_SETTINGS.dayCloseDefaults } as Prisma.InputJsonValue,
+        estimateDefaultsJson: { ...DEFAULT_REVENUE_SETTINGS.estimateDefaults } as Prisma.InputJsonValue,
         providerQueryTemplatesJson: [...DEFAULT_REVENUE_SETTINGS.providerQueryTemplates] as Prisma.InputJsonValue,
         athenaLinkTemplate: DEFAULT_REVENUE_SETTINGS.athenaLinkTemplate,
         athenaChecklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.athenaChecklistDefaults as Prisma.InputJsonValue,
         checklistDefaultsJson: DEFAULT_REVENUE_SETTINGS.checklistDefaults as Prisma.InputJsonValue,
         serviceCatalogJson: DEFAULT_REVENUE_SETTINGS.serviceCatalog as Prisma.InputJsonValue,
         chargeScheduleJson: DEFAULT_REVENUE_SETTINGS.chargeSchedule as Prisma.InputJsonValue,
+        reimbursementRulesJson: DEFAULT_REVENUE_SETTINGS.reimbursementRules as Prisma.InputJsonValue,
       },
       update: {},
     });
 
     const checklistDefaults = parseChecklistDefaults(settings.checklistDefaultsJson);
     const athenaChecklistDefaults = parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson);
-    checklistDefaults[RevenueChecklistGroup.athena_handoff] = athenaChecklistDefaults;
+    checklistDefaults[RevenueChecklistGroup.athena_handoff_attestation] = athenaChecklistDefaults;
 
     return {
       facilityId: settings.facilityId,
       missedCollectionReasons: parseSettingsArray(settings.missedCollectionReasonsJson, DEFAULT_MISSED_COLLECTION_REASONS),
       queueSla: asRecord(settings.queueSlaJson),
       dayCloseDefaults: asRecord(settings.dayCloseDefaultsJson),
+      estimateDefaults: parseEstimateDefaults(settings.estimateDefaultsJson),
       providerQueryTemplates: parseSettingsArray(settings.providerQueryTemplatesJson, DEFAULT_PROVIDER_QUERY_TEMPLATES),
       athenaLinkTemplate: settings.athenaLinkTemplate || "",
       athenaChecklistDefaults,
       checklistDefaults,
       serviceCatalog: parseServiceCatalog(settings.serviceCatalogJson),
       chargeSchedule: parseChargeSchedule(settings.chargeScheduleJson),
+      reimbursementRules: parseReimbursementRules(settings.reimbursementRulesJson),
     };
   } catch (error) {
     if (isMissingRevenueSettingsSchemaError(error)) {
@@ -1127,7 +1377,7 @@ async function ensureAthenaChecklist(
   revenueCaseId: string,
   checklistDefaults: ReadonlyArray<RevenueChecklistDefaultItem> = DEFAULT_ATHENA_CHECKLIST,
 ) {
-  await ensureRevenueChecklistGroup(db, revenueCaseId, RevenueChecklistGroup.athena_handoff, checklistDefaults);
+  await ensureRevenueChecklistGroup(db, revenueCaseId, RevenueChecklistGroup.athena_handoff_attestation, checklistDefaults);
 }
 
 async function ensureRevenueChecklistGroup(
@@ -1164,10 +1414,14 @@ async function ensureRevenueChecklistItems(
   checklistDefaults: Record<string, RevenueChecklistDefaultItem[]>,
 ) {
   const supportedGroups: RevenueChecklistGroup[] = [
-    RevenueChecklistGroup.financial_readiness,
+    RevenueChecklistGroup.registration_demographics,
+    RevenueChecklistGroup.eligibility_benefits,
+    RevenueChecklistGroup.patient_estimate_pos,
+    RevenueChecklistGroup.referral_prior_auth,
     RevenueChecklistGroup.checkout_tracking,
-    RevenueChecklistGroup.charge_capture,
-    RevenueChecklistGroup.athena_handoff,
+    RevenueChecklistGroup.encounter_documentation,
+    RevenueChecklistGroup.charge_capture_coding,
+    RevenueChecklistGroup.athena_handoff_attestation,
     RevenueChecklistGroup.day_close,
   ];
   for (const group of supportedGroups) {
@@ -1218,9 +1472,9 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
 
   if (!encounter?.clinic?.facilityId) return null;
 
-  const financial = parseFinancialReadiness(encounter);
-  const checkoutTracking = parseCheckoutTracking(encounter);
   const settings = await getRevenueSettings(db, encounter.clinic.facilityId);
+  const financial = parseFinancialReadiness(encounter, settings.estimateDefaults);
+  const checkoutTracking = parseCheckoutTracking(encounter);
   const chargeCapture = parseChargeCapture(encounter, settings.serviceCatalog);
 
   const upsertedCase = await db.revenueCase.upsert({
@@ -1250,16 +1504,21 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       eligibilityStatus: financial.eligibilityStatus,
       coverageIssueCategory: financial.coverageIssueCategory,
       coverageIssueText: financial.coverageIssueText,
+      registrationVerified: financial.registrationVerified,
+      contactInfoVerified: financial.contactInfoVerified,
       primaryPayerName: financial.primaryPayerName,
       primaryPlanName: financial.primaryPlanName,
       secondaryPayerName: financial.secondaryPayerName,
       financialClass: financial.financialClass,
+      benefitsSummaryText: financial.benefitsSummaryText,
+      patientEstimateAmountCents: financial.patientEstimateAmountCents,
       referralRequired: financial.referralRequired,
       referralStatus: financial.referralStatus,
       priorAuthRequired: financial.priorAuthRequired,
       priorAuthStatus: financial.priorAuthStatus,
       priorAuthNumber: financial.priorAuthNumber,
       pointOfServiceAmountDueCents: financial.pointOfServiceAmountDueCents,
+      estimateExplainedToPatient: financial.estimateExplainedToPatient,
       outstandingPriorBalanceCents: financial.outstandingPriorBalanceCents,
       notesJson: financial.notesJson as Prisma.InputJsonValue,
       verifiedAt: encounter.insuranceVerified ? new Date() : null,
@@ -1268,16 +1527,21 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       eligibilityStatus: financial.eligibilityStatus,
       coverageIssueCategory: financial.coverageIssueCategory,
       coverageIssueText: financial.coverageIssueText,
+      registrationVerified: financial.registrationVerified,
+      contactInfoVerified: financial.contactInfoVerified,
       primaryPayerName: financial.primaryPayerName,
       primaryPlanName: financial.primaryPlanName,
       secondaryPayerName: financial.secondaryPayerName,
       financialClass: financial.financialClass,
+      benefitsSummaryText: financial.benefitsSummaryText,
+      patientEstimateAmountCents: financial.patientEstimateAmountCents,
       referralRequired: financial.referralRequired,
       referralStatus: financial.referralStatus,
       priorAuthRequired: financial.priorAuthRequired,
       priorAuthStatus: financial.priorAuthStatus,
       priorAuthNumber: financial.priorAuthNumber,
       pointOfServiceAmountDueCents: financial.pointOfServiceAmountDueCents,
+      estimateExplainedToPatient: financial.estimateExplainedToPatient,
       outstandingPriorBalanceCents: financial.outstandingPriorBalanceCents,
       notesJson: financial.notesJson as Prisma.InputJsonValue,
       verifiedAt: encounter.insuranceVerified ? new Date() : null,
@@ -1318,6 +1582,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       icd10CodesJson: chargeCapture.icd10CodesJson as Prisma.InputJsonValue,
       procedureLinesJson: chargeCapture.procedureLinesJson as Prisma.InputJsonValue,
       serviceCaptureItemsJson: chargeCapture.serviceCaptureItemsJson as Prisma.InputJsonValue,
+      documentationSummaryJson: chargeCapture.documentationSummaryJson as Prisma.InputJsonValue,
       cptCodesJson: chargeCapture.cptCodesJson as Prisma.InputJsonValue,
       modifiersJson: chargeCapture.modifiersJson as Prisma.InputJsonValue,
       unitsJson: chargeCapture.unitsJson as Prisma.InputJsonValue,
@@ -1330,6 +1595,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
       icd10CodesJson: chargeCapture.icd10CodesJson as Prisma.InputJsonValue,
       procedureLinesJson: chargeCapture.procedureLinesJson as Prisma.InputJsonValue,
       serviceCaptureItemsJson: chargeCapture.serviceCaptureItemsJson as Prisma.InputJsonValue,
+      documentationSummaryJson: chargeCapture.documentationSummaryJson as Prisma.InputJsonValue,
       cptCodesJson: chargeCapture.cptCodesJson as Prisma.InputJsonValue,
       modifiersJson: chargeCapture.modifiersJson as Prisma.InputJsonValue,
       unitsJson: chargeCapture.unitsJson as Prisma.InputJsonValue,
@@ -1340,10 +1606,21 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
 
   await ensureRevenueChecklistItems(db, upsertedCase.id, settings.checklistDefaults);
 
-  const priorAuthOrReferralAddressed =
-    (!financial.priorAuthRequired || isRequirementSatisfied(financial.priorAuthStatus, true)) &&
-    (!financial.referralRequired || isRequirementSatisfied(financial.referralStatus, true));
-  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.financial_readiness, [
+  const priorAuthAddressed = !financial.priorAuthRequired || isRequirementSatisfied(financial.priorAuthStatus, true);
+  const referralAddressed = !financial.referralRequired || isRequirementSatisfied(financial.referralStatus, true);
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.registration_demographics, [
+    {
+      label: "Registration / demographics verified",
+      completed: financial.registrationVerified,
+      evidenceText: financial.registrationVerified ? "Registration and demographics verified in Flow" : null,
+    },
+    {
+      label: "Contact info verified",
+      completed: financial.contactInfoVerified,
+      evidenceText: financial.contactInfoVerified ? "Contact info verified in Flow" : null,
+    },
+  ]);
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.eligibility_benefits, [
     {
       label: "Eligibility checked",
       completed: financial.eligibilityStatus !== FinancialEligibilityStatus.NotChecked,
@@ -1357,14 +1634,38 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
         : null,
     },
     {
-      label: "Expected POS amount recorded",
-      completed: financial.pointOfServiceAmountDueCents >= 0,
-      evidenceText: `POS amount ${financial.pointOfServiceAmountDueCents}`,
+      label: "Benefits summary captured",
+      completed: Boolean(financial.benefitsSummaryText || financial.coverageIssueText),
+      evidenceText: financial.benefitsSummaryText || financial.coverageIssueText,
+    },
+  ]);
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.patient_estimate_pos, [
+    {
+      label: "Patient estimate amount recorded",
+      completed: financial.estimateExplainedToPatient || financial.patientEstimateAmountCents > 0 || financial.pointOfServiceAmountDueCents > 0,
+      evidenceText: `Patient estimate ${financial.patientEstimateAmountCents}`,
     },
     {
-      label: "Prior auth / referral addressed",
-      completed: priorAuthOrReferralAddressed,
-      evidenceText: priorAuthOrReferralAddressed ? "Prior auth / referral requirements addressed in Flow" : null,
+      label: "Expected POS collection amount recorded",
+      completed: financial.estimateExplainedToPatient || financial.pointOfServiceAmountDueCents > 0,
+      evidenceText: `Expected POS ${financial.pointOfServiceAmountDueCents}`,
+    },
+    {
+      label: "Estimate explained to patient",
+      completed: financial.estimateExplainedToPatient,
+      evidenceText: financial.estimateExplainedToPatient ? "Estimate reviewed in Flow" : null,
+    },
+  ]);
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.referral_prior_auth, [
+    {
+      label: "Prior auth addressed",
+      completed: priorAuthAddressed,
+      evidenceText: priorAuthAddressed ? "Prior auth addressed in Flow" : null,
+    },
+    {
+      label: "Referral addressed",
+      completed: referralAddressed,
+      evidenceText: referralAddressed ? "Referral addressed in Flow" : null,
     },
   ]);
 
@@ -1402,8 +1703,37 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
   const expectation = buildRevenueExpectationSummary({
     chargeCapture,
     chargeSchedule: settings.chargeSchedule,
+    reimbursementRules: settings.reimbursementRules,
+    financialReadiness: financial,
   });
-  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.charge_capture, [
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.encounter_documentation, [
+    {
+      label: "Chief concern / visit summary captured",
+      completed: Boolean(chargeCapture.documentationSummaryJson.chiefConcernSummary),
+      evidenceText: chargeCapture.documentationSummaryJson.chiefConcernSummary,
+    },
+    {
+      label: "Assessment summary captured",
+      completed: Boolean(chargeCapture.documentationSummaryJson.assessmentSummary),
+      evidenceText: chargeCapture.documentationSummaryJson.assessmentSummary,
+    },
+    {
+      label: "Plan / follow-up captured",
+      completed: Boolean(chargeCapture.documentationSummaryJson.planFollowUp),
+      evidenceText: chargeCapture.documentationSummaryJson.planFollowUp,
+    },
+    {
+      label: "Orders / procedures documented",
+      completed: Boolean(chargeCapture.documentationSummaryJson.ordersOrProcedures),
+      evidenceText: chargeCapture.documentationSummaryJson.ordersOrProcedures,
+    },
+    {
+      label: "Documentation complete enough for handoff",
+      completed: chargeCapture.documentationComplete,
+      evidenceText: chargeCapture.documentationComplete ? "Clinician marked documentation complete" : null,
+    },
+  ]);
+  await syncChecklistCompletion(db, upsertedCase.id, RevenueChecklistGroup.charge_capture_coding, [
     {
       label: "MA service capture complete",
       completed: expectation.serviceCaptureCompleted,
@@ -1421,11 +1751,6 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
         chargeCapture.icd10CodesJson.length > 0 && chargeCapture.procedureLinesJson.length > 0
           ? `${chargeCapture.icd10CodesJson.length} dx / ${chargeCapture.procedureLinesJson.length} procedure lines`
           : null,
-    },
-    {
-      label: "Documentation complete enough for handoff",
-      completed: chargeCapture.documentationComplete,
-      evidenceText: chargeCapture.documentationComplete ? "Clinician marked documentation complete" : null,
     },
   ]);
 
@@ -1455,7 +1780,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
     expectation,
     revenueCase: refreshed,
     athenaChecklistCompletedCount: refreshed.checklistItems.filter(
-      (item) => item.group === RevenueChecklistGroup.athena_handoff && item.status === "completed",
+      (item) => item.group === RevenueChecklistGroup.athena_handoff_attestation && item.status === "completed",
     ).length,
     openClarifications: openClarifications.length,
     earliestOpenQueryAt: openClarifications[0]?.openedAt || null,

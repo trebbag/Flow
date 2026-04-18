@@ -150,6 +150,13 @@ enum RevenueChecklistGroup {
   charge_capture
   athena_handoff
   athena_monitoring
+  registration_demographics
+  eligibility_benefits
+  patient_estimate_pos
+  referral_prior_auth
+  encounter_documentation
+  charge_capture_coding
+  athena_handoff_attestation
   day_close
 }
 
@@ -787,11 +794,16 @@ model FinancialReadiness {
   eligibilityStatus              FinancialEligibilityStatus @default(NotChecked)
   verifiedAt                     DateTime?
   verifiedByUserId               String?
+  registrationVerified           Boolean                   @default(false)
+  contactInfoVerified            Boolean                   @default(false)
   primaryPayerName               String?
   primaryPlanName                String?
   secondaryPayerName             String?
   financialClass                 String?
+  benefitsSummaryText            String?
+  patientEstimateAmountCents     Int                       @default(0)
   pointOfServiceAmountDueCents   Int                       @default(0)
+  estimateExplainedToPatient     Boolean                   @default(false)
   outstandingPriorBalanceCents   Int                       @default(0)
   coverageIssueCategory          String?
   coverageIssueText              String?
@@ -827,6 +839,7 @@ model ChargeCaptureRecord {
   icd10CodesJson         Json?
   procedureLinesJson     Json?
   serviceCaptureItemsJson Json?
+  documentationSummaryJson Json?
   cptCodesJson           Json?
   modifiersJson          Json?
   unitsJson              Json?
@@ -900,12 +913,14 @@ model RevenueCycleSettings {
   missedCollectionReasonsJson Json
   queueSlaJson                Json
   dayCloseDefaultsJson        Json
+  estimateDefaultsJson        Json
   providerQueryTemplatesJson  Json
   athenaLinkTemplate          String?
   athenaChecklistDefaultsJson Json
   checklistDefaultsJson       Json
   serviceCatalogJson          Json
   chargeScheduleJson          Json
+  reimbursementRulesJson      Json
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 
@@ -1185,6 +1200,7 @@ model RevenueCycleDailyRollup {
   sameDayCollectionVisitRate   Float    @default(0)
   sameDayCollectionDollarRate  Float    @default(0)
   expectedGrossChargeCents     Int      @default(0)
+  expectedNetReimbursementCents Int     @default(0)
   serviceCaptureCompletedVisitCount Int @default(0)
   clinicianCodingEnteredVisitCount Int  @default(0)
   chargeCaptureReadyVisitCount Int      @default(0)
