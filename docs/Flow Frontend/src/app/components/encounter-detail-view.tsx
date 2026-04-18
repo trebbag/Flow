@@ -822,6 +822,33 @@ export function EncounterDetailView() {
     setShowRequiredFieldErrors(false);
   }, [baseEnc, showRequiredFieldErrors, localStatus, runtimeTemplates, templateValues, localRoom]);
 
+  const safeStatus = (localStatus ?? baseEnc?.status ?? "Lobby") as EncounterStatus;
+  const safeVisitType = baseEnc?.visitType || "";
+  const safeTemplateVals = templateValues[safeStatus] || {};
+  const safeTemplate = getTemplateForStatus(safeStatus, safeVisitType, runtimeTemplates);
+  const clinicianDiagnosisParse = useMemo(
+    () => parseValidatedCodes(String(safeTemplateVals["coding.working_diagnosis_codes_text"] || ""), "diagnosis"),
+    [safeTemplateVals],
+  );
+  const clinicianProcedureParse = useMemo(
+    () => parseValidatedCodes(String(safeTemplateVals["coding.working_procedure_codes_text"] || ""), "procedure"),
+    [safeTemplateVals],
+  );
+  const clinicianDiagnosisCodes = clinicianDiagnosisParse.valid;
+  const clinicianProcedureCodes = clinicianProcedureParse.valid;
+  const suggestedProcedureCodes = useMemo(
+    () =>
+      dedupeCodes(
+        serviceCaptureItems
+          .map((item) => item.suggestedProcedureCode)
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .map(normalizeCodeToken),
+      ),
+    [serviceCaptureItems],
+  );
+  const diagnosisSearchResults = useMemo(() => searchClinicalCodes("diagnosis", diagnosisInput), [diagnosisInput]);
+  const procedureSearchResults = useMemo(() => searchClinicalCodes("procedure", procedureInput), [procedureInput]);
+
   if (!baseEnc && loadingEncounter) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -926,32 +953,10 @@ export function EncounterDetailView() {
   const currentIdx = statusFlow.indexOf(enc.status);
   const threshold = defaultThresholds.find((t) => t.status === enc.status);
   const encTasks = encMaTasks;
-  const { label: templateLabel, fields: templateFields } = getTemplateForStatus(enc.status, enc.visitType, runtimeTemplates);
+  const { label: templateLabel, fields: templateFields } = safeTemplate;
   const canAdvance = !!nextStatusMap[enc.status];
 
   const currentTemplateVals = templateValues[enc.status] || {};
-  const clinicianDiagnosisParse = useMemo(
-    () => parseValidatedCodes(String(currentTemplateVals["coding.working_diagnosis_codes_text"] || ""), "diagnosis"),
-    [currentTemplateVals],
-  );
-  const clinicianProcedureParse = useMemo(
-    () => parseValidatedCodes(String(currentTemplateVals["coding.working_procedure_codes_text"] || ""), "procedure"),
-    [currentTemplateVals],
-  );
-  const clinicianDiagnosisCodes = clinicianDiagnosisParse.valid;
-  const clinicianProcedureCodes = clinicianProcedureParse.valid;
-  const suggestedProcedureCodes = useMemo(
-    () =>
-      dedupeCodes(
-        serviceCaptureItems
-          .map((item) => item.suggestedProcedureCode)
-          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-          .map(normalizeCodeToken),
-      ),
-    [serviceCaptureItems],
-  );
-  const diagnosisSearchResults = useMemo(() => searchClinicalCodes("diagnosis", diagnosisInput), [diagnosisInput]);
-  const procedureSearchResults = useMemo(() => searchClinicalCodes("procedure", procedureInput), [procedureInput]);
   const fieldsForCompletion = enc.status === "Rooming" ? [...standardRoomingFields, ...templateFields] : templateFields;
   const requiredFields = fieldsForCompletion.filter((f) => f.required);
   const requiredCount = requiredFields.length;
