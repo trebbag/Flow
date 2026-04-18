@@ -1307,12 +1307,6 @@ export const admin = {
       body: JSON.stringify(dto),
     });
   },
-  resetUserPassword(id: string) {
-    return apiFetch<{ status: string; message: string }>(`/admin/users/${id}/reset-password`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-  },
   resyncUser(id: string) {
     return apiFetch<StaffUser>(`/admin/users/${id}/resync`, {
       method: "POST",

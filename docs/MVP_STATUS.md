@@ -37,7 +37,7 @@ Updated: April 18, 2026
 ## Remaining Work Before Pilot
 
 1. Run the full role-by-role staging proof with real Entra users or per-role bearer tokens and record the final evidence.
-2. Resolve or clean up stale occupied proof rooms in `Team A` before broader staging proof there.
+2. Complete broader room-operations validation in `Team A` during role-by-role staging proof now that the stale proof-room residue has been cleaned up.
 3. Finalize the facility service catalog, charge schedule, and payer / financial-class reimbursement rules used by the revenue projection model.
 4. Finalize PHI-facing security controls:
    - MFA / Conditional-Access-equivalent enforcement

@@ -141,6 +141,21 @@ function dedupeRoleNames(rows: Array<{ role: RoleName }>) {
   return Array.from(new Set(rows.map((row) => row.role)));
 }
 
+function resolveLegacyIdentityAlias(params: {
+  subject: string;
+  entraObjectIdClaim: string | null;
+  cognitoSub: string | null | undefined;
+}) {
+  return params.entraObjectIdClaim || params.cognitoSub || params.subject;
+}
+
+function resolveStoredEntraObjectId(user: {
+  entraObjectId: string | null;
+  cognitoSub: string | null;
+}) {
+  return user.entraObjectId || user.cognitoSub || null;
+}
+
 async function resolveFacilityScopeForRole(params: {
   selectedRole: RoleName;
   roleRows: Array<{ clinicId: string | null; facilityId: string | null; clinic?: { facilityId: string | null } | null }>;
@@ -277,7 +292,11 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
           entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
           entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
           identityProvider: "entra",
-          cognitoSub: entraObjectIdClaim || user.cognitoSub || subject,
+          cognitoSub: resolveLegacyIdentityAlias({
+            subject,
+            entraObjectIdClaim,
+            cognitoSub: user.cognitoSub,
+          }),
           directoryStatus: "active",
           directoryUserType: tokenUserType || user.directoryUserType || "Member",
           directoryAccountEnabled: true,
@@ -326,7 +345,11 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
           entraTenantId: tokenTenantId || user.entraTenantId || env.ENTRA_TENANT_ID || null,
           entraUserPrincipalName: emailClaim || user.entraUserPrincipalName || null,
           identityProvider: "entra",
-          cognitoSub: entraObjectIdClaim || user.cognitoSub || subject,
+          cognitoSub: resolveLegacyIdentityAlias({
+            subject,
+            entraObjectIdClaim,
+            cognitoSub: user.cognitoSub,
+          }),
           lastDirectorySyncAt: new Date()
         }
       });
@@ -380,7 +403,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       availableFacilityIds: facilityScopeResult.availableFacilityIds,
       authSource: "jwt",
       identityProvider: user.identityProvider,
-      entraObjectId: user.entraObjectId || user.cognitoSub,
+      entraObjectId: resolveStoredEntraObjectId(user),
       entraTenantId: user.entraTenantId || tokenTenantId
     };
   } catch (error) {

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus } from "@prisma/client";
+import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus, TemplateType } from "@prisma/client";
 import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
 import { authHeaders, bootstrapCore, jwtHeaders, prisma, resetDb } from "./helpers.js";
@@ -133,6 +133,8 @@ async function createRevenueWorkflowEncounter(params: {
     payload: {
       version: encounter.version,
       data: {
+        "coding.working_diagnosis_codes_text": "J01.90",
+        "coding.working_procedure_codes_text": "99213",
         assessment: "Visit complete",
         "documentation.chief_concern_summary": "Follow-up visit review",
         "documentation.assessment_summary": "Assessment documented for revenue handoff.",
@@ -199,6 +201,66 @@ describe("Flow backend core relationships", () => {
     const incoming = await prisma.incomingSchedule.findUnique({ where: { id: ctx.incoming.id } });
     expect(incoming?.checkedInEncounterId).toBe(encounter.id);
     expect(incoming?.checkedInAt).not.toBeNull();
+  });
+
+  it("accepts required intake yes/no fields when the value is explicitly No", async () => {
+    const ctx = await bootstrapCore();
+
+    const intakeTemplate = await prisma.template.create({
+      data: {
+        facilityId: ctx.facility.id,
+        name: "Intake Default",
+        status: "active",
+        active: true,
+        reasonForVisitId: ctx.reason.id,
+        type: TemplateType.intake,
+        fieldsJson: [
+          {
+            key: "financial.registration_demographics_verified",
+            label: "Registration / Demographics Verified",
+            type: "yesNo",
+            required: true,
+          },
+          {
+            key: "financial.estimate_explained_to_patient",
+            label: "Estimate Explained",
+            type: "yesNo",
+            required: true,
+          },
+        ],
+        jsonSchema: { type: "object" },
+        uiSchema: {},
+        requiredFields: [
+          "financial.registration_demographics_verified",
+          "financial.estimate_explained_to_patient",
+        ],
+      },
+    });
+    await prisma.templateReasonAssignment.create({
+      data: {
+        templateId: intakeTemplate.id,
+        reasonId: ctx.reason.id,
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-INTAKE-NO",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+        intakeData: {
+          "financial.registration_demographics_verified": "No",
+          "financial.estimate_explained_to_patient": false,
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
   });
 
   it("returns 401 when request has no auth context", async () => {
@@ -1148,7 +1210,14 @@ describe("Flow backend core relationships", () => {
       method: "POST",
       url: `/encounters/${encounter.id}/visit/end`,
       headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
-      payload: { version: encounter.version, data: { assessment: "stable" } }
+      payload: {
+        version: encounter.version,
+        data: {
+          assessment: "stable",
+          "coding.working_diagnosis_codes_text": "J01.90",
+          "coding.working_procedure_codes_text": "99213",
+        },
+      }
     });
     expect(advanced.statusCode).toBe(200);
 
@@ -1806,6 +1875,126 @@ describe("Flow backend core relationships", () => {
     expect(toReadyBlocked.json().message).toContain("room assignment");
     expect(toReadyBlocked.json().message).toContain("service capture");
     expect(toReadyBlocked.json().message).toContain("allergiesChanged");
+  });
+
+  it("blocks clinician checkout when diagnosis and procedure codes are missing or invalid", async () => {
+    const ctx = await bootstrapCore();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-CODE-GATE-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    let encounter = created.json();
+
+    const toRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "Rooming",
+        version: encounter.version,
+      },
+    });
+    expect(toRooming.statusCode).toBe(200);
+    encounter = toRooming.json();
+
+    const saveRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        data: {
+          vitals: "120/80",
+          allergiesChanged: "No",
+          medicationReconciliationChanged: "No",
+          labChanged: "No",
+          pharmacyChanged: "No",
+          "service.capture_items": [
+            {
+              id: "svc-test-2",
+              catalogItemId: "svc-venipuncture",
+              label: "Venipuncture",
+              sourceRole: "MA",
+              quantity: 1,
+              suggestedProcedureCode: "36415",
+              expectedChargeCents: 1800,
+            },
+          ],
+        },
+      },
+    });
+    expect(saveRooming.statusCode).toBe(200);
+
+    const toReady = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "ReadyForProvider",
+        version: encounter.version,
+      },
+    });
+    expect(toReady.statusCode).toBe(200);
+    encounter = toReady.json();
+
+    const startVisit = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/start`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        version: encounter.version,
+      },
+    });
+    expect(startVisit.statusCode).toBe(200);
+    encounter = startVisit.json();
+
+    const missingCodes = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/end`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        version: encounter.version,
+        data: {
+          assessment: "Visit complete",
+          "documentation.chief_concern_summary": "Follow-up visit review",
+          "documentation.assessment_summary": "Assessment documented for revenue handoff.",
+          "documentation.plan_follow_up": "Plan documented and follow-up instructions provided.",
+          "documentation.orders_or_procedures": "Orders and performed procedures documented.",
+        },
+      },
+    });
+    expect(missingCodes.statusCode).toBe(400);
+    expect(missingCodes.json().message).toContain("ICD-10 diagnosis code");
+
+    const invalidCodes = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/end`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        version: encounter.version,
+        data: {
+          assessment: "Visit complete",
+          "coding.working_diagnosis_codes_text": "FOLLOW UP",
+          "coding.working_procedure_codes_text": "OFFICE VISIT",
+          "documentation.chief_concern_summary": "Follow-up visit review",
+          "documentation.assessment_summary": "Assessment documented for revenue handoff.",
+          "documentation.plan_follow_up": "Plan documented and follow-up instructions provided.",
+          "documentation.orders_or_procedures": "Orders and performed procedures documented.",
+        },
+      },
+    });
+    expect(invalidCodes.statusCode).toBe(400);
+    expect(invalidCodes.json().message).toContain("real ICD-10 format");
   });
 
   it("persists active facility context and scopes admin data to the selected facility", async () => {
@@ -2688,6 +2877,29 @@ describe("Flow backend core relationships", () => {
     expect(assignedFacilityIds).toEqual([ctx.facility.id, secondFacility.id].sort());
   });
 
+  it("ignores legacy cognito-subject input when creating local users", async () => {
+    const ctx = await bootstrapCore();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/admin/users",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        name: "Legacy Subject User",
+        email: "legacy.subject@test.local",
+        role: "FrontDeskCheckIn",
+        facilityIds: [ctx.facility.id],
+        cognitoSub: "legacy-manual-subject",
+      },
+    });
+
+    expect(created.statusCode).toBe(200);
+    const stored = await prisma.user.findUniqueOrThrow({
+      where: { id: created.json().id },
+    });
+    expect(stored.cognitoSub).toBeNull();
+  });
+
   it("blocks suspended user authentication and archives suspended users on delete", async () => {
     const ctx = await bootstrapCore();
 
@@ -2707,14 +2919,6 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.ma.id, RoleName.MA)
     });
     expect(authDenied.statusCode).toBe(401);
-
-    const resetPassword = await app.inject({
-      method: "POST",
-      url: `/admin/users/${ctx.ma.id}/reset-password`,
-      headers: authHeaders(ctx.admin.id, RoleName.Admin)
-    });
-    expect(resetPassword.statusCode).toBe(200);
-    expect(resetPassword.json().status).toBe("queued");
 
     const archived = await app.inject({
       method: "DELETE",

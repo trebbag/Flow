@@ -69,17 +69,18 @@ Current live room snapshot after proof:
 - `Room 4 = NeedsTurnover`
 - `Room 5 = Ready`
 
-## Remaining Room Operations Issue
-Staging still has a separate real operational follow-up in `Team A`.
+## Post-Proof Staging Cleanup
+The synthetic proof residue identified during the original live run was cleaned up after evidence capture.
 
-Current live state observed during proof:
-- `Room 2 = Occupied` by legacy proof patient `ZZ-STAGE-DOC-1776520101099`
-- `Room 3 = Occupied` by legacy proof patient `ZZ-STAGE-DOC-1776520632713`
-- `Proof Room = Occupied` by older proof patient `PT-E2E-1776526811839`
+Cleanup completed:
+- deleted the synthetic `PT-E2E-*` and `ZZ-STAGE-DOC-*` encounters and related revenue rows
+- cleared `Team A / Room 2` and `Team A / Room 3`
+- removed the temporary `Proof Room`
 
-Interpretation:
+Current interpretation:
 - room release works in the validated happy path on `Team J`
-- `Team A` still contains stale occupied rooms from earlier proof activity and needs cleanup / follow-through validation before broader role proof there
+- the earlier `Team A` stale-proof-room residue is no longer a blocker
+- broader room-operations proof in `Team A` still needs to happen with real role-by-role staging usage, not synthetic cleanup residue
 
 ## Checkout Reliability Regression
 The local checkout-screen crash was traced to missing frontend component imports in the expanded checkout card.
@@ -114,5 +115,5 @@ Pass:
 
 Still outstanding before broad pilot proof:
 - provide role-specific staging tokens or complete real user sign-ins for role-by-role proof
-- clean up or validate stale occupied rooms in `Team A`
+- complete broader room-operations validation in `Team A` now that the stale proof residue is gone
 - finalize remaining PHI-facing governance inputs and pilot data/config inputs

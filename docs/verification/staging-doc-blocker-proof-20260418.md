@@ -17,7 +17,8 @@ Prove the intended workflow where:
 ## Setup Notes
 - The staging PostgreSQL schema had drift and was brought back in sync before proof.
 - `Team A` clinic assignment had a missing `providerId` even though `providerUserId` existed; that assignment was repaired in staging before proof.
-- The original proof rooms were not reusable because prior proof encounters stayed marked as occupying Room 2 and Room 3 after cleanup. A temporary active room named `Proof Room` was added to Team A so the proof could continue against live staging.
+- At proof time, the original rooms were not reusable because prior proof encounters stayed marked as occupying Room 2 and Room 3, so a temporary active room named `Proof Room` was added to Team A to finish the validation.
+- Post-proof cleanup on April 18, 2026 removed the synthetic proof encounters, cleared `Team A / Room 2` and `Room 3`, and removed `Proof Room`.
 
 ## Proof Encounter
 - Encounter ID: `08ef6983-7276-48f0-abb7-1109cad80238`
@@ -85,11 +86,11 @@ Result:
 ## Issues Uncovered During Proof
 
 ### Room release follow-up
-Staging room operations still need live validation:
-- earlier proof encounters that were closed or cleaned up remained marked as occupying Room 2 and Room 3
-- that forced use of a temporary proof room to finish this validation
+Staging room operations still need broader live validation:
+- the stale proof-room residue that originally forced use of `Proof Room` has now been cleaned up
+- the remaining work is to validate room operations through broader real-role staging usage, not to clean synthetic residue
 
-This does not block the documentation-blocker workflow itself, but it is a real staging/pilot operational issue.
+This does not block the documentation-blocker workflow itself, but broader room-operations proof is still part of pilot validation.
 
 ### Revenue page proof harness brittleness
 The first proof harness assumed:

@@ -68,9 +68,10 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 - Before real staging proof of the revenue cockpit, configure the AthenaOne connector with the real revenue-monitoring endpoint in `revenuePath` and valid connector credentials for the pilot facility so the new preview/import path can exercise real downstream Athena data.
 - Before real staging proof of the time-of-service RCM workflow, review and confirm the seeded MA service catalog and charge schedule in `Admin -> Revenue Operations Settings` so expected-money totals reflect your pilot operating model rather than demo defaults.
 - Before clinician-role staging proof of the new optimizing flow, confirm whether the seeded bundled ICD-10/CPT lookup list is sufficient for pilot use or whether you want a larger reference dataset loaded for broader code coverage.
-- Staging proof on April 18, 2026 now shows a split result for room operations:
+- Staging proof on April 18, 2026 now shows:
   - room release was validated successfully on `Team J` / `Room 5` through `NeedsTurnover -> Ready`
-  - `Team A` still has stale occupied proof rooms (`Room 2`, `Room 3`, and `Proof Room`) that need cleanup or follow-through validation before broad role proof there.
+  - the earlier stale proof-room residue in `Team A` has been cleaned up
+  - broader room-operations validation in `Team A` is still needed during full role-by-role staging proof
 
 ## Repository Hygiene Follow-Up
 

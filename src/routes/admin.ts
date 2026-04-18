@@ -315,8 +315,7 @@ const createUserSchema = z.object({
   facilityIds: z.array(z.string().uuid()).optional(),
   facilityId: z.string().uuid().optional(),
   clinicId: z.string().uuid().optional(),
-  phone: z.string().optional(),
-  cognitoSub: z.string().optional()
+  phone: z.string().optional()
 });
 
 const directorySearchSchema = z.object({
@@ -380,6 +379,17 @@ function resolveDirectoryEmail(user: EntraDirectoryUser) {
   return email.toLowerCase();
 }
 
+function legacyIdentityAlias(existingCognitoSub: string | null | undefined, objectId: string) {
+  return existingCognitoSub || objectId;
+}
+
+function resolveUserDirectoryObjectId(user: {
+  entraObjectId?: string | null;
+  cognitoSub?: string | null;
+}) {
+  return user.entraObjectId || user.cognitoSub || null;
+}
+
 async function syncUserFromDirectory(params: {
   userId: string;
   directoryUser: EntraDirectoryUser | null;
@@ -423,7 +433,7 @@ async function syncUserFromDirectory(params: {
       directoryUserType: directoryUser.userType,
       directoryAccountEnabled: directoryUser.accountEnabled,
       lastDirectorySyncAt: syncTimestamp,
-      cognitoSub: existing.cognitoSub || directoryUser.objectId,
+      cognitoSub: legacyIdentityAlias(existing.cognitoSub, directoryUser.objectId),
       status:
         existing.status === "archived"
           ? "archived"
@@ -3492,7 +3502,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             directoryUserType: directoryUser.userType,
             directoryAccountEnabled: directoryUser.accountEnabled,
             lastDirectorySyncAt: new Date(),
-            cognitoSub: existing.cognitoSub || directoryUser.objectId,
+            cognitoSub: legacyIdentityAlias(existing.cognitoSub, directoryUser.objectId),
             activeFacilityId: existing.activeFacilityId || fallbackFacility
           }
         })
@@ -3509,7 +3519,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             directoryUserType: directoryUser.userType,
             directoryAccountEnabled: directoryUser.accountEnabled,
             lastDirectorySyncAt: new Date(),
-            cognitoSub: directoryUser.objectId,
+            cognitoSub: legacyIdentityAlias(null, directoryUser.objectId),
             activeFacilityId: fallbackFacility
           }
         });
@@ -3581,7 +3591,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     });
     assert(existing, 404, "User not found");
 
-    const objectId = existing.entraObjectId || existing.cognitoSub;
+    const objectId = resolveUserDirectoryObjectId(existing);
     assert(objectId, 400, "User is not linked to Microsoft Entra");
 
     const directoryUser = await getEntraDirectoryUserByObjectId(objectId, {
@@ -3660,7 +3670,6 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         name: displayName,
         status: (dto.status || "active").toLowerCase(),
         phone: dto.phone,
-        cognitoSub: dto.cognitoSub,
         activeFacilityId: fallbackFacility
       }
     });
@@ -3756,23 +3765,6 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return {
       ...updated,
       impact
-    };
-  });
-
-  app.post("/admin/users/:id/reset-password", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
-    if (isStrictEntraProvisioningMode()) {
-      throw new ApiError(405, "Password resets are managed in Microsoft Entra for this environment.");
-    }
-    const userId = (request.params as { id: string }).id;
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, status: true }
-    });
-    assert(user, 404, "User not found");
-    assert(user.status !== "archived", 400, "Cannot reset password for archived users");
-    return {
-      status: "queued",
-      message: `Password reset initiated for ${user.email}`
     };
   });
 

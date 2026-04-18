@@ -14,7 +14,7 @@ import {
   markEncounterRoomNeedsTurnoverInTx,
   markEncounterRoomOccupiedInTx
 } from "../lib/room-operations.js";
-import { syncRevenueCaseForEncounter } from "../lib/revenue-cycle.js";
+import { CLINICIAN_CODING_KEYS, ROOMING_SERVICE_CAPTURE_KEY, syncRevenueCaseForEncounter } from "../lib/revenue-cycle.js";
 import { hasActiveTemporaryClinicOverride, listActiveTemporaryClinicOverrideIds } from "../lib/assignment-overrides.js";
 import {
   formatClinicDisplayName,
@@ -326,13 +326,14 @@ async function findActiveTemplateForReason(params: {
   return templates[0] || null;
 }
 
-const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items";
 const STANDARD_ROOMING_REQUIRED_FIELDS = [
   "allergiesChanged",
   "medicationReconciliationChanged",
   "labChanged",
   "pharmacyChanged",
 ] as const;
+const ICD10_CODE_PATTERN = /^[A-TV-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?$/i;
+const CPT_HCPCS_CODE_PATTERN = /^(?:\d{5}|[A-Z]\d{4})$/i;
 
 type TemplateFieldDefinition = {
   key?: string;
@@ -377,6 +378,60 @@ function getRoomingDataMap(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function getDataMap(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function mergeTemplateData(
+  existing: unknown,
+  override?: Record<string, unknown>
+) {
+  if (!override) return getDataMap(existing);
+  return {
+    ...getDataMap(existing),
+    ...override,
+  };
+}
+
+function splitDelimitedCodes(value: unknown) {
+  if (typeof value !== "string") return [] as string[];
+  return value
+    .split(/[\n,;]+/)
+    .map((entry) => entry.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function ensureClinicianCheckoutRequirements(
+  encounter: {
+    clinicianData: unknown;
+  },
+  overrideData?: Record<string, unknown>
+) {
+  const clinicianData = mergeTemplateData(encounter.clinicianData, overrideData);
+  const diagnoses = splitDelimitedCodes(clinicianData[CLINICIAN_CODING_KEYS.diagnosisText]);
+  const procedures = splitDelimitedCodes(clinicianData[CLINICIAN_CODING_KEYS.procedureText]);
+
+  if (diagnoses.length === 0) {
+    throw new ApiError(400, "Clinician checkout requires at least one ICD-10 diagnosis code.");
+  }
+
+  const invalidDiagnoses = diagnoses.filter((code) => !ICD10_CODE_PATTERN.test(code));
+  if (invalidDiagnoses.length > 0) {
+    throw new ApiError(400, `Diagnosis codes must use real ICD-10 format: ${invalidDiagnoses.join(", ")}`);
+  }
+
+  if (procedures.length === 0) {
+    throw new ApiError(400, "Clinician checkout requires at least one CPT / HCPCS procedure code.");
+  }
+
+  const invalidProcedures = procedures.filter((code) => !CPT_HCPCS_CODE_PATTERN.test(code));
+  if (invalidProcedures.length > 0) {
+    throw new ApiError(400, `Procedure codes must use real CPT / HCPCS format: ${invalidProcedures.join(", ")}`);
+  }
 }
 
 function ensureStandardRoomingRequirements(encounter: {
@@ -481,13 +536,13 @@ async function ensureRequiredFields(
     }
   });
 
-  const dataMap =
-    overrideData ||
-    (templateType === "rooming"
-      ? (encounter.roomingData as Record<string, unknown> | null)
+  const baseData =
+    templateType === "rooming"
+      ? encounter.roomingData
       : templateType === "clinician"
-        ? (encounter.clinicianData as Record<string, unknown> | null)
-        : (encounter.checkoutData as Record<string, unknown> | null));
+        ? encounter.clinicianData
+        : encounter.checkoutData;
+  const dataMap = mergeTemplateData(baseData, overrideData);
 
   const missing = required.filter((field) => {
     const fieldType = fieldDefinitionsByKey.get(field)?.type;
@@ -787,7 +842,19 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         const required = Array.isArray(intakeTemplate.requiredFields)
           ? (intakeTemplate.requiredFields as string[])
           : [];
-        const missing = required.filter((field) => !(intakeData as Record<string, unknown>)[field]);
+        const fieldDefinitions = getTemplateFieldDefinitions(intakeTemplate.fieldsJson);
+        const fieldDefinitionsByKey = new Map<string, TemplateFieldDefinition>();
+        fieldDefinitions.forEach((field) => {
+          const key = field.key || field.name;
+          if (key) {
+            fieldDefinitionsByKey.set(key, field);
+          }
+        });
+        const intakeDataMap = getDataMap(intakeData);
+        const missing = required.filter((field) => {
+          const fieldType = fieldDefinitionsByKey.get(field)?.type;
+          return isTemplateFieldValueMissing(fieldType, intakeDataMap[field]);
+        });
         if (missing.length > 0) {
           throw new ApiError(400, `Required intake fields missing: ${missing.join(", ")}`);
         }
@@ -1253,6 +1320,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     }
 
     await ensureRequiredFields(encounter, "CheckOut", dto.data);
+    ensureClinicianCheckoutRequirements(encounter, dto.data);
 
     const data: Prisma.EncounterUpdateInput = {
       providerEndAt: new Date(),
