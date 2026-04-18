@@ -914,14 +914,14 @@ model RevenueCycleSettings {
   missedCollectionReasonsJson Json
   queueSlaJson                Json
   dayCloseDefaultsJson        Json
-  estimateDefaultsJson        Json
+  estimateDefaultsJson        Json?
   providerQueryTemplatesJson  Json
   athenaLinkTemplate          String?
   athenaChecklistDefaultsJson Json
   checklistDefaultsJson       Json
   serviceCatalogJson          Json
   chargeScheduleJson          Json
-  reimbursementRulesJson      Json
+  reimbursementRulesJson      Json?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 

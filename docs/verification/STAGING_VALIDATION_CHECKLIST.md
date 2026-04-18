@@ -8,11 +8,11 @@ Run this before pilot go/no-go:
    - AthenaOne staging connector inputs from [ATHENAONE_STAGING_RUNBOOK.md](../ATHENAONE_STAGING_RUNBOOK.md)
 2. Run `pnpm pilot:validate:staging` from repo root.
 3. Confirm a new report exists in `docs/verification/` named `staging-validation-*.md`.
-4. Verify both steps passed in the report:
-   - `Pilot Preflight`
-   - `Frontend Live Verification`
-   - `Role-by-Role Facility Switch Proof`
-   - `Threshold Trigger Evidence Across Roles`
+4. Verify the latest evidence matches the current expectation:
+   - `Pilot Preflight` should pass when staging infra is healthy
+   - `Frontend Live Verification` should pass with real auth
+   - `Role-by-Role Facility Switch Proof` may show Admin pass plus explicit role-token blockers until per-role auth is provided
+   - `Threshold Trigger Evidence Across Roles` may show Admin pass plus explicit role-token blockers until per-role auth is provided
 5. Attach that report to pilot readiness evidence.
 
 Role proof auth options:

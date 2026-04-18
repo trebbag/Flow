@@ -81,6 +81,61 @@ function findRoleScopedUser(users, { role, facilityId, clinicId }) {
 
 function buildRequiredData(templates, { type, clinicId }) {
   const normalizedType = String(type || "").toLowerCase();
+  const defaultsByType = {
+    checkin: {
+      "financial.registration_verified": true,
+      "financial.contact_info_verified": true,
+      "financial.eligibility_checked": true,
+      "financial.eligibility_status": "Verified",
+      "financial.coverage_issue_flag": false,
+      "financial.expected_collection_indicator": true,
+      "financial.patient_estimate_amount_cents": 2500,
+      "financial.expected_pos_amount_due_cents": 2500,
+      "financial.estimate_explained_to_patient": true,
+      "financial.prior_auth_required": false,
+      "financial.prior_auth_status": "NotRequired",
+      "financial.referral_required": false,
+      "financial.referral_status": "NotRequired",
+    },
+    rooming: {
+      allergiesChanged: false,
+      medicationReconciliationChanged: false,
+      labChanged: false,
+      pharmacyChanged: false,
+      "service.capture_items": [
+        {
+          id: "e2e-rooming-service",
+          catalogItemId: null,
+          label: "Vitals and intake completed",
+          sourceRole: "MA",
+          sourceTaskId: null,
+          quantity: 1,
+          note: null,
+          performedAt: new Date().toISOString(),
+          capturedByUserId: null,
+          suggestedProcedureCode: null,
+        },
+      ],
+    },
+    clinician: {
+      "coding.working_diagnosis_codes_text": "J01.90",
+      "coding.working_procedure_codes_text": "99213",
+      "coding.documentation_complete": true,
+      "documentation.chief_concern_summary": "Acute follow-up concern reviewed.",
+      "documentation.assessment_summary": "Assessment documented for staging proof.",
+      "documentation.plan_follow_up": "Plan and follow-up reviewed with patient.",
+      "documentation.orders_or_procedures": "No additional orders.",
+    },
+    checkout: {
+      "billing.collection_expected": true,
+      "billing.amount_due_cents": 2500,
+      "billing.amount_collected_cents": 2500,
+      "billing.collection_outcome": "CollectedInFull",
+      "billing.missed_reason": "",
+      "billing.tracking_note": "staging-live-proof",
+    },
+  };
+
   const matchingTemplate =
     templates.find((template) => {
       const templateType = String(template.type || "").toLowerCase();
@@ -98,13 +153,16 @@ function buildRequiredData(templates, { type, clinicId }) {
     }) ||
     null;
 
-  if (!matchingTemplate) return {};
+  if (!matchingTemplate) return { ...(defaultsByType[normalizedType] || {}) };
   const requiredFields = Array.isArray(matchingTemplate.requiredFields) && matchingTemplate.requiredFields.length > 0
     ? matchingTemplate.requiredFields
     : Array.isArray(matchingTemplate.fields)
       ? matchingTemplate.fields.filter((field) => field?.required).map((field) => field.key).filter(Boolean)
       : [];
-  return Object.fromEntries(requiredFields.map((field) => [field, "e2e-live"]));
+  return {
+    ...(defaultsByType[normalizedType] || {}),
+    ...Object.fromEntries(requiredFields.map((field) => [field, "e2e-live"])),
+  };
 }
 
 function isoDateToday() {
@@ -338,15 +396,33 @@ async function main() {
   });
   assert.ok(Array.isArray(assignments) && assignments.length > 0, "expected assignments for selected facility");
 
-  const targetAssignment =
-    assignments.find((row) => row.clinicStatus === "active" && row.isOperational && row.maRun === false) ||
-    assignments.find((row) => row.clinicStatus === "active" && row.isOperational);
-  assert.ok(targetAssignment, "expected at least one active operational clinic assignment");
+  const assignmentCandidates = [
+    ...assignments.filter((row) => row.clinicStatus === "active" && row.isOperational && row.maRun === false),
+    ...assignments.filter((row) => row.clinicStatus === "active" && row.isOperational && row.maRun === true),
+  ].filter((row, index, rows) => rows.findIndex((entry) => entry.clinicId === row.clinicId) === index);
 
-  const clinic = clinics.find((row) => row.id === targetAssignment.clinicId);
+  let targetAssignment = null;
+  let clinic = null;
+  let room = null;
+  for (const candidate of assignmentCandidates) {
+    if (!candidate.roomCount || candidate.roomCount <= 0) continue;
+    const candidateClinic = clinics.find((row) => row.id === candidate.clinicId);
+    if (!candidateClinic || candidateClinic.status !== "active") continue;
+    const readyRoom = await ensureReadyRoom({
+      clinicId: candidateClinic.id,
+      facilityId: originalFacilityId,
+      adminAuth,
+    });
+    if (!readyRoom) continue;
+    targetAssignment = candidate;
+    clinic = candidateClinic;
+    room = readyRoom;
+    break;
+  }
+
+  assert.ok(targetAssignment, "expected at least one active operational clinic assignment with a ready room");
   assert.ok(clinic, "expected clinic for selected assignment");
-  assert.equal(clinic.status, "active", "selected clinic must be active");
-  assert.ok(targetAssignment.roomCount > 0, "selected clinic must have at least one active room");
+  assert.ok(room, "expected at least one operationally Ready room for selected clinic");
 
   const users = await request(`/admin/users?facilityId=${originalFacilityId}`, {
     auth: { ...adminAuth, facilityId: originalFacilityId },
@@ -406,13 +482,6 @@ async function main() {
   const roomingData = buildRequiredData(templates, { type: "rooming", clinicId: clinic.id });
   const clinicianData = buildRequiredData(templates, { type: "clinician", clinicId: clinic.id });
   const checkoutData = buildRequiredData(templates, { type: "checkout", clinicId: clinic.id });
-
-  const room = await ensureReadyRoom({
-    clinicId: clinic.id,
-    facilityId: originalFacilityId,
-    adminAuth,
-  });
-  assert.ok(room, "expected at least one operationally Ready room for selected clinic");
 
   const providerLastName =
     (Array.isArray(incomingReference?.samples?.providerLastNames) &&
