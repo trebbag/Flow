@@ -33,23 +33,20 @@ function asRole(value?: string | null): RoleName | null {
   return null;
 }
 
+function splitEnvList(value?: string | null) {
+  return (value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 const jwtSecret = env.JWT_SECRET ? new TextEncoder().encode(env.JWT_SECRET) : null;
 const remoteJwks = env.JWT_JWKS_URI ? createRemoteJWKSet(new URL(env.JWT_JWKS_URI)) : null;
-const jwtSubjectClaims = env.JWT_SUBJECT_CLAIMS.split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-const jwtRoleClaims = env.JWT_ROLE_CLAIMS.split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-const jwtEmailClaims = env.JWT_EMAIL_CLAIMS.split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-const jwtClinicClaims = env.JWT_CLINIC_ID_CLAIMS.split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-const jwtFacilityClaims = env.JWT_FACILITY_ID_CLAIMS.split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
+const jwtSubjectClaims = splitEnvList(env.JWT_SUBJECT_CLAIMS);
+const jwtRoleClaims = splitEnvList(env.JWT_ROLE_CLAIMS);
+const jwtEmailClaims = splitEnvList(env.JWT_EMAIL_CLAIMS);
+const jwtClinicClaims = splitEnvList(env.JWT_CLINIC_ID_CLAIMS);
+const jwtFacilityClaims = splitEnvList(env.JWT_FACILITY_ID_CLAIMS);
 const jwtIssuers = Array.from(
   new Set(
     [env.JWT_ISSUER]
@@ -66,8 +63,7 @@ const jwtIssuers = Array.from(
 );
 const jwtAudiences = Array.from(
   new Set(
-    env.JWT_AUDIENCE.split(",")
-      .map((value) => value.trim())
+    splitEnvList(env.JWT_AUDIENCE)
       .filter(Boolean)
       .flatMap((value) => {
         const derived = [value];
