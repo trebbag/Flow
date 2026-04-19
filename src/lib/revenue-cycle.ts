@@ -634,8 +634,15 @@ function isNonEmptyValue(value: unknown) {
   return value !== null && value !== undefined;
 }
 
-function areServiceDetailFieldsComplete(detail: Record<string, unknown>, requiredKeys: string[]) {
-  return requiredKeys.every((key) => isNonEmptyValue(detail[key]));
+function hasAnyServiceDetailValue(detail: Record<string, unknown>, keys: string[]) {
+  return keys.some((key) => isNonEmptyValue(detail[key]));
+}
+
+function areServiceDetailFieldsComplete(detail: Record<string, unknown>, requiredKeys: Array<string | string[]>) {
+  return requiredKeys.every((keyOrKeys) => {
+    const keys = Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys];
+    return hasAnyServiceDetailValue(detail, keys);
+  });
 }
 
 export function isServiceCaptureDetailComplete(item: {
@@ -650,13 +657,13 @@ export function isServiceCaptureDetailComplete(item: {
     : {};
   switch (schemaKey) {
     case "vaccine":
-      return areServiceDetailFieldsComplete(detail, ["productLabel", "site", "route", "lotNumber", "expirationDate", "dose"]);
+      return areServiceDetailFieldsComplete(detail, [["productLabel", "productServiceLabel"], "site", "route", "lotNumber", "expirationDate", "dose"]);
     case "injection_medication":
-      return areServiceDetailFieldsComplete(detail, ["medicationLabel", "dose", "doseUnit", "route", "site", "lotNumber", "expirationDate"]);
+      return areServiceDetailFieldsComplete(detail, [["medicationLabel", "productServiceLabel"], "dose", ["doseUnit", "unit"], "route", "site", "lotNumber", "expirationDate"]);
     case "point_of_care_test":
       return areServiceDetailFieldsComplete(detail, ["testName", "specimenSource", "result"]);
     case "specimen_collection":
-      return areServiceDetailFieldsComplete(detail, ["specimenType", "collectionMethod"]);
+      return areServiceDetailFieldsComplete(detail, ["specimenType", ["collectionMethod", "collectionMethodSite"]]);
     case "procedure_performed":
       return areServiceDetailFieldsComplete(detail, ["procedureSummary"]);
     case "generic_service":

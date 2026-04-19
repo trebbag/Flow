@@ -21,6 +21,7 @@ export interface Encounter {
   clinicName: string;
   clinicShortCode: string;
   clinicColor: string;
+  maRun?: boolean;
   provider: string;
   providerInitials: string;
   visitType: string;

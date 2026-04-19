@@ -24,7 +24,7 @@ import {
   formatUserDisplayName
 } from "../lib/display-names.js";
 
-const allowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
+const defaultAllowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   Incoming: ["Lobby"],
   Lobby: ["Rooming"],
   Rooming: ["ReadyForProvider"],
@@ -33,6 +33,16 @@ const allowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   CheckOut: ["Optimized"],
   Optimized: []
 };
+
+function getAllowedTransitionsForEncounter(
+  currentStatus: EncounterStatus,
+  options?: { maRun?: boolean | null },
+) {
+  if (options?.maRun && currentStatus === "Rooming") {
+    return ["CheckOut"] as EncounterStatus[];
+  }
+  return defaultAllowedTransitions[currentStatus] || [];
+}
 
 const cancelReasons = [
   "no_show",
@@ -627,6 +637,7 @@ async function listEncountersForRole(filters: {
           name: true,
           status: true,
           shortCode: true,
+          maRun: true,
           cardTags: true,
           cardColor: true
         }
@@ -690,6 +701,7 @@ async function getHydratedEncounterView(encounterId: string) {
           name: true,
           status: true,
           shortCode: true,
+          maRun: true,
           cardTags: true,
           cardColor: true
         }
@@ -1089,6 +1101,11 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
     assert(encounter, 404, "Encounter not found");
     await assertEncounterInScope(encounter, request.user!);
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: encounter.clinicId },
+      select: { maRun: true },
+    });
+    assert(clinic, 404, "Clinic not found");
 
     await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
@@ -1096,9 +1113,13 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       throw new ApiError(400, "Version mismatch");
     }
 
-    const allowedNext = allowedTransitions[encounter.currentStatus] || [];
+    const allowedNext = getAllowedTransitionsForEncounter(encounter.currentStatus, { maRun: clinic.maRun });
     const isSkip = !allowedNext.includes(dto.toStatus);
     const isAdmin = request.user!.role === RoleName.Admin;
+    const isMaRunRoomingToCheckout =
+      clinic.maRun &&
+      encounter.currentStatus === EncounterStatus.Rooming &&
+      dto.toStatus === EncounterStatus.CheckOut;
 
     if (isSkip && !isAdmin) {
       throw new ApiError(400, "Invalid transition");
@@ -1108,8 +1129,11 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       throw new ApiError(400, "Reason code required for override");
     }
 
-    await ensureRequiredFields(encounter, dto.toStatus);
-    if (dto.toStatus === "ReadyForProvider") {
+    await ensureRequiredFields(
+      encounter,
+      isMaRunRoomingToCheckout ? EncounterStatus.ReadyForProvider : dto.toStatus,
+    );
+    if (dto.toStatus === "ReadyForProvider" || isMaRunRoomingToCheckout) {
       ensureStandardRoomingRequirements(encounter);
     }
 
@@ -1122,6 +1146,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     if (dto.toStatus === "ReadyForProvider") updates.roomingCompleteAt = encounter.roomingCompleteAt ?? new Date();
     if (dto.toStatus === "Optimizing") updates.providerStartAt = encounter.providerStartAt ?? new Date();
     if (dto.toStatus === "CheckOut") updates.providerEndAt = encounter.providerEndAt ?? new Date();
+    if (isMaRunRoomingToCheckout) updates.roomingCompleteAt = encounter.roomingCompleteAt ?? new Date();
 
     const updated = await prisma.encounter.update({
       where: { id: encounterId },

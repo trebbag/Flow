@@ -447,6 +447,7 @@ export interface EncounterView {
   clinicName: string;
   clinicShortCode: string;
   clinicColor: string;
+  maRun?: boolean;
   providerName: string;
   providerInitials: string;
   reasonName: string;

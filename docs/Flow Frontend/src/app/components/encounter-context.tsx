@@ -53,6 +53,7 @@ type LiveClinic = {
   shortCode?: string;
   cardColor?: string;
   timezone?: string;
+  maRun?: boolean;
 };
 
 type LiveReason = {
@@ -260,6 +261,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       clinicName: labelClinicName(raw.clinicName || clinic?.name || "Clinic", raw.clinic?.status),
       clinicShortCode: clinic?.shortCode || clinic?.name?.slice(0, 2)?.toUpperCase() || "CL",
       clinicColor: safeClinicColor,
+      maRun: Boolean(raw.clinic?.maRun ?? clinic?.maRun),
       provider: providerName,
       providerInitials: initials(providerName),
       visitType: reasonName,
@@ -318,6 +320,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       clinicName: labelClinicName(clinic?.name || "Clinic", row.clinic?.status),
       clinicShortCode: clinic?.shortCode || clinic?.name?.slice(0, 2)?.toUpperCase() || "CL",
       clinicColor: clinic?.cardColor || colorFromText(clinic?.name || row.clinicId),
+      maRun: Boolean(clinic?.maRun),
       provider: providerName,
       providerInitials: initials(providerName),
       visitType: reasonName,
@@ -389,7 +392,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
 
     if (clinicRowsResult.status === "fulfilled") {
       clinicsRef.current = Object.fromEntries(
-        clinicRowsResult.value.map((c: any) => [c.id, { id: c.id, name: c.name, shortCode: c.shortCode, cardColor: c.cardColor, timezone: c.timezone }]),
+        clinicRowsResult.value.map((c: any) => [c.id, { id: c.id, name: c.name, shortCode: c.shortCode, cardColor: c.cardColor, timezone: c.timezone, maRun: Boolean(c.maRun) }]),
       );
     } else {
       errors.push(`Clinics: ${clinicRowsResult.reason instanceof Error ? clinicRowsResult.reason.message : "failed to load"}`);

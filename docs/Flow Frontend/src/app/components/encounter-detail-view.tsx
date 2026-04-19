@@ -51,12 +51,20 @@ import type { RevenueCaseDetail, RevenueServiceCaptureItem, RevenueSettings } fr
 
 // ── Status progression ──
 
-const statusFlow: EncounterStatus[] = [
+const defaultStatusFlow: EncounterStatus[] = [
   "Incoming",
   "Lobby",
   "Rooming",
   "ReadyForProvider",
   "Optimizing",
+  "CheckOut",
+  "Optimized",
+];
+
+const maRunStatusFlow: EncounterStatus[] = [
+  "Incoming",
+  "Lobby",
+  "Rooming",
   "CheckOut",
   "Optimized",
 ];
@@ -71,7 +79,7 @@ const stepIcons: Record<EncounterStatus, React.ElementType> = {
   Optimized: CheckCircle2,
 };
 
-const nextStatusMap: Record<string, EncounterStatus> = {
+const defaultNextStatusMap: Record<string, EncounterStatus> = {
   Lobby: "Rooming",
   Rooming: "ReadyForProvider",
   ReadyForProvider: "Optimizing",
@@ -79,13 +87,31 @@ const nextStatusMap: Record<string, EncounterStatus> = {
   CheckOut: "Optimized",
 };
 
-const nextStatusActionLabel: Record<string, string> = {
+const defaultNextStatusActionLabel: Record<string, string> = {
   Lobby: "Begin Rooming",
   Rooming: "Ready for Provider",
   ReadyForProvider: "Start Visit",
   Optimizing: "Check Out",
   CheckOut: "Complete Check Out",
 };
+
+function getStatusFlowForEncounter(encounter: Pick<Encounter, "maRun"> | null | undefined) {
+  return encounter?.maRun ? maRunStatusFlow : defaultStatusFlow;
+}
+
+function getNextStatusForEncounter(encounter: Pick<Encounter, "maRun"> | null | undefined, status: EncounterStatus) {
+  if (encounter?.maRun && status === "Rooming") {
+    return "CheckOut" satisfies EncounterStatus;
+  }
+  return defaultNextStatusMap[status];
+}
+
+function getNextStatusActionLabelForEncounter(encounter: Pick<Encounter, "maRun"> | null | undefined, status: EncounterStatus) {
+  if (encounter?.maRun && status === "Rooming") {
+    return "Check Out";
+  }
+  return defaultNextStatusActionLabel[status];
+}
 
 const ROOMING_SERVICE_CAPTURE_KEY = "service.capture_items";
 const CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY = "documentation.athena_attestation_note";
@@ -305,6 +331,7 @@ function parseValidatedCodes(
 
 function stageDurationSeconds(encounter: Encounter, status: EncounterStatus, nowMs: number) {
   if (status === "Incoming" || status === "Optimized") return null;
+  const statusFlow = getStatusFlowForEncounter(encounter);
 
   const events = [...(encounter.statusEvents || [])]
     .flatMap((event) => {
@@ -1074,6 +1101,7 @@ export function EncounterDetailView() {
     roomNumber: localRoom || baseEnc.roomNumber,
     currentStageStartAtIso: localStatus !== null ? localStageStartIso || baseEnc.currentStageStartAtIso : baseEnc.currentStageStartAtIso,
   };
+  const encounterStatusFlow = getStatusFlowForEncounter(enc);
 
   // Available rooms for this clinic. Operational data wins so non-ready rooms cannot be selected.
   const fallbackRooms = ctx.getAvailableRoomsForClinic(baseEnc.clinicId).map((room) => ({
@@ -1137,11 +1165,11 @@ export function EncounterDetailView() {
   }
 
   const statusColor = statusColors[enc.status];
-  const currentIdx = statusFlow.indexOf(enc.status);
+  const currentIdx = encounterStatusFlow.indexOf(enc.status);
   const threshold = defaultThresholds.find((t) => t.status === enc.status);
   const encTasks = encMaTasks;
   const { label: templateLabel, fields: templateFields } = safeTemplate;
-  const canAdvance = !!nextStatusMap[enc.status];
+  const canAdvance = !!getNextStatusForEncounter(enc, enc.status);
 
   const currentTemplateVals = templateValues[enc.status] || {};
   const fieldsForCompletion = enc.status === "Rooming" ? [...standardRoomingFields, ...templateFields] : templateFields;
@@ -1356,7 +1384,7 @@ export function EncounterDetailView() {
       });
       return;
     }
-    const next = nextStatusMap[enc.status];
+    const next = getNextStatusForEncounter(enc, enc.status);
     if (!next) return;
 
     if (!allRequiredComplete) {
@@ -1367,7 +1395,7 @@ export function EncounterDetailView() {
       return;
     }
 
-    // For rooming → ReadyForProvider: validate
+    // For rooming completion: validate
     if (enc.status === "Rooming" && !roomingReady) {
       setShowRequiredFieldErrors(true);
       toast.error("Complete all required fields before advancing", {
@@ -1562,7 +1590,7 @@ export function EncounterDetailView() {
                   }`}
                   style={{ fontWeight: 500, backgroundColor: isAdvancing || (enc.status === "Rooming" && !roomingReady) ? undefined : statusColor }}
                 >
-                  {isAdvancing ? "Saving..." : nextStatusActionLabel[enc.status]}
+                  {isAdvancing ? "Saving..." : getNextStatusActionLabelForEncounter(enc, enc.status)}
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -1678,7 +1706,7 @@ export function EncounterDetailView() {
       {/* ── Status Stepper ── */}
       <div className="shrink-0 px-6 py-3 bg-gray-50/80 border-b border-gray-100">
         <div className="flex items-center gap-1">
-          {statusFlow.map((status, idx) => {
+          {encounterStatusFlow.map((status, idx) => {
             const StepIcon = stepIcons[status];
             const isPast = idx < currentIdx || completedStages.has(status);
             const isCurrent = idx === currentIdx;
@@ -1714,7 +1742,7 @@ export function EncounterDetailView() {
                     {statusLabels[status]}
                   </span>
                 </div>
-                {idx < statusFlow.length - 1 && (
+                {idx < encounterStatusFlow.length - 1 && (
                   <div
                     className="flex-1 h-0.5 mx-2 rounded-full transition-colors"
                     style={{
@@ -1911,7 +1939,7 @@ export function EncounterDetailView() {
                     <span className="text-[12px]" style={{ fontWeight: 600 }}>Timeline</span>
                   </div>
                   <div className="space-y-0">
-                    {statusFlow.slice(0, currentIdx + 1).map((status, idx) => {
+                    {encounterStatusFlow.slice(0, currentIdx + 1).map((status, idx) => {
                       const color = statusColors[status];
                       const isLast = idx === currentIdx;
                       const durationLabel = stageDurationLabel(enc, status, nowMs);
@@ -1936,7 +1964,7 @@ export function EncounterDetailView() {
                               {status === "Rooming" && (enc.assignedMA ? `Roomed by ${enc.assignedMA}${localRoom ? ` · ${localRoom}` : ""}` : "Rooming started")}
                               {status === "ReadyForProvider" && `Handed off to ${enc.provider}`}
                               {status === "Optimizing" && `Visit started with ${enc.provider}`}
-                              {status === "CheckOut" && "Visit complete, at front desk"}
+                              {status === "CheckOut" && (enc.maRun ? "Rooming complete, at front desk" : "Visit complete, at front desk")}
                               {status === "Optimized" && "Encounter completed"}
                             </p>
                           </div>
@@ -1964,7 +1992,7 @@ export function EncounterDetailView() {
                 </h3>
                 <p className="text-[13px] text-muted-foreground mb-1">
                   {enc.patientId} is waiting to be roomed for a <span style={{ fontWeight: 500 }}>{enc.visitType}</span> visit
-                  with <span style={{ fontWeight: 500 }}>{enc.provider}</span>.
+                  {enc.maRun ? "." : <> with <span style={{ fontWeight: 500 }}>{enc.provider}</span>.</>}
                 </p>
                 <p className="text-[12px] text-muted-foreground mb-6">
                   Start rooming from the MA Board. Front Desk can review this patient, but workflow handoff begins with the assigned MA.
@@ -2480,7 +2508,7 @@ export function EncounterDetailView() {
                           style={{ fontWeight: 500 }}
                         >
                           <CheckCircle2 className="w-5 h-5" />
-                          {isAdvancing ? "Saving..." : "Ready for Provider"}
+                          {isAdvancing ? "Saving..." : getNextStatusActionLabelForEncounter(enc, enc.status)}
                           <ChevronRight className="w-4 h-4 ml-1" />
                         </button>
                       )}
@@ -2986,7 +3014,7 @@ export function EncounterDetailView() {
                         style={{ fontWeight: 500, backgroundColor: statusColor }}
                       >
                         <CheckCircle2 className="w-5 h-5" />
-                        {isAdvancing ? "Saving..." : nextStatusActionLabel[enc.status]}
+                        {isAdvancing ? "Saving..." : getNextStatusActionLabelForEncounter(enc, enc.status)}
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </button>
                     )}
@@ -3023,7 +3051,7 @@ export function EncounterDetailView() {
                     }`}
                     style={{ fontWeight: 500, backgroundColor: statusColor }}
                   >
-                    {isAdvancing ? "Saving..." : nextStatusActionLabel[enc.status]}
+                    {isAdvancing ? "Saving..." : getNextStatusActionLabelForEncounter(enc, enc.status)}
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 )}

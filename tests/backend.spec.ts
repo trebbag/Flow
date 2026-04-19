@@ -593,6 +593,111 @@ describe("Flow backend core relationships", () => {
     expect(encounter.currentStatus).toBe("Lobby");
   });
 
+  it("moves MA-run encounters from rooming directly to checkout", async () => {
+    const ctx = await bootstrapCore();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-MA-RUN-ROOMING-1",
+        clinicId: ctx.maRunClinic.id,
+        reasonForVisitId: ctx.reasonMaRun.id,
+        walkIn: true,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    let encounter = created.json();
+
+    const toRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.maTwo.id, RoleName.MA),
+      payload: {
+        toStatus: "Rooming",
+        version: encounter.version,
+      },
+    });
+    expect(toRooming.statusCode).toBe(200);
+    encounter = toRooming.json();
+
+    const saveRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.maTwo.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomB.id,
+        data: {
+          allergiesChanged: "No",
+          medicationReconciliationChanged: "No",
+          labChanged: "No",
+          pharmacyChanged: "No",
+          "service.capture_items": [
+            {
+              id: "svc-ma-run-1",
+              catalogItemId: "svc-flu-shot",
+              label: "Flu Shot",
+              sourceRole: "MA",
+              quantity: 1,
+              suggestedProcedureCode: "90471",
+              detailSchemaKey: "vaccine",
+              detailJson: {
+                productServiceLabel: "Influenza vaccine",
+                site: "Left deltoid",
+                route: "IM",
+                lotNumber: "LOT-123",
+                expirationDate: "2026-12-31",
+                dose: "0.5 mL",
+              },
+              detailComplete: true,
+            },
+          ],
+        },
+      },
+    });
+    expect(saveRooming.statusCode).toBe(200);
+    encounter = saveRooming.json();
+
+    const toReadyBlocked = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.maTwo.id, RoleName.MA),
+      payload: {
+        toStatus: "ReadyForProvider",
+        version: encounter.version,
+      },
+    });
+    expect(toReadyBlocked.statusCode).toBe(400);
+    expect(toReadyBlocked.json().message).toContain("Invalid transition");
+
+    const toCheckout = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.maTwo.id, RoleName.MA),
+      payload: {
+        toStatus: "CheckOut",
+        version: encounter.version,
+      },
+    });
+    expect(toCheckout.statusCode).toBe(200);
+    expect(toCheckout.json()).toEqual(
+      expect.objectContaining({
+        currentStatus: "CheckOut",
+        providerId: null,
+        roomId: ctx.clinicRoomB.id,
+      }),
+    );
+    expect(toCheckout.json().roomingCompleteAt).toBeTruthy();
+    expect(toCheckout.json().providerEndAt).toBeTruthy();
+
+    const roomState = await prisma.roomOperationalState.findUnique({
+      where: { roomId: ctx.clinicRoomB.id },
+    });
+    expect(roomState?.currentStatus).toBe("NeedsTurnover");
+    expect(roomState?.occupiedEncounterId).toBeNull();
+  });
+
   it("returns office-manager dashboard aggregates", async () => {
     const ctx = await bootstrapCore();
     const date = ctx.day.toISOString().slice(0, 10);
