@@ -534,7 +534,10 @@ async function main() {
     await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Start Visit" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("heading", { name: "Ready for Provider" }).waitFor({ timeout: 10_000 });
+    await page.getByText("The provider will start the visit from the Clinician Board.", { exact: false }).waitFor({
+      timeout: 10_000,
+    });
 
     await page.goto(`${frontendBaseUrl}/clinician`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Clinician Board" }).waitFor({ timeout: 10_000 });
