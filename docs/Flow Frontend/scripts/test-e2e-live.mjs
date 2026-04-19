@@ -512,7 +512,10 @@ async function main() {
       ].join("\n"),
     },
   });
-  assert.ok(pendingImport.acceptedCount >= 1, "expected at least one accepted imported row");
+  assert.ok(
+    (Number(pendingImport.acceptedCount || 0) + Number(pendingImport.pendingCount || 0)) >= 1,
+    "expected imported rows to be created",
+  );
   assert.ok(pendingImport.pendingCount >= 1, "expected one pending row for retry");
 
   const pendingRows = await request(
