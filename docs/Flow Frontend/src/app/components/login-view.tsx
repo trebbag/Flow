@@ -12,8 +12,9 @@ import {
   resetMicrosoftLoginState,
   startMicrosoftLogin,
 } from "./microsoft-auth";
-import { completeMicrosoftSignIn } from "./complete-microsoft-signin";
 import type { Role } from "./types";
+import { useAppBootstrap } from "./app-bootstrap";
+import { BootstrapLoadingScreen } from "./bootstrap-loading-screen";
 
 const roles: Role[] = [
   "Admin",
@@ -64,6 +65,7 @@ function parseNext(locationSearch: string) {
 export function LoginView() {
   const navigate = useNavigate();
   const location = useLocation();
+  const bootstrap = useAppBootstrap();
   const [mode, setMode] = useState<AuthMode>(defaultMode);
   const [role, setRole] = useState<Role>("Admin");
   const [userId, setUserId] = useState("");
@@ -73,7 +75,6 @@ export function LoginView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [microsoftAccountLabel, setMicrosoftAccountLabel] = useState("");
-  const [completingMicrosoft, setCompletingMicrosoft] = useState(false);
 
   const nextPath = useMemo(() => parseNext(location.search), [location.search]);
 
@@ -131,15 +132,14 @@ export function LoginView() {
 
   useEffect(() => {
     if (!microsoftConfigured) return;
+    if (!loginRedirectReturnDetected) return;
 
     let cancelled = false;
-    if (loginRedirectReturnDetected) {
-      setCompletingMicrosoft(true);
-      setLoading(true);
-      setError(null);
-    }
+    setLoading(true);
+    setError(null);
 
-    void completeMicrosoftSignIn(nextPath)
+    void bootstrap
+      .completeMicrosoftBootstrap(nextPath)
       .then((target) => {
         if (cancelled) return;
         if (!target) return;
@@ -147,19 +147,17 @@ export function LoginView() {
       })
       .catch((err) => {
         if (cancelled) return;
-        applySession(null);
         setError(err instanceof Error ? err.message : "Microsoft sign-in failed");
       })
       .finally(() => {
         if (cancelled) return;
-        setCompletingMicrosoft(false);
         setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [loginRedirectReturnDetected, microsoftConfigured, navigate, nextPath]);
+  }, [bootstrap, loginRedirectReturnDetected, microsoftConfigured, navigate, nextPath]);
 
   useEffect(() => {
     const existing = loadSession();
@@ -268,28 +266,22 @@ export function LoginView() {
   const showModeSwitcher = !productionStyleAuthOnly;
   const modeColumns = enableDevHeaderLogin ? "grid-cols-3" : microsoftConfigured ? "grid-cols-2" : "grid-cols-1";
 
-  if (completingMicrosoft) {
+  if (loginRedirectReturnDetected || bootstrap.isBootstrapping) {
     return (
-      <div className="min-h-screen bg-[#f7f8fb] flex items-center justify-center p-4">
-        <div className="w-full max-w-[480px] rounded-2xl border border-gray-200 bg-white shadow-sm px-6 py-8">
-          <div className="flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
-            <div>
-              <h1 className="text-[18px] tracking-tight" style={{ fontWeight: 700 }}>
-                Completing Microsoft sign-in
-              </h1>
-              <p className="text-[12px] text-muted-foreground">
-                We’re finishing the secure redirect and loading your Flow access.
-              </p>
-            </div>
-          </div>
-          {error && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
-      </div>
+      <BootstrapLoadingScreen
+        phase={bootstrap.phase === "idle" ? "microsoft_redirect" : bootstrap.phase}
+        error={bootstrap.error || error}
+        onRetry={() => {
+          void bootstrap.retryBootstrap().then((target) => {
+            if (target) {
+              navigate(target, { replace: true });
+            }
+          });
+        }}
+        onReturnToLogin={() => {
+          void handleClearSession();
+        }}
+      />
     );
   }
 

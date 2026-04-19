@@ -70,6 +70,127 @@ function authHeaders() {
   };
 }
 
+function buildRequiredData(templates, { type, clinicId }) {
+  const normalizedType = String(type || "").toLowerCase();
+  const defaultsByType = {
+    rooming: {
+      allergiesChanged: false,
+      medicationReconciliationChanged: false,
+      labChanged: false,
+      pharmacyChanged: false,
+      "service.capture_items": [
+        {
+          id: "browser-rooming-service",
+          catalogItemId: "svc-venipuncture",
+          label: "Venipuncture",
+          sourceRole: "MA",
+          sourceTaskId: null,
+          quantity: 1,
+          note: null,
+          performedAt: new Date().toISOString(),
+          capturedByUserId: null,
+          suggestedProcedureCode: "36415",
+          detailSchemaKey: "specimen_collection",
+          detailJson: {
+            specimenType: "Blood",
+            collectionMethod: "Venipuncture",
+            sentToLab: "Yes",
+          },
+          detailComplete: true,
+        },
+      ],
+    },
+  };
+
+  const matchingTemplate =
+    templates.find((template) => {
+      const templateType = String(template.type || "").toLowerCase();
+      return templateType === normalizedType && template.clinicId === clinicId;
+    }) ||
+    templates.find((template) => String(template.type || "").toLowerCase() === normalizedType && !template.clinicId) ||
+    null;
+
+  if (!matchingTemplate) return { ...(defaultsByType[normalizedType] || {}) };
+
+  const requiredFields =
+    Array.isArray(matchingTemplate.requiredFields) && matchingTemplate.requiredFields.length > 0
+      ? matchingTemplate.requiredFields
+      : Array.isArray(matchingTemplate.fields)
+        ? matchingTemplate.fields.filter((field) => field?.required).map((field) => field.key).filter(Boolean)
+        : [];
+
+  return {
+    ...(defaultsByType[normalizedType] || {}),
+    ...Object.fromEntries(requiredFields.map((field) => [field, "browser-e2e"])),
+  };
+}
+
+async function ensureReadyRoom({ clinicId, facilityId }) {
+  const fetchRoomCards = async () => request(`/rooms/live?clinicId=${clinicId}`, { auth: true });
+
+  let roomCards = await fetchRoomCards();
+  let room = Array.isArray(roomCards)
+    ? roomCards.find((row) => row.operationalStatus === "Ready")
+    : null;
+  if (room) return room;
+
+  const recoverableRoom = Array.isArray(roomCards)
+    ? roomCards.find(
+        (row) =>
+          row.roomId &&
+          row.actualOperationalStatus !== "Occupied" &&
+          row.actualOperationalStatus !== "Hold" &&
+          row.dayStartCompleted === false,
+      )
+    : null;
+
+  if (recoverableRoom?.roomId) {
+    await request("/rooms/checklists/day-start", {
+      method: "POST",
+      auth: true,
+      body: {
+        roomId: recoverableRoom.roomId,
+        clinicId,
+        completed: true,
+        items: [
+          { key: "visual-ready", label: "Room visually ready", completed: true },
+          { key: "baseline-supplies", label: "Baseline supplies and equipment present", completed: true },
+          { key: "prior-holds-reviewed", label: "Prior holds reviewed", completed: true },
+          { key: "status-confirmed", label: "Room status confirmed", completed: true },
+        ],
+      },
+    });
+    roomCards = await fetchRoomCards();
+    room = Array.isArray(roomCards)
+      ? roomCards.find((row) => row.operationalStatus === "Ready")
+      : null;
+  }
+
+  if (!room) {
+    const turnoverRoom = Array.isArray(roomCards)
+      ? roomCards.find(
+          (row) =>
+            row.roomId &&
+            row.dayStartCompleted === true &&
+            (row.actualOperationalStatus === "NeedsTurnover" || row.actualOperationalStatus === "NotReady"),
+        )
+      : null;
+    if (turnoverRoom?.roomId) {
+      await request(`/rooms/${turnoverRoom.roomId}/actions/mark-ready`, {
+        method: "POST",
+        auth: true,
+        body: { clinicId, facilityId },
+      });
+      roomCards = await fetchRoomCards();
+      room = Array.isArray(roomCards)
+        ? roomCards.find((row) => row.operationalStatus === "Ready")
+        : null;
+    }
+  }
+
+  return room || null;
+}
+
 async function request(path, { method = "GET", body, auth = false } = {}) {
   const headers = auth ? authHeaders() : {};
   if (body) {
@@ -276,6 +397,31 @@ async function main() {
   });
   assert.ok(createdEncounter?.id, "encounter create should return id");
 
+  const templates = await request(
+    `/admin/templates?facilityId=${originalFacilityId}&clinicId=${clinic.id}&reasonForVisitId=${reason.id}`,
+    { auth: true },
+  );
+  const roomingData = buildRequiredData(templates, { type: "rooming", clinicId: clinic.id });
+  const readyRoom = await ensureReadyRoom({ clinicId: clinic.id, facilityId: originalFacilityId });
+  assert.ok(readyRoom?.roomId || readyRoom?.id, "expected an operationally ready room for rooming proof");
+
+  const movedToRooming = await request(`/encounters/${createdEncounter.id}/status`, {
+    method: "PATCH",
+    auth: true,
+    body: {
+      toStatus: "Rooming",
+      version: createdEncounter.version,
+    },
+  });
+  await request(`/encounters/${createdEncounter.id}/rooming`, {
+    method: "PATCH",
+    auth: true,
+    body: {
+      roomId: readyRoom.roomId || readyRoom.id,
+      data: roomingData,
+    },
+  });
+
   let preview = null;
   let browser;
   let context;
@@ -316,6 +462,22 @@ async function main() {
 
     await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
+
+    await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Ready for Provider" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Ready for Provider" }).click();
+    await page.getByText(`${createdEncounter.patientId} → Ready for Provider`, { exact: false }).waitFor({ timeout: 10_000 });
+
+    await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
+    const roomingColumn = page.locator("div").filter({ has: page.getByText("Rooming", { exact: true }) }).first();
+    const readyForProviderColumn = page.locator("div").filter({ has: page.getByText("Ready for Provider", { exact: true }) }).first();
+    await expectPoll(async () => await roomingColumn.getByText(createdEncounter.patientId, { exact: true }).count(), 0);
+    await expectPoll(async () => await readyForProviderColumn.getByText(createdEncounter.patientId, { exact: true }).count(), 1);
+
+    await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
+    await page.getByText("Ready for Provider", { exact: true }).waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Start Visit" }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/clinician`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Clinician Board" }).waitFor({ timeout: 10_000 });
@@ -384,6 +546,15 @@ async function main() {
       preview.kill("SIGTERM");
     }
   }
+}
+
+async function expectPoll(read, expected, timeoutMs = 10_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if ((await read()) === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  assert.equal(await read(), expected);
 }
 
 main().catch((error) => {

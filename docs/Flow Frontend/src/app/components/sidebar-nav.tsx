@@ -17,13 +17,14 @@ import {
   DoorOpen,
 } from "lucide-react";
 import { cn } from "./ui/utils";
-import { alerts as alertsApi, tasks as tasksApi, primeRouteData } from "./api-client";
+import { alerts as alertsApi, tasks as tasksApi, primeRouteDataWithOptions } from "./api-client";
 import { useSidebar } from "./sidebar-context";
 import { clearSession, loadSession, type AuthSession } from "./auth-session";
 import { auth } from "./api-client";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT, SESSION_CHANGED_EVENT } from "./app-events";
 import { logoutFromMicrosoft, resetMicrosoftLoginState } from "./microsoft-auth";
 import { getAllowedPathsForRole, type AppPath } from "./role-access";
+import { useAppBootstrap } from "./app-bootstrap";
 
 const workflowItems: Array<{ to: AppPath; icon: React.ElementType; label: string }> = [
   { to: "/", icon: Activity, label: "Overview" },
@@ -81,6 +82,7 @@ function deriveInitials(session: AuthSession | null) {
 export function SidebarNav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const bootstrap = useAppBootstrap();
   const { collapsed, toggle: toggleCollapsed } = useSidebar();
   const [session, setSession] = useState(() => loadSession());
   const [tooltip, setTooltip] = useState<TooltipState>(null);
@@ -108,6 +110,35 @@ export function SidebarNav() {
         setFacilityTimezone("America/New_York");
         return;
       }
+
+       if (bootstrap.authContext) {
+        const context = bootstrap.authContext;
+        setSession((current) =>
+          current
+            ? {
+                ...current,
+                userId: context.userId || current.userId,
+                name: context.name || current.name,
+                email: context.email || current.email,
+                firstName: context.firstName || current.firstName,
+                lastName: context.lastName || current.lastName,
+              }
+            : current,
+        );
+        const match = (context.availableFacilities || []).find(
+          (facility) => facility.id === (context.activeFacilityId || nextSession.facilityId),
+        );
+        if (match?.name) {
+          setFacilityLabel(match.name);
+        }
+        if (match?.timezone) {
+          setFacilityTimezone(match.timezone);
+        }
+        if (bootstrap.phase !== "ready") {
+          return;
+        }
+      }
+
       auth
         .getContext()
         .then((context) => {
@@ -149,10 +180,22 @@ export function SidebarNav() {
         window.removeEventListener(SESSION_CHANGED_EVENT, refreshFacilityContext);
       }
     };
-  }, []);
+  }, [bootstrap.authContext, bootstrap.phase]);
 
   useEffect(() => {
     let mounted = true;
+
+    if (bootstrap.overviewSnapshot) {
+      setAlertCount(bootstrap.overviewSnapshot.alerts.length);
+      setTaskCount(bootstrap.overviewSnapshot.tasks.length);
+    }
+
+    if (bootstrap.phase !== "ready") {
+      return () => {
+        mounted = false;
+      };
+    }
+
     const refreshCounts = () => {
       Promise.all([
         alertsApi.list({ tab: "active", limit: 200 }),
@@ -170,7 +213,7 @@ export function SidebarNav() {
         });
     };
 
-    refreshCounts();
+    const timeoutId = setTimeout(refreshCounts, bootstrap.overviewSnapshot ? 1200 : 0);
     const onRefresh = () => refreshCounts();
     if (typeof window !== "undefined") {
       window.addEventListener(ADMIN_REFRESH_EVENT, onRefresh);
@@ -180,6 +223,7 @@ export function SidebarNav() {
     const interval = setInterval(refreshCounts, 30000);
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       clearInterval(interval);
       if (typeof window !== "undefined") {
         window.removeEventListener(ADMIN_REFRESH_EVENT, onRefresh);
@@ -187,7 +231,7 @@ export function SidebarNav() {
         window.removeEventListener(SESSION_CHANGED_EVENT, onRefresh);
       }
     };
-  }, []);
+  }, [bootstrap.overviewSnapshot, bootstrap.phase]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 30000);
@@ -220,8 +264,11 @@ export function SidebarNav() {
   }, []);
 
   const warmRoute = useCallback((to: string) => {
-    void primeRouteData(to);
-  }, []);
+    if (bootstrap.phase !== "ready") return;
+    void primeRouteDataWithOptions(to, {
+      skipAuthContext: Boolean(bootstrap.authContext),
+    });
+  }, [bootstrap.authContext, bootstrap.phase]);
 
   const handleSwitchAccount = useCallback(async () => {
     const existing = loadSession();
@@ -246,7 +293,7 @@ export function SidebarNav() {
   }, [navigate]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || bootstrap.phase !== "ready") return;
 
     const likelyRoutesByRole: Record<string, string[]> = {
       Admin: ["/", "/rooms", "/office-manager", "/revenue-cycle", "/analytics", "/settings"],
@@ -269,9 +316,9 @@ export function SidebarNav() {
     let idleId: number | null = null;
 
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleId = window.requestIdleCallback(runWarmup, { timeout: 1500 });
+      idleId = window.requestIdleCallback(runWarmup, { timeout: 2800 });
     } else {
-      timeoutId = setTimeout(runWarmup, 350);
+      timeoutId = setTimeout(runWarmup, 1400);
     }
 
     return () => {
@@ -280,7 +327,7 @@ export function SidebarNav() {
         window.cancelIdleCallback(idleId);
       }
     };
-  }, [activeRole, location.pathname, session, warmRoute]);
+  }, [activeRole, bootstrap.phase, location.pathname, session, warmRoute]);
 
   const renderNavItem = (item: { to: string; icon: React.ElementType; label: string }, showBadge?: boolean) => {
     const isActive = item.to === "/"

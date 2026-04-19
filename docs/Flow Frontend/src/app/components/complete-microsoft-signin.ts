@@ -1,10 +1,22 @@
-import { auth } from "./api-client";
+import { auth, type AuthContextSummary } from "./api-client";
 import { applySession, loadSession, saveSession, type AuthSession } from "./auth-session";
 import { getMicrosoftAccount, handleMicrosoftRedirect, hasMicrosoftLoginPending, resetMicrosoftLoginState } from "./microsoft-auth";
 import type { Role } from "./types";
 
-export async function completeMicrosoftSignIn(fallbackPath = "/") {
+export type CompleteMicrosoftSignInResult = {
+  targetPath: string;
+  session: AuthSession;
+  context: AuthContextSummary;
+};
+
+export async function completeMicrosoftSignIn(
+  fallbackPath = "/",
+  options?: {
+    onPhaseChange?: (phase: "session_restoration" | "context_loading") => void;
+  },
+): Promise<CompleteMicrosoftSignInResult | null> {
   const redirect = await handleMicrosoftRedirect();
+  options?.onPhaseChange?.("session_restoration");
   let account = redirect.account || (await getMicrosoftAccount());
 
   for (let attempt = 0; !account && attempt < 3 && hasMicrosoftLoginPending(); attempt += 1) {
@@ -34,6 +46,7 @@ export async function completeMicrosoftSignIn(fallbackPath = "/") {
   };
 
   applySession(provisional);
+  options?.onPhaseChange?.("context_loading");
   const context = await auth.getContext();
 
   let activeFacilityId =
@@ -62,5 +75,9 @@ export async function completeMicrosoftSignIn(fallbackPath = "/") {
   };
 
   saveSession(nextSession);
-  return redirect.postLoginPath || fallbackPath;
+  return {
+    targetPath: redirect.postLoginPath || fallbackPath,
+    session: nextSession,
+    context,
+  };
 }

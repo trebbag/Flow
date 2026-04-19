@@ -101,6 +101,37 @@ type ApiFetchOptions = RequestInit & {
   cacheKey?: string;
 };
 
+export type AuthContextSummary = {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  role: string;
+  roles: string[];
+  clinicId: string | null;
+  facilityId: string | null;
+  activeFacilityId: string | null;
+  availableFacilities: Array<{
+    id: string;
+    name: string;
+    shortCode?: string | null;
+    timezone?: string;
+    status?: string;
+  }>;
+};
+
+export type OverviewBootstrapSnapshot = {
+  facilityId: string;
+  role: string;
+  rooms: any[];
+  users: any[];
+  assignments: any[];
+  alerts: any[];
+  tasks: any[];
+  errors: string[];
+};
+
 const getCache = new Map<string, CachedGetEntry>();
 const inflightGets = new Map<string, Promise<unknown>>();
 
@@ -1968,46 +1999,10 @@ export const revenueCases = {
 
 export const auth = {
   getContext() {
-    return apiFetch<{
-      userId: string;
-      name: string | null;
-      email: string | null;
-      firstName: string | null;
-      lastName: string | null;
-      role: string;
-      roles: string[];
-      clinicId: string | null;
-      facilityId: string | null;
-      activeFacilityId: string | null;
-      availableFacilities: Array<{
-        id: string;
-        name: string;
-        shortCode?: string | null;
-        timezone?: string;
-        status?: string;
-      }>;
-    }>("/auth/context", { cacheTtlMs: 30_000 });
+    return apiFetch<AuthContextSummary>("/auth/context", { cacheTtlMs: 30_000 });
   },
   setActiveFacility(facilityId: string) {
-    return apiFetch<{
-      userId: string;
-      name: string | null;
-      email: string | null;
-      firstName: string | null;
-      lastName: string | null;
-      role: string;
-      roles: string[];
-      clinicId: string | null;
-      facilityId: string | null;
-      activeFacilityId: string | null;
-      availableFacilities: Array<{
-        id: string;
-        name: string;
-        shortCode?: string | null;
-        timezone?: string;
-        status?: string;
-      }>;
-    }>("/auth/context/facility", {
+    return apiFetch<AuthContextSummary>("/auth/context/facility", {
       method: "POST",
       body: JSON.stringify({ facilityId }),
     });
@@ -2025,6 +2020,15 @@ function swallowPrefetchError<T>(request: Promise<T>) {
 }
 
 export async function primeRouteData(path: string) {
+  return primeRouteDataWithOptions(path);
+}
+
+export async function primeRouteDataWithOptions(
+  path: string,
+  options?: {
+    skipAuthContext?: boolean;
+  },
+) {
   const session = getCurrentSession();
   if (!session) return;
 
@@ -2037,7 +2041,7 @@ export async function primeRouteData(path: string) {
   switch (normalizedPath) {
     case "/":
       requests = [
-        auth.getContext(),
+        ...(options?.skipAuthContext ? [] : [auth.getContext()]),
         admin.listRooms({ facilityId, includeInactive: true }),
         admin.listUsers(facilityId),
         admin.listAssignments(facilityId),
@@ -2080,7 +2084,7 @@ export async function primeRouteData(path: string) {
       break;
     case "/settings":
       requests = [
-        auth.getContext(),
+        ...(options?.skipAuthContext ? [] : [auth.getContext()]),
         admin.listClinics({ facilityId, includeInactive: true, includeArchived: true }),
         admin.listRooms({ facilityId, includeInactive: true, includeArchived: true }),
         admin.listUsers(facilityId),
@@ -2097,4 +2101,88 @@ export async function primeRouteData(path: string) {
   }
 
   await Promise.all(requests.map(swallowPrefetchError));
+}
+
+export async function loadOverviewBootstrap(input: {
+  facilityId?: string;
+  role?: string;
+}): Promise<OverviewBootstrapSnapshot> {
+  const facilityId = input.facilityId || getCurrentSession()?.facilityId || "";
+  const role = input.role || getCurrentSession()?.role || "Admin";
+  const tasksRequest =
+    role === "Admin"
+      ? tasks.list({ includeCompleted: false })
+      : tasks.list({ mine: true, includeCompleted: false });
+
+  const [roomsResult, usersResult, assignmentsResult, alertsResult, tasksResult] =
+    await Promise.allSettled([
+      admin.listRooms({ facilityId, includeInactive: true }),
+      admin.listUsers(facilityId),
+      admin.listAssignments(facilityId),
+      alerts.list({ tab: "active", limit: 50 }),
+      tasksRequest,
+    ]);
+
+  const errors: string[] = [];
+
+  return {
+    facilityId,
+    role,
+    rooms:
+      roomsResult.status === "fulfilled"
+        ? (roomsResult.value as any[])
+        : (errors.push(
+            `Rooms: ${
+              roomsResult.reason instanceof Error
+                ? roomsResult.reason.message
+                : "failed to load"
+            }`,
+          ),
+          []),
+    users:
+      usersResult.status === "fulfilled"
+        ? (usersResult.value as any[])
+        : (errors.push(
+            `Users: ${
+              usersResult.reason instanceof Error
+                ? usersResult.reason.message
+                : "failed to load"
+            }`,
+          ),
+          []),
+    assignments:
+      assignmentsResult.status === "fulfilled"
+        ? (assignmentsResult.value as any[])
+        : (errors.push(
+            `Assignments: ${
+              assignmentsResult.reason instanceof Error
+                ? assignmentsResult.reason.message
+                : "failed to load"
+            }`,
+          ),
+          []),
+    alerts:
+      alertsResult.status === "fulfilled"
+        ? (((alertsResult.value as any)?.items || []) as any[])
+        : (errors.push(
+            `Alerts: ${
+              alertsResult.reason instanceof Error
+                ? alertsResult.reason.message
+                : "failed to load"
+            }`,
+          ),
+          []),
+    tasks:
+      tasksResult.status === "fulfilled"
+        ? ((tasksResult.value as any[]) || [])
+        : (errors.push(
+            `Tasks: ${
+              tasksResult.reason instanceof Error
+                ? tasksResult.reason.message
+                : "failed to load"
+            }`,
+          ),
+          []),
+    errors,
+  };
 }

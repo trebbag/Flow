@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Activity,
@@ -25,6 +25,7 @@ import { admin, alerts as alertsApi, auth, tasks as tasksApi } from "./api-clien
 import { loadSession } from "./auth-session";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT, SESSION_CHANGED_EVENT } from "./app-events";
 import { labelUserName } from "./display-names";
+import { useAppBootstrap } from "./app-bootstrap";
 
 const pipelineStages: EncounterStatus[] = [
   "Incoming",
@@ -57,6 +58,7 @@ function summarizeClinicOwner(assignment: any) {
 
 export function OverviewPage() {
   const navigate = useNavigate();
+  const bootstrap = useAppBootstrap();
   const { encounters, isLiveMode, syncError } = useEncounters();
   const [now, setNow] = useState(() => new Date());
   const [facilityName, setFacilityName] = useState("Facility");
@@ -69,22 +71,79 @@ export function OverviewPage() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
 
+  const applyBootstrapSeed = useCallback(() => {
+    const session = loadSession();
+    const context = bootstrap.authContext;
+    const snapshot = bootstrap.overviewSnapshot;
+    const role = session?.role || context?.role || "Admin";
+
+    setActiveRole(role);
+
+    if (context) {
+      const activeFacility = context.availableFacilities.find(
+        (entry) =>
+          entry.id ===
+          (context.activeFacilityId || context.facilityId || session?.facilityId),
+      );
+      if (activeFacility?.name) {
+        setFacilityName(activeFacility.name);
+      }
+      if (activeFacility?.timezone) {
+        setFacilityTimezone(activeFacility.timezone);
+      }
+    }
+
+    if (snapshot) {
+      setRooms(snapshot.rooms);
+      setUsers(snapshot.users);
+      setAssignments(snapshot.assignments);
+      setAlerts(snapshot.alerts);
+      setTasks(snapshot.tasks);
+
+      const userId = context?.userId || session?.userId;
+      if (userId) {
+        const currentUser = snapshot.users.find((entry) => entry.id === userId);
+        if (currentUser?.name) {
+          setCurrentUserName(currentUser.name);
+        }
+      }
+    }
+  }, [bootstrap.authContext, bootstrap.overviewSnapshot]);
+
   useEffect(() => {
     const interval = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
+    applyBootstrapSeed();
+  }, [applyBootstrapSeed]);
+
+  useEffect(() => {
     let mounted = true;
+    if (
+      bootstrap.phase === "microsoft_redirect" ||
+      bootstrap.phase === "session_restoration" ||
+      bootstrap.phase === "context_loading" ||
+      (bootstrap.phase === "initial_data_loading" && !bootstrap.overviewSnapshot)
+    ) {
+      return () => {
+        mounted = false;
+      };
+    }
+
     const loadOverview = async () => {
       const session = loadSession();
       const facilityId = session?.facilityId;
-      const role = session?.role || "Admin";
+      const role = session?.role || bootstrap.authContext?.role || "Admin";
       const tasksRequest = role === "Admin"
         ? tasksApi.list({ includeCompleted: false })
         : tasksApi.list({ mine: true, includeCompleted: false });
+      const contextPromise = bootstrap.authContext
+        ? Promise.resolve(bootstrap.authContext)
+        : auth.getContext();
       const [contextResult, roomsResult, usersResult, assignmentsResult, alertsResult, tasksResult] = await Promise.allSettled([
-        auth.getContext(),
+        contextPromise,
         admin.listRooms({ facilityId, includeInactive: true }),
         admin.listUsers(facilityId),
         admin.listAssignments(facilityId),
@@ -117,7 +176,9 @@ export function OverviewPage() {
       if (tasksResult.status === "fulfilled") setTasks(tasksResult.value as any[]);
     };
 
-    loadOverview().catch(() => undefined);
+    const timeoutId = setTimeout(() => {
+      loadOverview().catch(() => undefined);
+    }, bootstrap.overviewSnapshot ? 1400 : 0);
     const onRefresh = () => {
       loadOverview().catch(() => undefined);
     };
@@ -128,13 +189,14 @@ export function OverviewPage() {
     }
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       if (typeof window !== "undefined") {
         window.removeEventListener(ADMIN_REFRESH_EVENT, onRefresh);
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onRefresh);
         window.removeEventListener(SESSION_CHANGED_EVENT, onRefresh);
       }
     };
-  }, []);
+  }, [bootstrap.authContext, bootstrap.overviewSnapshot, bootstrap.phase]);
 
   const activeEncounters = useMemo(
     () => encounters.filter((encounter) => encounter.status !== "Optimized"),
@@ -235,6 +297,19 @@ export function OverviewPage() {
     minute: "2-digit",
     timeZoneName: "short",
   });
+
+  const showOverviewSkeleton =
+    bootstrap.phase === "initial_data_loading" ||
+    bootstrap.phase === "session_restoration" ||
+    bootstrap.phase === "context_loading" ||
+    (bootstrap.phase === "ready" &&
+      !isLiveMode &&
+      encounters.length === 0 &&
+      !syncError);
+
+  if (showOverviewSkeleton) {
+    return <OverviewPageSkeleton />;
+  }
 
   return (
     <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
@@ -426,6 +501,90 @@ export function OverviewPage() {
               )}
             </CardContent>
           </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OverviewPageSkeleton() {
+  return (
+    <div className="p-6 space-y-5 max-w-[1400px] mx-auto animate-pulse">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <div className="h-3 w-56 rounded bg-gray-200" />
+          <div className="h-8 w-72 rounded bg-gray-200" />
+          <div className="h-4 w-96 rounded bg-gray-100" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-7 w-24 rounded-full bg-gray-200" />
+          <div className="h-7 w-20 rounded-full bg-gray-200" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={index} className="border-0 shadow-sm overflow-hidden">
+            <CardContent className="p-4 space-y-3">
+              <div className="h-3 w-20 rounded bg-gray-200" />
+              <div className="h-8 w-16 rounded bg-gray-300" />
+              <div className="h-3 w-24 rounded bg-gray-100" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="border-0 shadow-sm overflow-hidden">
+        <CardContent className="p-5 space-y-4">
+          <div className="h-4 w-40 rounded bg-gray-200" />
+          <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div key={index} className="rounded-xl border border-gray-100 p-4 space-y-3">
+                <div className="h-8 w-14 rounded bg-gray-200" />
+                <div className="h-3 w-20 rounded bg-gray-100" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.9fr] gap-4">
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardContent className="p-5 space-y-3">
+            <div className="h-4 w-36 rounded bg-gray-200" />
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="rounded-xl border border-gray-100 p-4 space-y-3">
+                <div className="h-4 w-40 rounded bg-gray-200" />
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({ length: 3 }).map((__, statIndex) => (
+                    <div
+                      key={statIndex}
+                      className="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2.5 space-y-2"
+                    >
+                      <div className="h-3 w-12 rounded bg-gray-100" />
+                      <div className="h-5 w-10 rounded bg-gray-200" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Card key={index} className="border-0 shadow-sm overflow-hidden">
+              <CardContent className="p-5 space-y-3">
+                <div className="h-4 w-32 rounded bg-gray-200" />
+                {Array.from({ length: 3 }).map((__, rowIndex) => (
+                  <div key={rowIndex} className="rounded-lg border border-gray-100 p-3 space-y-2">
+                    <div className="h-3 w-40 rounded bg-gray-200" />
+                    <div className="h-3 w-28 rounded bg-gray-100" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     </div>

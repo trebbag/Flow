@@ -336,26 +336,32 @@ export function CheckOutView() {
     return { data: null, encounter: enc ?? null };
   }, [selectedCompletedId, getCheckoutData, optimizedEncounters]);
 
-  function handleComplete(
+  async function handleComplete(
     enc: Encounter,
     checkedItems: string[],
     templateValues: Record<string, string | boolean>,
   ) {
     const now = new Date();
     const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-    completeCheckout({
-      encounterId: enc.id,
-      encounter: enc,
-      checkedItems,
-      templateValues,
-      completedAt: timeStr,
-    });
-    if (expandedId === enc.id) {
-      setExpandedId(null);
+    try {
+      await completeCheckout({
+        encounterId: enc.id,
+        encounter: enc,
+        checkedItems,
+        templateValues,
+        completedAt: timeStr,
+      });
+      if (expandedId === enc.id) {
+        setExpandedId(null);
+      }
+      toast.success(`${enc.patientId} checkout complete`, {
+        description: `Encounter ${enc.id} finalized at ${timeStr}`,
+      });
+    } catch (error) {
+      toast.error("Unable to complete checkout", {
+        description: error instanceof Error && error.message ? error.message : "The encounter stayed in Check-Out. Retry once the page finishes syncing.",
+      });
     }
-    toast.success(`${enc.patientId} checkout complete`, {
-      description: `Encounter ${enc.id} finalized at ${timeStr}`,
-    });
   }
 
   async function handleTaskCompletion(taskId: string, completed: boolean) {

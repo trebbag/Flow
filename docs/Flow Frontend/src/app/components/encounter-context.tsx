@@ -71,7 +71,7 @@ interface EncounterContextType {
   getEncounter: (id: string) => Encounter | undefined;
   fetchEncounter: (id: string, options?: { force?: boolean }) => Promise<Encounter | undefined>;
   getAvailableRoomsForClinic: (clinicId: string) => Array<{ id: string; name: string }>;
-  advanceStatus: (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => void;
+  advanceStatus: (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => Promise<Encounter | undefined>;
   updateEncounter: (id: string, overrides: Partial<Encounter>) => void;
 
   maTasks: MATask[];
@@ -81,7 +81,7 @@ interface EncounterContextType {
   getTasksForEncounter: (encounterId: string) => { maTasks: MATask[]; createdTasks: CreatedTask[] };
 
   completedCheckouts: CompletedCheckout[];
-  completeCheckout: (data: CompletedCheckout) => void;
+  completeCheckout: (data: CompletedCheckout) => Promise<Encounter | undefined>;
   getCheckoutData: (encounterId: string) => CompletedCheckout | undefined;
 
   isLiveMode: boolean;
@@ -561,34 +561,17 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     return (roomsByClinicRef.current[clinicId] || []).map((room) => ({ id: room.id, name: room.name }));
   }, []);
 
-  const advanceStatus = useCallback(
-    (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => {
-      const current = encountersRef.current.find((entry) => entry.id === id) || encounterCacheRef.current[id];
-      if (!current) return;
-      const changedAt = new Date().toISOString();
-      const optimisticEncounter = {
-        ...current,
-        ...extras,
-        status: newStatus,
-        version: current.version + 1,
-        currentStageStart: timeFromIso(new Date().toISOString()),
-        currentStageStartAtIso: changedAt,
-        completedAtIso: newStatus === "Optimized" ? changedAt : current.completedAtIso,
-        minutesInStage: 0,
-        statusEvents: [
-          ...(current.statusEvents || []),
-          { fromStatus: current.status, toStatus: newStatus, changedAt },
-        ],
-      };
+  const applyEncounterMutationResult = useCallback((raw: any) => {
+    const mapped = mapBackendEncounter(raw as any);
+    setEncounters((prev) => prev.map((entry) => (entry.id === mapped.id ? mapped : entry)));
+    setEncounterCacheEntry(mapped);
+    return mapped;
+  }, [mapBackendEncounter, setEncounterCacheEntry]);
 
-      setEncounters((prev) =>
-        prev.map((entry) =>
-          entry.id === id
-            ? optimisticEncounter
-            : entry,
-        ),
-      );
-      setEncounterCacheEntry(optimisticEncounter);
+  const advanceStatus = useCallback(
+    async (id: string, newStatus: EncounterStatus, extras?: Partial<Encounter>) => {
+      const current = encountersRef.current.find((entry) => entry.id === id) || encounterCacheRef.current[id];
+      if (!current) return undefined;
 
       const roomId = extras?.roomNumber
         ? (roomsByClinicRef.current[current.clinicId] || []).find((room) => room.name === extras.roomNumber)?.id
@@ -600,35 +583,44 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         ? (extras.clinicianData as Record<string, unknown>)
         : undefined;
 
-      (async () => {
-        try {
-          if (roomId || roomingPayload) {
-            await encounterApi.updateRooming(id, {
-              ...(roomId ? { roomId } : {}),
-              ...(roomingPayload ? { data: roomingPayload } : {}),
-            });
-          }
-          const updated =
-            current.status === "ReadyForProvider" && newStatus === "Optimizing"
-              ? await encounterApi.startVisit(id, { version: current.version })
-              : current.status === "Optimizing" && newStatus === "CheckOut"
-                ? await encounterApi.endVisit(id, {
-                    version: current.version,
-                    ...(clinicianPayload ? { data: clinicianPayload } : {}),
-                  })
-                : await encounterApi.updateStatus(id, {
-                    toStatus: newStatus,
-                    version: current.version,
-                  });
-          const mapped = mapBackendEncounter(updated as any);
-          setEncounters((prev) => prev.map((entry) => (entry.id === id ? mapped : entry)));
-          setEncounterCacheEntry(mapped);
-        } catch {
-          refreshData().catch(() => undefined);
+      if (extras?.roomNumber && !roomId) {
+        throw new Error("Selected room could not be resolved. Pick a room again and retry.");
+      }
+
+      let workingEncounter = current;
+      let latestPersisted: Encounter | undefined;
+
+      try {
+        if (roomId || roomingPayload) {
+          latestPersisted = applyEncounterMutationResult(await encounterApi.updateRooming(id, {
+            ...(roomId ? { roomId } : {}),
+            ...(roomingPayload ? { data: roomingPayload } : {}),
+          }));
+          workingEncounter = latestPersisted;
         }
-      })();
+
+        const updated =
+          current.status === "ReadyForProvider" && newStatus === "Optimizing"
+            ? await encounterApi.startVisit(id, { version: workingEncounter.version })
+            : current.status === "Optimizing" && newStatus === "CheckOut"
+              ? await encounterApi.endVisit(id, {
+                  version: workingEncounter.version,
+                  ...(clinicianPayload ? { data: clinicianPayload } : {}),
+                })
+              : await encounterApi.updateStatus(id, {
+                  toStatus: newStatus,
+                  version: workingEncounter.version,
+                });
+
+        latestPersisted = applyEncounterMutationResult(updated);
+        refreshData().catch(() => undefined);
+        return latestPersisted;
+      } catch (error) {
+        refreshData().catch(() => undefined);
+        throw error;
+      }
     },
-    [mapBackendEncounter, refreshData, setEncounterCacheEntry],
+    [applyEncounterMutationResult, refreshData],
   );
 
   const updateEncounter = useCallback(
@@ -731,58 +723,30 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
   );
 
   const completeCheckout = useCallback(
-    (data: CompletedCheckout) => {
+    async (data: CompletedCheckout) => {
       const completedAtIso = new Date().toISOString();
-      setCompletedCheckouts((prev) => [data, ...prev]);
-      setEncounters((prev) =>
-        prev.map((entry) =>
-          entry.id === data.encounterId
-            ? {
-                ...entry,
-                status: "Optimized",
-                currentStageStart: timeFromIso(completedAtIso),
-                currentStageStartAtIso: completedAtIso,
-                completedAtIso,
-                minutesInStage: 0,
-              }
-            : entry,
-        ),
-      );
-      const cachedEncounter =
-        encountersRef.current.find((entry) => entry.id === data.encounterId) ||
-        encounterCacheRef.current[data.encounterId];
-      if (cachedEncounter) {
-        setEncounterCacheEntry({
-          ...cachedEncounter,
-          status: "Optimized",
-          currentStageStart: timeFromIso(completedAtIso),
-          currentStageStartAtIso: completedAtIso,
-          completedAtIso,
-          minutesInStage: 0,
-        });
-      }
-
       const current =
         encountersRef.current.find((entry) => entry.id === data.encounterId) ||
         encounterCacheRef.current[data.encounterId];
-      if (!current) return;
+      if (!current) return undefined;
 
-      (async () => {
-        try {
-          const updated = await encounterApi.completeCheckout(data.encounterId, {
-            version: current.version,
-            checkoutData: data.templateValues,
-          });
-          const mapped = mapBackendEncounter(updated as any);
-          setEncounters((prev) => prev.map((entry) => (entry.id === data.encounterId ? mapped : entry)));
-          setEncounterCacheEntry(mapped);
-          await refreshData();
-        } catch {
-          refreshData().catch(() => undefined);
-        }
-      })();
+      const updated = await encounterApi.completeCheckout(data.encounterId, {
+        version: current.version,
+        checkoutData: data.templateValues,
+      });
+      const mapped = applyEncounterMutationResult(updated);
+      setCompletedCheckouts((prev) => [
+        {
+          ...data,
+          encounter: mapped,
+          completedAt: timeFromIso(completedAtIso),
+        },
+        ...prev.filter((entry) => entry.encounterId !== data.encounterId),
+      ]);
+      refreshData().catch(() => undefined);
+      return mapped;
     },
-    [mapBackendEncounter, refreshData, setEncounterCacheEntry],
+    [applyEncounterMutationResult, refreshData],
   );
 
   const getCheckoutData = useCallback(

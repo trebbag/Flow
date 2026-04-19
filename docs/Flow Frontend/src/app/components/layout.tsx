@@ -7,6 +7,8 @@ import { SidebarProvider, useSidebar } from "./sidebar-context";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import { applySession, loadSession } from "./auth-session";
 import { canAccessPath } from "./role-access";
+import { useAppBootstrap } from "./app-bootstrap";
+import { BootstrapLoadingScreen } from "./bootstrap-loading-screen";
 
 function LayoutInner() {
   const navigate = useNavigate();
@@ -65,8 +67,12 @@ function LayoutInner() {
 export function RootLayout() {
   const location = useLocation();
   const session = loadSession();
+  const bootstrap = useAppBootstrap();
 
   if (!session) {
+    if (bootstrap.isBootstrapping) {
+      return <BootstrapLoadingScreen phase={bootstrap.phase} error={bootstrap.error} onRetry={() => { void bootstrap.retryBootstrap(); }} />;
+    }
     const next = encodeURIComponent(`${location.pathname}${location.search}${location.hash}`);
     return <Navigate to={`/login?next=${next}`} replace />;
   }

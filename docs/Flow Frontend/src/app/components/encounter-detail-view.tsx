@@ -616,6 +616,7 @@ export function EncounterDetailView() {
   const [localRoom, setLocalRoom] = useState<string>("");
   const [roomingNotes, setRoomingNotes] = useState<string>("");
   const [localStageStartIso, setLocalStageStartIso] = useState<string | null>(null);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [safetyModal, setSafetyModal] = useState<"activate" | "resolve" | null>(null);
   const [templateValues, setTemplateValues] = useState<Record<string, Record<string, string | boolean>>>({});
@@ -796,6 +797,14 @@ export function EncounterDetailView() {
   }, [baseEnc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!baseEnc || localStatus === null) return;
+    if (baseEnc.status === localStatus) {
+      setLocalStatus(null);
+      setLocalStageStartIso(null);
+    }
+  }, [baseEnc?.status, localStatus]);
+
+  useEffect(() => {
     const roomingValues = (baseEnc?.roomingData || {}) as Record<string, unknown>;
     setServiceCaptureItems(parseServiceCaptureItems(roomingValues[ROOMING_SERVICE_CAPTURE_KEY]));
   }, [baseEnc?.id, baseEnc?.roomingData]);
@@ -812,36 +821,81 @@ export function EncounterDetailView() {
     setShowRequiredFieldErrors(false);
   }, [localStatus, baseEnc?.status]);
 
+  function getAdvanceErrorMessage(error: unknown, fallback: string) {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message;
+    }
+    return fallback;
+  }
+
   // Auto-advance from Lobby -> Rooming or ReadyForProvider -> Optimizing when arriving with query actions.
   useEffect(() => {
-    if (!baseEnc) return;
+    if (!baseEnc || isAdvancing) return;
     const startRooming = searchParams.get("startRooming");
     const startVisit = searchParams.get("startVisit");
     const effectiveStatus = localStatus ?? baseEnc.status;
 
     if (startRooming === "true" && effectiveStatus === "Lobby") {
-      setCompletedStages((prev) => new Set([...prev, "Lobby"]));
-      setLocalStatus("Rooming");
-      setLocalStageStartIso(new Date().toISOString());
-      ctx.advanceStatus(baseEnc.id, "Rooming");
-      toast.success(`${baseEnc.patientId} → ${statusLabels["Rooming"]}`, {
-        description: "Rooming workflow started",
-      });
-      setSearchParams({}, { replace: true });
-      return;
+      let cancelled = false;
+      setIsAdvancing(true);
+      (async () => {
+        try {
+          const updated = await ctx.advanceStatus(baseEnc.id, "Rooming");
+          if (cancelled) return;
+          setCompletedStages((prev) => new Set([...prev, "Lobby"]));
+          setLocalStatus(updated?.status || "Rooming");
+          setLocalStageStartIso(updated?.currentStageStartAtIso || new Date().toISOString());
+          toast.success(`${baseEnc.patientId} → ${statusLabels["Rooming"]}`, {
+            description: "Rooming workflow started",
+          });
+          setSearchParams({}, { replace: true });
+        } catch (error) {
+          if (cancelled) return;
+          toast.error("Unable to start rooming", {
+            description: getAdvanceErrorMessage(error, "The encounter stayed in Lobby. Retry once the page finishes syncing."),
+          });
+        } finally {
+          if (!cancelled) setIsAdvancing(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (startVisit === "true" && effectiveStatus === "ReadyForProvider") {
-      setCompletedStages((prev) => new Set([...prev, "ReadyForProvider"]));
-      setLocalStatus("Optimizing");
-      setLocalStageStartIso(new Date().toISOString());
-      ctx.advanceStatus(baseEnc.id, "Optimizing");
-      toast.success(`${baseEnc.patientId} → ${statusLabels["Optimizing"]}`, {
-        description: "Visit started from Clinician Board",
-      });
-      setSearchParams({}, { replace: true });
+      let cancelled = false;
+      setIsAdvancing(true);
+      (async () => {
+        try {
+          const updated = await ctx.advanceStatus(baseEnc.id, "Optimizing");
+          if (cancelled) return;
+          setCompletedStages((prev) => new Set([...prev, "ReadyForProvider"]));
+          setLocalStatus(updated?.status || "Optimizing");
+          setLocalStageStartIso(updated?.currentStageStartAtIso || new Date().toISOString());
+          toast.success(`${baseEnc.patientId} → ${statusLabels["Optimizing"]}`, {
+            description: "Visit started from Clinician Board",
+          });
+          setSearchParams({}, { replace: true });
+        } catch (error) {
+          if (cancelled) return;
+          toast.error("Unable to start the visit", {
+            description: getAdvanceErrorMessage(error, "The encounter stayed ready for the provider. Retry once the page finishes syncing."),
+          });
+        } finally {
+          if (!cancelled) setIsAdvancing(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [baseEnc, searchParams, localStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [baseEnc, ctx, isAdvancing, localStatus, searchParams, setSearchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isAdvancing) return;
+    setShowRequiredFieldErrors(false);
+  }, [isAdvancing]);
 
   useEffect(() => {
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
@@ -1235,7 +1289,7 @@ export function EncounterDetailView() {
     }));
   }
 
-  function handleAdvance() {
+  async function handleAdvance() {
     if (isEncounterReadOnly) {
       toast.info("Encounter review is read-only", {
         description: "Workflow changes stay with the role-specific working boards.",
@@ -1274,9 +1328,6 @@ export function EncounterDetailView() {
 
     setShowRequiredFieldErrors(false);
 
-    // Mark current stage as completed
-    setCompletedStages((prev) => new Set([...prev, enc.status]));
-
     const roomingDataForSave =
       enc.status === "Rooming"
         ? {
@@ -1285,31 +1336,59 @@ export function EncounterDetailView() {
           }
         : undefined;
 
-    // Transition locally AND in shared context
-    setLocalStatus(next);
-    setLocalStageStartIso(new Date().toISOString());
-    ctx.advanceStatus(
-      enc.id,
-      next,
-      enc.status === "Rooming"
-        ? { roomNumber: localRoom, roomingData: roomingDataForSave as Record<string, unknown> }
-        : enc.status === "Optimizing"
-          ? { clinicianData: (templateValues["Optimizing"] || {}) as Record<string, unknown> }
-          : undefined,
-    );
+    setIsAdvancing(true);
+    try {
+      const updated =
+        enc.status === "CheckOut"
+          ? await ctx.completeCheckout({
+              encounterId: enc.id,
+              encounter: enc,
+              checkedItems: Object.entries(currentTemplateVals)
+                .filter(([, value]) => value === true)
+                .map(([key]) => key),
+              templateValues: currentTemplateVals,
+              completedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            })
+          : await ctx.advanceStatus(
+              enc.id,
+              next,
+              enc.status === "Rooming"
+                ? { roomNumber: localRoom, roomingData: roomingDataForSave as Record<string, unknown> }
+                : enc.status === "Optimizing"
+                  ? { clinicianData: (templateValues["Optimizing"] || {}) as Record<string, unknown> }
+                  : undefined,
+            );
 
-    const advanceDescription =
-      enc.status === "Optimizing" && currentTemplateVals["coding.documentation_complete"] !== true
-        ? "Moved to checkout. Revenue will keep documentation incomplete flagged until Athena documentation is finished."
-        : `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`;
+      setCompletedStages((prev) => new Set([...prev, enc.status]));
+      if (updated) {
+        setLocalStatus(updated.status);
+        setLocalStageStartIso(updated.currentStageStartAtIso || new Date().toISOString());
+      } else {
+        setLocalStatus(next);
+        setLocalStageStartIso(new Date().toISOString());
+      }
 
-    toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
-      description: advanceDescription,
-    });
+      const advanceDescription =
+        enc.status === "Optimizing" && currentTemplateVals["coding.documentation_complete"] !== true
+          ? "Moved to checkout. Revenue will keep documentation incomplete flagged until Athena documentation is finished."
+          : `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`;
 
-    // When completing the provider visit (Optimizing → CheckOut), return to Clinician Board
-    if (enc.status === "Optimizing" && next === "CheckOut") {
-      navigate("/clinician");
+      toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
+        description: advanceDescription,
+      });
+
+      if (enc.status === "Optimizing" && next === "CheckOut") {
+        navigate("/clinician");
+      }
+    } catch (error) {
+      toast.error("Unable to save the workflow step", {
+        description: getAdvanceErrorMessage(
+          error,
+          "The encounter stayed in its current stage. Any partial rooming or checkout details that saved were kept, but the step itself did not advance.",
+        ),
+      });
+    } finally {
+      setIsAdvancing(false);
     }
   }
 
@@ -1419,15 +1498,15 @@ export function EncounterDetailView() {
                 <button
                   data-advance-btn
                   onClick={handleAdvance}
-                  disabled={enc.status === "Rooming" && !roomingReady}
+                  disabled={isAdvancing || (enc.status === "Rooming" && !roomingReady)}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-[12px] shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all ${
-                    enc.status === "Rooming" && !roomingReady
+                    isAdvancing || (enc.status === "Rooming" && !roomingReady)
                       ? "opacity-50 cursor-not-allowed bg-gray-400"
                       : "hover:brightness-110"
                   }`}
-                  style={{ fontWeight: 500, backgroundColor: enc.status === "Rooming" && !roomingReady ? undefined : statusColor }}
+                  style={{ fontWeight: 500, backgroundColor: isAdvancing || (enc.status === "Rooming" && !roomingReady) ? undefined : statusColor }}
                 >
-                  {nextStatusActionLabel[enc.status]}
+                  {isAdvancing ? "Saving..." : nextStatusActionLabel[enc.status]}
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -2336,16 +2415,16 @@ export function EncounterDetailView() {
                         <button
                           data-advance-btn
                           onClick={handleAdvance}
-                          disabled={!roomingReady}
+                          disabled={isAdvancing || !roomingReady}
                           className={`w-full h-12 rounded-xl text-[14px] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-100 transition-all ${
-                            !roomingReady
+                            isAdvancing || !roomingReady
                               ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                               : "bg-violet-600 text-white hover:bg-violet-700 active:bg-violet-800"
                           }`}
                           style={{ fontWeight: 500 }}
                         >
                           <CheckCircle2 className="w-5 h-5" />
-                          Ready for Provider
+                          {isAdvancing ? "Saving..." : "Ready for Provider"}
                           <ChevronRight className="w-4 h-4 ml-1" />
                         </button>
                       )}
@@ -2844,11 +2923,14 @@ export function EncounterDetailView() {
                       <button
                         data-advance-btn
                         onClick={handleAdvance}
-                        className="w-full h-12 mt-6 rounded-xl text-white text-[14px] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 transition-colors hover:brightness-110"
+                        disabled={isAdvancing}
+                        className={`w-full h-12 mt-6 rounded-xl text-white text-[14px] flex items-center justify-center gap-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-100 transition-colors ${
+                          isAdvancing ? "cursor-not-allowed opacity-60" : "hover:brightness-110"
+                        }`}
                         style={{ fontWeight: 500, backgroundColor: statusColor }}
                       >
                         <CheckCircle2 className="w-5 h-5" />
-                        {nextStatusActionLabel[enc.status]}
+                        {isAdvancing ? "Saving..." : nextStatusActionLabel[enc.status]}
                         <ChevronRight className="w-4 h-4 ml-1" />
                       </button>
                     )}
@@ -2879,10 +2961,13 @@ export function EncounterDetailView() {
                   <button
                     data-advance-btn
                     onClick={handleAdvance}
-                    className="mt-4 px-5 py-2.5 rounded-lg text-white text-[13px] flex items-center gap-2 mx-auto shadow-sm transition-colors hover:brightness-110"
+                    disabled={isAdvancing}
+                    className={`mt-4 px-5 py-2.5 rounded-lg text-white text-[13px] flex items-center gap-2 mx-auto shadow-sm transition-colors ${
+                      isAdvancing ? "cursor-not-allowed opacity-60" : "hover:brightness-110"
+                    }`}
                     style={{ fontWeight: 500, backgroundColor: statusColor }}
                   >
-                    {nextStatusActionLabel[enc.status]}
+                    {isAdvancing ? "Saving..." : nextStatusActionLabel[enc.status]}
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 )}

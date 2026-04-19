@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { RootLayout } from "./components/layout";
 import { RouteErrorBoundary } from "./components/route-error-boundary";
+import { AppBootstrapProvider } from "./components/app-bootstrap";
 
 const router = createBrowserRouter([
   {
@@ -117,5 +118,9 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <AppBootstrapProvider>
+      <RouterProvider router={router} />
+    </AppBootstrapProvider>
+  );
 }
