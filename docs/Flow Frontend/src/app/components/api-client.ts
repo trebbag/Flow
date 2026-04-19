@@ -2112,7 +2112,6 @@ export async function primeRouteDataWithOptions(
       requests = [
         tasks.list({ assignedToRole: "RevenueCycle" }),
         admin.listClinics({ facilityId, includeInactive: true, includeArchived: true }),
-        dashboards.revenueCycle(),
       ];
       break;
     case "/analytics":
