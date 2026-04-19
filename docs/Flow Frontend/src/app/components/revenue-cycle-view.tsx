@@ -66,7 +66,7 @@ const workQueues: RevenueWorkQueue[] = [
   "AthenaHandoff",
 ];
 
-const athenaUnavailableText = "Not yet synced from Athena. Flow is tracking handoff only in this MVP slice.";
+const athenaUnavailableText = "Not yet synced from Athena. Flow keeps operating without Athena access in this MVP slice.";
 const financialRequirementStatuses: FinancialRequirementStatus[] = [
   "NotRequired",
   "Pending",
@@ -241,6 +241,12 @@ function checklistItemsFor(revenueCase: RevenueCaseDetail, groups: string[]) {
   return revenueCase.checklistItems.filter((item) => groups.includes(item.group));
 }
 
+function describeLoadError(error: unknown, fallback = "Request failed") {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return fallback;
+}
+
 function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings | null) {
   const chargeSchedule = buildChargeScheduleMap(settings);
   const serviceItems = safeServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson);
@@ -368,7 +374,10 @@ export function RevenueCycleView() {
   const [providerQueryText, setProviderQueryText] = useState("");
   const [athenaReference, setAthenaReference] = useState("");
   const [settings, setSettings] = useState<RevenueSettings | null>(null);
-  const [loadIssues, setLoadIssues] = useState<string[]>([]);
+  const [coreLoadError, setCoreLoadError] = useState<string | null>(null);
+  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
+  const [dayCloseLoadError, setDayCloseLoadError] = useState<string | null>(null);
+  const [userOptionsLoadError, setUserOptionsLoadError] = useState<string | null>(null);
   const [financialDraft, setFinancialDraft] = useState({
     eligibilityStatus: "NotChecked",
     registrationVerified: false,
@@ -425,25 +434,22 @@ export function RevenueCycleView() {
   async function refreshRevenue() {
     setLoading(true);
     try {
-      const facilityId = session?.facilityId;
-      const [dashboardResult, queueResult, historyResult, todayCloseoutRowsResult, userRowsResult] = await Promise.allSettled([
+      const [dashboardResult, queueResult] = await Promise.allSettled([
         dashboards.revenueCycle({ dayBucket, workQueue, mine: mineOnly, search }),
         revenueCases.list({ dayBucket, workQueue, mine: mineOnly, search }),
-        dashboards.revenueCycleHistory({ from: historyFrom, to: historyTo }),
-        revenueCases.list({ dayBucket: "Today", from: isoDate(0), to: isoDate(0) }),
-        admin.listUsers(facilityId),
       ]);
-
-      const failures = [dashboardResult, queueResult, historyResult, todayCloseoutRowsResult, userRowsResult]
-        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-        .map((result) => result.reason instanceof Error ? result.reason.message : "Request failed");
-      setLoadIssues(failures);
 
       const dashboardValue = dashboardResult.status === "fulfilled" ? dashboardResult.value : dashboard;
       const queueValue = queueResult.status === "fulfilled" ? queueResult.value : queueRows;
-      const historyValue = historyResult.status === "fulfilled" ? historyResult.value : { daily: history, summary: historySummary };
-      const dayCloseValue = todayCloseoutRowsResult.status === "fulfilled" ? todayCloseoutRowsResult.value : dayCloseRows;
-      const userValue = userRowsResult.status === "fulfilled" ? userRowsResult.value : userOptions;
+      const nextCoreLoadError =
+        dashboardResult.status === "rejected" && queueResult.status === "rejected"
+          ? describeLoadError(dashboardResult.reason, describeLoadError(queueResult.reason))
+          : dashboardResult.status === "rejected" && !dashboard
+            ? describeLoadError(dashboardResult.reason)
+            : queueResult.status === "rejected" && queueRows.length === 0
+              ? describeLoadError(queueResult.reason)
+              : null;
+      setCoreLoadError(nextCoreLoadError);
 
       if (dashboardValue) {
         setDashboard(dashboardValue);
@@ -466,33 +472,84 @@ export function RevenueCycleView() {
           reimbursementRules: dashboardValue.settings?.reimbursementRules || [],
         };
         setSettings(nextSettings);
-        setRollDrafts((prev) => {
-          const next = { ...prev };
-          (dayCloseValue || []).forEach((row) => {
-            next[row.id] = next[row.id] || defaultCloseoutDraft(row, session?.userId, nextSettings.dayCloseDefaults?.defaultDueHours || 18);
-          });
-          return next;
-        });
       }
 
       setQueueRows(queueValue || []);
-      setHistory(historyValue?.daily || []);
-      setHistorySummary(historyValue?.summary || null);
-      setDayCloseRows((dayCloseValue || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus)));
-      setUserOptions((userValue || []).filter((row) => row.status !== "archived"));
 
-      const candidateId = selectedCaseId && [...(queueValue || []), ...(dayCloseValue || [])].some((row) => row.id === selectedCaseId)
+      const candidateId = selectedCaseId && (queueValue || []).some((row) => row.id === selectedCaseId)
         ? selectedCaseId
-        : queueValue?.[0]?.id || dashboardValue?.cases?.[0]?.id || dayCloseValue?.[0]?.id || null;
+        : queueValue?.[0]?.id || dashboardValue?.cases?.[0]?.id || null;
       setSelectedCaseId(candidateId);
 
-      if (failures.length > 0) {
-        toast.error("Some Revenue Cycle data did not refresh", {
-          description: failures[0],
+      if (nextCoreLoadError && !dashboardValue && (!queueValue || queueValue.length === 0)) {
+        toast.error("Unable to load Revenue Cycle data", {
+          description: nextCoreLoadError,
         });
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshRevenueHistory({ notify = false } = {}) {
+    try {
+      const result = await dashboards.revenueCycleHistory({ from: historyFrom, to: historyTo });
+      setHistory(result.daily || []);
+      setHistorySummary(result.summary || null);
+      setHistoryLoadError(null);
+    } catch (error) {
+      const message = describeLoadError(error, "Unable to load Revenue history.");
+      setHistoryLoadError(message);
+      if (notify) {
+        toast.error("Unable to load Revenue history", {
+          description: message,
+        });
+      }
+    }
+  }
+
+  async function refreshDayCloseRows({ notify = false } = {}) {
+    try {
+      const rows = await revenueCases.list({ dayBucket: "Today", from: isoDate(0), to: isoDate(0) });
+      const unresolvedRows = (rows || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus));
+      setDayCloseRows(unresolvedRows);
+      setDayCloseLoadError(null);
+      setRollDrafts((prev) => {
+        const next = { ...prev };
+        unresolvedRows.forEach((row) => {
+          next[row.id] = next[row.id] || defaultCloseoutDraft(row, session?.userId, settings?.dayCloseDefaults?.defaultDueHours || 18);
+        });
+        return next;
+      });
+    } catch (error) {
+      const message = describeLoadError(error, "Unable to load day close data.");
+      setDayCloseLoadError(message);
+      if (notify) {
+        toast.error("Unable to load Revenue day close", {
+          description: message,
+        });
+      }
+    }
+  }
+
+  async function refreshUserOptions({ notify = false } = {}) {
+    if (!session?.facilityId) {
+      setUserOptions([]);
+      setUserOptionsLoadError(null);
+      return;
+    }
+    try {
+      const users = await admin.listUsers(session.facilityId);
+      setUserOptions((users || []).filter((row) => row.status !== "archived"));
+      setUserOptionsLoadError(null);
+    } catch (error) {
+      const message = describeLoadError(error, "Unable to load staff directory.");
+      setUserOptionsLoadError(message);
+      if (notify) {
+        toast.error("Unable to load staff directory", {
+          description: message,
+        });
+      }
     }
   }
 
@@ -512,6 +569,21 @@ export function RevenueCycleView() {
       }
     };
   }, [dayBucket, workQueue, mineOnly, search, historyFrom, historyTo]);
+
+  useEffect(() => {
+    if (activeView === "History" || activeView === "Day Close") {
+      refreshRevenueHistory().catch(() => undefined);
+    }
+    if (activeView === "Day Close") {
+      refreshDayCloseRows().catch(() => undefined);
+    }
+  }, [activeView, historyFrom, historyTo]);
+
+  useEffect(() => {
+    if (activeView === "Day Close" || Boolean(selectedCaseId)) {
+      refreshUserOptions().catch(() => undefined);
+    }
+  }, [activeView, selectedCaseId, session?.facilityId]);
 
   useEffect(() => {
     if (!selectedCaseId) {
@@ -607,6 +679,9 @@ export function RevenueCycleView() {
     const refreshed = await revenueCases.get(caseId);
     setSelectedCase(refreshed);
     await refreshRevenue();
+    if (activeView === "Day Close") {
+      await refreshDayCloseRows();
+    }
   }
 
   async function assignToMe() {
@@ -805,7 +880,7 @@ export function RevenueCycleView() {
       toast.success("Revenue day closed", {
         description: `${unresolvedRows.length} unresolved cases were captured for supervisor follow-up.`,
       });
-      await refreshRevenue();
+      await Promise.all([refreshRevenue(), refreshDayCloseRows()]);
     } catch (error) {
       toast.error("Unable to close revenue day", { description: (error as Error).message });
     } finally {
@@ -897,8 +972,8 @@ export function RevenueCycleView() {
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                 <Badge className="border-0 bg-emerald-50 text-emerald-700">Clinic-local</Badge>
-                <Badge className="border-0 bg-cyan-50 text-cyan-700">Athena handoff only</Badge>
-                <Badge className="border-0 bg-slate-100 text-slate-600">Source of truth stays in Athena</Badge>
+                <Badge className="border-0 bg-cyan-50 text-cyan-700">Athena optional</Badge>
+                <Badge className="border-0 bg-slate-100 text-slate-600">Runs without Athena access</Badge>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -915,7 +990,18 @@ export function RevenueCycleView() {
                 </button>
               ))}
               <button
-                onClick={() => refreshRevenue().catch(() => undefined)}
+                onClick={() => {
+                  refreshRevenue().catch(() => undefined);
+                  if (activeView === "History" || activeView === "Day Close") {
+                    refreshRevenueHistory({ notify: true }).catch(() => undefined);
+                  }
+                  if (activeView === "Day Close") {
+                    refreshDayCloseRows({ notify: true }).catch(() => undefined);
+                  }
+                  if (activeView === "Day Close" || Boolean(selectedCaseId)) {
+                    refreshUserOptions({ notify: true }).catch(() => undefined);
+                  }
+                }}
                 className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-[12px] text-slate-600 hover:border-slate-300"
                 style={{ fontWeight: 600 }}
               >
@@ -1093,7 +1179,7 @@ export function RevenueCycleView() {
                     <div className="space-y-3 text-[12px] text-slate-600">
                       <BoundaryRow title="Pre-service in Flow" body="Check-In plus Revenue guide registration checks, eligibility, patient estimate capture, POS expectation, and auth/referral follow-through even without Athena configured." />
                       <BoundaryRow title="Time-of-service in Flow" body="Flow directly owns service capture, clinician working codes, checkout tracking, revenue verification, and Athena documentation plus handoff attestation." />
-                      <BoundaryRow title="Post-service stays in Athena" body="Claim edits, submission, adjudication, payment posting, denials, patient billing, collections, and payment truth remain Athena-only in this MVP." />
+                      <BoundaryRow title="Post-service stays outside Flow" body="Flow does not run claim edits, submission, adjudication, payment posting, denials, patient billing, or collections. If Athena is used later, those steps still remain outside Flow." />
                     </div>
                   </CardContent>
                 </Card>
@@ -1111,7 +1197,7 @@ export function RevenueCycleView() {
                       Revenue overview data is unavailable right now
                     </div>
                     <div className="mt-2 text-[12px] text-slate-600">
-                      {loadIssues[0] || "The Revenue overview payload did not load. Refresh after the supporting data calls settle."}
+                      {coreLoadError || "The Revenue overview payload did not load. Refresh after the supporting data calls settle."}
                     </div>
                   </div>
                 </div>
@@ -1258,12 +1344,26 @@ export function RevenueCycleView() {
                 onCreateProviderQuery={createProviderQuery}
                 onCompleteAthena={completeAthenaHandoff}
                 onResolveClarification={resolveClarification}
+                userOptionsLoadError={userOptionsLoadError}
               />
             </div>
           )}
 
           {activeView === "Day Close" && (
             <div className="space-y-4">
+              {dayCloseLoadError && (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="flex items-start gap-3 p-5">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
+                    <div>
+                      <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>
+                        Day close details are temporarily unavailable
+                      </div>
+                      <div className="mt-1 text-[12px] text-slate-600">{dayCloseLoadError}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-5">
                   <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
@@ -1445,6 +1545,19 @@ export function RevenueCycleView() {
 
           {activeView === "History" && (
             <div className="space-y-4">
+              {historyLoadError && (
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="flex items-start gap-3 p-5">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
+                    <div>
+                      <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>
+                        Revenue history is temporarily unavailable
+                      </div>
+                      <div className="mt-1 text-[12px] text-slate-600">{historyLoadError}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <KpiCard
                   title="Visits collected"
@@ -1642,6 +1755,7 @@ function RevenueCaseDetailPane({
   onCreateProviderQuery,
   onCompleteAthena,
   onResolveClarification,
+  userOptionsLoadError,
 }: {
   revenueCase: RevenueCaseDetail | null;
   activeDrawerTab: DrawerTab;
@@ -1730,6 +1844,7 @@ function RevenueCaseDetailPane({
   onCreateProviderQuery: () => void;
   onCompleteAthena: () => void;
   onResolveClarification: (clarificationId: string) => void;
+  userOptionsLoadError: string | null;
 }) {
   if (!revenueCase) {
     return (
@@ -2394,9 +2509,9 @@ function RevenueCaseDetailPane({
               Revenue read-only encounter review is available through the existing encounter route.
             </div>
             <div className="flex items-center gap-2">
-              <span>{userOptions.filter((user) => user.status !== "archived").length} active staff in scope</span>
+              <span>{userOptionsLoadError ? "Staff directory unavailable right now" : `${userOptions.filter((user) => user.status !== "archived").length} active staff in scope`}</span>
               <CircleOff className="h-3.5 w-3.5 text-slate-300" />
-              <span>No Athena PM duplication</span>
+              <span>Flow runs without Athena access</span>
             </div>
           </div>
         </div>
