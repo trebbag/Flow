@@ -278,6 +278,10 @@ function startPreviewServer() {
   return child;
 }
 
+async function gotoFrontend(page, path = "/") {
+  await page.goto(`${frontendBaseUrl}${path}`, { waitUntil: "domcontentloaded" });
+}
+
 async function main() {
   if (!devUserId && !hasBearerToken) {
     console.info("Skipping browser e2e check because no dev-user or bearer-token auth was provided.");
@@ -487,16 +491,16 @@ async function main() {
     }, seededSession);
     page = await context.newPage();
 
-    await page.goto(`${frontendBaseUrl}/`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/");
     await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 });
 
-    await page.goto(`${frontendBaseUrl}/checkin`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/checkin");
     await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });
 
-    await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/ma-board");
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
 
-    await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, `/encounter/${createdEncounter.id}`);
     const readyForProviderButtons = page.locator('[data-advance-btn]').filter({ hasText: "Ready for Provider" });
     await expectPoll(async () => {
       const count = await readyForProviderButtons.count();
@@ -523,26 +527,26 @@ async function main() {
       return refreshedEncounter?.status || refreshedEncounter?.currentStatus || null;
     }, "ReadyForProvider");
 
-    await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/ma-board");
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
     const roomingColumnCard = page.locator(
       `[data-status-column="Rooming"] [data-encounter-patient-id="${createdEncounter.patientId}"]`,
     );
     await expectPoll(async () => await roomingColumnCard.count(), 0);
 
-    await page.goto(`${frontendBaseUrl}/checkin`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/checkin");
     await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });
 
-    await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, `/encounter/${createdEncounter.id}`);
     await page.getByRole("heading", { name: "Ready for Provider" }).waitFor({ timeout: 10_000 });
     await page.getByText("The provider will start the visit from the Clinician Board.", { exact: false }).waitFor({
       timeout: 10_000,
     });
 
-    await page.goto(`${frontendBaseUrl}/clinician`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/clinician");
     await page.getByRole("heading", { name: "Clinician Board" }).waitFor({ timeout: 10_000 });
 
-    await page.goto(`${frontendBaseUrl}/checkout`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/checkout");
     await page.getByRole("heading", { name: "Front Desk Check-Out" }).waitFor({ timeout: 10_000 });
     const checkoutQueueCards = page.locator('div[class*="cursor-pointer"]').filter({ hasText: "In checkout" });
     if ((await checkoutQueueCards.count()) > 0) {
@@ -556,7 +560,7 @@ async function main() {
       await page.getByText("Collection Tracking", { exact: false }).waitFor({ timeout: 10_000 });
     }
 
-    await page.goto(`${frontendBaseUrl}/settings`, { waitUntil: "networkidle" });
+    await gotoFrontend(page, "/settings");
     await page.getByRole("heading", { name: "Admin Console" }).waitFor({ timeout: 10_000 });
 
     await page.getByRole("tab", { name: /Incoming Uploads/i }).click();
