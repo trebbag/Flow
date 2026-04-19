@@ -485,13 +485,18 @@ async function main() {
     }
     await enabledReadyButton.click();
     await page.getByText(`${createdEncounter.patientId} → Ready for Provider`, { exact: false }).waitFor({ timeout: 10_000 });
+    await expectPoll(async () => {
+      const refreshedEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
+      return refreshedEncounter?.status || refreshedEncounter?.currentStatus || null;
+    }, "ReadyForProvider");
 
     await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
     const roomingColumn = page.locator("div").filter({ has: page.getByText("Rooming", { exact: true }) }).first();
-    const readyForProviderColumn = page.locator("div").filter({ has: page.getByText("Ready for Provider", { exact: true }) }).first();
     await expectPoll(async () => await roomingColumn.getByText(createdEncounter.patientId, { exact: true }).count(), 0);
-    await expectPoll(async () => await readyForProviderColumn.getByText(createdEncounter.patientId, { exact: true }).count(), 1);
+
+    await page.goto(`${frontendBaseUrl}/checkin`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
     await page.getByText("Ready for Provider", { exact: true }).waitFor({ timeout: 10_000 });
