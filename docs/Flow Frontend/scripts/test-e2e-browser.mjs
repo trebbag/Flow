@@ -464,8 +464,26 @@ async function main() {
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Ready for Provider" }).waitFor({ timeout: 10_000 });
-    await page.getByRole("button", { name: "Ready for Provider" }).click();
+    const readyForProviderButtons = page.locator('[data-advance-btn]').filter({ hasText: "Ready for Provider" });
+    await expectPoll(async () => {
+      const count = await readyForProviderButtons.count();
+      for (let index = 0; index < count; index += 1) {
+        if (await readyForProviderButtons.nth(index).isEnabled()) {
+          return 1;
+        }
+      }
+      return 0;
+    }, 1);
+    let enabledReadyButton = readyForProviderButtons.first();
+    const buttonCount = await readyForProviderButtons.count();
+    for (let index = 0; index < buttonCount; index += 1) {
+      const candidate = readyForProviderButtons.nth(index);
+      if (await candidate.isEnabled()) {
+        enabledReadyButton = candidate;
+        break;
+      }
+    }
+    await enabledReadyButton.click();
     await page.getByText(`${createdEncounter.patientId} → Ready for Provider`, { exact: false }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
