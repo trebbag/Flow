@@ -598,14 +598,16 @@ async function main() {
     method: "PATCH",
     auth: maAuth,
     body: {
-      toStatus: "ReadyForProvider",
+      toStatus: clinic.maRun ? "CheckOut" : "ReadyForProvider",
       version: movedRooming.version,
     },
   });
   assert.equal(
     movedReady.status || movedReady.currentStatus,
-    "ReadyForProvider",
-    "encounter should move to ReadyForProvider",
+    clinic.maRun ? "CheckOut" : "ReadyForProvider",
+    clinic.maRun
+      ? "MA-run encounter should move directly to CheckOut"
+      : "encounter should move to ReadyForProvider",
   );
 
   let providerStarted;
@@ -658,23 +660,7 @@ async function main() {
       "end visit should move encounter to CheckOut",
     );
   } else {
-    providerEnded = await request(`/encounters/${created.id}/status`, {
-      method: "PATCH",
-      auth: maAuth,
-      body: {
-        toStatus: "Optimizing",
-        version: movedReady.version,
-      },
-    });
-    const checkoutMoved = await request(`/encounters/${created.id}/status`, {
-      method: "PATCH",
-      auth: maAuth,
-      body: {
-        toStatus: "CheckOut",
-        version: providerEnded.version,
-      },
-    });
-    providerEnded = checkoutMoved;
+    providerEnded = movedReady;
   }
 
   const checkoutBoard = await request(`/encounters?clinicId=${clinic.id}&date=${today}`, {

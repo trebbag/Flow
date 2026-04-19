@@ -1856,7 +1856,10 @@ export const dashboards = {
     if (params?.mine) qs.set("mine", "true");
     if (params?.search) qs.set("search", params.search);
     const q = qs.toString();
-    return apiFetch<RevenueDashboardSnapshot>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, { cacheTtlMs: 25_000 });
+    return apiFetch<RevenueDashboardSnapshot>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, {
+      cacheTtlMs: 25_000,
+      timeoutMs: 45_000,
+    });
   },
   revenueCycleHistory(params?: { clinicId?: string; from?: string; to?: string }) {
     const qs = new URLSearchParams();
@@ -1870,7 +1873,10 @@ export const dashboards = {
       summary: RevenueHistorySummary;
     }>(
       `/dashboard/revenue-cycle/history${q ? `?${q}` : ""}`,
-      { cacheTtlMs: 30_000 },
+      {
+        cacheTtlMs: 30_000,
+        timeoutMs: 45_000,
+      },
     );
   },
 };
@@ -1896,10 +1902,16 @@ export const revenueCases = {
     if (params?.from) qs.set("from", params.from);
     if (params?.to) qs.set("to", params.to);
     const q = qs.toString();
-    return apiFetch<RevenueCaseDetail[]>(`/revenue-cases${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
+    return apiFetch<RevenueCaseDetail[]>(`/revenue-cases${q ? `?${q}` : ""}`, {
+      cacheTtlMs: 15_000,
+      timeoutMs: 45_000,
+    });
   },
   get(id: string) {
-    return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}`, { cacheTtlMs: 15_000 });
+    return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}`, {
+      cacheTtlMs: 15_000,
+      timeoutMs: 45_000,
+    });
   },
   update(
     id: string,

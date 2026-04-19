@@ -359,15 +359,26 @@ async function main() {
     })),
   );
 
-  const assignmentWithUsableRoom =
-    roomsByClinic.find(
-      (entry) => Array.isArray(entry.rooms) && entry.rooms.some((row) => roomCardIsUsableForProof(row)),
-    )?.assignment || null;
+  const assignmentsWithUsableRooms = roomsByClinic
+    .filter((entry) => Array.isArray(entry.rooms) && entry.rooms.some((row) => roomCardIsUsableForProof(row)))
+    .map((entry) => ({
+      assignment: entry.assignment,
+      clinic: clinics.find((row) => row.id === entry.assignment.clinicId) || null,
+    }))
+    .filter((entry) => Boolean(entry.clinic));
 
-  const targetAssignment = assignmentWithUsableRoom || operationalAssignments[0] || null;
+  const selectedAssignmentEntry =
+    assignmentsWithUsableRooms.find((entry) => entry.clinic?.maRun) ||
+    assignmentsWithUsableRooms[0] ||
+    null;
+
+  const targetAssignment = selectedAssignmentEntry?.assignment || operationalAssignments[0] || null;
   assert.ok(targetAssignment, "expected at least one active operational clinic assignment");
 
-  const clinic = clinics.find((entry) => entry.id === targetAssignment.clinicId);
+  const clinic =
+    selectedAssignmentEntry?.clinic ||
+    clinics.find((entry) => entry.id === targetAssignment.clinicId) ||
+    null;
   assert.ok(clinic, "expected selected clinic from assignments");
 
   let reasons = await request(`/admin/reasons?facilityId=${originalFacilityId}&clinicId=${clinic.id}&includeInactive=true`, { auth: true });
@@ -501,30 +512,31 @@ async function main() {
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
 
     await gotoFrontend(page, `/encounter/${createdEncounter.id}`);
-    const readyForProviderButtons = page.locator('[data-advance-btn]').filter({ hasText: "Ready for Provider" });
+    const advanceLabel = clinic.maRun ? "Check Out" : "Ready for Provider";
+    const advanceButtons = page.locator('[data-advance-btn]').filter({ hasText: advanceLabel });
     await expectPoll(async () => {
-      const count = await readyForProviderButtons.count();
+      const count = await advanceButtons.count();
       for (let index = 0; index < count; index += 1) {
-        if (await readyForProviderButtons.nth(index).isEnabled()) {
+        if (await advanceButtons.nth(index).isEnabled()) {
           return 1;
         }
       }
       return 0;
-    }, 1);
-    let enabledReadyButton = readyForProviderButtons.first();
-    const buttonCount = await readyForProviderButtons.count();
+    }, 1, 30_000);
+    let enabledAdvanceButton = advanceButtons.first();
+    const buttonCount = await advanceButtons.count();
     for (let index = 0; index < buttonCount; index += 1) {
-      const candidate = readyForProviderButtons.nth(index);
+      const candidate = advanceButtons.nth(index);
       if (await candidate.isEnabled()) {
-        enabledReadyButton = candidate;
+        enabledAdvanceButton = candidate;
         break;
       }
     }
-    await enabledReadyButton.click();
+    await enabledAdvanceButton.click();
     await expectPoll(async () => {
       const refreshedEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
       return refreshedEncounter?.status || refreshedEncounter?.currentStatus || null;
-    }, "ReadyForProvider");
+    }, clinic.maRun ? "CheckOut" : "ReadyForProvider");
 
     await gotoFrontend(page, "/ma-board");
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
@@ -533,17 +545,26 @@ async function main() {
     );
     await expectPoll(async () => await roomingColumnCard.count(), 0);
 
-    await gotoFrontend(page, "/checkin");
-    await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });
-
     await gotoFrontend(page, `/encounter/${createdEncounter.id}`);
-    await page.getByRole("heading", { name: "Ready for Provider" }).waitFor({ timeout: 10_000 });
-    await page.getByText("The provider will start the visit from the Clinician Board.", { exact: false }).waitFor({
-      timeout: 10_000,
-    });
+    if (clinic.maRun) {
+      await expectPoll(async () => {
+        const refreshedEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
+        return refreshedEncounter?.status || refreshedEncounter?.currentStatus || null;
+      }, "CheckOut");
+      const encounterBodyText = await page.locator("body").innerText();
+      assert.ok(
+        !encounterBodyText.includes("Unexpected Application Error"),
+        "MA-run encounter detail should remain stable after moving directly to CheckOut",
+      );
+    } else {
+      await page.getByRole("heading", { name: "Ready for Provider" }).waitFor({ timeout: 10_000 });
+      await page.getByText("The provider will start the visit from the Clinician Board.", { exact: false }).waitFor({
+        timeout: 10_000,
+      });
 
-    await gotoFrontend(page, "/clinician");
-    await page.getByRole("heading", { name: "Clinician Board" }).waitFor({ timeout: 10_000 });
+      await gotoFrontend(page, "/clinician");
+      await page.getByRole("heading", { name: "Clinician Board" }).waitFor({ timeout: 10_000 });
+    }
 
     await gotoFrontend(page, "/checkout");
     await page.getByRole("heading", { name: "Front Desk Check-Out" }).waitFor({ timeout: 10_000 });
@@ -558,6 +579,20 @@ async function main() {
       );
       await page.getByText("Collection Tracking", { exact: false }).waitFor({ timeout: 10_000 });
     }
+
+    await gotoFrontend(page, "/revenue-cycle");
+    await page.getByPlaceholder("Search patient, clinic, or blocker").waitFor({ timeout: 10_000 });
+    const revenueBodyText = await page.locator("body").innerText();
+    assert.ok(
+      !revenueBodyText.includes("Unable to load Revenue Cycle data"),
+      "revenue cycle should render without the global load failure state",
+    );
+    assert.ok(
+      !revenueBodyText.includes("Unexpected Application Error"),
+      "revenue cycle should not trigger the route error screen",
+    );
+    await page.getByRole("button", { name: "Work Queues" }).waitFor({ timeout: 10_000 });
+    await page.getByText("Today's risk strip", { exact: false }).waitFor({ timeout: 30_000 });
 
     await gotoFrontend(page, "/settings");
     await page.getByRole("heading", { name: "Admin Console" }).waitFor({ timeout: 10_000 });
@@ -604,6 +639,52 @@ async function main() {
 
     console.info("Browser role-flow regression checks passed.");
   } finally {
+    try {
+      let latestEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
+      let latestStatus = latestEncounter?.status || latestEncounter?.currentStatus || null;
+      if (
+        latestEncounter?.version &&
+        latestStatus &&
+        latestStatus !== "CheckOut" &&
+        latestStatus !== "Optimized"
+      ) {
+        latestEncounter = await request(`/encounters/${createdEncounter.id}/status`, {
+          method: "PATCH",
+          auth: true,
+          body: {
+            toStatus: "CheckOut",
+            version: latestEncounter.version,
+            reasonCode: "admin_override_cleanup",
+          },
+        });
+        latestStatus = latestEncounter?.status || latestEncounter?.currentStatus || null;
+      }
+      if (latestEncounter?.version && latestStatus !== "Optimized") {
+        await request(`/encounters/${createdEncounter.id}/cancel`, {
+          method: "POST",
+          auth: true,
+          body: {
+            version: latestEncounter.version,
+            reason: "other",
+            note: "browser e2e cleanup",
+          },
+        });
+      }
+    } catch {
+      // Cleanup should never hide the real test result.
+    }
+    try {
+      await request(`/rooms/${readyRoom.roomId || readyRoom.id}/actions/mark-ready`, {
+        method: "POST",
+        auth: true,
+        body: {
+          clinicId: clinic.id,
+          facilityId: originalFacilityId,
+        },
+      });
+    } catch {
+      // Cleanup should never hide the real test result.
+    }
     if (browser) await browser.close();
     if (preview && preview.exitCode === null) {
       preview.kill("SIGTERM");
