@@ -184,6 +184,13 @@ function parseDetailJson(value: unknown) {
   return value as Record<string, unknown>;
 }
 
+function normalizeTemplateValueMap(value: unknown): Record<string, string | boolean> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => typeof entry === "string" || typeof entry === "boolean"),
+  );
+}
+
 function detailValueToString(value: unknown) {
   if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -795,6 +802,34 @@ export function EncounterDetailView() {
       setShowRequiredFieldErrors(false);
     }
   }, [baseEnc?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!baseEnc) return;
+    setTemplateValues((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      const stageHydrationMap: Array<[EncounterStatus, Record<string, string | boolean>]> = [
+        ["Rooming", normalizeTemplateValueMap(baseEnc.roomingData)],
+        ["Optimizing", normalizeTemplateValueMap(baseEnc.clinicianData)],
+        ["CheckOut", normalizeTemplateValueMap(baseEnc.checkoutData)],
+      ];
+
+      for (const [stage, hydratedValues] of stageHydrationMap) {
+        if (Object.keys(hydratedValues).length === 0) continue;
+        const existingValues = prev[stage] || {};
+        const mergedValues = { ...hydratedValues, ...existingValues };
+        const differs =
+          Object.keys(existingValues).length !== Object.keys(mergedValues).length ||
+          Object.entries(mergedValues).some(([key, value]) => existingValues[key] !== value);
+        if (differs) {
+          next[stage] = mergedValues;
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [baseEnc?.id, baseEnc?.version, baseEnc?.roomingData, baseEnc?.clinicianData, baseEnc?.checkoutData]);
 
   useEffect(() => {
     if (!baseEnc || localStatus === null) return;
