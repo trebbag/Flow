@@ -174,6 +174,30 @@ function splitCodes(value: string) {
     .filter(Boolean);
 }
 
+function safeStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0) : [];
+}
+
+function safeProcedureLines(value: unknown): RevenueProcedureLine[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is RevenueProcedureLine => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    return typeof (entry as RevenueProcedureLine).cptCode === "string" && (entry as RevenueProcedureLine).cptCode.trim().length > 0;
+  });
+}
+
+function safeServiceCaptureItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (entry): entry is NonNullable<RevenueCaseDetail["chargeCaptureRecord"]>["serviceCaptureItemsJson"][number] =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      !Array.isArray(entry) &&
+      typeof (entry as { id?: unknown }).id === "string" &&
+      typeof (entry as { label?: unknown }).label === "string",
+  );
+}
+
 function buildAthenaLink(template: string | undefined, revenueCase: RevenueCaseDetail | null) {
   if (!template || !revenueCase) return "";
   return template
@@ -219,8 +243,8 @@ function checklistItemsFor(revenueCase: RevenueCaseDetail, groups: string[]) {
 
 function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings | null) {
   const chargeSchedule = buildChargeScheduleMap(settings);
-  const serviceItems = row.chargeCaptureRecord?.serviceCaptureItemsJson || [];
-  const procedureLines = row.chargeCaptureRecord?.procedureLinesJson || [];
+  const serviceItems = safeServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson);
+  const procedureLines = safeProcedureLines(row.chargeCaptureRecord?.procedureLinesJson);
   let expectedGrossChargeCents = 0;
   let missingChargeMapping = false;
 
@@ -272,10 +296,10 @@ function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings
 }
 
 function queueRowSubsummary(row: RevenueCaseDetail, settings: RevenueSettings | null) {
-  const diagnosisCount = row.chargeCaptureRecord?.icd10CodesJson?.length || 0;
-  const procedureCount = row.chargeCaptureRecord?.procedureLinesJson?.length || 0;
+  const diagnosisCount = safeStringArray(row.chargeCaptureRecord?.icd10CodesJson).length;
+  const procedureCount = safeProcedureLines(row.chargeCaptureRecord?.procedureLinesJson).length;
   const expectation = getRevenueExpectation(row, settings);
-  const serviceDetailComplete = (row.chargeCaptureRecord?.serviceCaptureItemsJson || []).every((item) => item.detailComplete !== false);
+  const serviceDetailComplete = safeServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson).every((item) => item.detailComplete !== false);
   const codingReady = row.chargeCaptureRecord?.documentationComplete && serviceDetailComplete && diagnosisCount > 0 && procedureCount > 0;
   const documentationIncomplete = diagnosisCount > 0 && procedureCount > 0 && row.chargeCaptureRecord?.documentationComplete === false;
   return {
@@ -344,6 +368,7 @@ export function RevenueCycleView() {
   const [providerQueryText, setProviderQueryText] = useState("");
   const [athenaReference, setAthenaReference] = useState("");
   const [settings, setSettings] = useState<RevenueSettings | null>(null);
+  const [loadIssues, setLoadIssues] = useState<string[]>([]);
   const [financialDraft, setFinancialDraft] = useState({
     eligibilityStatus: "NotChecked",
     registrationVerified: false,
@@ -412,6 +437,7 @@ export function RevenueCycleView() {
       const failures = [dashboardResult, queueResult, historyResult, todayCloseoutRowsResult, userRowsResult]
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
         .map((result) => result.reason instanceof Error ? result.reason.message : "Request failed");
+      setLoadIssues(failures);
 
       const dashboardValue = dashboardResult.status === "fulfilled" ? dashboardResult.value : dashboard;
       const queueValue = queueResult.status === "fulfilled" ? queueResult.value : queueRows;
@@ -508,6 +534,11 @@ export function RevenueCycleView() {
 
   useEffect(() => {
     if (!selectedCase) return;
+    const diagnosisCodes = safeStringArray(selectedCase.chargeCaptureRecord?.icd10CodesJson);
+    const procedureLines = safeProcedureLines(selectedCase.chargeCaptureRecord?.procedureLinesJson);
+    const cptCodes = safeStringArray(selectedCase.chargeCaptureRecord?.cptCodesJson);
+    const modifiers = safeStringArray(selectedCase.chargeCaptureRecord?.modifiersJson);
+    const units = safeStringArray(selectedCase.chargeCaptureRecord?.unitsJson);
     setFinancialDraft({
       eligibilityStatus: selectedCase.financialReadiness?.eligibilityStatus || "NotChecked",
       registrationVerified: Boolean(selectedCase.financialReadiness?.registrationVerified),
@@ -539,16 +570,16 @@ export function RevenueCycleView() {
     });
     setCodingDraft({
       documentationComplete: Boolean(selectedCase.chargeCaptureRecord?.documentationComplete),
-      diagnoses: selectedCase.chargeCaptureRecord?.icd10CodesJson || [],
-      procedureLines: selectedCase.chargeCaptureRecord?.procedureLinesJson?.length
-        ? selectedCase.chargeCaptureRecord.procedureLinesJson
-        : (selectedCase.chargeCaptureRecord?.cptCodesJson || []).map((code, index) => ({
+      diagnoses: diagnosisCodes,
+      procedureLines: procedureLines.length
+        ? procedureLines
+        : cptCodes.map((code, index) => ({
             lineId: crypto.randomUUID(),
             cptCode: code,
-            modifiers: selectedCase.chargeCaptureRecord?.modifiersJson?.[index]
-              ? splitCodes(selectedCase.chargeCaptureRecord.modifiersJson[index])
+            modifiers: modifiers[index]
+              ? splitCodes(modifiers[index])
               : [],
-            units: Number(selectedCase.chargeCaptureRecord?.unitsJson?.[index] || 1),
+            units: Number(units[index] || 1),
             diagnosisPointers: [],
           })),
       codingNote: selectedCase.chargeCaptureRecord?.codingNote || "",
@@ -667,7 +698,7 @@ export function RevenueCycleView() {
 
   async function saveCodingHandoff(markReadyForAthena = false) {
     if (!selectedCase) return;
-    const serviceCaptureCount = selectedCase.chargeCaptureRecord?.serviceCaptureItemsJson?.length || 0;
+    const serviceCaptureCount = safeServiceCaptureItems(selectedCase.chargeCaptureRecord?.serviceCaptureItemsJson).length || 0;
     const validProcedureLines = codingDraft.procedureLines
       .map((line) => ({
         ...line,
@@ -1070,6 +1101,24 @@ export function RevenueCycleView() {
             </div>
           )}
 
+          {activeView === "Overview" && !dashboard && (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-500" />
+                  <div>
+                    <div className="text-[14px] text-slate-900" style={{ fontWeight: 700 }}>
+                      Revenue overview data is unavailable right now
+                    </div>
+                    <div className="mt-2 text-[12px] text-slate-600">
+                      {loadIssues[0] || "The Revenue overview payload did not load. Refresh after the supporting data calls settle."}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeView === "Work Queues" && (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_420px]">
               <div className="space-y-4">
@@ -1094,7 +1143,9 @@ export function RevenueCycleView() {
                         No revenue cases match the current filters.
                       </div>
                     )}
-                    {queueRows.map((row) => (
+                    {queueRows.map((row) => {
+                      const summary = queueRowSubsummary(row, settings);
+                      return (
                       <button
                         key={row.id}
                         onClick={() => setSelectedCaseId(row.id)}
@@ -1119,31 +1170,31 @@ export function RevenueCycleView() {
                             {row.currentBlockerText || "No blocker text recorded"}
                           </div>
                           <div className={`mt-3 flex flex-wrap gap-2 text-[11px] ${selectedCaseId === row.id ? "text-white/80" : "text-slate-500"}`}>
-                            <span>{queueRowSubsummary(row, settings).serviceCaptureComplete ? "Service capture complete" : "Service capture missing"}</span>
-                            <span>Dx {queueRowSubsummary(row, settings).diagnosisCount}</span>
-                            <span>Proc {queueRowSubsummary(row, settings).procedureCount}</span>
+                            <span>{summary.serviceCaptureComplete ? "Service capture complete" : "Service capture missing"}</span>
+                            <span>Dx {summary.diagnosisCount}</span>
+                            <span>Proc {summary.procedureCount}</span>
                             <span>
-                              {queueRowSubsummary(row, settings).codingReady
+                              {summary.codingReady
                                 ? "Coding ready"
-                                : queueRowSubsummary(row, settings).documentationIncomplete
+                                : summary.documentationIncomplete
                                   ? "Documentation incomplete"
                                   : "Coding incomplete"}
                             </span>
                             <span>
-                              {queueRowSubsummary(row, settings).expectedGrossChargeCents > 0
-                                ? `Expected ${formatCurrency(queueRowSubsummary(row, settings).expectedGrossChargeCents)}`
-                                : queueRowSubsummary(row, settings).missingChargeMapping
+                              {summary.expectedGrossChargeCents > 0
+                                ? `Expected ${formatCurrency(summary.expectedGrossChargeCents)}`
+                                : summary.missingChargeMapping
                                   ? "Missing charge mapping"
                                   : "No expected charge yet"}
                             </span>
                             <span>
-                              {queueRowSubsummary(row, settings).expectedNetReimbursementCents > 0
-                                ? `Net ${formatCurrency(queueRowSubsummary(row, settings).expectedNetReimbursementCents)}`
-                                : queueRowSubsummary(row, settings).missingReimbursementMapping
+                              {summary.expectedNetReimbursementCents > 0
+                                ? `Net ${formatCurrency(summary.expectedNetReimbursementCents)}`
+                                : summary.missingReimbursementMapping
                                   ? "Missing reimbursement mapping"
                                   : "No net projection yet"}
                             </span>
-                            <span>{queueRowSubsummary(row, settings).athenaStatus}</span>
+                            <span>{summary.athenaStatus}</span>
                           </div>
                         </div>
                         <div className={`text-[12px] ${selectedCaseId === row.id ? "text-white/80" : "text-slate-600"}`}>
@@ -1169,7 +1220,7 @@ export function RevenueCycleView() {
                           <div className="mt-1" style={{ fontWeight: 700 }}>{row.athenaClaimStatus || (row.athenaHandoffConfirmedAt ? "Confirmed" : "Pending")}</div>
                         </div>
                       </button>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </div>
@@ -1770,9 +1821,9 @@ function RevenueCaseDetailPane({
                   { label: "Eligibility", value: revenueCase.financialReadiness?.eligibilityStatus || "Not checked" },
                   { label: "Benefits summary", value: revenueCase.financialReadiness?.benefitsSummaryText || "Not captured" },
                   { label: "Collection outcome", value: revenueCase.checkoutCollectionTracking?.collectionOutcome || "Not tracked" },
-                  { label: "Service capture items", value: String(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson.length || 0) },
-                  { label: "Diagnoses", value: String(revenueCase.chargeCaptureRecord?.icd10CodesJson.length || 0) },
-                  { label: "Procedure lines", value: String(revenueCase.chargeCaptureRecord?.procedureLinesJson.length || 0) },
+                  { label: "Service capture items", value: String(safeServiceCaptureItems(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson).length || 0) },
+                  { label: "Diagnoses", value: String(safeStringArray(revenueCase.chargeCaptureRecord?.icd10CodesJson).length || 0) },
+                  { label: "Procedure lines", value: String(safeProcedureLines(revenueCase.chargeCaptureRecord?.procedureLinesJson).length || 0) },
                   { label: "Documentation complete", value: revenueCase.chargeCaptureRecord?.documentationComplete ? "Yes" : "No - still blocks handoff" },
                   { label: "Expected gross", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedGrossChargeCents) },
                   { label: "Expected net", value: formatCurrency(getRevenueExpectation(revenueCase, settings).expectedNetReimbursementCents) },
@@ -2008,7 +2059,7 @@ function RevenueCaseDetailPane({
                 <textarea value={checkoutDraft.trackingNote} onChange={(event) => setCheckoutDraft((prev) => ({ ...prev, trackingNote: event.target.value }))} className="min-h-[88px] w-full rounded-2xl border border-slate-200 px-3 py-3 text-[12px] outline-none focus:border-slate-300" />
               </Field>
               <ActionRow>
-                <div className="text-[11px] text-slate-500">Current tracked amount: {formatCurrency(Number(checkoutDraft.amountCollectedCents || 0))}</div>
+                <div className="text-[11px] text-slate-500">Current tracked amount: {formatCurrency(parseCurrencyInputToCents(checkoutDraft.amountCollectedCents || "0"))}</div>
                 <button onClick={onSaveCheckout} disabled={saving} className="rounded-full bg-slate-900 px-4 py-2 text-[11px] text-white disabled:opacity-50" style={{ fontWeight: 700 }}>Save checkout tracking</button>
               </ActionRow>
             </div>
@@ -2061,10 +2112,10 @@ function RevenueCaseDetailPane({
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
                 <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">MA service capture</div>
                 <div className="space-y-2">
-                  {(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson || []).length === 0 && (
+                  {safeServiceCaptureItems(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson).length === 0 && (
                     <div className="text-[12px] text-slate-500">No structured service capture items recorded yet. MA service capture must be completed in Flow before Athena handoff.</div>
                   )}
-                  {(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson || []).map((item) => (
+                  {safeServiceCaptureItems(revenueCase.chargeCaptureRecord?.serviceCaptureItemsJson).map((item) => (
                     <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-[12px]">
                       <div>
                         <div className="text-slate-900" style={{ fontWeight: 700 }}>{item.label}</div>

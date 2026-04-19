@@ -4441,6 +4441,105 @@ describe("Flow backend core relationships", () => {
     expect(mutateEncounter.statusCode).toBe(403);
   });
 
+  it("allows Revenue Cycle staff to list in-scope users for revenue assignment and closeout ownership", async () => {
+    const ctx = await bootstrapCore();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/admin/users?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: ctx.revenue.id }),
+        expect.objectContaining({ id: ctx.officeManager.id }),
+        expect.objectContaining({ id: ctx.clinician.id }),
+      ]),
+    );
+  });
+
+  it("normalizes legacy malformed charge-capture JSON in revenue case responses", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-LEGACY-NORMALIZE",
+      clinicianData: {
+        "coding.working_diagnosis_codes_text": "J01.90",
+        "coding.working_procedure_codes_text": "99213",
+        "coding.documentation_complete": true,
+      },
+      checkoutData: {
+        "billing.collection_expected": true,
+        "billing.amount_due_cents": 2500,
+        "billing.amount_collected_cents": 2500,
+        "billing.collection_outcome": "CollectedInFull",
+        disposition: "Discharged",
+      },
+    });
+
+    const revenueCase = await prisma.revenueCase.findUnique({
+      where: { encounterId: finishedEncounter.id },
+      include: { chargeCaptureRecord: true },
+    });
+    expect(revenueCase?.chargeCaptureRecord).toBeTruthy();
+
+    await prisma.chargeCaptureRecord.update({
+      where: { revenueCaseId: revenueCase!.id },
+      data: {
+        icd10CodesJson: { legacy: true } as any,
+        procedureLinesJson: { legacy: true } as any,
+        serviceCaptureItemsJson: { legacy: true } as any,
+        cptCodesJson: { legacy: true } as any,
+        modifiersJson: { legacy: true } as any,
+        unitsJson: { legacy: true } as any,
+        documentationSummaryJson: ["legacy"] as any,
+      },
+    });
+
+    const detailResponse = await app.inject({
+      method: "GET",
+      url: `/revenue-cases/${revenueCase!.id}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toEqual(
+      expect.objectContaining({
+        id: revenueCase!.id,
+        chargeCaptureRecord: expect.objectContaining({
+          cptCodesJson: [],
+          modifiersJson: [],
+          unitsJson: [],
+          documentationSummaryJson: null,
+          icd10CodesJson: [],
+          procedureLinesJson: [],
+          serviceCaptureItemsJson: [],
+        }),
+      }),
+    );
+
+    const dashboardResponse = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&from=${DateTime.now().toISODate()}&to=${DateTime.now().toISODate()}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(dashboardResponse.json().cases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          encounterId: finishedEncounter.id,
+        }),
+      ]),
+    );
+  });
+
   it("normalizes checkout collection tracking into the revenue case", async () => {
     const ctx = await bootstrapCore();
     const finishedEncounter = await createRevenueWorkflowEncounter({

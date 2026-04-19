@@ -84,6 +84,27 @@ function readProcedureLines(value: Prisma.JsonValue | null | undefined): Revenue
     .filter((entry): entry is RevenueProcedureLine => Boolean(entry));
 }
 
+function readJsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function mapChargeCaptureRecord(
+  record: Awaited<ReturnType<typeof buildRevenueCaseList>>[number]["chargeCaptureRecord"] | null | undefined,
+) {
+  if (!record) return null;
+  return {
+    ...record,
+    icd10CodesJson: readStringArray(record.icd10CodesJson),
+    procedureLinesJson: readProcedureLines(record.procedureLinesJson),
+    serviceCaptureItemsJson: readServiceCaptureItems(record.serviceCaptureItemsJson),
+    cptCodesJson: readStringArray(record.cptCodesJson),
+    modifiersJson: readStringArray(record.modifiersJson),
+    unitsJson: readStringArray(record.unitsJson),
+    documentationSummaryJson: readJsonObject(record.documentationSummaryJson),
+  };
+}
+
 function readServiceCaptureItems(value: Prisma.JsonValue | null | undefined): RevenueServiceCaptureItem[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -338,13 +359,13 @@ function mapRevenueCaseRow(row: Awaited<ReturnType<typeof buildRevenueCaseList>>
       checkoutCompleteAt: row.encounter.checkoutCompleteAt,
       roomName: formatRoomDisplayName(row.encounter.room),
       reasonForVisit: formatReasonDisplayName(row.encounter.reason),
-      roomingData: row.encounter.roomingData,
-      clinicianData: row.encounter.clinicianData,
-      checkoutData: row.encounter.checkoutData,
+      roomingData: readJsonObject(row.encounter.roomingData),
+      clinicianData: readJsonObject(row.encounter.clinicianData),
+      checkoutData: readJsonObject(row.encounter.checkoutData),
     },
     financialReadiness: row.financialReadiness,
     checkoutCollectionTracking: row.checkoutCollectionTracking,
-    chargeCaptureRecord: row.chargeCaptureRecord,
+    chargeCaptureRecord: mapChargeCaptureRecord(row.chargeCaptureRecord),
     checklistItems: row.checklistItems,
     providerClarifications: row.providerClarifications,
     events: row.events,

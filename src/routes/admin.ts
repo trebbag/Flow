@@ -3403,7 +3403,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/admin/users", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+  app.get("/admin/users", { preHandler: requireRoles(RoleName.Admin, RoleName.OfficeManager, RoleName.RevenueCycle) }, async (request) => {
     const query = request.query as { facilityId?: string };
     const facility = await resolveFacilityForRequest(request, query.facilityId);
     const users = await prisma.user.findMany({
