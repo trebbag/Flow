@@ -99,6 +99,7 @@ type CachedGetEntry = {
 type ApiFetchOptions = RequestInit & {
   cacheTtlMs?: number;
   cacheKey?: string;
+  timeoutMs?: number;
 };
 
 export type AuthContextSummary = {
@@ -192,6 +193,7 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
   }
   const method = String(options.method || "GET").toUpperCase();
   const cacheTtlMs = Number(options.cacheTtlMs || 0);
+  const timeoutMs = Number(options.timeoutMs || (method === "GET" ? 20_000 : 15_000));
   const shouldCache = method === "GET" && cacheTtlMs > 0;
   const cacheKey = shouldCache ? getCacheKey(path, options, headers) : null;
 
@@ -210,18 +212,45 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
 
   const performFetch = async () => {
     let res: Response;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutId = Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeoutMs)
+      : null;
+    const callerSignal = options.signal;
+    const forwardAbort = () => controller.abort();
+    if (callerSignal) {
+      if (callerSignal.aborted) {
+        forwardAbort();
+      } else {
+        callerSignal.addEventListener("abort", forwardAbort, { once: true });
+      }
+    }
     try {
       res = await fetch(`${BASE_URL}${path}`, {
         ...options,
         headers,
         cache: "no-store",
+        signal: controller.signal,
       });
     } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (callerSignal) callerSignal.removeEventListener("abort", forwardAbort);
+      if (error instanceof DOMException && error.name === "AbortError" && timedOut) {
+        throw new Error(
+          `Request timed out after ${Math.max(1, Math.round(timeoutMs / 1000))}s. Flow will recheck the encounter state so you can retry safely.`,
+        );
+      }
       if (error instanceof TypeError) {
         throw new Error("Network/CORS request failed. Verify API server and CORS settings.");
       }
       throw error;
     }
+    if (timeoutId) clearTimeout(timeoutId);
+    if (callerSignal) callerSignal.removeEventListener("abort", forwardAbort);
 
     if (!res.ok) {
       const text = await res.text();

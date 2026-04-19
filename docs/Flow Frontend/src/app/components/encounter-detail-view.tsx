@@ -863,6 +863,31 @@ export function EncounterDetailView() {
     return fallback;
   }
 
+  function applyAdvanceSuccess(next: EncounterStatus, updated?: Encounter, descriptionOverride?: string) {
+    setCompletedStages((prev) => new Set([...prev, enc.status]));
+    if (updated) {
+      setLocalStatus(updated.status);
+      setLocalStageStartIso(updated.currentStageStartAtIso || new Date().toISOString());
+    } else {
+      setLocalStatus(next);
+      setLocalStageStartIso(new Date().toISOString());
+    }
+
+    const advanceDescription =
+      descriptionOverride ||
+      (enc.status === "Optimizing" && currentTemplateVals["coding.documentation_complete"] !== true
+        ? "Moved to checkout. Revenue will keep documentation incomplete flagged until Athena documentation is finished."
+        : `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`);
+
+    toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
+      description: advanceDescription,
+    });
+
+    if (enc.status === "Optimizing" && next === "CheckOut") {
+      navigate("/clinician");
+    }
+  }
+
   // Auto-advance from Lobby -> Rooming or ReadyForProvider -> Optimizing when arriving with query actions.
   useEffect(() => {
     if (!baseEnc || isAdvancing) return;
@@ -1394,28 +1419,24 @@ export function EncounterDetailView() {
                   : undefined,
             );
 
-      setCompletedStages((prev) => new Set([...prev, enc.status]));
-      if (updated) {
-        setLocalStatus(updated.status);
-        setLocalStageStartIso(updated.currentStageStartAtIso || new Date().toISOString());
-      } else {
-        setLocalStatus(next);
-        setLocalStageStartIso(new Date().toISOString());
-      }
-
-      const advanceDescription =
-        enc.status === "Optimizing" && currentTemplateVals["coding.documentation_complete"] !== true
-          ? "Moved to checkout. Revenue will keep documentation incomplete flagged until Athena documentation is finished."
-          : `Encounter ${enc.id} advanced from ${statusLabels[enc.status]}`;
-
-      toast.success(`${enc.patientId} → ${statusLabels[next]}`, {
-        description: advanceDescription,
-      });
-
-      if (enc.status === "Optimizing" && next === "CheckOut") {
-        navigate("/clinician");
-      }
+      applyAdvanceSuccess(next, updated);
     } catch (error) {
+      let refreshedEncounter: Encounter | undefined;
+      try {
+        refreshedEncounter = await ctx.fetchEncounter(enc.id, { force: true });
+      } catch {
+        refreshedEncounter = undefined;
+      }
+
+      if (refreshedEncounter?.status === next) {
+        applyAdvanceSuccess(
+          next,
+          refreshedEncounter,
+          "The response was delayed, but the step completed and the encounter advanced successfully.",
+        );
+        return;
+      }
+
       toast.error("Unable to save the workflow step", {
         description: getAdvanceErrorMessage(
           error,
