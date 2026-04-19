@@ -1858,7 +1858,7 @@ export const dashboards = {
     const q = qs.toString();
     return apiFetch<RevenueDashboardSnapshot>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, {
       cacheTtlMs: 25_000,
-      timeoutMs: 45_000,
+      timeoutMs: 90_000,
     });
   },
   revenueCycleHistory(params?: { clinicId?: string; from?: string; to?: string }) {
@@ -1875,7 +1875,7 @@ export const dashboards = {
       `/dashboard/revenue-cycle/history${q ? `?${q}` : ""}`,
       {
         cacheTtlMs: 30_000,
-        timeoutMs: 45_000,
+        timeoutMs: 90_000,
       },
     );
   },
@@ -1904,13 +1904,13 @@ export const revenueCases = {
     const q = qs.toString();
     return apiFetch<RevenueCaseDetail[]>(`/revenue-cases${q ? `?${q}` : ""}`, {
       cacheTtlMs: 15_000,
-      timeoutMs: 45_000,
+      timeoutMs: 90_000,
     });
   },
   get(id: string) {
     return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}`, {
       cacheTtlMs: 15_000,
-      timeoutMs: 45_000,
+      timeoutMs: 90_000,
     });
   },
   update(
