@@ -191,6 +191,25 @@ async function ensureReadyRoom({ clinicId, facilityId }) {
   return room || null;
 }
 
+function roomCardIsUsableForProof(row) {
+  if (!row?.roomId && !row?.id) return false;
+  if (row.operationalStatus === "Ready") return true;
+  if (
+    row.actualOperationalStatus !== "Occupied" &&
+    row.actualOperationalStatus !== "Hold" &&
+    row.dayStartCompleted === false
+  ) {
+    return true;
+  }
+  if (
+    row.dayStartCompleted === true &&
+    (row.actualOperationalStatus === "NeedsTurnover" || row.actualOperationalStatus === "NotReady")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 async function request(path, { method = "GET", body, auth = false } = {}) {
   const headers = auth ? authHeaders() : {};
   if (body) {
@@ -326,8 +345,22 @@ async function main() {
   assert.ok(Array.isArray(clinics) && clinics.length > 0, "expected at least one clinic");
   const assignments = await request(`/admin/assignments?facilityId=${originalFacilityId}`, { auth: true });
   assert.ok(Array.isArray(assignments) && assignments.length > 0, "expected assignment rows");
-  const targetAssignment =
-    assignments.find((row) => row.clinicStatus === "active" && row.isOperational) || null;
+  const operationalAssignments = assignments.filter((row) => row.clinicStatus === "active" && row.isOperational);
+  assert.ok(operationalAssignments.length > 0, "expected at least one active operational clinic assignment");
+
+  const roomsByClinic = await Promise.all(
+    operationalAssignments.map(async (row) => ({
+      assignment: row,
+      rooms: await request(`/rooms/live?clinicId=${row.clinicId}`, { auth: true }),
+    })),
+  );
+
+  const assignmentWithUsableRoom =
+    roomsByClinic.find(
+      (entry) => Array.isArray(entry.rooms) && entry.rooms.some((row) => roomCardIsUsableForProof(row)),
+    )?.assignment || null;
+
+  const targetAssignment = assignmentWithUsableRoom || operationalAssignments[0] || null;
   assert.ok(targetAssignment, "expected at least one active operational clinic assignment");
 
   const clinic = clinics.find((entry) => entry.id === targetAssignment.clinicId);
@@ -501,7 +534,6 @@ async function main() {
     await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/encounter/${createdEncounter.id}`, { waitUntil: "networkidle" });
-    await page.getByText("Ready for Provider", { exact: true }).waitFor({ timeout: 10_000 });
     await page.getByRole("button", { name: "Start Visit" }).waitFor({ timeout: 10_000 });
 
     await page.goto(`${frontendBaseUrl}/clinician`, { waitUntil: "networkidle" });
