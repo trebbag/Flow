@@ -492,8 +492,10 @@ async function main() {
 
     await page.goto(`${frontendBaseUrl}/ma-board`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
-    const roomingColumn = page.locator("div").filter({ has: page.getByText("Rooming", { exact: true }) }).first();
-    await expectPoll(async () => await roomingColumn.getByText(createdEncounter.patientId, { exact: true }).count(), 0);
+    const roomingColumnCard = page.locator(
+      `[data-status-column="Rooming"] [data-encounter-patient-id="${createdEncounter.patientId}"]`,
+    );
+    await expectPoll(async () => await roomingColumnCard.count(), 0);
 
     await page.goto(`${frontendBaseUrl}/checkin`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Front Desk Check-In" }).waitFor({ timeout: 10_000 });

@@ -269,6 +269,7 @@ export function MABoardView() {
             return (
               <div
                 key={status}
+                data-status-column={status}
                 className="flex flex-col flex-1 min-w-[280px]"
               >
                 {/* Column header */}
@@ -424,6 +425,8 @@ function EncounterCard({
   if (isSafety) {
     return (
       <div
+        data-encounter-card={e.id}
+        data-encounter-patient-id={e.patientId}
         onClick={onSelect}
         className={`rounded-xl overflow-hidden cursor-pointer transition-all hover:shadow-lg ${checking ? "opacity-70 pointer-events-none" : ""}`}
         style={{
@@ -501,6 +504,8 @@ function EncounterCard({
   // ── Normal card (non-safety) ──
   return (
     <div
+      data-encounter-card={e.id}
+      data-encounter-patient-id={e.patientId}
       onClick={onSelect}
       className={`rounded-xl overflow-hidden border transition-all hover:shadow-md cursor-pointer ${checking ? "opacity-70 pointer-events-none" : ""}`}
       style={{
