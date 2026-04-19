@@ -2,14 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { applySession } from "./auth-session";
-import { resetMicrosoftLoginState } from "./microsoft-auth";
+import { isMicrosoftAuthRedirectFrame, resetMicrosoftLoginState } from "./microsoft-auth";
 import { completeMicrosoftSignIn } from "./complete-microsoft-signin";
 
 export function AuthCallbackView() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const redirectFrame = isMicrosoftAuthRedirectFrame();
 
   useEffect(() => {
+    if (redirectFrame) {
+      return;
+    }
+
     let cancelled = false;
 
     async function completeRedirect() {
@@ -31,7 +36,15 @@ export function AuthCallbackView() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, redirectFrame]);
+
+  if (redirectFrame) {
+    return (
+      <div aria-hidden="true" className="min-h-screen bg-white">
+        <span className="sr-only">Completing Microsoft authentication</span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f8fb] flex items-center justify-center p-4">

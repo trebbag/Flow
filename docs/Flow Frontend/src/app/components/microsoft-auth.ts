@@ -19,6 +19,15 @@ const LOGIN_PENDING_KEY = "flow_entra_login_pending";
 const REDIRECT_NAVIGATION_TIMEOUT_MS = 5 * 60 * 1000;
 const LOGIN_PENDING_TTL_MS = 10 * 60 * 1000;
 
+function isRunningInIframe() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.parent !== window;
+  } catch {
+    return true;
+  }
+}
+
 function normalizePath(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
   return path.startsWith("/") ? path : `/${path}`;
@@ -121,6 +130,7 @@ function isInteractionInProgressError(error: unknown) {
 }
 
 let clientPromise: Promise<PublicClientApplication> | null = null;
+let accessTokenPromise: Promise<string | null> | null = null;
 
 export function isMicrosoftAuthConfigured() {
   return Boolean(configuredClientId && buildAuthority() && configuredApiScope);
@@ -240,24 +250,50 @@ export async function startMicrosoftLogin(nextPath?: string): Promise<Authentica
 }
 
 export async function acquireMicrosoftAccessToken(forceRefresh = false) {
-  const { client, account } = await ensureActiveAccount();
-  if (!account) {
-    return null;
+  if (!forceRefresh && accessTokenPromise) {
+    return accessTokenPromise;
   }
 
-  try {
-    const result = await client.acquireTokenSilent({
-      account,
-      scopes: apiScopes(),
-      forceRefresh,
-    });
-    return result.accessToken;
-  } catch (error) {
-    if (error instanceof InteractionRequiredAuthError) {
-      throw new Error("Microsoft session expired. Sign in again.");
+  const acquire = async () => {
+    const { client, account } = await ensureActiveAccount();
+    if (!account) {
+      return null;
     }
-    throw error;
+
+    try {
+      const result = await client.acquireTokenSilent({
+        account,
+        scopes: apiScopes(),
+        forceRefresh,
+      });
+      return result.accessToken;
+    } catch (error) {
+      if (error instanceof InteractionRequiredAuthError) {
+        throw new Error("Microsoft session expired. Sign in again.");
+      }
+      if (isInteractionInProgressError(error)) {
+        throw new Error("Microsoft sign-in is still finishing. Wait a moment and try again.");
+      }
+      if (isTimedOutBrowserError(error)) {
+        throw new Error(
+          "Microsoft token renewal timed out before it finished in the browser. Refresh Flow and try again.",
+        );
+      }
+      throw error;
+    }
+  };
+
+  const request = acquire().finally(() => {
+    if (accessTokenPromise === request) {
+      accessTokenPromise = null;
+    }
+  });
+
+  if (!forceRefresh) {
+    accessTokenPromise = request;
   }
+
+  return request;
 }
 
 export async function logoutFromMicrosoft() {
@@ -279,6 +315,10 @@ export function getMicrosoftConfigSummary() {
 
 export function hasMicrosoftLoginPending() {
   return Boolean(readPendingStartedAt());
+}
+
+export function isMicrosoftAuthRedirectFrame() {
+  return isRunningInIframe();
 }
 
 export function resetMicrosoftLoginState() {
