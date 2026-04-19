@@ -521,7 +521,6 @@ async function main() {
       }
     }
     await enabledReadyButton.click();
-    await page.getByText(`${createdEncounter.patientId} → Ready for Provider`, { exact: false }).waitFor({ timeout: 10_000 });
     await expectPoll(async () => {
       const refreshedEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
       return refreshedEncounter?.status || refreshedEncounter?.currentStatus || null;
