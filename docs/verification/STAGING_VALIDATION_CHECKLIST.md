@@ -7,6 +7,7 @@ Run this before pilot go/no-go:
    - `STAGING_FRONTEND_BEARER_TOKEN` (preferred) or `STAGING_VITE_DEV_USER_ID`
    - AthenaOne staging connector inputs from [ATHENAONE_STAGING_RUNBOOK.md](../ATHENAONE_STAGING_RUNBOOK.md)
 2. Run `pnpm pilot:validate:staging` from repo root.
+   - to force the live encounter/room proof through a specific clinic during targeted validation, set `FRONTEND_TEST_CLINIC_ID` or `FRONTEND_TEST_CLINIC_NAME` before the run
 3. Confirm a new report exists in `docs/verification/` named `staging-validation-*.md`.
 4. Verify the latest evidence matches the current expectation:
    - `Pilot Preflight` should pass when staging infra is healthy
