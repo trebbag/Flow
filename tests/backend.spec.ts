@@ -4522,6 +4522,11 @@ describe("Flow backend core relationships", () => {
           patientId: "PT-REV-READONLY",
           currentRevenueStatus: "CheckoutTrackingNeeded",
           currentWorkQueue: "CheckoutTracking",
+          encounter: expect.objectContaining({
+            roomingData: null,
+            clinicianData: null,
+            checkoutData: null,
+          }),
         }),
       ]),
     );
@@ -4643,6 +4648,11 @@ describe("Flow backend core relationships", () => {
       expect.arrayContaining([
         expect.objectContaining({
           encounterId: finishedEncounter.id,
+          encounter: expect.objectContaining({
+            roomingData: null,
+            clinicianData: null,
+            checkoutData: null,
+          }),
         }),
       ]),
     );

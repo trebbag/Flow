@@ -27,8 +27,10 @@ import {
   DEFAULT_MISSED_COLLECTION_REASONS,
   DEFAULT_PROVIDER_QUERY_TEMPLATES,
   DEFAULT_REVENUE_SETTINGS,
-  getRevenueSettings
+  getRevenueSettings,
+  invalidateRevenueSettingsCache,
 } from "../lib/revenue-cycle.js";
+import { getRevenueDailyHistoryRollups, listDateKeys } from "../lib/revenue-rollups.js";
 
 const facilitySchema = z.object({
   name: z.string().min(1),
@@ -3040,6 +3042,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     let importedCount = 0;
     let skippedCount = 0;
     const importedCaseIds: string[] = [];
+    const importedClinicIds = new Set<string>();
     const unmatchedRows: Array<{ index: number; patientId: string; encounterId: string; dateOfService: string }> = [];
 
     for (const row of previewResult.rows) {
@@ -3083,6 +3086,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
       importedCount += 1;
       importedCaseIds.push(matchedCase.id);
+      importedClinicIds.add(matchedCase.clinicId);
     }
 
     await prisma.integrationConnector.update({
@@ -3098,6 +3102,24 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         lastSyncMessage: `Imported Athena monitoring for ${importedCount} revenue case(s). ${skippedCount} unmatched row(s).`
       }
     });
+
+    if (importedClinicIds.size > 0) {
+      const clinics = await prisma.clinic.findMany({
+        where: {
+          id: { in: [...importedClinicIds] },
+        },
+        select: {
+          id: true,
+          name: true,
+          timezone: true,
+          facilityId: true,
+        },
+      });
+      await getRevenueDailyHistoryRollups(prisma, clinics, listDateKeys(importDate, importDate), {
+        persist: true,
+        forceRecompute: true,
+      });
+    }
 
     return {
       ok: true,
@@ -3215,6 +3237,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       }
     });
 
+    invalidateRevenueSettingsCache(facility.id);
     const settings = await getRevenueSettings(prisma, facility.id);
     return {
       facilityId: facility.id,

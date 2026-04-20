@@ -7,7 +7,7 @@ import {
   FinancialEligibilityStatus,
   FinancialRequirementStatus,
   type FinancialReadiness,
-  type Prisma,
+  Prisma,
   type PrismaClient,
   ProviderClarificationStatus,
   RevenueChecklistGroup,
@@ -141,7 +141,14 @@ export type RevenueEstimateDefaults = {
 };
 
 type RevenueSettingsSnapshot = {
+  facilityId: string;
+  missedCollectionReasons: string[];
+  queueSla: Record<string, unknown>;
+  dayCloseDefaults: Record<string, unknown>;
   estimateDefaults: RevenueEstimateDefaults;
+  providerQueryTemplates: string[];
+  athenaLinkTemplate: string;
+  athenaChecklistDefaults: RevenueChecklistDefaultItem[];
   checklistDefaults: Record<string, RevenueChecklistDefaultItem[]>;
   serviceCatalog: RevenueServiceCatalogItem[];
   chargeSchedule: RevenueChargeScheduleItem[];
@@ -1431,9 +1438,72 @@ function buildDefaultRevenueSettings(facilityId: string) {
   };
 }
 
+type CachedRevenueSettingsEntry = {
+  expiresAt: number;
+  value: RevenueSettingsSnapshot;
+};
+
+const REVENUE_SETTINGS_CACHE_TTL_MS = 30_000;
+const revenueSettingsCache = new Map<string, CachedRevenueSettingsEntry>();
+
+function normalizeRevenueSettingsRecord(
+  settings: {
+    facilityId: string;
+    missedCollectionReasonsJson: Prisma.JsonValue;
+    queueSlaJson: Prisma.JsonValue;
+    dayCloseDefaultsJson: Prisma.JsonValue;
+    estimateDefaultsJson: Prisma.JsonValue;
+    providerQueryTemplatesJson: Prisma.JsonValue;
+    athenaLinkTemplate: string | null;
+    athenaChecklistDefaultsJson: Prisma.JsonValue;
+    checklistDefaultsJson: Prisma.JsonValue;
+    serviceCatalogJson: Prisma.JsonValue;
+    chargeScheduleJson: Prisma.JsonValue;
+    reimbursementRulesJson: Prisma.JsonValue;
+  },
+) {
+  const checklistDefaults = parseChecklistDefaults(settings.checklistDefaultsJson);
+  const athenaChecklistDefaults = parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson);
+  checklistDefaults[RevenueChecklistGroup.athena_handoff_attestation] = athenaChecklistDefaults;
+
+  return {
+    facilityId: settings.facilityId,
+    missedCollectionReasons: parseSettingsArray(settings.missedCollectionReasonsJson, DEFAULT_MISSED_COLLECTION_REASONS),
+    queueSla: asRecord(settings.queueSlaJson),
+    dayCloseDefaults: asRecord(settings.dayCloseDefaultsJson),
+    estimateDefaults: parseEstimateDefaults(settings.estimateDefaultsJson),
+    providerQueryTemplates: parseSettingsArray(settings.providerQueryTemplatesJson, DEFAULT_PROVIDER_QUERY_TEMPLATES),
+    athenaLinkTemplate: settings.athenaLinkTemplate || "",
+    athenaChecklistDefaults,
+    checklistDefaults,
+    serviceCatalog: parseServiceCatalog(settings.serviceCatalogJson),
+    chargeSchedule: parseChargeSchedule(settings.chargeScheduleJson),
+    reimbursementRules: parseReimbursementRules(settings.reimbursementRulesJson),
+  } satisfies RevenueSettingsSnapshot;
+}
+
+export function invalidateRevenueSettingsCache(facilityId?: string | null) {
+  const cacheKey = (facilityId || "").trim();
+  if (!cacheKey) {
+    revenueSettingsCache.clear();
+    return;
+  }
+  revenueSettingsCache.delete(cacheKey);
+}
+
 export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionClient, facilityId: string) {
   try {
-    const settings = await db.revenueCycleSettings.upsert({
+    const cacheKey = facilityId.trim();
+    const cached = revenueSettingsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
+
+    const existing = await db.revenueCycleSettings.findUnique({
+      where: { facilityId },
+    });
+
+    const settings = existing || (await db.revenueCycleSettings.upsert({
       where: { facilityId },
       create: {
         facilityId,
@@ -1450,26 +1520,14 @@ export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionCl
         reimbursementRulesJson: DEFAULT_REVENUE_SETTINGS.reimbursementRules as Prisma.InputJsonValue,
       },
       update: {},
+    }));
+
+    const normalized = normalizeRevenueSettingsRecord(settings);
+    revenueSettingsCache.set(cacheKey, {
+      expiresAt: Date.now() + REVENUE_SETTINGS_CACHE_TTL_MS,
+      value: normalized,
     });
-
-    const checklistDefaults = parseChecklistDefaults(settings.checklistDefaultsJson);
-    const athenaChecklistDefaults = parseAthenaChecklistDefaults(settings.athenaChecklistDefaultsJson);
-    checklistDefaults[RevenueChecklistGroup.athena_handoff_attestation] = athenaChecklistDefaults;
-
-    return {
-      facilityId: settings.facilityId,
-      missedCollectionReasons: parseSettingsArray(settings.missedCollectionReasonsJson, DEFAULT_MISSED_COLLECTION_REASONS),
-      queueSla: asRecord(settings.queueSlaJson),
-      dayCloseDefaults: asRecord(settings.dayCloseDefaultsJson),
-      estimateDefaults: parseEstimateDefaults(settings.estimateDefaultsJson),
-      providerQueryTemplates: parseSettingsArray(settings.providerQueryTemplatesJson, DEFAULT_PROVIDER_QUERY_TEMPLATES),
-      athenaLinkTemplate: settings.athenaLinkTemplate || "",
-      athenaChecklistDefaults,
-      checklistDefaults,
-      serviceCatalog: parseServiceCatalog(settings.serviceCatalogJson),
-      chargeSchedule: parseChargeSchedule(settings.chargeScheduleJson),
-      reimbursementRules: parseReimbursementRules(settings.reimbursementRulesJson),
-    };
+    return normalized;
   } catch (error) {
     if (isMissingRevenueSettingsSchemaError(error)) {
       return buildDefaultRevenueSettings(facilityId);
@@ -2017,6 +2075,42 @@ export async function syncRevenueCasesForScope(
   }
 }
 
+const revenueCaseFullSelect = Prisma.validator<Prisma.RevenueCaseFindManyArgs>()({
+  include: {
+    clinic: { select: { id: true, name: true, status: true, shortCode: true, cardColor: true } },
+    provider: { select: { id: true, name: true, active: true } },
+    encounter: {
+      select: {
+        id: true,
+        patientId: true,
+        currentStatus: true,
+        checkInAt: true,
+        providerEndAt: true,
+        checkoutCompleteAt: true,
+        roomingData: true,
+        clinicianData: true,
+        checkoutData: true,
+        room: { select: { id: true, name: true, status: true } },
+        reason: { select: { id: true, name: true, status: true } },
+      },
+    },
+    assignedToUser: { select: { id: true, name: true, status: true } },
+    financialReadiness: true,
+    checkoutCollectionTracking: true,
+    chargeCaptureRecord: true,
+    providerClarifications: {
+      where: { status: { not: ProviderClarificationStatus.Resolved } },
+      orderBy: { openedAt: "asc" },
+    },
+    checklistItems: { orderBy: [{ group: "asc" }, { sortOrder: "asc" }] },
+    events: { orderBy: { createdAt: "desc" }, take: 20 },
+  },
+});
+
+type RevenueCaseListRow = Prisma.RevenueCaseGetPayload<typeof revenueCaseFullSelect> & {
+  providerQueryOpenCount: number;
+};
+
 export async function buildRevenueCaseList(
   db: PrismaClient | Prisma.TransactionClient,
   params: {
@@ -2024,78 +2118,113 @@ export async function buildRevenueCaseList(
     clinicIds?: string[];
     facilityId?: string | null;
     encounterId?: string;
+    fromDateKey?: string;
+    toDateKey?: string;
     search?: string;
     dayBucket?: RevenueDayBucket;
     workQueue?: RevenueWorkQueue;
     mine?: boolean;
     userId?: string;
     userRole?: RoleName;
+    detailLevel?: "summary" | "full";
   },
-) {
+) : Promise<RevenueCaseListRow[]> {
   const search = params.search?.trim();
-  const rows = await db.revenueCase.findMany({
-    where: {
-      id: params.revenueCaseId,
-      clinicId: params.clinicIds && params.clinicIds.length > 0 ? { in: params.clinicIds } : undefined,
-      facilityId: params.facilityId || undefined,
-      encounterId: params.encounterId,
-      currentDayBucket: params.dayBucket,
-      currentWorkQueue: params.workQueue,
-      ...(params.mine && params.userId && params.userRole
+  const fromDate = params.fromDateKey?.trim()
+    ? DateTime.fromISO(params.fromDateKey.trim()).startOf("day").toJSDate()
+    : undefined;
+  const toDate = params.toDateKey?.trim()
+    ? DateTime.fromISO(params.toDateKey.trim()).endOf("day").toJSDate()
+    : undefined;
+  const where = {
+    id: params.revenueCaseId,
+    clinicId: params.clinicIds && params.clinicIds.length > 0 ? { in: params.clinicIds } : undefined,
+    facilityId: params.facilityId || undefined,
+    encounterId: params.encounterId,
+    dateOfService:
+      fromDate || toDate
         ? {
-            OR: [
-              { assignedToUserId: params.userId },
-              { assignedToRole: params.userRole, assignedToUserId: null },
-            ],
+            gte: fromDate,
+            lte: toDate,
           }
-        : {}),
-      ...(search
-        ? {
-            OR: [
-              { patientId: { contains: search } },
-              { currentBlockerText: { contains: search } },
-              { encounter: { provider: { name: { contains: search } } } },
-              { clinic: { name: { contains: search } } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      clinic: { select: { id: true, name: true, status: true, shortCode: true, cardColor: true } },
-      provider: { select: { id: true, name: true, active: true } },
-      encounter: {
-        select: {
-          id: true,
-          patientId: true,
-          currentStatus: true,
-          checkInAt: true,
-          providerEndAt: true,
-          checkoutCompleteAt: true,
-          roomingData: true,
-          clinicianData: true,
-          checkoutData: true,
-          room: { select: { id: true, name: true, status: true } },
-          reason: { select: { id: true, name: true, status: true } },
+        : undefined,
+    currentDayBucket: params.dayBucket,
+    currentWorkQueue: params.workQueue,
+    ...(params.mine && params.userId && params.userRole
+      ? {
+          OR: [
+            { assignedToUserId: params.userId },
+            { assignedToRole: params.userRole, assignedToUserId: null },
+          ],
+        }
+      : {}),
+    ...(search
+      ? {
+          OR: [
+            { patientId: { contains: search } },
+            { currentBlockerText: { contains: search } },
+            { encounter: { provider: { name: { contains: search } } } },
+            { clinic: { name: { contains: search } } },
+          ],
+        }
+      : {}),
+  } satisfies Prisma.RevenueCaseWhereInput;
+
+  if (params.detailLevel === "summary") {
+    const rows = await db.revenueCase.findMany({
+      where,
+      include: {
+        clinic: { select: { id: true, name: true, status: true, shortCode: true, cardColor: true } },
+        provider: { select: { id: true, name: true, active: true } },
+        encounter: {
+          select: {
+            id: true,
+            patientId: true,
+            currentStatus: true,
+            checkInAt: true,
+            providerEndAt: true,
+            checkoutCompleteAt: true,
+            room: { select: { id: true, name: true, status: true } },
+            reason: { select: { id: true, name: true, status: true } },
+          },
+        },
+        assignedToUser: { select: { id: true, name: true, status: true } },
+        financialReadiness: true,
+        checkoutCollectionTracking: true,
+        chargeCaptureRecord: true,
+        providerClarifications: {
+          where: { status: { not: ProviderClarificationStatus.Resolved } },
+          select: { id: true },
         },
       },
-      assignedToUser: { select: { id: true, name: true, status: true } },
-      financialReadiness: true,
-      checkoutCollectionTracking: true,
-      chargeCaptureRecord: true,
-      providerClarifications: {
-        where: { status: { not: ProviderClarificationStatus.Resolved } },
-        orderBy: { openedAt: "asc" },
+      orderBy: [{ priority: "asc" }, { dueAt: "asc" }, { updatedAt: "desc" }],
+    });
+
+    return rows.map((row) => ({
+      ...row,
+      encounter: {
+        ...row.encounter,
+        roomingData: null,
+        clinicianData: null,
+        checkoutData: null,
       },
-      checklistItems: { orderBy: [{ group: "asc" }, { sortOrder: "asc" }] },
-      events: { orderBy: { createdAt: "desc" }, take: 20 },
-    },
+      providerClarifications: [],
+      checklistItems: [],
+      events: [],
+      providerQueryOpenCount: row.providerClarifications.length,
+    })) as RevenueCaseListRow[];
+  }
+
+  const rows = await db.revenueCase.findMany({
+    where,
+    include: revenueCaseFullSelect.include,
     orderBy: [{ priority: "asc" }, { dueAt: "asc" }, { updatedAt: "desc" }],
   });
 
   return rows.map((row) => ({
     ...row,
     providerQueryOpenCount: row.providerClarifications.length,
-  }));
+  })) as RevenueCaseListRow[];
 }
 
 export async function createRevenueProviderClarification(

@@ -14,7 +14,8 @@ import {
   markEncounterRoomNeedsTurnoverInTx,
   markEncounterRoomOccupiedInTx
 } from "../lib/room-operations.js";
-import { CLINICIAN_CODING_KEYS, ROOMING_SERVICE_CAPTURE_KEY, serviceCaptureItemsAreComplete, syncRevenueCaseForEncounter } from "../lib/revenue-cycle.js";
+import { CLINICIAN_CODING_KEYS, ROOMING_SERVICE_CAPTURE_KEY, serviceCaptureItemsAreComplete } from "../lib/revenue-cycle.js";
+import { queueRevenueEncounterSync } from "../lib/revenue-sync-queue.js";
 import { hasActiveTemporaryClinicOverride, listActiveTemporaryClinicOverrideIds } from "../lib/assignment-overrides.js";
 import {
   formatClinicDisplayName,
@@ -991,7 +992,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       return created;
     });
 
-    await syncRevenueCaseForEncounter(prisma, encounter.id);
+    await queueRevenueEncounterSync(prisma, encounter.id);
     return getHydratedEncounterView(encounter.id);
   });
 
@@ -1174,7 +1175,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         userId: request.user!.id
       });
     }
-    await syncRevenueCaseForEncounter(prisma, updated.id);
+    await queueRevenueEncounterSync(prisma, updated.id);
     return getHydratedEncounterView(updated.id);
   });
 
@@ -1229,7 +1230,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       }
       return row;
     });
-    await syncRevenueCaseForEncounter(prisma, updated.id);
+    await queueRevenueEncounterSync(prisma, updated.id);
     return getHydratedEncounterView(updated.id);
   });
 
@@ -1340,6 +1341,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         version: encounter.version + 1
       }
     });
+    await queueRevenueEncounterSync(prisma, updated.id);
     return getHydratedEncounterView(updated.id);
   });
 
@@ -1437,7 +1439,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
       userId: request.user!.id
     });
-    await syncRevenueCaseForEncounter(prisma, updated.id);
+    await queueRevenueEncounterSync(prisma, updated.id);
     return getHydratedEncounterView(updated.id);
   });
 
@@ -1496,7 +1498,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       where: { id: encounterId },
       data
     });
-    await syncRevenueCaseForEncounter(prisma, updated.id);
+    await queueRevenueEncounterSync(prisma, updated.id);
     return getHydratedEncounterView(updated.id);
   });
 
@@ -1553,7 +1555,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         }
       }
     });
-    await syncRevenueCaseForEncounter(prisma, updated.id);
+    await queueRevenueEncounterSync(prisma, updated.id);
     return getHydratedEncounterView(updated.id);
   });
 }

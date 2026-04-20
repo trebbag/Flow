@@ -1414,11 +1414,14 @@ export const admin = {
   },
 
   // Users
-  listUsers(facilityId?: string) {
+  listUsers(facilityId?: string, options?: { signal?: AbortSignal }) {
     const qs = new URLSearchParams();
     if (facilityId) qs.set("facilityId", facilityId);
     const q = qs.toString();
-    return apiFetch<StaffUser[]>(`/admin/users${q ? `?${q}` : ""}`, { cacheTtlMs: 15_000 });
+    return apiFetch<StaffUser[]>(`/admin/users${q ? `?${q}` : ""}`, {
+      cacheTtlMs: 15_000,
+      signal: options?.signal,
+    });
   },
   searchDirectoryUsers(query: string) {
     const qs = new URLSearchParams({ query });
@@ -1954,6 +1957,7 @@ export const dashboards = {
     workQueue?: RevenueWorkQueue;
     mine?: boolean;
     search?: string;
+    signal?: AbortSignal;
   }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
@@ -1966,10 +1970,11 @@ export const dashboards = {
     const q = qs.toString();
     return apiFetch<RevenueDashboardSnapshot>(`/dashboard/revenue-cycle${q ? `?${q}` : ""}`, {
       cacheTtlMs: 25_000,
-      timeoutMs: 90_000,
+      timeoutMs: 15_000,
+      signal: params?.signal,
     });
   },
-  revenueCycleHistory(params?: { clinicId?: string; from?: string; to?: string }) {
+  revenueCycleHistory(params?: { clinicId?: string; from?: string; to?: string; signal?: AbortSignal }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.from) qs.set("from", params.from);
@@ -1983,7 +1988,8 @@ export const dashboards = {
       `/dashboard/revenue-cycle/history${q ? `?${q}` : ""}`,
       {
         cacheTtlMs: 30_000,
-        timeoutMs: 90_000,
+        timeoutMs: 15_000,
+        signal: params?.signal,
       },
     );
   },
@@ -1999,6 +2005,7 @@ export const revenueCases = {
     mine?: boolean;
     from?: string;
     to?: string;
+    signal?: AbortSignal;
   }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
@@ -2012,13 +2019,15 @@ export const revenueCases = {
     const q = qs.toString();
     return apiFetch<RevenueCaseDetail[]>(`/revenue-cases${q ? `?${q}` : ""}`, {
       cacheTtlMs: 15_000,
-      timeoutMs: 90_000,
+      timeoutMs: 15_000,
+      signal: params?.signal,
     });
   },
-  get(id: string) {
+  get(id: string, options?: { signal?: AbortSignal }) {
     return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}`, {
       cacheTtlMs: 15_000,
-      timeoutMs: 90_000,
+      timeoutMs: 15_000,
+      signal: options?.signal,
     });
   },
   update(

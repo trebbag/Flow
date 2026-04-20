@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   Activity,
@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
+import { Skeleton } from "./ui/skeleton";
 import { Switch } from "./ui/switch";
 import { admin, dashboards, revenueCases } from "./api-client";
 import { loadSession } from "./auth-session";
@@ -82,6 +83,11 @@ const collectionOutcomes: CollectionOutcome[] = [
   "Waived",
   "Deferred",
 ];
+
+const REVENUE_CORE_TOAST_ID = "revenue-core-load";
+const REVENUE_HISTORY_TOAST_ID = "revenue-history-load";
+const REVENUE_DAY_CLOSE_TOAST_ID = "revenue-day-close-load";
+const REVENUE_USERS_TOAST_ID = "revenue-user-options-load";
 
 type DayCloseDraft = {
   ownerUserId: string;
@@ -247,6 +253,12 @@ function describeLoadError(error: unknown, fallback = "Request failed") {
   return fallback;
 }
 
+function isAbortLikeError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return error.name === "AbortError" || message.includes("aborted") || message.includes("aborterror");
+}
+
 function getRevenueExpectation(row: RevenueCaseDetail, settings: RevenueSettings | null) {
   const chargeSchedule = buildChargeScheduleMap(settings);
   const serviceItems = safeServiceCaptureItems(row.chargeCaptureRecord?.serviceCaptureItemsJson);
@@ -369,6 +381,9 @@ export function RevenueCycleView() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(() => searchParams.get("case"));
   const [selectedCase, setSelectedCase] = useState<RevenueCaseDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [dayCloseLoading, setDayCloseLoading] = useState(false);
+  const [selectedCaseLoading, setSelectedCaseLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userOptions, setUserOptions] = useState<StaffUser[]>([]);
   const [providerQueryText, setProviderQueryText] = useState("");
@@ -378,6 +393,7 @@ export function RevenueCycleView() {
   const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
   const [dayCloseLoadError, setDayCloseLoadError] = useState<string | null>(null);
   const [userOptionsLoadError, setUserOptionsLoadError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [financialDraft, setFinancialDraft] = useState({
     eligibilityStatus: "NotChecked",
     registrationVerified: false,
@@ -415,6 +431,12 @@ export function RevenueCycleView() {
   });
   const [diagnosisInput, setDiagnosisInput] = useState("");
   const [rollDrafts, setRollDrafts] = useState<Record<string, DayCloseDraft>>({});
+  const revenueAbortRef = useRef<AbortController | null>(null);
+  const historyAbortRef = useRef<AbortController | null>(null);
+  const dayCloseAbortRef = useRef<AbortController | null>(null);
+  const userOptionsAbortRef = useRef<AbortController | null>(null);
+  const selectedCaseAbortRef = useRef<AbortController | null>(null);
+  const selectedCaseIdRef = useRef<string | null>(selectedCaseId);
 
   const historyFrom = useMemo(() => isoDate(6), []);
   const historyTo = useMemo(() => isoDate(0), []);
@@ -431,10 +453,22 @@ export function RevenueCycleView() {
     setSearchParams(next, { replace: true });
   }, [activeDrawerTab, activeView, dayBucket, mineOnly, search, selectedCaseId, setSearchParams, workQueue]);
 
-  async function refreshRevenue() {
+  async function refreshRevenue({
+    notify = false,
+    signal,
+  }: {
+    notify?: boolean;
+    signal?: AbortSignal;
+  } = {}) {
     setLoading(true);
     try {
-      const dashboardValue = await dashboards.revenueCycle({ dayBucket, workQueue, mine: mineOnly, search });
+      const dashboardValue = await dashboards.revenueCycle({
+        dayBucket,
+        workQueue,
+        mine: mineOnly,
+        search,
+        signal,
+      });
       const normalizedCases = Array.isArray(dashboardValue?.cases) ? dashboardValue.cases : [];
       const normalizedDashboard: RevenueDashboardSnapshot = {
         ...dashboardValue,
@@ -469,39 +503,65 @@ export function RevenueCycleView() {
         ? selectedCaseId
         : normalizedCases[0]?.id || null;
       setSelectedCaseId(candidateId);
+      toast.dismiss(REVENUE_CORE_TOAST_ID);
     } catch (error) {
+      if (isAbortLikeError(error)) return;
       const message = describeLoadError(error, "Unable to load Revenue Cycle data.");
       setCoreLoadError(message);
-      if (!dashboard && queueRows.length === 0) {
+      if (notify || !dashboard) {
         toast.error("Unable to load Revenue Cycle data", {
+          id: REVENUE_CORE_TOAST_ID,
           description: message,
         });
       }
     } finally {
-      setLoading(false);
-    }
-  }
-
-  async function refreshRevenueHistory({ notify = false } = {}) {
-    try {
-      const result = await dashboards.revenueCycleHistory({ from: historyFrom, to: historyTo });
-      setHistory(result.daily || []);
-      setHistorySummary(result.summary || null);
-      setHistoryLoadError(null);
-    } catch (error) {
-      const message = describeLoadError(error, "Unable to load Revenue history.");
-      setHistoryLoadError(message);
-      if (notify) {
-        toast.error("Unable to load Revenue history", {
-          description: message,
-        });
+      if (!signal?.aborted) {
+        setLoading(false);
       }
     }
   }
 
-  async function refreshDayCloseRows({ notify = false } = {}) {
+  async function refreshRevenueHistory({
+    notify = false,
+    signal,
+  }: {
+    notify?: boolean;
+    signal?: AbortSignal;
+  } = {}) {
+    setHistoryLoading(true);
     try {
-      const rows = await revenueCases.list({ dayBucket: "Today", from: isoDate(0), to: isoDate(0) });
+      const result = await dashboards.revenueCycleHistory({ from: historyFrom, to: historyTo, signal });
+      setHistory(result.daily || []);
+      setHistorySummary(result.summary || null);
+      setHistoryLoadError(null);
+      toast.dismiss(REVENUE_HISTORY_TOAST_ID);
+    } catch (error) {
+      if (isAbortLikeError(error)) return;
+      const message = describeLoadError(error, "Unable to load Revenue history.");
+      setHistoryLoadError(message);
+      if (notify) {
+        toast.error("Unable to load Revenue history", {
+          id: REVENUE_HISTORY_TOAST_ID,
+          description: message,
+        });
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setHistoryLoading(false);
+      }
+    }
+  }
+
+  async function refreshDayCloseRows({
+    notify = false,
+    signal,
+  }: {
+    notify?: boolean;
+    signal?: AbortSignal;
+  } = {}) {
+    setDayCloseLoading(true);
+    try {
+      const rows = await revenueCases.list({ dayBucket: "Today", from: isoDate(0), to: isoDate(0), signal });
       const unresolvedRows = (rows || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus));
       setDayCloseRows(unresolvedRows);
       setDayCloseLoadError(null);
@@ -512,32 +572,48 @@ export function RevenueCycleView() {
         });
         return next;
       });
+      toast.dismiss(REVENUE_DAY_CLOSE_TOAST_ID);
     } catch (error) {
+      if (isAbortLikeError(error)) return;
       const message = describeLoadError(error, "Unable to load day close data.");
       setDayCloseLoadError(message);
       if (notify) {
         toast.error("Unable to load Revenue day close", {
+          id: REVENUE_DAY_CLOSE_TOAST_ID,
           description: message,
         });
+      }
+    } finally {
+      if (!signal?.aborted) {
+        setDayCloseLoading(false);
       }
     }
   }
 
-  async function refreshUserOptions({ notify = false } = {}) {
+  async function refreshUserOptions({
+    notify = false,
+    signal,
+  }: {
+    notify?: boolean;
+    signal?: AbortSignal;
+  } = {}) {
     if (!session?.facilityId) {
       setUserOptions([]);
       setUserOptionsLoadError(null);
       return;
     }
     try {
-      const users = await admin.listUsers(session.facilityId);
+      const users = await admin.listUsers(session.facilityId, { signal });
       setUserOptions((users || []).filter((row) => row.status !== "archived"));
       setUserOptionsLoadError(null);
+      toast.dismiss(REVENUE_USERS_TOAST_ID);
     } catch (error) {
+      if (isAbortLikeError(error)) return;
       const message = describeLoadError(error, "Unable to load staff directory.");
       setUserOptionsLoadError(message);
       if (notify) {
         toast.error("Unable to load staff directory", {
+          id: REVENUE_USERS_TOAST_ID,
           description: message,
         });
       }
@@ -545,55 +621,107 @@ export function RevenueCycleView() {
   }
 
   useEffect(() => {
-    refreshRevenue().catch(() => undefined);
+    const controller = new AbortController();
+    revenueAbortRef.current?.abort();
+    revenueAbortRef.current = controller;
+
+    const timeout = window.setTimeout(() => {
+      refreshRevenue({ signal: controller.signal }).catch(() => undefined);
+    }, 200);
+
     const onRefresh = () => {
-      refreshRevenue().catch(() => undefined);
+      setRefreshNonce((value) => value + 1);
     };
     if (typeof window !== "undefined") {
       window.addEventListener(ADMIN_REFRESH_EVENT, onRefresh);
       window.addEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onRefresh);
     }
     return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
       if (typeof window !== "undefined") {
         window.removeEventListener(ADMIN_REFRESH_EVENT, onRefresh);
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onRefresh);
       }
     };
-  }, [dayBucket, workQueue, mineOnly, search, historyFrom, historyTo]);
+  }, [dayBucket, workQueue, mineOnly, search, refreshNonce]);
 
   useEffect(() => {
-    if (activeView === "History" || activeView === "Day Close") {
-      refreshRevenueHistory().catch(() => undefined);
-    }
     if (activeView === "Day Close") {
-      refreshDayCloseRows().catch(() => undefined);
+      const controller = new AbortController();
+      historyAbortRef.current?.abort();
+      dayCloseAbortRef.current?.abort();
+      userOptionsAbortRef.current?.abort();
+      historyAbortRef.current = controller;
+      dayCloseAbortRef.current = controller;
+      userOptionsAbortRef.current = controller;
+      Promise.all([
+        refreshRevenueHistory({ signal: controller.signal }).catch(() => undefined),
+        refreshDayCloseRows({ signal: controller.signal }).catch(() => undefined),
+        refreshUserOptions({ signal: controller.signal }).catch(() => undefined),
+      ]).catch(() => undefined);
+      return () => controller.abort();
     }
+    if (activeView === "History") {
+      const controller = new AbortController();
+      historyAbortRef.current?.abort();
+      historyAbortRef.current = controller;
+      refreshRevenueHistory({ signal: controller.signal }).catch(() => undefined);
+      return () => controller.abort();
+    }
+    return undefined;
   }, [activeView, historyFrom, historyTo]);
 
   useEffect(() => {
-    if (activeView === "Day Close" || (activeView === "Work Queues" && Boolean(selectedCaseId))) {
-      refreshUserOptions().catch(() => undefined);
+    if (activeView === "Work Queues" && Boolean(selectedCaseId)) {
+      const controller = new AbortController();
+      userOptionsAbortRef.current?.abort();
+      userOptionsAbortRef.current = controller;
+      refreshUserOptions({ signal: controller.signal }).catch(() => undefined);
+      return () => controller.abort();
     }
+    return undefined;
   }, [activeView, selectedCaseId, session?.facilityId]);
 
   useEffect(() => {
     if (!selectedCaseId) {
+      selectedCaseIdRef.current = null;
       setSelectedCase(null);
       return;
     }
-    let mounted = true;
-    revenueCases.get(selectedCaseId)
+    if (selectedCaseIdRef.current === selectedCaseId && selectedCase) {
+      return;
+    }
+    selectedCaseIdRef.current = selectedCaseId;
+    const controller = new AbortController();
+    selectedCaseAbortRef.current?.abort();
+    selectedCaseAbortRef.current = controller;
+    setSelectedCaseLoading(true);
+    revenueCases.get(selectedCaseId, { signal: controller.signal })
       .then((result) => {
-        if (!mounted) return;
         setSelectedCase(result);
       })
-      .catch(() => {
-        if (mounted) setSelectedCase(null);
+      .catch((error) => {
+        if (isAbortLikeError(error)) return;
+        setSelectedCase(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSelectedCaseLoading(false);
+        }
       });
+    return () => controller.abort();
+  }, [selectedCaseId]);
+
+  useEffect(() => {
     return () => {
-      mounted = false;
+      revenueAbortRef.current?.abort();
+      historyAbortRef.current?.abort();
+      dayCloseAbortRef.current?.abort();
+      userOptionsAbortRef.current?.abort();
+      selectedCaseAbortRef.current?.abort();
     };
-  }, [selectedCaseId, dashboard?.cases.length, queueRows.length]);
+  }, []);
 
   useEffect(() => {
     if (!selectedCase) return;
@@ -664,6 +792,7 @@ export function RevenueCycleView() {
   }, [dashboard]);
 
   const selectedDue = timeUntilDue(selectedCase?.dueAt || null);
+  const anyLoading = loading || historyLoading || dayCloseLoading || selectedCaseLoading;
 
   async function refreshSelectedCase(caseId = selectedCaseId) {
     if (!caseId) return;
@@ -982,7 +1111,7 @@ export function RevenueCycleView() {
               ))}
               <button
                 onClick={() => {
-                  refreshRevenue().catch(() => undefined);
+                  refreshRevenue({ notify: true }).catch(() => undefined);
                   if (activeView === "History" || activeView === "Day Close") {
                     refreshRevenueHistory({ notify: true }).catch(() => undefined);
                   }
@@ -996,7 +1125,7 @@ export function RevenueCycleView() {
                 className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-[12px] text-slate-600 hover:border-slate-300"
                 style={{ fontWeight: 600 }}
               >
-                <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCcw className={`h-3.5 w-3.5 ${anyLoading ? "animate-spin" : ""}`} />
                 Refresh
               </button>
             </div>
@@ -1035,8 +1164,35 @@ export function RevenueCycleView() {
             </div>
           </div>
 
+          {coreLoadError && (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
+                  <div>
+                    <div className="text-[13px] text-slate-900" style={{ fontWeight: 700 }}>
+                      Revenue data is stale or unavailable
+                    </div>
+                    <div className="mt-1 text-[12px] text-slate-600">
+                      {coreLoadError}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => refreshRevenue({ notify: true }).catch(() => undefined)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-[12px] text-slate-700 hover:border-slate-300"
+                  style={{ fontWeight: 700 }}
+                >
+                  Retry Revenue Load
+                </button>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeView === "Overview" && loading && !dashboard && <RevenueOverviewSkeleton />}
+
           {activeView === "Overview" && dashboard && (
-            <div className="space-y-6">
+            <div className={`space-y-6 transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <KpiCard
                   title="Visits collected"
@@ -1178,7 +1334,7 @@ export function RevenueCycleView() {
             </div>
           )}
 
-          {activeView === "Overview" && !dashboard && (
+          {activeView === "Overview" && !dashboard && !loading && (
             <Card className="border-0 shadow-sm">
               <CardContent className="p-6">
                 <div className="flex items-start gap-3">
@@ -1197,8 +1353,9 @@ export function RevenueCycleView() {
           )}
 
           {activeView === "Work Queues" && (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_420px]">
+            <div className={`grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_420px] transition-opacity ${loading && queueRows.length > 0 ? "opacity-60" : "opacity-100"}`}>
               <div className="space-y-4">
+                {loading && queueRows.length === 0 && <RevenueQueueSkeleton />}
                 <div className="flex flex-wrap items-center gap-2">
                   {workQueues.map((queue) => (
                     <button
@@ -1215,7 +1372,7 @@ export function RevenueCycleView() {
                 </div>
                 <div className="rounded-3xl border border-slate-200 bg-white/90 p-3 shadow-sm">
                   <div className="space-y-2">
-                    {queueRows.length === 0 && (
+                    {queueRows.length === 0 && !loading && (
                       <div className="rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center text-[13px] text-slate-500">
                         No revenue cases match the current filters.
                       </div>
@@ -1691,6 +1848,67 @@ function KpiCard({
         {unavailable && <div className="mt-4 text-[11px] text-slate-400">Not yet synced from Athena</div>}
       </CardContent>
     </Card>
+  );
+}
+
+function RevenueOverviewSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Card key={index} className="border-0 shadow-sm">
+            <CardContent className="space-y-3 p-5">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-3 w-full" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="space-y-4 p-5">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-48 w-full rounded-3xl" />
+          </CardContent>
+        </Card>
+        <div className="space-y-6">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <Card key={index} className="border-0 shadow-sm">
+              <CardContent className="space-y-3 p-5">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-16 w-full rounded-2xl" />
+                <Skeleton className="h-16 w-full rounded-2xl" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RevenueQueueSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div key={index} className="grid gap-3 rounded-2xl border border-slate-200 px-4 py-4 lg:grid-cols-[minmax(0,1.1fr)_220px_170px]">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-48" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

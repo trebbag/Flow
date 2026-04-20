@@ -1,11 +1,18 @@
 import { buildApp } from "./app.js";
 import { env } from "./lib/env.js";
 import { prisma } from "./lib/prisma.js";
+import { startRevenueSyncWorker, stopRevenueSyncWorker } from "./lib/revenue-sync-queue.js";
 
 const app = buildApp();
 
 async function start() {
   try {
+    startRevenueSyncWorker({
+      db: prisma,
+      logger: {
+        error: (error, message) => app.log.error(error as Error, message),
+      },
+    });
     await app.listen({ port: env.PORT, host: env.HOST });
   } catch (error) {
     app.log.error(error);
@@ -16,11 +23,13 @@ async function start() {
 start();
 
 process.on("SIGTERM", async () => {
+  await stopRevenueSyncWorker();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
+  await stopRevenueSyncWorker();
   await prisma.$disconnect();
   process.exit(0);
 });

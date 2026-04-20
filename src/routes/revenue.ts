@@ -426,23 +426,20 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const facilityId = request.user!.facilityId || clinics[0]?.facilityId;
     assert(facilityId, 400, "Revenue settings require a facility scope.");
     const settings = await getRevenueSettings(prisma, facilityId);
-    await syncRevenueCasesForScope(prisma, {
-      clinicIds: clinics.map((clinic) => clinic.id),
-      facilityId: request.user!.facilityId,
-      fromDateKey: fromDate,
-      toDateKey: toDate,
-    });
 
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
       facilityId: request.user!.facilityId,
       encounterId: query.encounterId,
+      fromDateKey: fromDate,
+      toDateKey: toDate,
       dayBucket: query.dayBucket,
       workQueue: query.workQueue,
       search: query.search,
       mine: query.mine,
       userId: request.user!.id,
       userRole: request.user!.role,
+      detailLevel: "summary",
     });
 
     const todayRows = rows.filter((row) => row.currentDayBucket === RevenueDayBucket.Today);
@@ -557,16 +554,9 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       throw new ApiError(400, error instanceof Error ? error.message : "Invalid date range");
     }
 
-    await syncRevenueCasesForScope(prisma, {
-      clinicIds: clinics.map((clinic) => clinic.id),
-      facilityId: request.user!.facilityId,
-      fromDateKey: effectiveFrom,
-      toDateKey: effectiveTo,
-    });
-
     const daily = await getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, {
       persist: true,
-      forceRecompute: true,
+      forceRecompute: false,
     });
     const clinicNameById = new Map(clinics.map((clinic) => [clinic.id, formatClinicDisplayName({ name: clinic.name })]));
     const unfinishedQueueCounts: Record<string, number> = {};
@@ -671,23 +661,20 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
     const toDate = query.to || DateTime.now().toISODate()!;
     const fromDate = query.from || DateTime.now().minus({ days: 14 }).toISODate()!;
-    await syncRevenueCasesForScope(prisma, {
-      clinicIds: clinics.map((clinic) => clinic.id),
-      facilityId: request.user!.facilityId,
-      fromDateKey: fromDate,
-      toDateKey: toDate,
-    });
 
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
       facilityId: request.user!.facilityId,
       encounterId: query.encounterId,
+      fromDateKey: fromDate,
+      toDateKey: toDate,
       dayBucket: query.dayBucket,
       workQueue: query.workQueue,
       search: query.search,
       mine: query.mine,
       userId: request.user!.id,
       userRole: request.user!.role,
+      detailLevel: "summary",
     });
 
     return rows.map(mapRevenueCaseRow);
@@ -695,11 +682,11 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
 
   app.get("/revenue-cases/:id", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
-    const revenueCase = await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    await syncRevenueCaseForEncounter(prisma, revenueCase.encounterId);
+    await assertRevenueCaseReadable(revenueCaseId, request.user!);
     const rows = await buildRevenueCaseList(prisma, {
       revenueCaseId,
       facilityId: request.user!.facilityId,
+      detailLevel: "full",
     });
     const row = rows[0] || null;
     assert(row, 404, "Revenue case not found");
@@ -818,8 +805,13 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
     });
 
-    const rows = await buildRevenueCaseList(prisma, { facilityId: request.user!.facilityId });
-    const row = rows.find((entry) => entry.id === revenueCaseId);
+    const row = (
+      await buildRevenueCaseList(prisma, {
+        revenueCaseId,
+        facilityId: request.user!.facilityId,
+        detailLevel: "full",
+      })
+    )[0];
     assert(row, 404, "Revenue case not found");
     return mapRevenueCaseRow(row);
   });
@@ -848,7 +840,13 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     });
 
     await syncRevenueCaseForEncounter(prisma, updated.encounterId);
-    const row = (await buildRevenueCaseList(prisma, { facilityId: request.user!.facilityId })).find((entry) => entry.id === revenueCaseId);
+    const row = (
+      await buildRevenueCaseList(prisma, {
+        revenueCaseId,
+        facilityId: request.user!.facilityId,
+        detailLevel: "full",
+      })
+    )[0];
     assert(row, 404, "Revenue case not found");
     return mapRevenueCaseRow(row);
   });
@@ -968,7 +966,13 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
     });
 
-    const row = (await buildRevenueCaseList(prisma, { facilityId: request.user!.facilityId })).find((entry) => entry.id === revenueCaseId);
+    const row = (
+      await buildRevenueCaseList(prisma, {
+        revenueCaseId,
+        facilityId: request.user!.facilityId,
+        detailLevel: "full",
+      })
+    )[0];
     assert(row, 404, "Revenue case not found");
     return mapRevenueCaseRow(row);
   });
