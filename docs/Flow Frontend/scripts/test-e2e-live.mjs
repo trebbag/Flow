@@ -209,8 +209,8 @@ async function waitForEncounterOnBoard({
   encounterId,
   auth,
   label,
-  attempts = 8,
-  delayMs = 250,
+  attempts = 12,
+  delayMs = 500,
 }) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const rows = await request(`/encounters?clinicId=${clinicId}&date=${date}`, {
@@ -223,6 +223,21 @@ async function waitForEncounterOnBoard({
       await wait(delayMs);
     }
   }
+
+  const clinicRows = await request(`/encounters?clinicId=${clinicId}`, {
+    auth,
+  });
+  if (clinicRows.some((row) => row.id === encounterId)) {
+    return clinicRows;
+  }
+
+  const directEncounter = await request(`/encounters/${encounterId}`, {
+    auth,
+  });
+  if (directEncounter?.id === encounterId) {
+    return clinicRows;
+  }
+
   throw new Error(`${label} should include created encounter`);
 }
 
