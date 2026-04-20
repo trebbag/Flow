@@ -14,7 +14,6 @@ jobs:
     environment: staging
     env:
       FRONTEND_API_BASE_URL: ${{ vars.STAGING_FRONTEND_API_BASE_URL }}
-      STAGING_PROOF_USER_ID: ${{ secrets.STAGING_VITE_DEV_USER_ID }}
       STAGING_PROOF_ROLE: ${{ vars.STAGING_VITE_DEV_ROLE }}
       FRONTEND_E2E_PORT: ${{ vars.STAGING_FRONTEND_E2E_PORT }}
       AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
@@ -65,11 +64,6 @@ jobs:
             exit 1
           fi
 
-          if [[ -z "${STAGING_PROOF_USER_ID}" ]]; then
-            echo "Missing secrets.STAGING_VITE_DEV_USER_ID for proof identity."
-            exit 1
-          fi
-
           RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}"
           if [[ -z "${RESOURCE_GROUP}" ]]; then
             RESOURCE_GROUP="$(az webapp list \
@@ -93,11 +87,53 @@ jobs:
             exit 1
           fi
 
+          POSTGRES_DATABASE_URL="$(az webapp config appsettings list \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --query "[?name=='POSTGRES_DATABASE_URL'].value | [0]" \
+            -o tsv)"
+
+          if [[ -z "${POSTGRES_DATABASE_URL}" ]]; then
+            echo "POSTGRES_DATABASE_URL is not configured on ${AZURE_WEBAPP_NAME}"
+            exit 1
+          fi
+
+          STAGING_PROOF_USER_ID="$(POSTGRES_DATABASE_URL="${POSTGRES_DATABASE_URL}" node --input-type=module <<'NODE'
+          import pg from "pg";
+
+          const client = new pg.Client({ connectionString: process.env.POSTGRES_DATABASE_URL });
+          await client.connect();
+          const result = await client.query(`
+            select u.id
+            from "User" u
+            join "UserRole" ur on ur."userId" = u.id
+            where ur.role = 'Admin'
+              and lower(u.status) = 'active'
+            order by u."createdAt" desc
+            limit 1
+          `);
+          await client.end();
+
+          const row = result.rows[0];
+          if (!row?.id) {
+            process.exit(1);
+          }
+
+          process.stdout.write(row.id);
+          NODE
+          )"
+
+          if [[ -z "${STAGING_PROOF_USER_ID}" ]]; then
+            echo "Unable to resolve an active Admin proof identity from staging data."
+            exit 1
+          fi
+
           if [[ -z "${FRONTEND_E2E_PORT}" ]]; then
             echo "FRONTEND_E2E_PORT=4173" >> "$GITHUB_ENV"
           fi
 
           echo "::add-mask::${AUTH_PROOF_HEADER_SECRET}"
+          echo "::add-mask::${POSTGRES_DATABASE_URL}"
           {
             echo "VITE_PROOF_USER_ID=${STAGING_PROOF_USER_ID}"
             echo "FRONTEND_PROOF_USER_ID=${STAGING_PROOF_USER_ID}"
