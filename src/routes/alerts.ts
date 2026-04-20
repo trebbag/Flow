@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { AlertInboxStatus, RoleName } from "@prisma/client";
 import { z } from "zod";
-import { assert } from "../lib/errors.js";
+import { requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { listUserInboxAlerts, updateUserInboxAlertStatus } from "../lib/user-alert-inbox.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
@@ -51,7 +51,7 @@ export async function registerAlertRoutes(app: FastifyInstance) {
       userId: request.user!.id,
       status: AlertInboxStatus.archived
     });
-    assert(updated.count > 0, 404, "Alert not found");
+    requireCondition(updated.count > 0, 404, "Alert not found");
     return { status: "archived", id: alertId };
   });
 
@@ -62,7 +62,7 @@ export async function registerAlertRoutes(app: FastifyInstance) {
       userId: request.user!.id,
       status: AlertInboxStatus.active
     });
-    assert(updated.count > 0, 404, "Alert not found");
+    requireCondition(updated.count > 0, 404, "Alert not found");
     return { status: "active", id: alertId };
   });
 }

@@ -100,6 +100,7 @@ type ApiFetchOptions = RequestInit & {
   cacheTtlMs?: number;
   cacheKey?: string;
   timeoutMs?: number;
+  idempotencyKey?: string;
 };
 
 type EventStreamMessage = {
@@ -138,8 +139,112 @@ export type OverviewBootstrapSnapshot = {
   errors: string[];
 };
 
+export type PaginatedResponse<T> = {
+  items: T[];
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+async function collectPaginatedItems<T>(params: {
+  fetchPage: (cursor?: string) => Promise<PaginatedResponse<T>>;
+  signal?: AbortSignal;
+  maxPages?: number;
+}) {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  let pageCount = 0;
+  const maxPages = params.maxPages || 50;
+
+  while (pageCount < maxPages) {
+    if (params.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const page = await params.fetchPage(cursor);
+    items.push(...(Array.isArray(page.items) ? page.items : []));
+    pageCount += 1;
+    if (!page.nextCursor) {
+      break;
+    }
+    cursor = page.nextCursor;
+  }
+
+  return items;
+}
+
 const getCache = new Map<string, CachedGetEntry>();
 const inflightGets = new Map<string, Promise<unknown>>();
+const mutationIdempotencyKeys = new Map<string, { key: string; expiresAt: number }>();
+const GET_CACHE_MAX_ENTRIES = 200;
+const MUTATION_IDEMPOTENCY_TTL_MS = 60_000;
+
+export function createIdempotencyKey() {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `flow-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || value === undefined) return "null";
+  if (typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => stableSerialize(entry)).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(",")}}`;
+}
+
+function resolveMutationBodyFingerprint(body: RequestInit["body"]) {
+  if (body === undefined || body === null) return "null";
+  if (typeof body === "string") {
+    try {
+      return stableSerialize(JSON.parse(body));
+    } catch {
+      return body;
+    }
+  }
+  if (body instanceof URLSearchParams) return body.toString();
+  if (body instanceof FormData) return null;
+  if (typeof body === "object") {
+    return stableSerialize(body);
+  }
+  return String(body);
+}
+
+function resolveMutationIdempotencyKey(path: string, options: ApiFetchOptions) {
+  if (options.idempotencyKey?.trim()) {
+    return options.idempotencyKey.trim();
+  }
+
+  const method = String(options.method || "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD") {
+    return null;
+  }
+
+  const bodyFingerprint = resolveMutationBodyFingerprint(options.body);
+  if (bodyFingerprint === null) {
+    return createIdempotencyKey();
+  }
+
+  const fingerprint = `${currentSessionFingerprint()}::${method}::${path}::${bodyFingerprint}`;
+  const now = Date.now();
+  for (const [key, entry] of mutationIdempotencyKeys.entries()) {
+    if (entry.expiresAt <= now) {
+      mutationIdempotencyKeys.delete(key);
+    }
+  }
+  const existing = mutationIdempotencyKeys.get(fingerprint);
+  if (existing && existing.expiresAt > now) {
+    return existing.key;
+  }
+
+  const key = createIdempotencyKey();
+  mutationIdempotencyKeys.set(fingerprint, {
+    key,
+    expiresAt: now + MUTATION_IDEMPOTENCY_TTL_MS,
+  });
+  return key;
+}
 
 function currentSessionFingerprint() {
   const session = getCurrentSession();
@@ -165,8 +270,40 @@ function clearGetCache() {
   inflightGets.clear();
 }
 
+function clearMutationIdempotencyCache() {
+  mutationIdempotencyKeys.clear();
+}
+
+function readCachedGetEntry(cacheKey: string) {
+  const cached = getCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    getCache.delete(cacheKey);
+    return null;
+  }
+  // Reinsert to keep the Map in least-recently-used order.
+  getCache.delete(cacheKey);
+  getCache.set(cacheKey, cached);
+  return cached;
+}
+
+function storeCachedGetEntry(cacheKey: string, entry: CachedGetEntry) {
+  if (getCache.has(cacheKey)) {
+    getCache.delete(cacheKey);
+  }
+  getCache.set(cacheKey, entry);
+  while (getCache.size > GET_CACHE_MAX_ENTRIES) {
+    const oldestKey = getCache.keys().next().value;
+    if (!oldestKey) break;
+    getCache.delete(oldestKey);
+  }
+}
+
 if (typeof window !== "undefined") {
-  const resetOnEvent = () => clearGetCache();
+  const resetOnEvent = () => {
+    clearGetCache();
+    clearMutationIdempotencyCache();
+  };
   window.addEventListener(ADMIN_REFRESH_EVENT, resetOnEvent);
   window.addEventListener(FACILITY_CONTEXT_CHANGED_EVENT, resetOnEvent);
   window.addEventListener(SESSION_CHANGED_EVENT, resetOnEvent);
@@ -197,14 +334,18 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
     headers["Content-Type"] = "application/json";
   }
   const method = String(options.method || "GET").toUpperCase();
+  const idempotencyKey = resolveMutationIdempotencyKey(path, options);
+  if (idempotencyKey && !headers["Idempotency-Key"]) {
+    headers["Idempotency-Key"] = idempotencyKey;
+  }
   const cacheTtlMs = Number(options.cacheTtlMs || 0);
   const timeoutMs = Number(options.timeoutMs || (method === "GET" ? 20_000 : 15_000));
   const shouldCache = method === "GET" && cacheTtlMs > 0;
   const cacheKey = shouldCache ? getCacheKey(path, options, headers) : null;
 
   if (cacheKey) {
-    const cached = getCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
+    const cached = readCachedGetEntry(cacheKey);
+    if (cached) {
       return cached.value as T;
     }
     const inflight = inflightGets.get(cacheKey);
@@ -282,7 +423,7 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
 
   const request = performFetch()
     .then((value) => {
-      getCache.set(cacheKey, {
+      storeCachedGetEntry(cacheKey, {
         expiresAt: Date.now() + cacheTtlMs,
         value,
       });
@@ -408,13 +549,33 @@ export const encounters = {
     assignedMaUserId?: string;
     date?: string;
   }) {
+    return collectPaginatedItems({
+      signal: undefined,
+      fetchPage: (cursor) =>
+        encounters.listPage({
+          ...params,
+          cursor,
+          pageSize: 100,
+        }),
+    });
+  },
+  listPage(params?: {
+    clinicId?: string;
+    status?: EncounterStatus;
+    assignedMaUserId?: string;
+    date?: string;
+    cursor?: string;
+    pageSize?: number;
+  }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.status) qs.set("status", params.status);
     if (params?.assignedMaUserId) qs.set("assignedMaUserId", params.assignedMaUserId);
     if (params?.date) qs.set("date", params.date);
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const q = qs.toString();
-    return apiFetch<EncounterBase[]>(`/encounters${q ? `?${q}` : ""}`);
+    return apiFetch<PaginatedResponse<EncounterBase>>(`/encounters${q ? `?${q}` : ""}`);
   },
 
   get(id: string) {
@@ -586,13 +747,33 @@ export const incoming = {
     includeCheckedIn?: boolean;
     includeInvalid?: boolean;
   }) {
+    return collectPaginatedItems({
+      signal: undefined,
+      fetchPage: (cursor) =>
+        incoming.listPage({
+          ...params,
+          cursor,
+          pageSize: 100,
+        }),
+    });
+  },
+  listPage(params?: {
+    clinicId?: string;
+    date?: string;
+    includeCheckedIn?: boolean;
+    includeInvalid?: boolean;
+    cursor?: string;
+    pageSize?: number;
+  }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.date) qs.set("date", params.date);
     if (params?.includeCheckedIn) qs.set("includeCheckedIn", "true");
     if (params?.includeInvalid) qs.set("includeInvalid", "true");
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const q = qs.toString();
-    return apiFetch<IncomingRow[]>(`/incoming${q ? `?${q}` : ""}`);
+    return apiFetch<PaginatedResponse<IncomingRow>>(`/incoming${q ? `?${q}` : ""}`);
   },
   importSchedule(dto: {
     clinicId?: string;
@@ -2007,6 +2188,30 @@ export const revenueCases = {
     to?: string;
     signal?: AbortSignal;
   }) {
+    return collectPaginatedItems({
+      signal: params?.signal,
+      fetchPage: (cursor) =>
+        revenueCases.listPage({
+          ...params,
+          cursor,
+          pageSize: 100,
+          signal: params?.signal,
+        }),
+    });
+  },
+  listPage(params?: {
+    clinicId?: string;
+    encounterId?: string;
+    dayBucket?: RevenueDayBucket;
+    workQueue?: RevenueWorkQueue;
+    search?: string;
+    mine?: boolean;
+    from?: string;
+    to?: string;
+    cursor?: string;
+    pageSize?: number;
+    signal?: AbortSignal;
+  }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.encounterId) qs.set("encounterId", params.encounterId);
@@ -2016,8 +2221,10 @@ export const revenueCases = {
     if (params?.mine) qs.set("mine", "true");
     if (params?.from) qs.set("from", params.from);
     if (params?.to) qs.set("to", params.to);
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const q = qs.toString();
-    return apiFetch<RevenueCaseDetail[]>(`/revenue-cases${q ? `?${q}` : ""}`, {
+    return apiFetch<PaginatedResponse<RevenueCaseDetail>>(`/revenue-cases${q ? `?${q}` : ""}`, {
       cacheTtlMs: 15_000,
       timeoutMs: 15_000,
       signal: params?.signal,

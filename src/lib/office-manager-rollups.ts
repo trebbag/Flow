@@ -8,6 +8,7 @@ import {
 import { DateTime } from "luxon";
 import { normalizeDate } from "./dates.js";
 import { formatProviderDisplayName } from "./display-names.js";
+import { ApiError } from "./errors.js";
 
 export const MAX_HISTORY_DAYS = 31;
 
@@ -229,12 +230,20 @@ export function listDateKeys(fromDate: string, toDate: string, maxDays = MAX_HIS
   const end = DateTime.fromISO(toDate, { zone: "utc" }).startOf("day");
 
   if (!start.isValid || !end.isValid || start > end) {
-    throw new Error("Invalid date range");
+    throw new ApiError({
+      statusCode: 400,
+      code: "INVALID_DATE_RANGE",
+      message: "Invalid date range",
+    });
   }
 
   const days = end.diff(start, "days").days;
   if (days > maxDays) {
-    throw new Error(`Date range cannot exceed ${maxDays} days`);
+    throw new ApiError({
+      statusCode: 400,
+      code: "DATE_RANGE_TOO_LARGE",
+      message: `Date range cannot exceed ${maxDays} days`,
+    });
   }
 
   const keys: string[] = [];

@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import { ZodError } from "zod";
 import { env } from "./lib/env.js";
 import { ApiError } from "./lib/errors.js";
 import { registerHealthRoutes } from "./routes/health.js";
@@ -46,7 +47,8 @@ export function buildApp() {
       "x-dev-user-id",
       "x-dev-role",
       "x-facility-id",
-      "x-correlation-id"
+      "x-correlation-id",
+      "Idempotency-Key"
     ]
   });
 
@@ -56,7 +58,7 @@ export function buildApp() {
 
   app.register(rateLimit, {
     global: true,
-    max: env.RATE_LIMIT_MAX,
+    max: env.NODE_ENV === "test" ? env.RATE_LIMIT_MAX * 100 : env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW,
     addHeadersOnExceeding: {
       "x-ratelimit-limit": true,
@@ -93,21 +95,38 @@ export function buildApp() {
   });
 
   app.setErrorHandler((error, request, reply) => {
+    const correlationId = request.correlationId || request.id;
+    const sendError = (statusCode: number, code: string, message: string, details?: unknown) => {
+      reply.code(statusCode).send({
+        code,
+        message,
+        details,
+        correlationId,
+      });
+    };
+
     if (error instanceof ApiError) {
-      reply.code(error.statusCode).send({ message: error.message });
+      sendError(error.statusCode, error.code, error.message, error.details);
       return;
     }
 
-    if (error instanceof Error && error.name === "ZodError") {
-      const message = (error as { issues?: Array<{ message: string }> }).issues?.map((item) => item.message).join(", ");
-      reply.code(400).send({ message: message || "Validation failed" });
+    if (error instanceof ZodError) {
+      sendError(
+        400,
+        "VALIDATION_ERROR",
+        "Validation failed",
+        error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      );
       return;
     }
 
     const fastifyStatus = Number((error as { statusCode?: unknown })?.statusCode || 0);
     const fastifyCode = String((error as { code?: unknown })?.code || "");
     if (fastifyStatus >= 400 && fastifyStatus < 500) {
-      reply.code(fastifyStatus).send({ message: (error as Error).message || "Invalid request" });
+      sendError(fastifyStatus, fastifyCode || "REQUEST_ERROR", (error as Error).message || "Invalid request");
       return;
     }
 
@@ -116,23 +135,23 @@ export function buildApp() {
       : null;
     if (prismaCode) {
       if (prismaCode === "P2021" || prismaCode === "P2022") {
-        reply.code(500).send({ message: "Database schema is out of date. Run `pnpm db:push` and restart the server." });
+        sendError(500, "DATABASE_SCHEMA_OUT_OF_DATE", "Database schema is out of date. Run `pnpm db:push` and restart the server.");
         return;
       }
       if (prismaCode === "P2025") {
-        reply.code(404).send({ message: "Record not found" });
+        sendError(404, "RECORD_NOT_FOUND", "Record not found");
         return;
       }
       if (prismaCode === "P2002") {
-        reply.code(409).send({ message: "Conflict: record already exists" });
+        sendError(409, "UNIQUE_CONSTRAINT_CONFLICT", "Conflict: record already exists");
         return;
       }
       if (prismaCode === "P2003" || prismaCode === "P2014") {
-        reply.code(409).send({ message: "Conflict: dependent records prevent this operation" });
+        sendError(409, "DEPENDENT_RECORD_CONFLICT", "Conflict: dependent records prevent this operation");
         return;
       }
       if (prismaCode.startsWith("P20")) {
-        reply.code(400).send({ message: "Invalid database operation payload" });
+        sendError(400, "INVALID_DATABASE_PAYLOAD", "Invalid database operation payload");
         return;
       }
     }
@@ -140,18 +159,24 @@ export function buildApp() {
     const rawCode = String((error as { code?: unknown })?.code || "");
     const rawMessage = String((error as { message?: unknown })?.message || "").toLowerCase();
     if (
+      rawMessage.includes("encounter_version_required")
+    ) {
+      sendError(409, "VERSION_MISMATCH", "Version mismatch");
+      return;
+    }
+    if (
       rawCode === "23503" ||
       rawCode === "23505" ||
       rawCode.startsWith("SQLITE_CONSTRAINT")
     ) {
-      reply.code(409).send({ message: "Conflict: dependent records prevent this operation" });
+      sendError(409, "DEPENDENT_RECORD_CONFLICT", "Conflict: dependent records prevent this operation");
       return;
     }
     if (
       rawMessage.includes("no such table") ||
       rawMessage.includes("no such column")
     ) {
-      reply.code(500).send({ message: "Database schema is out of date. Run `pnpm db:push` and restart the server." });
+      sendError(500, "DATABASE_SCHEMA_OUT_OF_DATE", "Database schema is out of date. Run `pnpm db:push` and restart the server.");
       return;
     }
     if (
@@ -160,21 +185,21 @@ export function buildApp() {
       rawMessage.includes("violates foreign key constraint") ||
       rawMessage.includes("duplicate key value")
     ) {
-      reply.code(409).send({ message: "Conflict: dependent records prevent this operation" });
+      sendError(409, "DEPENDENT_RECORD_CONFLICT", "Conflict: dependent records prevent this operation");
       return;
     }
 
     if ((error as { name?: string })?.name === "PrismaClientValidationError") {
-      reply.code(400).send({ message: "Invalid database payload" });
+      sendError(400, "INVALID_DATABASE_PAYLOAD", "Invalid database payload");
       return;
     }
 
     request.log.error(error as Error);
     if (env.NODE_ENV !== "production" && error instanceof Error && error.message) {
-      reply.code(500).send({ message: error.message });
+      sendError(500, "INTERNAL_SERVER_ERROR", error.message);
       return;
     }
-    reply.code(500).send({ message: "Internal server error" });
+    sendError(500, "INTERNAL_SERVER_ERROR", "Internal server error");
   });
 
   app.register(registerHealthRoutes);

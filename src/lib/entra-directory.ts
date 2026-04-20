@@ -66,10 +66,11 @@ function normalizeDirectoryUser(row: GraphUserRow): EntraDirectoryUser {
 async function graphRequest<T>(pathname: string, init?: RequestInit): Promise<T> {
   const token = await getCredential().getToken(env.ENTRA_GRAPH_SCOPE);
   if (!token?.token) {
-    throw new ApiError(
-      503,
-      "Microsoft Graph access is unavailable. Configure a managed identity or Azure developer login before using Entra provisioning."
-    );
+    throw new ApiError({
+      statusCode: 503,
+      code: "ENTRA_GRAPH_TOKEN_UNAVAILABLE",
+      message: "Microsoft Graph access is unavailable. Configure a managed identity or Azure developer login before using Entra provisioning.",
+    });
   }
 
   const response = await fetch(`${env.ENTRA_GRAPH_API_BASE_URL}${pathname}`, {
@@ -82,15 +83,16 @@ async function graphRequest<T>(pathname: string, init?: RequestInit): Promise<T>
   });
 
   if (response.status === 404) {
-    throw new ApiError(404, "Microsoft Entra user was not found.");
+    throw new ApiError({ statusCode: 404, code: "ENTRA_USER_NOT_FOUND", message: "Microsoft Entra user was not found." });
   }
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ApiError(
-      503,
-      `Microsoft Graph request failed (${response.status}). ${body || "Verify Graph permissions and managed identity access."}`
-    );
+    throw new ApiError({
+      statusCode: 503,
+      code: "ENTRA_GRAPH_REQUEST_FAILED",
+      message: `Microsoft Graph request failed (${response.status}). ${body || "Verify Graph permissions and managed identity access."}`,
+    });
   }
 
   return (await response.json()) as T;
@@ -177,7 +179,7 @@ export async function getEntraDirectoryUserByObjectId(
 ) {
   const trimmed = objectId.trim();
   if (!trimmed) {
-    throw new ApiError(400, "Microsoft Entra object ID is required.");
+    throw new ApiError({ statusCode: 400, code: "ENTRA_OBJECT_ID_REQUIRED", message: "Microsoft Entra object ID is required." });
   }
 
   const search = new URLSearchParams({

@@ -18,6 +18,7 @@ jobs:
     environment: staging
     env:
       AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -50,6 +51,11 @@ jobs:
             exit 1
           fi
 
+          if [[ -z "${AZURE_RESOURCE_GROUP}" ]]; then
+            echo "Missing GitHub variable: AZURE_RESOURCE_GROUP"
+            exit 1
+          fi
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
         with:
@@ -67,6 +73,21 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Load staging database settings
+        run: |
+          POSTGRES_DATABASE_URL="$(az webapp config appsettings list \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query "[?name=='POSTGRES_DATABASE_URL'].value | [0]" \
+            -o tsv)"
+
+          if [[ -z "${POSTGRES_DATABASE_URL}" ]]; then
+            echo "POSTGRES_DATABASE_URL is not configured on ${AZURE_WEBAPP_NAME}"
+            exit 1
+          fi
+
+          echo "POSTGRES_DATABASE_URL=${POSTGRES_DATABASE_URL}" >> "${GITHUB_ENV}"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -74,6 +95,9 @@ jobs:
         run: |
           pnpm db:generate
           pnpm db:generate:postgres
+
+      - name: Apply PostgreSQL schema
+        run: pnpm db:push:postgres
 
       - name: Build backend
         run: pnpm build

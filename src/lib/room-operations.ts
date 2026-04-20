@@ -9,7 +9,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { prisma } from "./prisma.js";
-import { ApiError, assert } from "./errors.js";
+import { ApiError, requireCondition } from "./errors.js";
 import type { RequestUser } from "./auth.js";
 import { listActiveTemporaryClinicOverrideIds } from "./assignment-overrides.js";
 
@@ -110,12 +110,16 @@ export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId
       where: { id: requested },
       select: { id: true, facilityId: true, status: true }
     });
-    assert(clinic, 404, "Clinic not found");
+    requireCondition(clinic, 404, "Clinic not found", "CLINIC_NOT_FOUND");
     if (clinic.status === "archived") {
-      throw new ApiError(400, "Clinic is archived");
+      throw new ApiError({ statusCode: 400, code: "CLINIC_ARCHIVED", message: "Clinic is archived" });
     }
     if (user.facilityId && clinic.facilityId !== user.facilityId) {
-      throw new ApiError(403, "Clinic is outside your facility scope");
+      throw new ApiError({
+        statusCode: 403,
+        code: "CLINIC_OUTSIDE_FACILITY_SCOPE",
+        message: "Clinic is outside your facility scope",
+      });
     }
   }
 
@@ -164,7 +168,11 @@ export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId
   ]);
   if (requested) clinicIds = clinicIds.filter((id) => id === requested);
   if (requested && clinicIds.length === 0) {
-    throw new ApiError(403, "Clinic is outside your MA room scope");
+    throw new ApiError({
+      statusCode: 403,
+      code: "CLINIC_OUTSIDE_ROOM_SCOPE",
+      message: "Clinic is outside your MA room scope",
+    });
   }
   return clinicIds;
 }
@@ -176,7 +184,11 @@ async function resolveRoomContext(params: {
 }) {
   const clinicIds = await getRoomScopeClinicIds(params.user, params.clinicId);
   if (clinicIds.length === 0) {
-    throw new ApiError(403, "No clinics are available in your room scope");
+    throw new ApiError({
+      statusCode: 403,
+      code: "ROOM_SCOPE_EMPTY",
+      message: "No clinics are available in your room scope",
+    });
   }
 
   const room = await prisma.clinicRoom.findFirst({
@@ -206,13 +218,13 @@ async function resolveRoomContext(params: {
       operationalState: true
     }
   });
-  assert(room, 404, "Room not found in your scope");
+  requireCondition(room, 404, "Room not found in your scope", "ROOM_NOT_FOUND");
   const link = params.clinicId
     ? room.clinicLinks.find((entry) => entry.clinicId === params.clinicId)
     : room.clinicLinks[0];
-  assert(link?.clinic, 404, "Room is not linked to an active clinic");
+  requireCondition(link?.clinic, 404, "Room is not linked to an active clinic", "ROOM_CLINIC_LINK_NOT_FOUND");
   const facilityId = link.clinic.facilityId || room.facilityId || params.user.facilityId;
-  assert(facilityId, 400, "Room is missing a facility scope");
+  requireCondition(facilityId, 400, "Room is missing a facility scope", "ROOM_FACILITY_SCOPE_MISSING");
 
   return {
     room,
@@ -253,7 +265,11 @@ export async function transitionRoomOperationalStateInTx(
   const now = new Date();
   const state = await ensureRoomOperationalStateInTx(tx, params.roomId);
   if (params.allowedFrom && !params.allowedFrom.includes(state.currentStatus)) {
-    throw new ApiError(409, `Room is ${state.currentStatus}, not available for this action.`);
+    throw new ApiError({
+      statusCode: 409,
+      code: "ROOM_STATUS_CONFLICT",
+      message: `Room is ${state.currentStatus}, not available for this action.`,
+    });
   }
 
   const data: Prisma.RoomOperationalStateUncheckedUpdateInput = {
@@ -327,7 +343,7 @@ export async function assertRoomAssignableForEncounter(params: {
     user: params.user,
     clinicId: params.encounter.clinicId
   });
-  assert(context.room.status === "active", 400, "Room is inactive");
+  requireCondition(context.room.status === "active", 400, "Room is inactive", "ROOM_INACTIVE");
 
   const state = context.room.operationalState || await prisma.roomOperationalState.create({
     data: {
@@ -338,7 +354,11 @@ export async function assertRoomAssignableForEncounter(params: {
   });
 
   if (state.currentStatus !== RoomOperationalStatus.Ready) {
-    throw new ApiError(409, `Room ${context.room.name} is ${state.currentStatus} and cannot be assigned.`);
+    throw new ApiError({
+      statusCode: 409,
+      code: "ROOM_NOT_ASSIGNABLE",
+      message: `Room ${context.room.name} is ${state.currentStatus} and cannot be assigned.`,
+    });
   }
 
   const dateKey = currentRoomDateKey(context.clinic.timezone);
@@ -353,7 +373,11 @@ export async function assertRoomAssignableForEncounter(params: {
     select: { completed: true }
   });
   if (!dayStart?.completed) {
-    throw new ApiError(409, `Room ${context.room.name} is not ready. Complete Day Start before rooming a patient.`);
+    throw new ApiError({
+      statusCode: 409,
+      code: "ROOM_DAY_START_INCOMPLETE",
+      message: `Room ${context.room.name} is not ready. Complete Day Start before rooming a patient.`,
+    });
   }
 
   return { ...context, state };
@@ -599,7 +623,7 @@ export async function getPreRoomingAvailability(params: {
     where: { id: params.encounterId },
     select: { id: true, clinicId: true, roomId: true, currentStatus: true }
   });
-  assert(encounter, 404, "Encounter not found");
+  requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
   const rooms = await listRoomCards({ user: params.user, clinicId: encounter.clinicId });
   const readyRooms = rooms.filter((room) => room.assignable);
   return {

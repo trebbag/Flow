@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { OutboxStatus, RoleName } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { assert } from "../lib/errors.js";
+import { requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { subscribeOutboxStreamEvent } from "../lib/event-bus.js";
 
@@ -74,7 +74,7 @@ export async function registerEventRoutes(app: FastifyInstance) {
       const outboxId = (request.params as { id: string }).id;
 
       const row = await prisma.eventOutbox.findUnique({ where: { id: outboxId } });
-      assert(row, 404, "Outbox event not found");
+      requireCondition(row, 404, "Outbox event not found");
 
       return prisma.eventOutbox.update({
         where: { id: outboxId },
@@ -96,7 +96,7 @@ export async function registerEventRoutes(app: FastifyInstance) {
       const dto = failOutboxSchema.parse(request.body);
 
       const row = await prisma.eventOutbox.findUnique({ where: { id: outboxId } });
-      assert(row, 404, "Outbox event not found");
+      requireCondition(row, 404, "Outbox event not found");
 
       return prisma.eventOutbox.update({
         where: { id: outboxId },
@@ -117,7 +117,7 @@ export async function registerEventRoutes(app: FastifyInstance) {
       const requestedFacilityId = query.facilityId || request.user!.facilityId || null;
 
       if (requestedFacilityId) {
-        assert(
+        requireCondition(
           request.user!.availableFacilityIds.includes(requestedFacilityId),
           403,
           "Requested facility is outside the signed-in user's scope"

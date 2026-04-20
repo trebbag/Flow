@@ -4,9 +4,12 @@ import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { ApiError, assert } from "../lib/errors.js";
+import { ApiError, requireCondition } from "../lib/errors.js";
 import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
+import { clinicNow } from "../lib/clinic-time.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
+import { withIdempotentMutation } from "../lib/idempotency.js";
+import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 import {
   assertRoomAssignableForEncounter,
@@ -24,6 +27,8 @@ import {
   formatRoomDisplayName,
   formatUserDisplayName
 } from "../lib/display-names.js";
+import { ensurePatientRecord, extractPatientIdentityHints } from "../lib/patients.js";
+import { asInputJson, normalizeEncounterJsonRead, parseEncounterJsonInput } from "../lib/persisted-json.js";
 
 const defaultAllowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   Incoming: ["Lobby"],
@@ -79,6 +84,7 @@ const updateStatusSchema = z.object({
 });
 
 const updateRoomingSchema = z.object({
+  version: z.number().int().nonnegative().optional(),
   roomId: z.string().uuid().nullable().optional(),
   data: z.record(z.string(), z.unknown()).optional()
 });
@@ -103,6 +109,15 @@ const completeCheckoutSchema = z.object({
   version: z.number().int().nonnegative(),
   checkoutData: z.record(z.string(), z.unknown()).optional()
 });
+
+const listEncountersSchema = z
+  .object({
+    clinicId: z.string().uuid().optional(),
+    status: z.nativeEnum(EncounterStatus).optional(),
+    assignedMaUserId: z.string().uuid().optional(),
+    date: z.string().optional(),
+  })
+  .merge(paginationQuerySchema);
 
 const cancelSchema = z
   .object({
@@ -190,7 +205,7 @@ async function getClinicTimezone(clinicId: string) {
     where: { id: clinicId },
     select: { timezone: true }
   });
-  assert(clinic, 404, "Clinic not found");
+  requireCondition(clinic, 404, "Clinic not found");
   return clinic.timezone;
 }
 
@@ -253,7 +268,7 @@ async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
     where: { id: clinicId },
     select: { id: true, facilityId: true, timezone: true, status: true, maRun: true }
   });
-  assert(clinic, 404, "Clinic not found");
+  requireCondition(clinic, 404, "Clinic not found");
   await assertClinicInUserScope(user, clinic);
   return clinic;
 }
@@ -263,7 +278,7 @@ async function assertEncounterInScope(encounter: { clinicId: string }, user: Sco
     where: { id: encounter.clinicId },
     select: { id: true, facilityId: true }
   });
-  assert(clinic, 404, "Clinic not found");
+  requireCondition(clinic, 404, "Clinic not found");
   await assertClinicInUserScope(user, clinic);
 }
 
@@ -386,15 +401,14 @@ function isTemplateFieldValueMissing(fieldType: string | undefined, value: unkno
 }
 
 function getRoomingDataMap(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return (normalizeEncounterJsonRead("roomingData", value as Prisma.JsonValue | null | undefined) || {}) as Record<
+    string,
+    unknown
+  >;
 }
 
 function getDataMap(value: unknown) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function mergeTemplateData(
@@ -575,6 +589,10 @@ async function listEncountersForRole(filters: {
   facilityId?: string | null;
   userId: string;
   role: RoleName;
+  pagination?: {
+    offset: number;
+    pageSize: number;
+  } | null;
 }) {
   let dateOfService: Date | undefined;
   let dateRange: { start: Date; end: Date } | undefined;
@@ -663,7 +681,9 @@ async function listEncountersForRole(filters: {
         take: 1
       }
     },
-    orderBy: { checkInAt: "asc" }
+    orderBy: [{ checkInAt: "asc" }, { id: "asc" }],
+    take: filters.pagination ? filters.pagination.pageSize + 1 : undefined,
+    skip: filters.pagination ? filters.pagination.offset : undefined,
   });
 
   const maUserIds = Array.from(
@@ -684,6 +704,10 @@ async function listEncountersForRole(filters: {
   return encounters.map((encounter) =>
     withEncounterViewAliases({
       ...encounter,
+      roomingData: normalizeEncounterJsonRead("roomingData", encounter.roomingData) || null,
+      clinicianData: normalizeEncounterJsonRead("clinicianData", encounter.clinicianData) || null,
+      checkoutData: normalizeEncounterJsonRead("checkoutData", encounter.checkoutData) || null,
+      intakeData: normalizeEncounterJsonRead("intakeData", encounter.intakeData) || null,
       appointmentTime: appointmentByEncounterId.get(encounter.id) || null,
       assignedMaName: encounter.assignedMaUserId ? maById.get(encounter.assignedMaUserId)?.name || null : null,
       assignedMaStatus: encounter.assignedMaUserId ? maById.get(encounter.assignedMaUserId)?.status || null : null
@@ -728,7 +752,7 @@ async function getHydratedEncounterView(encounterId: string) {
     }
   });
 
-  assert(encounter, 404, "Encounter not found");
+  requireCondition(encounter, 404, "Encounter not found");
 
   const assignedMa = encounter.assignedMaUserId
     ? (
@@ -742,272 +766,380 @@ async function getHydratedEncounterView(encounterId: string) {
 
   return withEncounterViewAliases({
     ...encounter,
+    roomingData: normalizeEncounterJsonRead("roomingData", encounter.roomingData) || null,
+    clinicianData: normalizeEncounterJsonRead("clinicianData", encounter.clinicianData) || null,
+    checkoutData: normalizeEncounterJsonRead("checkoutData", encounter.checkoutData) || null,
+    intakeData: normalizeEncounterJsonRead("intakeData", encounter.intakeData) || null,
     appointmentTime: appointmentByEncounterId.get(encounter.id) || null,
     assignedMaName: assignedMa?.name || null,
     assignedMaStatus: assignedMa?.status || null
   });
 }
 
+async function updateEncounterWithVersionTx(params: {
+  tx: Prisma.TransactionClient;
+  encounterId: string;
+  expectedVersion: number;
+  data: Prisma.EncounterUncheckedUpdateManyInput;
+  statusEvent?: {
+    fromStatus: EncounterStatus | null;
+    toStatus: EncounterStatus;
+    changedByUserId: string;
+    reasonCode?: string;
+  };
+  resetAlertStateAt?: Date;
+}) {
+  const updateResult = await params.tx.encounter.updateMany({
+    where: {
+      id: params.encounterId,
+      version: params.expectedVersion,
+    },
+    data: {
+      ...params.data,
+      version: { increment: 1 },
+    },
+  });
+
+  if (updateResult.count === 0) {
+    const latest = await params.tx.encounter.findUnique({
+      where: { id: params.encounterId },
+      select: { id: true, version: true },
+    });
+    if (!latest) {
+      throw new ApiError({ statusCode: 404, code: "ENCOUNTER_NOT_FOUND", message: "Encounter not found" });
+    }
+    throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Version mismatch" });
+  }
+
+  if (params.statusEvent) {
+    await params.tx.statusChangeEvent.create({
+      data: {
+        encounterId: params.encounterId,
+        ...params.statusEvent,
+      },
+    });
+  }
+
+  if (params.resetAlertStateAt) {
+    await params.tx.alertState.upsert({
+      where: { encounterId: params.encounterId },
+      create: {
+        encounterId: params.encounterId,
+        enteredStatusAt: params.resetAlertStateAt,
+        currentAlertLevel: "Green",
+      },
+      update: {
+        enteredStatusAt: params.resetAlertStateAt,
+        currentAlertLevel: "Green",
+        yellowTriggeredAt: null,
+        redTriggeredAt: null,
+        escalationTriggeredAt: null,
+      },
+    });
+  }
+
+  const row = await params.tx.encounter.findUnique({
+    where: { id: params.encounterId },
+  });
+  requireCondition(row, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+  return row;
+}
+
 export async function registerEncounterRoutes(app: FastifyInstance) {
   app.post("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
     const dto = createEncounterSchema.parse(request.body);
     const userId = request.user!.id;
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const clinic = await resolveScopedClinic(request.user!, dto.clinicId);
+        requireCondition(clinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
 
-    const clinic = await resolveScopedClinic(request.user!, dto.clinicId);
-    assert(clinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
+        const now = clinicNow(clinic.timezone);
+        const startOfDay = now.startOf("day").toUTC();
+        const dateIso = now.toISODate() ?? now.toFormat("yyyy-MM-dd");
+        const isWalkIn = dto.walkIn === true;
 
-    const now = DateTime.now().setZone(clinic.timezone);
-    const startOfDay = now.startOf("day").toUTC();
-    const dateIso = now.toISODate() ?? now.toFormat("yyyy-MM-dd");
-    const isWalkIn = dto.walkIn === true;
+        let incomingRecord: {
+          id: string;
+          clinicId: string;
+          patientRecordId: string | null;
+          dateOfService: Date;
+          patientId: string;
+          providerId: string | null;
+          providerLastName: string | null;
+          reasonForVisitId: string | null;
+          appointmentAt: Date | null;
+          appointmentTime: string | null;
+          isValid: boolean;
+          rawPayloadJson: Prisma.JsonValue;
+          intakeData: Prisma.JsonValue | null;
+          checkedInAt: Date | null;
+          checkedInEncounterId: string | null;
+          dispositionAt: Date | null;
+          dispositionEncounterId: string | null;
+        } | null = null;
 
-    let incomingRecord: {
-      id: string;
-      clinicId: string;
-      dateOfService: Date;
-      patientId: string;
-      providerId: string | null;
-      providerLastName: string | null;
-      reasonForVisitId: string | null;
-      appointmentAt: Date | null;
-      appointmentTime: string | null;
-      isValid: boolean;
-      intakeData: Prisma.JsonValue | null;
-      checkedInAt: Date | null;
-      checkedInEncounterId: string | null;
-      dispositionAt: Date | null;
-      dispositionEncounterId: string | null;
-    } | null = null;
+        if (!isWalkIn) {
+          if (!dto.incomingId) {
+            throw new ApiError({ statusCode: 400, code: "INCOMING_SCHEDULE_REQUIRED", message: "Incoming schedule selection required" });
+          }
+          incomingRecord = await prisma.incomingSchedule.findUnique({ where: { id: dto.incomingId } });
+          requireCondition(incomingRecord, 400, "Incoming schedule not found", "INCOMING_SCHEDULE_NOT_FOUND");
+          requireCondition(incomingRecord.clinicId === dto.clinicId, 400, "Incoming schedule clinic mismatch", "INCOMING_SCHEDULE_CLINIC_MISMATCH");
 
-    if (!isWalkIn) {
-      if (!dto.incomingId) {
-        throw new ApiError(400, "Incoming schedule selection required");
-      }
-      incomingRecord = await prisma.incomingSchedule.findUnique({ where: { id: dto.incomingId } });
-      assert(incomingRecord, 400, "Incoming schedule not found");
-      assert(incomingRecord.clinicId === dto.clinicId, 400, "Incoming schedule clinic mismatch");
+          const incomingDate = DateTime.fromJSDate(incomingRecord.dateOfService).setZone(clinic.timezone).toISODate();
+          requireCondition(incomingDate === dateIso, 400, "Incoming schedule is not for today", "INCOMING_SCHEDULE_WRONG_DATE");
+          requireCondition(
+            !incomingRecord.checkedInAt && !incomingRecord.checkedInEncounterId,
+            400,
+            "Incoming schedule is already checked in for today",
+            "INCOMING_SCHEDULE_ALREADY_CHECKED_IN",
+          );
+          requireCondition(
+            !incomingRecord.dispositionAt && !incomingRecord.dispositionEncounterId,
+            400,
+            "Incoming schedule was dispositioned and cannot be checked in",
+            "INCOMING_SCHEDULE_DISPOSITIONED",
+          );
 
-      const incomingDate = DateTime.fromJSDate(incomingRecord.dateOfService).setZone(clinic.timezone).toISODate();
-      assert(incomingDate === dateIso, 400, "Incoming schedule is not for today");
-      assert(!incomingRecord.checkedInAt && !incomingRecord.checkedInEncounterId, 400, "Incoming schedule is already checked in for today");
-      assert(!incomingRecord.dispositionAt && !incomingRecord.dispositionEncounterId, 400, "Incoming schedule was dispositioned and cannot be checked in");
+          if (!incomingRecord.isValid || !incomingRecord.reasonForVisitId || !incomingRecord.providerLastName || !incomingRecord.appointmentAt) {
+            throw new ApiError({
+              statusCode: 400,
+              code: "INCOMING_SCHEDULE_INVALID",
+              message: "Incoming row has validation errors. Fix it in Incoming Ops before check-in.",
+            });
+          }
+        }
 
-      if (!incomingRecord.isValid || !incomingRecord.reasonForVisitId || !incomingRecord.providerLastName || !incomingRecord.appointmentAt) {
-        throw new ApiError(400, "Incoming row has validation errors. Fix it in Incoming Ops before check-in.");
-      }
-    }
-
-    const existing = await prisma.encounter.findFirst({
-      where: {
-        patientId: incomingRecord?.patientId ?? dto.patientId,
-        clinicId: dto.clinicId,
-        dateOfService: startOfDay.toJSDate()
-      }
-    });
-    if (existing) {
-      throw new ApiError(400, "Already checked in today");
-    }
-
-    let providerId = incomingRecord?.providerId ?? dto.providerId ?? null;
-    if (!providerId) {
-      const providerSearch = (dto.providerName || "").trim() || (incomingRecord?.providerLastName || "").trim();
-      if (providerSearch) {
-        const provider = await prisma.provider.findFirst({
+        const existing = await prisma.encounter.findFirst({
           where: {
+            patientId: incomingRecord?.patientId ?? dto.patientId,
             clinicId: dto.clinicId,
-            active: true,
-            OR: [
-              { name: { contains: providerSearch } },
-              { name: { endsWith: ` ${providerSearch}` } },
-              { name: { equals: providerSearch } }
-            ]
+            dateOfService: startOfDay.toJSDate(),
           },
-          orderBy: { name: "asc" }
         });
-        providerId = provider?.id || null;
-      }
-    }
-
-    let reasonForVisitId = incomingRecord?.reasonForVisitId ?? dto.reasonForVisitId ?? null;
-    if (reasonForVisitId) {
-      const scopedReason = await resolveActiveReasonForClinic({
-        clinicId: dto.clinicId,
-        reasonForVisitId
-      });
-      assert(scopedReason, 400, "Visit reason is inactive or not assigned to this clinic");
-      reasonForVisitId = scopedReason.id;
-    } else if (dto.reasonForVisit?.trim()) {
-      const scopedReason = await resolveActiveReasonForClinic({
-        clinicId: dto.clinicId,
-        reasonName: dto.reasonForVisit
-      });
-      reasonForVisitId = scopedReason?.id || null;
-    }
-
-    const [roomCount, clinicAssignment] = await Promise.all([
-      prisma.clinicRoomAssignment.count({
-        where: {
-          clinicId: dto.clinicId,
-          active: true,
-          room: { status: "active" }
+        if (existing) {
+          throw new ApiError({ statusCode: 400, code: "DUPLICATE_DAILY_ENCOUNTER", message: "Already checked in today" });
         }
-      }),
-      prisma.clinicAssignment.findUnique({
-        where: { clinicId: dto.clinicId },
-        include: {
-          providerUser: { select: { id: true, status: true } },
-          maUser: { select: { id: true, status: true } },
-          provider: { select: { id: true, clinicId: true, active: true } }
-        }
-      })
-    ]);
 
-    const maAssignedAndActive = !!clinicAssignment?.maUserId && clinicAssignment.maUser?.status === "active";
-    const providerAssignedAndActive =
-      clinic.maRun ||
-      (!!clinicAssignment?.providerUserId &&
-        clinicAssignment.providerUser?.status === "active" &&
-        !!clinicAssignment?.providerId &&
-        clinicAssignment.provider?.active === true);
-    const clinicReady = roomCount > 0 && maAssignedAndActive && providerAssignedAndActive;
-    if (!clinicReady) {
-      throw new ApiError(
-        400,
-        clinic.maRun
-          ? "Clinic is not ready: assign an active MA and active room before check-in."
-          : "Clinic is not ready: assign an active provider, active MA, and active room before check-in."
-      );
-    }
-
-    if (!providerId && !clinic.maRun) {
-      providerId = clinicAssignment?.providerId ?? null;
-    }
-    if (!clinic.maRun && !providerId) {
-      throw new ApiError(400, "Provider is required for non MA-run clinics.");
-    }
-
-    if (providerId) {
-      const scopedProvider = await prisma.provider.findFirst({
-        where: {
-          id: providerId,
-          clinicId: dto.clinicId,
-          active: true
-        }
-      });
-      assert(scopedProvider, 400, "Provider not found for clinic");
-      providerId = scopedProvider.id;
-    }
-
-    let assignedMaUserId: string | undefined = clinicAssignment?.maUserId || undefined;
-    const intakeData =
-      (incomingRecord?.intakeData as Prisma.InputJsonValue | null) ??
-      (dto.intakeData ? (dto.intakeData as Prisma.InputJsonValue) : null);
-
-    if (reasonForVisitId && intakeData && typeof intakeData === "object") {
-      const intakeTemplate = await findActiveTemplateForReason({
-        clinicId: dto.clinicId,
-        reasonForVisitId,
-        type: TemplateType.intake
-      });
-      if (intakeTemplate) {
-        const required = Array.isArray(intakeTemplate.requiredFields)
-          ? (intakeTemplate.requiredFields as string[])
-          : [];
-        const fieldDefinitions = getTemplateFieldDefinitions(intakeTemplate.fieldsJson);
-        const fieldDefinitionsByKey = new Map<string, TemplateFieldDefinition>();
-        fieldDefinitions.forEach((field) => {
-          const key = field.key || field.name;
-          if (key) {
-            fieldDefinitionsByKey.set(key, field);
+        let providerId = incomingRecord?.providerId ?? dto.providerId ?? null;
+        if (!providerId) {
+          const providerSearch = (dto.providerName || "").trim() || (incomingRecord?.providerLastName || "").trim();
+          if (providerSearch) {
+            const provider = await prisma.provider.findFirst({
+              where: {
+                clinicId: dto.clinicId,
+                active: true,
+                OR: [
+                  { name: { contains: providerSearch } },
+                  { name: { endsWith: ` ${providerSearch}` } },
+                  { name: { equals: providerSearch } },
+                ],
+              },
+              orderBy: { name: "asc" },
+            });
+            providerId = provider?.id || null;
           }
-        });
-        const intakeDataMap = getDataMap(intakeData);
-        const missing = required.filter((field) => {
-          const fieldType = fieldDefinitionsByKey.get(field)?.type;
-          return isTemplateFieldValueMissing(fieldType, intakeDataMap[field]);
-        });
-        if (missing.length > 0) {
-          throw new ApiError(400, `Required intake fields missing: ${missing.join(", ")}`);
         }
-      }
-    }
 
-    const encounter = await prisma.$transaction(async (tx) => {
-      const created = await tx.encounter.create({
-        data: {
-          patientId: incomingRecord?.patientId ?? dto.patientId,
-          clinicId: dto.clinicId,
-          providerId: providerId || undefined,
-          reasonForVisitId: reasonForVisitId || undefined,
-          currentStatus: "Lobby",
-          checkInAt: new Date(),
-          dateOfService: startOfDay.toJSDate(),
-          walkIn: dto.walkIn ?? false,
-          insuranceVerified: dto.insuranceVerified ?? false,
-          arrivalNotes: dto.arrivalNotes,
-          assignedMaUserId,
-          intakeData: intakeData ?? undefined,
-          statusEvents: {
-            create: {
-              fromStatus: null,
-              toStatus: "Lobby",
-              changedByUserId: userId
-            }
-          },
-          alertState: {
-            create: {
-              enteredStatusAt: new Date(),
-              currentAlertLevel: "Green"
+        let reasonForVisitId = incomingRecord?.reasonForVisitId ?? dto.reasonForVisitId ?? null;
+        if (reasonForVisitId) {
+          const scopedReason = await resolveActiveReasonForClinic({
+            clinicId: dto.clinicId,
+            reasonForVisitId,
+          });
+          requireCondition(scopedReason, 400, "Visit reason is inactive or not assigned to this clinic", "REASON_NOT_ACTIVE_FOR_CLINIC");
+          reasonForVisitId = scopedReason.id;
+        } else if (dto.reasonForVisit?.trim()) {
+          const scopedReason = await resolveActiveReasonForClinic({
+            clinicId: dto.clinicId,
+            reasonName: dto.reasonForVisit,
+          });
+          reasonForVisitId = scopedReason?.id || null;
+        }
+
+        const [roomCount, clinicAssignment] = await Promise.all([
+          prisma.clinicRoomAssignment.count({
+            where: {
+              clinicId: dto.clinicId,
+              active: true,
+              room: { status: "active" },
+            },
+          }),
+          prisma.clinicAssignment.findUnique({
+            where: { clinicId: dto.clinicId },
+            include: {
+              providerUser: { select: { id: true, status: true } },
+              maUser: { select: { id: true, status: true } },
+              provider: { select: { id: true, clinicId: true, active: true } },
+            },
+          }),
+        ]);
+
+        const maAssignedAndActive = !!clinicAssignment?.maUserId && clinicAssignment.maUser?.status === "active";
+        const providerAssignedAndActive =
+          clinic.maRun ||
+          (!!clinicAssignment?.providerUserId &&
+            clinicAssignment.providerUser?.status === "active" &&
+            !!clinicAssignment?.providerId &&
+            clinicAssignment.provider?.active === true);
+        const clinicReady = roomCount > 0 && maAssignedAndActive && providerAssignedAndActive;
+        if (!clinicReady) {
+          throw new ApiError({
+            statusCode: 400,
+            code: "CLINIC_NOT_READY",
+            message: clinic.maRun
+              ? "Clinic is not ready: assign an active MA and active room before check-in."
+              : "Clinic is not ready: assign an active provider, active MA, and active room before check-in.",
+          });
+        }
+
+        if (!providerId && !clinic.maRun) {
+          providerId = clinicAssignment?.providerId ?? null;
+        }
+        if (!clinic.maRun && !providerId) {
+          throw new ApiError({ statusCode: 400, code: "PROVIDER_REQUIRED", message: "Provider is required for non MA-run clinics." });
+        }
+
+        if (providerId) {
+          const scopedProvider = await prisma.provider.findFirst({
+            where: {
+              id: providerId,
+              clinicId: dto.clinicId,
+              active: true,
+            },
+          });
+          requireCondition(scopedProvider, 400, "Provider not found for clinic", "PROVIDER_NOT_FOUND_FOR_CLINIC");
+          providerId = scopedProvider.id;
+        }
+
+        const assignedMaUserId: string | undefined = clinicAssignment?.maUserId || undefined;
+        const intakeDataValue =
+          incomingRecord?.intakeData ??
+          (dto.intakeData !== undefined ? asInputJson(parseEncounterJsonInput("intakeData", dto.intakeData)) : null);
+
+        if (reasonForVisitId && intakeDataValue && typeof intakeDataValue === "object") {
+          const intakeTemplate = await findActiveTemplateForReason({
+            clinicId: dto.clinicId,
+            reasonForVisitId,
+            type: TemplateType.intake,
+          });
+          if (intakeTemplate) {
+            const required = Array.isArray(intakeTemplate.requiredFields) ? (intakeTemplate.requiredFields as string[]) : [];
+            const fieldDefinitions = getTemplateFieldDefinitions(intakeTemplate.fieldsJson);
+            const fieldDefinitionsByKey = new Map<string, TemplateFieldDefinition>();
+            fieldDefinitions.forEach((field) => {
+              const key = field.key || field.name;
+              if (key) {
+                fieldDefinitionsByKey.set(key, field);
+              }
+            });
+            const intakeDataMap = getDataMap(intakeDataValue);
+            const missing = required.filter((field) => {
+              const fieldType = fieldDefinitionsByKey.get(field)?.type;
+              return isTemplateFieldValueMissing(fieldType, intakeDataMap[field]);
+            });
+            if (missing.length > 0) {
+              throw new ApiError({
+                statusCode: 400,
+                code: "REQUIRED_INTAKE_FIELDS_MISSING",
+                message: `Required intake fields missing: ${missing.join(", ")}`,
+              });
             }
           }
         }
-      });
 
-      if (incomingRecord?.id) {
-        const checkedInAt = new Date();
-        const siblingWhere: Prisma.IncomingScheduleWhereInput = {
-          clinicId: incomingRecord.clinicId,
-          dateOfService: incomingRecord.dateOfService,
-          patientId: incomingRecord.patientId,
-          checkedInAt: null,
-          dispositionAt: null
-        };
+        const encounter = await prisma.$transaction(async (tx) => {
+          const identityHints = extractPatientIdentityHints(incomingRecord?.rawPayloadJson, intakeDataValue);
+          const patientRecordId =
+            incomingRecord?.patientRecordId ||
+            (
+              await ensurePatientRecord(tx, {
+                facilityId: clinic.facilityId || request.user!.facilityId || "",
+                sourcePatientId: incomingRecord?.patientId ?? dto.patientId,
+                displayName: identityHints.displayName,
+                dateOfBirth: identityHints.dateOfBirth,
+              })
+            ).id;
 
-        if (incomingRecord.appointmentTime) {
-          siblingWhere.appointmentTime = incomingRecord.appointmentTime;
-        } else {
-          siblingWhere.appointmentAt = incomingRecord.appointmentAt;
-        }
+          const created = await tx.encounter.create({
+            data: {
+              patientId: incomingRecord?.patientId ?? dto.patientId,
+              patientRecordId,
+              clinicId: dto.clinicId,
+              providerId: providerId || undefined,
+              reasonForVisitId: reasonForVisitId || undefined,
+              currentStatus: "Lobby",
+              checkInAt: new Date(),
+              dateOfService: startOfDay.toJSDate(),
+              walkIn: dto.walkIn ?? false,
+              insuranceVerified: dto.insuranceVerified ?? false,
+              arrivalNotes: dto.arrivalNotes,
+              assignedMaUserId,
+              intakeData: intakeDataValue ?? undefined,
+              statusEvents: {
+                create: {
+                  fromStatus: null,
+                  toStatus: "Lobby",
+                  changedByUserId: userId,
+                },
+              },
+              alertState: {
+                create: {
+                  enteredStatusAt: new Date(),
+                  currentAlertLevel: "Green",
+                },
+              },
+            },
+          });
 
-        await tx.incomingSchedule.updateMany({
-          where: siblingWhere,
-          data: {
-            checkedInAt,
-            checkedInByUserId: userId,
-            checkedInEncounterId: created.id
+          if (incomingRecord?.id) {
+            const checkedInAt = new Date();
+            const siblingWhere: Prisma.IncomingScheduleWhereInput = {
+              clinicId: incomingRecord.clinicId,
+              dateOfService: incomingRecord.dateOfService,
+              patientId: incomingRecord.patientId,
+              checkedInAt: null,
+              dispositionAt: null,
+            };
+
+            if (incomingRecord.appointmentTime) {
+              siblingWhere.appointmentTime = incomingRecord.appointmentTime;
+            } else {
+              siblingWhere.appointmentAt = incomingRecord.appointmentAt;
+            }
+
+            await tx.incomingSchedule.updateMany({
+              where: siblingWhere,
+              data: {
+                checkedInAt,
+                checkedInByUserId: userId,
+                checkedInEncounterId: created.id,
+                patientRecordId,
+              },
+            });
           }
-        });
-      }
 
-      return created;
+          await queueRevenueEncounterSync(tx, created.id, request.correlationId || request.id);
+          return created;
+        });
+
+        return getHydratedEncounterView(encounter.id);
+      },
     });
-
-    await queueRevenueEncounterSync(prisma, encounter.id);
-    return getHydratedEncounterView(encounter.id);
   });
 
   app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
-    const query = request.query as {
-      clinicId?: string;
-      status?: EncounterStatus;
-      assignedMaUserId?: string;
-      date?: string;
-    };
+    const query = listEncountersSchema.parse(request.query);
     const user = request.user!;
     const requestedClinicId = query.clinicId?.trim() || undefined;
     const scopedClinicId =
       requestedClinicId ||
       (user.role === RoleName.MA || user.role === RoleName.Clinician ? undefined : user.clinicId || undefined);
+    const pagination = resolveOptionalPagination(query, { pageSize: 100 });
     if (scopedClinicId) {
       await resolveScopedClinic(user, scopedClinicId);
     }
@@ -1017,15 +1149,22 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       clinicIds: scopedClinicId ? [scopedClinicId] : undefined
     });
 
-    return listEncountersForRole({
+    const rows = await listEncountersForRole({
       clinicId: scopedClinicId,
       status: query.status,
       assignedMaUserId: query.assignedMaUserId,
       date: query.date,
       facilityId: user.facilityId,
       userId: user.id,
-      role: user.role
+      role: user.role,
+      pagination,
     });
+
+    if (!pagination) {
+      return rows;
+    }
+
+    return paginateItems(rows, pagination);
   });
 
   app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
@@ -1070,7 +1209,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       }
     });
 
-    assert(encounter, 404, "Encounter not found");
+    requireCondition(encounter, 404, "Encounter not found");
     await assertClinicInUserScope(request.user!, {
       id: encounter.clinicId,
       facilityId: encounter.clinic?.facilityId || null
@@ -1098,464 +1237,485 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
   app.patch("/encounters/:id/status", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = updateStatusSchema.parse(request.body);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
+        const clinic = await prisma.clinic.findUnique({
+          where: { id: encounter.clinicId },
+          select: { maRun: true },
+        });
+        requireCondition(clinic, 404, "Clinic not found", "CLINIC_NOT_FOUND");
 
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
-    const clinic = await prisma.clinic.findUnique({
-      where: { id: encounter.clinicId },
-      select: { maRun: true },
-    });
-    assert(clinic, 404, "Clinic not found");
+        await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
+        const allowedNext = getAllowedTransitionsForEncounter(encounter.currentStatus, { maRun: clinic.maRun });
+        const isSkip = !allowedNext.includes(dto.toStatus);
+        const isAdmin = request.user!.role === RoleName.Admin;
+        const isMaRunRoomingToCheckout =
+          clinic.maRun &&
+          encounter.currentStatus === EncounterStatus.Rooming &&
+          dto.toStatus === EncounterStatus.CheckOut;
 
-    if (dto.version !== encounter.version) {
-      throw new ApiError(400, "Version mismatch");
-    }
-
-    const allowedNext = getAllowedTransitionsForEncounter(encounter.currentStatus, { maRun: clinic.maRun });
-    const isSkip = !allowedNext.includes(dto.toStatus);
-    const isAdmin = request.user!.role === RoleName.Admin;
-    const isMaRunRoomingToCheckout =
-      clinic.maRun &&
-      encounter.currentStatus === EncounterStatus.Rooming &&
-      dto.toStatus === EncounterStatus.CheckOut;
-
-    if (isSkip && !isAdmin) {
-      throw new ApiError(400, "Invalid transition");
-    }
-
-    if (isSkip && isAdmin && !dto.reasonCode) {
-      throw new ApiError(400, "Reason code required for override");
-    }
-
-    await ensureRequiredFields(
-      encounter,
-      isMaRunRoomingToCheckout ? EncounterStatus.ReadyForProvider : dto.toStatus,
-    );
-    if (dto.toStatus === "ReadyForProvider" || isMaRunRoomingToCheckout) {
-      ensureStandardRoomingRequirements(encounter);
-    }
-
-    const updates: Prisma.EncounterUpdateInput = {
-      currentStatus: dto.toStatus,
-      version: encounter.version + 1
-    };
-
-    if (dto.toStatus === "Rooming") updates.roomingStartAt = encounter.roomingStartAt ?? new Date();
-    if (dto.toStatus === "ReadyForProvider") updates.roomingCompleteAt = encounter.roomingCompleteAt ?? new Date();
-    if (dto.toStatus === "Optimizing") updates.providerStartAt = encounter.providerStartAt ?? new Date();
-    if (dto.toStatus === "CheckOut") updates.providerEndAt = encounter.providerEndAt ?? new Date();
-    if (isMaRunRoomingToCheckout) updates.roomingCompleteAt = encounter.roomingCompleteAt ?? new Date();
-
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data: {
-        ...updates,
-        statusEvents: {
-          create: {
-            fromStatus: encounter.currentStatus,
-            toStatus: dto.toStatus,
-            changedByUserId: request.user!.id,
-            reasonCode: dto.reasonCode
-          }
-        },
-        alertState: {
-          update: {
-            enteredStatusAt: new Date(),
-            currentAlertLevel: "Green"
-          }
+        if (isSkip && !isAdmin) {
+          throw new ApiError({ statusCode: 400, code: "INVALID_STATUS_TRANSITION", message: "Invalid transition" });
         }
-      }
+
+        if (isSkip && isAdmin && !dto.reasonCode) {
+          throw new ApiError({ statusCode: 400, code: "OVERRIDE_REASON_REQUIRED", message: "Reason code required for override" });
+        }
+
+        await ensureRequiredFields(encounter, isMaRunRoomingToCheckout ? EncounterStatus.ReadyForProvider : dto.toStatus);
+        if (dto.toStatus === "ReadyForProvider" || isMaRunRoomingToCheckout) {
+          ensureStandardRoomingRequirements(encounter);
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const updates: Prisma.EncounterUncheckedUpdateManyInput = {
+            currentStatus: dto.toStatus,
+          };
+
+          if (dto.toStatus === "Rooming") updates.roomingStartAt = encounter.roomingStartAt ?? new Date();
+          if (dto.toStatus === "ReadyForProvider") updates.roomingCompleteAt = encounter.roomingCompleteAt ?? new Date();
+          if (dto.toStatus === "Optimizing") updates.providerStartAt = encounter.providerStartAt ?? new Date();
+          if (dto.toStatus === "CheckOut") updates.providerEndAt = encounter.providerEndAt ?? new Date();
+          if (isMaRunRoomingToCheckout) updates.roomingCompleteAt = encounter.roomingCompleteAt ?? new Date();
+
+          const statusChangedAt = new Date();
+          const row = await updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version,
+            data: updates,
+            statusEvent: {
+              fromStatus: encounter.currentStatus,
+              toStatus: dto.toStatus,
+              changedByUserId: request.user!.id,
+              reasonCode: dto.reasonCode,
+            },
+            resetAlertStateAt: statusChangedAt,
+          });
+          if (dto.toStatus === "CheckOut") {
+            await markEncounterRoomNeedsTurnoverInTx(tx, {
+              encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
+              userId: request.user!.id,
+            });
+          }
+          await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          return row;
+        });
+
+        return getHydratedEncounterView(updated.id);
+      },
     });
-    if (dto.toStatus === "CheckOut") {
-      await markEncounterRoomNeedsTurnover({
-        encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
-        userId: request.user!.id
-      });
-    }
-    await queueRevenueEncounterSync(prisma, updated.id);
-    return getHydratedEncounterView(updated.id);
   });
 
   app.patch("/encounters/:id/rooming", { preHandler: requireRoles(RoleName.MA, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = updateRoomingSchema.parse(request.body);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
 
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
+        await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
+        const hasRoomUpdate = Object.prototype.hasOwnProperty.call(dto, "roomId");
+        const nextRoomId = hasRoomUpdate ? dto.roomId ?? null : encounter.roomId;
+        const isChangingRooms = hasRoomUpdate && nextRoomId !== encounter.roomId;
 
-    const hasRoomUpdate = Object.prototype.hasOwnProperty.call(dto, "roomId");
-    const nextRoomId = hasRoomUpdate ? dto.roomId ?? null : encounter.roomId;
-    const isChangingRooms = hasRoomUpdate && nextRoomId !== encounter.roomId;
+        const roomContext = isChangingRooms && dto.roomId
+          ? await assertRoomAssignableForEncounter({
+              encounter: { id: encounter.id, clinicId: encounter.clinicId, roomId: encounter.roomId },
+              roomId: dto.roomId,
+              user: request.user!,
+            })
+          : null;
 
-    const roomContext = isChangingRooms && dto.roomId
-      ? await assertRoomAssignableForEncounter({
-          encounter: { id: encounter.id, clinicId: encounter.clinicId, roomId: encounter.roomId },
-          roomId: dto.roomId,
-          user: request.user!
-        })
-      : null;
+        const data: Prisma.EncounterUncheckedUpdateManyInput = {
+          roomId: nextRoomId,
+        };
 
-    const data: Prisma.EncounterUncheckedUpdateInput = {
-      roomId: nextRoomId
-    };
+        if (dto.data !== undefined) {
+          data.roomingData = asInputJson(parseEncounterJsonInput("roomingData", dto.data));
+        }
 
-    if (dto.data !== undefined) {
-      data.roomingData = dto.data as Prisma.InputJsonValue;
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.encounter.update({
-        where: { id: encounterId },
-        data
-      });
-      if (isChangingRooms && encounter.roomId) {
-        await markEncounterRoomNeedsTurnoverInTx(tx, {
-          encounter: { id: row.id, clinicId: row.clinicId, roomId: encounter.roomId },
-          userId: request.user!.id
+        const updated = await prisma.$transaction(async (tx) => {
+          const row = await updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version ?? encounter.version,
+            data,
+          });
+          if (isChangingRooms && encounter.roomId) {
+            await markEncounterRoomNeedsTurnoverInTx(tx, {
+              encounter: { id: row.id, clinicId: row.clinicId, roomId: encounter.roomId },
+              userId: request.user!.id,
+            });
+          }
+          if (isChangingRooms && dto.roomId && roomContext) {
+            await markEncounterRoomOccupiedInTx(tx, {
+              encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
+              roomId: dto.roomId,
+              userId: request.user!.id,
+              facilityId: roomContext.facilityId,
+            });
+          }
+          await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          return row;
         });
-      }
-      if (isChangingRooms && dto.roomId && roomContext) {
-        await markEncounterRoomOccupiedInTx(tx, {
-          encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
-          roomId: dto.roomId,
-          userId: request.user!.id,
-          facilityId: roomContext.facilityId
-        });
-      }
-      return row;
+        return getHydratedEncounterView(updated.id);
+      },
     });
-    await queueRevenueEncounterSync(prisma, updated.id);
-    return getHydratedEncounterView(updated.id);
   });
 
   app.post("/encounters/:id/assign", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = assignSchema.parse(request.body);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
 
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
-
-    if (dto.version !== encounter.version) {
-      throw new ApiError(400, "Version mismatch");
-    }
-
-    if (!dto.assignedMaUserId && !dto.providerId) {
-      throw new ApiError(400, "Provide at least one reassignment target (MA or provider)");
-    }
-
-    const clinic = await prisma.clinic.findUnique({
-      where: { id: encounter.clinicId },
-      select: { id: true, maRun: true, facilityId: true, status: true }
-    });
-    assert(clinic, 404, "Clinic not found");
-    assert(clinic.status !== "archived", 400, "Cannot reassign encounters for archived clinics");
-
-    const clinicAssignment = await prisma.clinicAssignment.findUnique({
-      where: { clinicId: encounter.clinicId },
-      include: {
-        providerUser: { select: { id: true, status: true } },
-        provider: { select: { id: true, active: true } },
-        maUser: { select: { id: true, status: true } }
-      }
-    });
-
-    let nextProviderId = encounter.providerId || null;
-    if (dto.providerId) {
-      const provider = await prisma.provider.findFirst({
-        where: {
-          id: dto.providerId,
-          clinicId: encounter.clinicId,
-          active: true
+        if (!dto.assignedMaUserId && !dto.providerId) {
+          throw new ApiError({
+            statusCode: 400,
+            code: "REASSIGNMENT_TARGET_REQUIRED",
+            message: "Provide at least one reassignment target (MA or provider)",
+          });
         }
-      });
-      assert(provider, 400, "Provider not found for clinic");
-      nextProviderId = provider.id;
-    }
 
-    if (!nextProviderId && !clinic.maRun) {
-      nextProviderId = clinicAssignment?.providerId ?? null;
-    }
+        const clinic = await prisma.clinic.findUnique({
+          where: { id: encounter.clinicId },
+          select: { id: true, maRun: true, facilityId: true, status: true },
+        });
+        requireCondition(clinic, 404, "Clinic not found", "CLINIC_NOT_FOUND");
+        requireCondition(clinic.status !== "archived", 400, "Cannot reassign encounters for archived clinics", "CLINIC_ARCHIVED");
 
-    if (!clinic.maRun && clinicAssignment?.providerId && nextProviderId !== clinicAssignment.providerId) {
-      throw new ApiError(400, "Selected provider is not the clinic's assigned provider");
-    }
+        const clinicAssignment = await prisma.clinicAssignment.findUnique({
+          where: { clinicId: encounter.clinicId },
+          include: {
+            providerUser: { select: { id: true, status: true } },
+            provider: { select: { id: true, active: true } },
+            maUser: { select: { id: true, status: true } },
+          },
+        });
 
-    if (!clinic.maRun && !nextProviderId) {
-      throw new ApiError(400, "Provider is required for non MA-run clinics");
-    }
-
-    if (nextProviderId) {
-      const activeProvider = await prisma.provider.findFirst({
-        where: {
-          id: nextProviderId,
-          clinicId: encounter.clinicId,
-          active: true
+        let nextProviderId = encounter.providerId || null;
+        if (dto.providerId) {
+          const provider = await prisma.provider.findFirst({
+            where: {
+              id: dto.providerId,
+              clinicId: encounter.clinicId,
+              active: true,
+            },
+          });
+          requireCondition(provider, 400, "Provider not found for clinic", "PROVIDER_NOT_FOUND_FOR_CLINIC");
+          nextProviderId = provider.id;
         }
-      });
-      assert(activeProvider, 400, "Provider not found for clinic");
-      nextProviderId = activeProvider.id;
-    }
 
-    let nextAssignedMaUserId = encounter.assignedMaUserId || null;
-    if (dto.assignedMaUserId) {
-      const maUser = await prisma.user.findUnique({
-        where: { id: dto.assignedMaUserId },
-        include: {
-          roles: {
+        if (!nextProviderId && !clinic.maRun) {
+          nextProviderId = clinicAssignment?.providerId ?? null;
+        }
+
+        if (!clinic.maRun && clinicAssignment?.providerId && nextProviderId !== clinicAssignment.providerId) {
+          throw new ApiError({
+            statusCode: 400,
+            code: "PROVIDER_OUTSIDE_CLINIC_ASSIGNMENT",
+            message: "Selected provider is not the clinic's assigned provider",
+          });
+        }
+
+        if (!clinic.maRun && !nextProviderId) {
+          throw new ApiError({ statusCode: 400, code: "PROVIDER_REQUIRED", message: "Provider is required for non MA-run clinics" });
+        }
+
+        if (nextProviderId) {
+          const activeProvider = await prisma.provider.findFirst({
+            where: {
+              id: nextProviderId,
+              clinicId: encounter.clinicId,
+              active: true,
+            },
+          });
+          requireCondition(activeProvider, 400, "Provider not found for clinic", "PROVIDER_NOT_FOUND_FOR_CLINIC");
+          nextProviderId = activeProvider.id;
+        }
+
+        let nextAssignedMaUserId = encounter.assignedMaUserId || null;
+        if (dto.assignedMaUserId) {
+          const maUser = await prisma.user.findUnique({
+            where: { id: dto.assignedMaUserId },
             include: {
-              clinic: { select: { facilityId: true } }
-            }
-          }
+              roles: {
+                include: {
+                  clinic: { select: { facilityId: true } },
+                },
+              },
+            },
+          });
+          requireCondition(maUser, 404, "MA user not found", "MA_USER_NOT_FOUND");
+          requireCondition(maUser.status === "active", 400, "Selected MA user is not active", "MA_USER_INACTIVE");
+          const hasScopedMaRole = maUser.roles.some((entry) => {
+            if (entry.role !== RoleName.MA) return false;
+            if (!clinic.facilityId) return true;
+            if (entry.facilityId) return entry.facilityId === clinic.facilityId;
+            return entry.clinic?.facilityId === clinic.facilityId;
+          });
+          requireCondition(hasScopedMaRole, 400, "Selected user is not an MA in this facility", "MA_USER_OUTSIDE_SCOPE");
+          requireCondition(clinicAssignment?.maUserId, 400, "Clinic does not have an MA assignment", "CLINIC_MA_ASSIGNMENT_MISSING");
+          requireCondition(clinicAssignment.maUser?.status === "active", 400, "Clinic MA assignment is inactive", "CLINIC_MA_ASSIGNMENT_INACTIVE");
+          requireCondition(clinicAssignment.maUserId === dto.assignedMaUserId, 400, "Selected MA is not assigned to this clinic", "MA_USER_NOT_ASSIGNED_TO_CLINIC");
+
+          nextAssignedMaUserId = dto.assignedMaUserId;
+        } else if (!nextAssignedMaUserId && clinicAssignment?.maUserId && clinicAssignment.maUser?.status === "active") {
+          nextAssignedMaUserId = clinicAssignment.maUserId;
         }
-      });
-      assert(maUser, 404, "MA user not found");
-      assert(maUser.status === "active", 400, "Selected MA user is not active");
-      const hasScopedMaRole = maUser.roles.some((entry) => {
-        if (entry.role !== RoleName.MA) return false;
-        if (!clinic.facilityId) return true;
-        if (entry.facilityId) return entry.facilityId === clinic.facilityId;
-        return entry.clinic?.facilityId === clinic.facilityId;
-      });
-      assert(hasScopedMaRole, 400, "Selected user is not an MA in this facility");
-      assert(clinicAssignment?.maUserId, 400, "Clinic does not have an MA assignment");
-      assert(clinicAssignment.maUser?.status === "active", 400, "Clinic MA assignment is inactive");
-      assert(clinicAssignment.maUserId === dto.assignedMaUserId, 400, "Selected MA is not assigned to this clinic");
 
-      nextAssignedMaUserId = dto.assignedMaUserId;
-    } else if (!nextAssignedMaUserId && clinicAssignment?.maUserId && clinicAssignment.maUser?.status === "active") {
-      nextAssignedMaUserId = clinicAssignment.maUserId;
-    }
-
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data: {
-        assignedMaUserId: nextAssignedMaUserId,
-        providerId: nextProviderId,
-        version: encounter.version + 1
-      }
+        const updated = await prisma.$transaction(async (tx) => {
+          const row = await updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version,
+            data: {
+              assignedMaUserId: nextAssignedMaUserId,
+              providerId: nextProviderId,
+            },
+          });
+          await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          return row;
+        });
+        return getHydratedEncounterView(updated.id);
+      },
     });
-    await queueRevenueEncounterSync(prisma, updated.id);
-    return getHydratedEncounterView(updated.id);
   });
 
   app.post("/encounters/:id/visit/start", { preHandler: requireRoles(RoleName.Clinician, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = startVisitSchema.parse(request.body);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
 
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
+        await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
-
-    if (dto.version !== encounter.version) {
-      throw new ApiError(400, "Version mismatch");
-    }
-
-    if (encounter.currentStatus !== "ReadyForProvider") {
-      throw new ApiError(400, "Start Visit is only allowed from ReadyForProvider");
-    }
-
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data: {
-        providerStartAt: encounter.providerStartAt ?? new Date(),
-        currentStatus: "Optimizing",
-        version: encounter.version + 1,
-        statusEvents: {
-          create: {
-            fromStatus: encounter.currentStatus,
-            toStatus: "Optimizing",
-            changedByUserId: request.user!.id
-          }
-        },
-        alertState: {
-          update: {
-            enteredStatusAt: new Date(),
-            currentAlertLevel: "Green"
-          }
+        if (encounter.currentStatus !== "ReadyForProvider") {
+          throw new ApiError({
+            statusCode: 400,
+            code: "VISIT_START_INVALID_STATUS",
+            message: "Start Visit is only allowed from ReadyForProvider",
+          });
         }
-      }
+
+        const updated = await prisma.$transaction(async (tx) =>
+          updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version,
+            data: {
+              providerStartAt: encounter.providerStartAt ?? new Date(),
+              currentStatus: "Optimizing",
+            },
+            statusEvent: {
+              fromStatus: encounter.currentStatus,
+              toStatus: "Optimizing",
+              changedByUserId: request.user!.id,
+            },
+            resetAlertStateAt: new Date(),
+          }),
+        );
+        return getHydratedEncounterView(updated.id);
+      },
     });
-    return getHydratedEncounterView(updated.id);
   });
 
   app.post("/encounters/:id/visit/end", { preHandler: requireRoles(RoleName.Clinician, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = endVisitSchema.parse(request.body);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
 
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
+        await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
-
-    if (dto.version !== encounter.version) {
-      throw new ApiError(400, "Version mismatch");
-    }
-
-    if (encounter.currentStatus !== "Optimizing") {
-      throw new ApiError(400, "Visit must be started before ending");
-    }
-
-    await ensureRequiredFields(encounter, "CheckOut", dto.data);
-    ensureClinicianCheckoutRequirements(encounter, dto.data);
-
-    const data: Prisma.EncounterUpdateInput = {
-      providerEndAt: new Date(),
-      currentStatus: "CheckOut",
-      version: encounter.version + 1,
-      statusEvents: {
-        create: {
-          fromStatus: encounter.currentStatus,
-          toStatus: "CheckOut",
-          changedByUserId: request.user!.id
+        if (encounter.currentStatus !== "Optimizing") {
+          throw new ApiError({ statusCode: 400, code: "VISIT_END_INVALID_STATUS", message: "Visit must be started before ending" });
         }
+
+        const clinicianData = dto.data !== undefined ? parseEncounterJsonInput("clinicianData", dto.data) : undefined;
+        await ensureRequiredFields(encounter, "CheckOut", clinicianData);
+        ensureClinicianCheckoutRequirements(encounter, clinicianData);
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const data: Prisma.EncounterUncheckedUpdateManyInput = {
+            providerEndAt: new Date(),
+            currentStatus: "CheckOut",
+          };
+
+          if (clinicianData !== undefined) {
+            data.clinicianData = asInputJson(clinicianData);
+          }
+
+          const statusChangedAt = new Date();
+          const row = await updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version,
+            data,
+            statusEvent: {
+              fromStatus: encounter.currentStatus,
+              toStatus: "CheckOut",
+              changedByUserId: request.user!.id,
+            },
+            resetAlertStateAt: statusChangedAt,
+          });
+          await markEncounterRoomNeedsTurnoverInTx(tx, {
+            encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
+            userId: request.user!.id,
+          });
+          await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          return row;
+        });
+        return getHydratedEncounterView(updated.id);
       },
-      alertState: {
-        update: {
-          enteredStatusAt: new Date(),
-          currentAlertLevel: "Green"
-        }
-      }
-    };
-
-    if (dto.data !== undefined) {
-      data.clinicianData = dto.data as Prisma.InputJsonValue;
-    }
-
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data
     });
-    await markEncounterRoomNeedsTurnover({
-      encounter: { id: updated.id, clinicId: updated.clinicId, roomId: updated.roomId },
-      userId: request.user!.id
-    });
-    await queueRevenueEncounterSync(prisma, updated.id);
-    return getHydratedEncounterView(updated.id);
   });
 
   app.post("/encounters/:id/checkout/complete", { preHandler: requireRoles(RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = completeCheckoutSchema.parse(request.body);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
 
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
+        await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
 
-    await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
+        const blockingTasks = await prisma.task.findMany({
+          where: {
+            encounterId,
+            blocking: true,
+            OR: [{ completedAt: null }, { status: { not: "completed" } }],
+          },
+        });
 
-    if (dto.version !== encounter.version) {
-      throw new ApiError(400, "Version mismatch");
-    }
-
-    const blockingTasks = await prisma.task.findMany({
-      where: {
-        encounterId,
-        blocking: true,
-        OR: [{ completedAt: null }, { status: { not: "completed" } }]
-      }
-    });
-
-    if (blockingTasks.length > 0) {
-      throw new ApiError(400, "Blocking tasks must be completed");
-    }
-
-    await ensureRequiredFields(encounter, "Optimized", dto.checkoutData);
-
-    const data: Prisma.EncounterUpdateInput = {
-      checkoutCompleteAt: new Date(),
-      currentStatus: "Optimized",
-      version: encounter.version + 1,
-      statusEvents: {
-        create: {
-          fromStatus: encounter.currentStatus,
-          toStatus: "Optimized",
-          changedByUserId: request.user!.id
+        if (blockingTasks.length > 0) {
+          throw new ApiError({ statusCode: 400, code: "BLOCKING_TASKS_INCOMPLETE", message: "Blocking tasks must be completed" });
         }
+
+        const checkoutData = dto.checkoutData !== undefined ? parseEncounterJsonInput("checkoutData", dto.checkoutData) : undefined;
+        await ensureRequiredFields(encounter, "Optimized", checkoutData);
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const data: Prisma.EncounterUncheckedUpdateManyInput = {
+            checkoutCompleteAt: new Date(),
+            currentStatus: "Optimized",
+          };
+
+          if (checkoutData !== undefined) {
+            data.checkoutData = asInputJson(checkoutData);
+          }
+
+          const statusChangedAt = new Date();
+          const row = await updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version,
+            data,
+            statusEvent: {
+              fromStatus: encounter.currentStatus,
+              toStatus: "Optimized",
+              changedByUserId: request.user!.id,
+            },
+            resetAlertStateAt: statusChangedAt,
+          });
+          await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          return row;
+        });
+        return getHydratedEncounterView(updated.id);
       },
-      alertState: {
-        update: {
-          enteredStatusAt: new Date(),
-          currentAlertLevel: "Green"
-        }
-      }
-    };
-
-    if (dto.checkoutData !== undefined) {
-      data.checkoutData = dto.checkoutData as Prisma.InputJsonValue;
-    }
-
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data
     });
-    await queueRevenueEncounterSync(prisma, updated.id);
-    return getHydratedEncounterView(updated.id);
   });
 
   app.post("/encounters/:id/cancel", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.Admin) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
     const dto = cancelSchema.parse(request.body);
-
-    if (!cancelReasons.includes(dto.reason)) {
-      throw new ApiError(400, "Invalid cancellation reason");
-    }
-
-    if (dto.reason === "other" && !(dto.note || "").trim()) {
-      throw new ApiError(400, "A note is required when reason is other");
-    }
-
-    const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
-    assert(encounter, 404, "Encounter not found");
-    await assertEncounterInScope(encounter, request.user!);
-
-    await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
-
-    if (encounter.currentStatus === "Optimized") {
-      throw new ApiError(400, "Encounter is already optimized");
-    }
-
-    if (dto.version !== encounter.version) {
-      throw new ApiError(400, "Version mismatch");
-    }
-
-    const now = new Date();
-
-    const updated = await prisma.encounter.update({
-      where: { id: encounterId },
-      data: {
-        currentStatus: "Optimized",
-        checkoutCompleteAt: encounter.checkoutCompleteAt ?? now,
-        closedAt: now,
-        closureType: dto.reason,
-        closureNotes: (dto.note || "").trim() || null,
-        version: encounter.version + 1,
-        statusEvents: {
-          create: {
-            fromStatus: encounter.currentStatus,
-            toStatus: "Optimized",
-            changedByUserId: request.user!.id,
-            reasonCode: dto.reason
-          }
-        },
-        alertState: {
-          update: {
-            enteredStatusAt: now,
-            currentAlertLevel: "Green"
-          }
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        if (!cancelReasons.includes(dto.reason)) {
+          throw new ApiError({ statusCode: 400, code: "INVALID_CANCELLATION_REASON", message: "Invalid cancellation reason" });
         }
-      }
+
+        if (dto.reason === "other" && !(dto.note || "").trim()) {
+          throw new ApiError({ statusCode: 400, code: "CANCELLATION_NOTE_REQUIRED", message: "A note is required when reason is other" });
+        }
+
+        const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
+        requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+        await assertEncounterInScope(encounter, request.user!);
+
+        await assertEncounterAccess(encounter, request.user!.id, request.user!.role);
+
+        if (encounter.currentStatus === "Optimized") {
+          throw new ApiError({ statusCode: 400, code: "ENCOUNTER_ALREADY_OPTIMIZED", message: "Encounter is already optimized" });
+        }
+
+        const now = new Date();
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const row = await updateEncounterWithVersionTx({
+            tx,
+            encounterId,
+            expectedVersion: dto.version,
+            data: {
+              currentStatus: "Optimized",
+              checkoutCompleteAt: encounter.checkoutCompleteAt ?? now,
+              closedAt: now,
+              closureType: dto.reason,
+              closureNotes: (dto.note || "").trim() || null,
+            },
+            statusEvent: {
+              fromStatus: encounter.currentStatus,
+              toStatus: "Optimized",
+              changedByUserId: request.user!.id,
+              reasonCode: dto.reason,
+            },
+            resetAlertStateAt: now,
+          });
+          await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          return row;
+        });
+        return getHydratedEncounterView(updated.id);
+      },
     });
-    await queueRevenueEncounterSync(prisma, updated.id);
-    return getHydratedEncounterView(updated.id);
   });
 }

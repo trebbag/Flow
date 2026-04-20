@@ -238,13 +238,13 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
 
     if (env.ENTRA_STRICT_MODE) {
       if (tokenIdentityType === "app") {
-        throw new ApiError(403, "User sign-in is required. Application tokens are not allowed.");
+        throw new ApiError({ statusCode: 403, code: "JWT_APPLICATION_TOKEN_FORBIDDEN", message: "User sign-in is required. Application tokens are not allowed." });
       }
       if (env.ENTRA_TENANT_ID && tokenTenantId && tokenTenantId !== env.ENTRA_TENANT_ID) {
-        throw new ApiError(403, "This Microsoft account belongs to the wrong tenant.");
+        throw new ApiError({ statusCode: 403, code: "JWT_TENANT_MISMATCH", message: "This Microsoft account belongs to the wrong tenant." });
       }
       if (tokenUserType && tokenUserType.toLowerCase() !== "member") {
-        throw new ApiError(403, "Guest and B2B Microsoft accounts are not allowed.");
+        throw new ApiError({ statusCode: 403, code: "JWT_GUEST_ACCOUNT_FORBIDDEN", message: "Guest and B2B Microsoft accounts are not allowed." });
       }
     }
 
@@ -269,7 +269,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
     });
 
     if (!user) {
-      throw new ApiError(403, "This Microsoft account is not provisioned for Flow.");
+      throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_NOT_PROVISIONED", message: "This Microsoft account is not provisioned for Flow." });
     }
 
     const matchedBySubject = user.id === subject || user.entraObjectId === subject || user.cognitoSub === subject;
@@ -307,26 +307,26 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
     }
 
     if (user.status === "archived") {
-      throw new ApiError(403, "This Flow account has been archived.");
+      throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_ARCHIVED", message: "This Flow account has been archived." });
     }
 
     if (user.status === "suspended") {
-      throw new ApiError(403, "This Flow account is suspended.");
+      throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_SUSPENDED", message: "This Flow account is suspended." });
     }
 
     if (user.roles.length === 0) {
-      throw new ApiError(403, "This Flow account is missing role assignments.");
+      throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_ROLE_ASSIGNMENTS_MISSING", message: "This Flow account is missing role assignments." });
     }
 
     if (env.ENTRA_STRICT_MODE) {
       if (user.identityProvider && user.identityProvider !== "entra") {
-        throw new ApiError(403, "This Flow account is not linked to Microsoft Entra.");
+        throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_NOT_LINKED_TO_ENTRA", message: "This Flow account is not linked to Microsoft Entra." });
       }
       if (user.directoryUserType && user.directoryUserType.toLowerCase() !== "member") {
-        throw new ApiError(403, "Guest and B2B Microsoft accounts are not allowed.");
+        throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_GUEST_FORBIDDEN", message: "Guest and B2B Microsoft accounts are not allowed." });
       }
       if (user.directoryAccountEnabled === false || ["disabled", "deleted", "guest"].includes(String(user.directoryStatus || "").toLowerCase())) {
-        throw new ApiError(403, "This Microsoft account is not active in the directory.");
+        throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_DIRECTORY_INACTIVE", message: "This Microsoft account is not active in the directory." });
       }
     }
 
@@ -367,7 +367,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
         },
         "JWT verified but no active Flow user mapping was found"
       );
-      throw new ApiError(403, "This Microsoft account is not provisioned for Flow.");
+      throw new ApiError({ statusCode: 403, code: "FLOW_ACCOUNT_NOT_PROVISIONED", message: "This Microsoft account is not provisioned for Flow." });
     }
 
     const availableRoleSet = new Set(dedupeRoleNames(user.roles));

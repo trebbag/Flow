@@ -274,10 +274,77 @@ model Facility {
   alertInbox                         UserAlertInbox[]
   temporaryClinicAssignmentOverrides TemporaryClinicAssignmentOverride[]
   roomDailyRollups                   RoomDailyRollup[]
+  patients                           Patient[]
+  patientAliases                     PatientAlias[]
+  patientIdentityReviews             PatientIdentityReview[]
   revenueCases                       RevenueCase[]
   revenueSettings                    RevenueCycleSettings?
   revenueCloseoutRuns                RevenueCloseoutRun[]
   revenueCycleDailyRollups           RevenueCycleDailyRollup[]
+}
+
+model Patient {
+  id                        String   @id @default(uuid())
+  facilityId                String
+  sourcePatientId           String
+  normalizedSourcePatientId String
+  displayName               String?
+  dateOfBirth               DateTime?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  facility         Facility         @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  incomingSchedules IncomingSchedule[]
+  encounters       Encounter[]
+  revenueCases     RevenueCase[]
+  aliases          PatientAlias[]
+  identityReviews  PatientIdentityReview[]
+
+  @@unique([facilityId, normalizedSourcePatientId])
+  @@index([facilityId, createdAt])
+  @@index([facilityId, dateOfBirth])
+}
+
+model PatientAlias {
+  id                   String   @id @default(uuid())
+  patientId            String
+  facilityId           String
+  aliasType            String
+  aliasValue           String
+  normalizedAliasValue String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, aliasType, normalizedAliasValue])
+  @@index([facilityId, aliasType, normalizedAliasValue])
+  @@index([patientId, aliasType])
+}
+
+model PatientIdentityReview {
+  id                        String   @id @default(uuid())
+  facilityId                String
+  patientId                 String?
+  sourcePatientId           String
+  normalizedSourcePatientId String
+  displayName               String?
+  normalizedDisplayName     String?
+  dateOfBirth               DateTime?
+  reasonCode                String
+  status                    String   @default("open")
+  matchedPatientIdsJson     Json?
+  contextJson               Json?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  patient  Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([facilityId, status, createdAt])
+  @@index([facilityId, normalizedSourcePatientId])
+  @@index([patientId, status])
 }
 
 model Clinic {
@@ -557,6 +624,7 @@ model IncomingImportBatch {
 model IncomingSchedule {
   id                     String         @id @default(uuid())
   clinicId               String
+  patientRecordId        String?
   dateOfService          DateTime
   patientId              String
   appointmentTime        String?
@@ -581,6 +649,7 @@ model IncomingSchedule {
   importBatchId          String?
 
   clinic         Clinic                @relation(fields: [clinicId], references: [id])
+  patientRecord  Patient?              @relation(fields: [patientRecordId], references: [id])
   provider       Provider?             @relation(fields: [providerId], references: [id])
   reason         ReasonForVisit?       @relation(fields: [reasonForVisitId], references: [id])
   importBatch    IncomingImportBatch?  @relation(fields: [importBatchId], references: [id])
@@ -588,6 +657,7 @@ model IncomingSchedule {
 
   @@index([clinicId, dateOfService, checkedInAt])
   @@index([dateOfService, patientId, appointmentTime])
+  @@index([patientRecordId])
 }
 
 model IncomingImportIssue {
@@ -618,6 +688,7 @@ model IncomingImportIssue {
 model Encounter {
   id                 String          @id @default(uuid())
   patientId          String
+  patientRecordId    String?
   clinicId           String
   providerId         String?
   reasonForVisitId   String?
@@ -644,6 +715,7 @@ model Encounter {
   intakeData         Json?
 
   clinic                 Clinic                 @relation(fields: [clinicId], references: [id])
+  patientRecord          Patient?               @relation(fields: [patientRecordId], references: [id])
   provider               Provider?              @relation(fields: [providerId], references: [id])
   reason                 ReasonForVisit?        @relation(fields: [reasonForVisitId], references: [id])
   room                   ClinicRoom?            @relation(fields: [roomId], references: [id])
@@ -660,6 +732,7 @@ model Encounter {
   @@unique([patientId, clinicId, dateOfService])
   @@index([clinicId, currentStatus])
   @@index([clinicId, dateOfService])
+  @@index([patientRecordId])
 }
 
 model StatusChangeEvent {
@@ -712,6 +785,8 @@ model Task {
   acknowledgedBy   String?
   completedAt      DateTime?
   completedBy      String?
+  archivedAt       DateTime?
+  archivedBy       String?
   notes            String?
   updatedAt        DateTime        @updatedAt
 
@@ -736,6 +811,7 @@ model RevenueCase {
   facilityId               String
   clinicId                 String
   patientId                String
+  patientRecordId          String?
   providerId               String?
   dateOfService            DateTime
   currentRevenueStatus     RevenueStatus     @default(FinancialReadinessNeeded)
@@ -770,6 +846,7 @@ model RevenueCase {
   encounter                  Encounter                    @relation(fields: [encounterId], references: [id], onDelete: Cascade)
   facility                   Facility                     @relation(fields: [facilityId], references: [id], onDelete: Cascade)
   clinic                     Clinic                       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patientRecord              Patient?                     @relation(fields: [patientRecordId], references: [id])
   provider                   Provider?                    @relation(fields: [providerId], references: [id], onDelete: SetNull)
   assignedToUser             User?                        @relation("RevenueCaseAssignedUser", fields: [assignedToUserId], references: [id], onDelete: SetNull)
   financialReadiness         FinancialReadiness?
@@ -787,6 +864,7 @@ model RevenueCase {
   @@index([assignedToUserId, currentRevenueStatus])
   @@index([assignedToRole, currentRevenueStatus])
   @@index([closeoutState, currentDayBucket])
+  @@index([patientRecordId])
 }
 
 model FinancialReadiness {
@@ -1232,6 +1310,7 @@ model RevenueCycleDailyRollup {
 model AuditLog {
   id          String    @id @default(uuid())
   requestId   String
+  idempotencyKey String?
   occurredAt  DateTime  @default(now())
   actorUserId String?
   actorRole   RoleName?
@@ -1250,6 +1329,23 @@ model AuditLog {
   @@index([route, method])
   @@index([facilityId, occurredAt])
   @@index([clinicId, occurredAt])
+  @@index([idempotencyKey])
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  actorUserId    String
+  method         String
+  routeKey       String
+  idempotencyKey String
+  requestHash    String
+  statusCode     Int
+  responseJson   Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([actorUserId, method, routeKey, idempotencyKey])
+  @@index([routeKey, createdAt])
 }
 
 model EventOutbox {

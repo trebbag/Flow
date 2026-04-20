@@ -739,6 +739,7 @@ function CheckoutCard({
                   </label>
                   <div className="relative">
                     <select
+                      aria-label="Collection outcome"
                       value={collectionOutcome}
                       onChange={(event) => setCollectionOutcome(event.target.value)}
                       className="w-full h-10 rounded-lg border border-gray-200 bg-white px-4 pr-10 text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -761,6 +762,7 @@ function CheckoutCard({
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     <input
                       type="text"
+                      aria-label="Amount due"
                       inputMode="decimal"
                       value={amountDueCents}
                       onChange={(event) => setAmountDueCents(event.target.value)}
@@ -778,6 +780,7 @@ function CheckoutCard({
                     <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                     <input
                       type="text"
+                      aria-label="Amount collected"
                       inputMode="decimal"
                       value={amountCollectedCents}
                       onChange={(event) => setAmountCollectedCents(event.target.value)}
@@ -794,6 +797,7 @@ function CheckoutCard({
                 </label>
                 <textarea
                   rows={2}
+                  aria-label="Missed collection reason"
                   value={missedCollectionReason}
                   onChange={(event) => setMissedCollectionReason(event.target.value)}
                   placeholder="Required for partial, deferred, or not-collected outcomes..."
@@ -810,6 +814,7 @@ function CheckoutCard({
                 </label>
                 <textarea
                   rows={2}
+                  aria-label="Collection note"
                   value={collectionNote}
                   onChange={(event) => setCollectionNote(event.target.value)}
                   placeholder="Optional context for Revenue Cycle..."
@@ -1260,6 +1265,7 @@ function TemplateFieldInput({
       <label className="flex items-center gap-3 cursor-pointer group">
         <input
           type="checkbox"
+          aria-label={field.name}
           checked={!!value}
           onChange={(e) => onChange(e.target.checked)}
           className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
@@ -1283,6 +1289,7 @@ function TemplateFieldInput({
         </label>
         <textarea
           rows={2}
+          aria-label={field.name}
           placeholder={`Enter ${field.name.toLowerCase()}...`}
           value={(value as string) || ""}
           onChange={(e) => onChange(e.target.value)}
@@ -1301,6 +1308,7 @@ function TemplateFieldInput({
         </label>
         <div className="relative">
           <select
+            aria-label={field.name}
             value={(value as string) || ""}
             onChange={(e) => onChange(e.target.value)}
             className="w-full h-9 rounded-lg border border-purple-200 bg-white px-3 pr-9 text-[13px] appearance-none focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
@@ -1328,6 +1336,7 @@ function TemplateFieldInput({
             <label key={opt} className="h-8 px-3 rounded-lg border border-purple-200 bg-white text-[12px] flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
+                aria-label={`${field.name} ${opt}`}
                 name={`checkout-${fieldKey(field)}`}
                 checked={value === opt}
                 onChange={() => onChange(opt)}
@@ -1350,6 +1359,7 @@ function TemplateFieldInput({
         </label>
         <input
           type={field.type === "date" || field.type === "time" ? field.type : "text"}
+          aria-label={field.name}
           inputMode={field.type === "number" ? "numeric" : undefined}
           placeholder={`Enter ${field.name.toLowerCase()}...`}
           value={(value as string) || ""}
@@ -1370,6 +1380,7 @@ function TemplateFieldInput({
       </label>
       <input
         type="text"
+        aria-label={field.name}
         placeholder={`Enter ${field.name.toLowerCase()}...`}
         value={(value as string) || ""}
         onChange={(e) => onChange(e.target.value)}

@@ -52,6 +52,7 @@ import {
   REVENUE_WORK_QUEUE_LABELS,
 } from "./types";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT } from "./app-events";
+import { useUnsavedChangesGuard } from "./use-unsaved-changes-guard";
 
 const viewTabs = ["Overview", "Work Queues", "Day Close", "History"] as const;
 type RevenueViewTab = (typeof viewTabs)[number];
@@ -98,6 +99,82 @@ type DayCloseDraft = {
   rollover: boolean;
 };
 
+type FinancialDraftState = {
+  eligibilityStatus: string;
+  registrationVerified: boolean;
+  contactInfoVerified: boolean;
+  coverageIssueCategory: string;
+  coverageIssueText: string;
+  primaryPayerName: string;
+  primaryPlanName: string;
+  secondaryPayerName: string;
+  financialClass: string;
+  benefitsSummaryText: string;
+  patientEstimateAmountCents: string;
+  pointOfServiceAmountDueCents: string;
+  estimateExplainedToPatient: boolean;
+  outstandingPriorBalanceCents: string;
+  priorAuthRequired: boolean;
+  priorAuthStatus: string;
+  priorAuthNumber: string;
+  referralRequired: boolean;
+  referralStatus: string;
+};
+
+type CheckoutDraftState = {
+  collectionExpected: boolean;
+  amountDueCents: string;
+  amountCollectedCents: string;
+  collectionOutcome: string;
+  missedCollectionReason: string;
+  trackingNote: string;
+};
+
+type CodingDraftState = {
+  documentationComplete: boolean;
+  diagnoses: string[];
+  procedureLines: RevenueProcedureLine[];
+  codingNote: string;
+};
+
+const EMPTY_FINANCIAL_DRAFT: FinancialDraftState = {
+  eligibilityStatus: "NotChecked",
+  registrationVerified: false,
+  contactInfoVerified: false,
+  coverageIssueCategory: "",
+  coverageIssueText: "",
+  primaryPayerName: "",
+  primaryPlanName: "",
+  secondaryPayerName: "",
+  financialClass: "",
+  benefitsSummaryText: "",
+  patientEstimateAmountCents: "0",
+  pointOfServiceAmountDueCents: "0",
+  estimateExplainedToPatient: false,
+  outstandingPriorBalanceCents: "0",
+  priorAuthRequired: false,
+  priorAuthStatus: "NotRequired",
+  priorAuthNumber: "",
+  referralRequired: false,
+  referralStatus: "NotRequired",
+};
+
+const EMPTY_CHECKOUT_DRAFT: CheckoutDraftState = {
+  collectionExpected: false,
+  amountDueCents: "0",
+  amountCollectedCents: "0",
+  collectionOutcome: "NoCollectionExpected",
+  missedCollectionReason: "",
+  trackingNote: "",
+};
+
+const EMPTY_CODING_DRAFT: CodingDraftState = {
+  documentationComplete: false,
+  diagnoses: [],
+  procedureLines: [],
+  codingNote: "",
+};
+
 function parseRevenueView(value: string | null): RevenueViewTab {
   return viewTabs.includes(value as RevenueViewTab) ? (value as RevenueViewTab) : "Overview";
 }
@@ -139,6 +216,81 @@ function parseCurrencyInputToCents(value: string) {
 function formatCurrencyInput(cents?: number | null) {
   const amount = Number(cents || 0) / 100;
   return amount === 0 ? "0.00" : amount.toFixed(2);
+}
+
+function buildFinancialDraftFromCase(revenueCase: RevenueCaseDetail | null): FinancialDraftState {
+  if (!revenueCase) {
+    return { ...EMPTY_FINANCIAL_DRAFT };
+  }
+  return {
+    eligibilityStatus: revenueCase.financialReadiness?.eligibilityStatus || "NotChecked",
+    registrationVerified: Boolean(revenueCase.financialReadiness?.registrationVerified),
+    contactInfoVerified: Boolean(revenueCase.financialReadiness?.contactInfoVerified),
+    coverageIssueCategory: revenueCase.financialReadiness?.coverageIssueCategory || "",
+    coverageIssueText: revenueCase.financialReadiness?.coverageIssueText || "",
+    primaryPayerName: revenueCase.financialReadiness?.primaryPayerName || "",
+    primaryPlanName: revenueCase.financialReadiness?.primaryPlanName || "",
+    secondaryPayerName: revenueCase.financialReadiness?.secondaryPayerName || "",
+    financialClass: revenueCase.financialReadiness?.financialClass || "",
+    benefitsSummaryText: revenueCase.financialReadiness?.benefitsSummaryText || "",
+    patientEstimateAmountCents: formatCurrencyInput(revenueCase.financialReadiness?.patientEstimateAmountCents || 0),
+    pointOfServiceAmountDueCents: formatCurrencyInput(revenueCase.financialReadiness?.pointOfServiceAmountDueCents || 0),
+    estimateExplainedToPatient: Boolean(revenueCase.financialReadiness?.estimateExplainedToPatient),
+    outstandingPriorBalanceCents: formatCurrencyInput(revenueCase.financialReadiness?.outstandingPriorBalanceCents || 0),
+    priorAuthRequired: Boolean(revenueCase.financialReadiness?.priorAuthRequired),
+    priorAuthStatus: revenueCase.financialReadiness?.priorAuthStatus || "NotRequired",
+    priorAuthNumber: revenueCase.financialReadiness?.priorAuthNumber || "",
+    referralRequired: Boolean(revenueCase.financialReadiness?.referralRequired),
+    referralStatus: revenueCase.financialReadiness?.referralStatus || "NotRequired",
+  };
+}
+
+function buildCheckoutDraftFromCase(revenueCase: RevenueCaseDetail | null): CheckoutDraftState {
+  if (!revenueCase) {
+    return { ...EMPTY_CHECKOUT_DRAFT };
+  }
+  return {
+    collectionExpected: Boolean(revenueCase.checkoutCollectionTracking?.collectionExpected),
+    amountDueCents: formatCurrencyInput(revenueCase.checkoutCollectionTracking?.amountDueCents || 0),
+    amountCollectedCents: formatCurrencyInput(revenueCase.checkoutCollectionTracking?.amountCollectedCents || 0),
+    collectionOutcome: revenueCase.checkoutCollectionTracking?.collectionOutcome || "NoCollectionExpected",
+    missedCollectionReason: revenueCase.checkoutCollectionTracking?.missedCollectionReason || "",
+    trackingNote: revenueCase.checkoutCollectionTracking?.trackingNote || "",
+  };
+}
+
+function buildCodingDraftFromCase(revenueCase: RevenueCaseDetail | null): CodingDraftState {
+  if (!revenueCase) {
+    return { ...EMPTY_CODING_DRAFT };
+  }
+  const diagnosisCodes = safeStringArray(revenueCase.chargeCaptureRecord?.icd10CodesJson);
+  const procedureLines = safeProcedureLines(revenueCase.chargeCaptureRecord?.procedureLinesJson);
+  const cptCodes = safeStringArray(revenueCase.chargeCaptureRecord?.cptCodesJson);
+  const modifiers = safeStringArray(revenueCase.chargeCaptureRecord?.modifiersJson);
+  const units = safeStringArray(revenueCase.chargeCaptureRecord?.unitsJson);
+  return {
+    documentationComplete: Boolean(revenueCase.chargeCaptureRecord?.documentationComplete),
+    diagnoses: diagnosisCodes,
+    procedureLines: procedureLines.length
+      ? procedureLines
+      : cptCodes.map((code, index) => ({
+          lineId: `${revenueCase.id}-line-${index + 1}`,
+          cptCode: code,
+          modifiers: modifiers[index] ? splitCodes(modifiers[index]) : [],
+          units: Number(units[index] || 1),
+          diagnosisPointers: [],
+        })),
+    codingNote: revenueCase.chargeCaptureRecord?.codingNote || "",
+  };
+}
+
+function comparableProcedureLines(lines: RevenueProcedureLine[]) {
+  return lines.map((line) => ({
+    cptCode: (line.cptCode || "").trim().toUpperCase(),
+    modifiers: [...(line.modifiers || [])].map((item) => item.trim().toUpperCase()).sort(),
+    units: Number(line.units || 1),
+    diagnosisPointers: [...(line.diagnosisPointers || [])].map((item) => Number(item || 0)).sort((a, b) => a - b),
+  }));
 }
 
 function formatNullableAthenaMetric(value?: number | null) {
@@ -394,41 +546,9 @@ export function RevenueCycleView() {
   const [dayCloseLoadError, setDayCloseLoadError] = useState<string | null>(null);
   const [userOptionsLoadError, setUserOptionsLoadError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
-  const [financialDraft, setFinancialDraft] = useState({
-    eligibilityStatus: "NotChecked",
-    registrationVerified: false,
-    contactInfoVerified: false,
-    coverageIssueCategory: "",
-    coverageIssueText: "",
-    primaryPayerName: "",
-    primaryPlanName: "",
-    secondaryPayerName: "",
-    financialClass: "",
-    benefitsSummaryText: "",
-    patientEstimateAmountCents: "0",
-    pointOfServiceAmountDueCents: "0",
-    estimateExplainedToPatient: false,
-    outstandingPriorBalanceCents: "0",
-    priorAuthRequired: false,
-    priorAuthStatus: "NotRequired",
-    priorAuthNumber: "",
-    referralRequired: false,
-    referralStatus: "NotRequired",
-  });
-  const [checkoutDraft, setCheckoutDraft] = useState({
-    collectionExpected: false,
-    amountDueCents: "0",
-    amountCollectedCents: "0",
-    collectionOutcome: "NoCollectionExpected",
-    missedCollectionReason: "",
-    trackingNote: "",
-  });
-  const [codingDraft, setCodingDraft] = useState({
-    documentationComplete: false,
-    diagnoses: [] as string[],
-    procedureLines: [] as RevenueProcedureLine[],
-    codingNote: "",
-  });
+  const [financialDraft, setFinancialDraft] = useState<FinancialDraftState>(() => ({ ...EMPTY_FINANCIAL_DRAFT }));
+  const [checkoutDraft, setCheckoutDraft] = useState<CheckoutDraftState>(() => ({ ...EMPTY_CHECKOUT_DRAFT }));
+  const [codingDraft, setCodingDraft] = useState<CodingDraftState>(() => ({ ...EMPTY_CODING_DRAFT }));
   const [diagnosisInput, setDiagnosisInput] = useState("");
   const [rollDrafts, setRollDrafts] = useState<Record<string, DayCloseDraft>>({});
   const revenueAbortRef = useRef<AbortController | null>(null);
@@ -725,58 +845,12 @@ export function RevenueCycleView() {
 
   useEffect(() => {
     if (!selectedCase) return;
-    const diagnosisCodes = safeStringArray(selectedCase.chargeCaptureRecord?.icd10CodesJson);
-    const procedureLines = safeProcedureLines(selectedCase.chargeCaptureRecord?.procedureLinesJson);
-    const cptCodes = safeStringArray(selectedCase.chargeCaptureRecord?.cptCodesJson);
-    const modifiers = safeStringArray(selectedCase.chargeCaptureRecord?.modifiersJson);
-    const units = safeStringArray(selectedCase.chargeCaptureRecord?.unitsJson);
-    setFinancialDraft({
-      eligibilityStatus: selectedCase.financialReadiness?.eligibilityStatus || "NotChecked",
-      registrationVerified: Boolean(selectedCase.financialReadiness?.registrationVerified),
-      contactInfoVerified: Boolean(selectedCase.financialReadiness?.contactInfoVerified),
-      coverageIssueCategory: selectedCase.financialReadiness?.coverageIssueCategory || "",
-      coverageIssueText: selectedCase.financialReadiness?.coverageIssueText || "",
-      primaryPayerName: selectedCase.financialReadiness?.primaryPayerName || "",
-      primaryPlanName: selectedCase.financialReadiness?.primaryPlanName || "",
-      secondaryPayerName: selectedCase.financialReadiness?.secondaryPayerName || "",
-      financialClass: selectedCase.financialReadiness?.financialClass || "",
-      benefitsSummaryText: selectedCase.financialReadiness?.benefitsSummaryText || "",
-      patientEstimateAmountCents: formatCurrencyInput(selectedCase.financialReadiness?.patientEstimateAmountCents || 0),
-      pointOfServiceAmountDueCents: formatCurrencyInput(selectedCase.financialReadiness?.pointOfServiceAmountDueCents || 0),
-      estimateExplainedToPatient: Boolean(selectedCase.financialReadiness?.estimateExplainedToPatient),
-      outstandingPriorBalanceCents: formatCurrencyInput(selectedCase.financialReadiness?.outstandingPriorBalanceCents || 0),
-      priorAuthRequired: Boolean(selectedCase.financialReadiness?.priorAuthRequired),
-      priorAuthStatus: selectedCase.financialReadiness?.priorAuthStatus || "NotRequired",
-      priorAuthNumber: selectedCase.financialReadiness?.priorAuthNumber || "",
-      referralRequired: Boolean(selectedCase.financialReadiness?.referralRequired),
-      referralStatus: selectedCase.financialReadiness?.referralStatus || "NotRequired",
-    });
-    setCheckoutDraft({
-      collectionExpected: Boolean(selectedCase.checkoutCollectionTracking?.collectionExpected),
-      amountDueCents: formatCurrencyInput(selectedCase.checkoutCollectionTracking?.amountDueCents || 0),
-      amountCollectedCents: formatCurrencyInput(selectedCase.checkoutCollectionTracking?.amountCollectedCents || 0),
-      collectionOutcome: selectedCase.checkoutCollectionTracking?.collectionOutcome || "NoCollectionExpected",
-      missedCollectionReason: selectedCase.checkoutCollectionTracking?.missedCollectionReason || "",
-      trackingNote: selectedCase.checkoutCollectionTracking?.trackingNote || "",
-    });
-    setCodingDraft({
-      documentationComplete: Boolean(selectedCase.chargeCaptureRecord?.documentationComplete),
-      diagnoses: diagnosisCodes,
-      procedureLines: procedureLines.length
-        ? procedureLines
-        : cptCodes.map((code, index) => ({
-            lineId: crypto.randomUUID(),
-            cptCode: code,
-            modifiers: modifiers[index]
-              ? splitCodes(modifiers[index])
-              : [],
-            units: Number(units[index] || 1),
-            diagnosisPointers: [],
-          })),
-      codingNote: selectedCase.chargeCaptureRecord?.codingNote || "",
-    });
+    setFinancialDraft(buildFinancialDraftFromCase(selectedCase));
+    setCheckoutDraft(buildCheckoutDraftFromCase(selectedCase));
+    setCodingDraft(buildCodingDraftFromCase(selectedCase));
     setDiagnosisInput("");
     setAthenaReference(selectedCase.athenaHandoffNote || "");
+    setProviderQueryText("");
   }, [selectedCase]);
 
   const riskCards = useMemo(() => {
@@ -793,6 +867,44 @@ export function RevenueCycleView() {
 
   const selectedDue = timeUntilDue(selectedCase?.dueAt || null);
   const anyLoading = loading || historyLoading || dayCloseLoading || selectedCaseLoading;
+  const revenueDraftDirty = useMemo(() => {
+    if (!selectedCase) return false;
+    const financialChanged = JSON.stringify(financialDraft) !== JSON.stringify(buildFinancialDraftFromCase(selectedCase));
+    const checkoutChanged = JSON.stringify(checkoutDraft) !== JSON.stringify(buildCheckoutDraftFromCase(selectedCase));
+    const codingBaseline = buildCodingDraftFromCase(selectedCase);
+    const codingChanged =
+      codingDraft.documentationComplete !== codingBaseline.documentationComplete ||
+      codingDraft.codingNote !== codingBaseline.codingNote ||
+      JSON.stringify([...codingDraft.diagnoses].sort()) !== JSON.stringify([...codingBaseline.diagnoses].sort()) ||
+      JSON.stringify(comparableProcedureLines(codingDraft.procedureLines)) !==
+        JSON.stringify(comparableProcedureLines(codingBaseline.procedureLines));
+    const athenaChanged = athenaReference !== (selectedCase.athenaHandoffNote || "");
+    const providerQueryDirty = providerQueryText.trim().length > 0;
+    return financialChanged || checkoutChanged || codingChanged || athenaChanged || providerQueryDirty;
+  }, [athenaReference, checkoutDraft, codingDraft, financialDraft, providerQueryText, selectedCase]);
+  useUnsavedChangesGuard(
+    revenueDraftDirty && !saving,
+    "You have unsaved revenue edits. Leave this screen and discard them?",
+  );
+
+  function confirmDiscardRevenueDrafts() {
+    if (!revenueDraftDirty) return true;
+    return window.confirm("You have unsaved revenue edits. Continue and discard them?");
+  }
+
+  function navigateRevenueView(nextView: RevenueViewTab, nextQueue?: RevenueWorkQueue) {
+    if (!confirmDiscardRevenueDrafts()) return;
+    setActiveView(nextView);
+    if (nextQueue) {
+      setWorkQueue(nextQueue);
+    }
+  }
+
+  function selectRevenueCase(nextCaseId: string) {
+    if (nextCaseId === selectedCaseId) return;
+    if (!confirmDiscardRevenueDrafts()) return;
+    setSelectedCaseId(nextCaseId);
+  }
 
   async function refreshSelectedCase(caseId = selectedCaseId) {
     if (!caseId) return;
@@ -1100,7 +1212,9 @@ export function RevenueCycleView() {
               {viewTabs.map((tab) => (
                 <button
                   key={tab}
-                  onClick={() => setActiveView(tab)}
+                  onClick={() => navigateRevenueView(tab)}
+                  aria-pressed={activeView === tab}
+                  aria-label={`Open ${tab} view`}
                   className={`rounded-full px-4 py-2 text-[12px] transition-colors ${
                     activeView === tab ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
@@ -1137,6 +1251,8 @@ export function RevenueCycleView() {
                 <button
                   key={bucket}
                   onClick={() => setDayBucket(bucket)}
+                  aria-pressed={dayBucket === bucket}
+                  aria-label={`Filter revenue cases to ${REVENUE_DAY_BUCKET_LABELS[bucket]}`}
                   className={`rounded-full px-3 py-1.5 text-[11px] ${
                     dayBucket === bucket ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
@@ -1148,11 +1264,16 @@ export function RevenueCycleView() {
             </div>
             <div className="flex flex-1 flex-wrap items-center gap-2 xl:justify-end">
               <div className="relative min-w-[240px] max-w-[420px] flex-1">
+                <label htmlFor="revenue-search" className="sr-only">
+                  Search revenue cases
+                </label>
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                 <input
+                  id="revenue-search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search patient, clinic, or blocker"
+                  aria-label="Search revenue cases by patient, clinic, or blocker"
                   className="h-10 w-full rounded-full border border-slate-200 bg-white pl-9 pr-4 text-[12px] outline-none focus:border-slate-300"
                 />
               </div>
@@ -1165,7 +1286,7 @@ export function RevenueCycleView() {
           </div>
 
           {coreLoadError && (
-            <Card className="border-0 shadow-sm">
+            <Card className="border-0 shadow-sm" role="status" aria-live="polite">
               <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
@@ -1192,7 +1313,10 @@ export function RevenueCycleView() {
           {activeView === "Overview" && loading && !dashboard && <RevenueOverviewSkeleton />}
 
           {activeView === "Overview" && dashboard && (
-            <div className={`space-y-6 transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}>
+            <div
+              className={`space-y-6 transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}
+              aria-busy={loading}
+            >
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <KpiCard
                   title="Visits collected"
@@ -1253,10 +1377,8 @@ export function RevenueCycleView() {
                     {riskCards.map((card) => (
                       <button
                         key={card.key}
-                        onClick={() => {
-                          setActiveView("Work Queues");
-                          setWorkQueue(card.queue);
-                        }}
+                        onClick={() => navigateRevenueView("Work Queues", card.queue)}
+                        aria-label={`${card.label}: ${card.value} cases. Open ${REVENUE_WORK_QUEUE_LABELS[card.queue]} queue.`}
                         className="rounded-2xl border px-4 py-4 text-left transition-transform hover:-translate-y-0.5"
                         style={{ borderColor: `${card.tone}25`, background: `${card.tone}08` }}
                       >
@@ -1290,10 +1412,8 @@ export function RevenueCycleView() {
                         return (
                           <button
                             key={queue}
-                            onClick={() => {
-                              setActiveView("Work Queues");
-                              setWorkQueue(queue);
-                            }}
+                            onClick={() => navigateRevenueView("Work Queues", queue)}
+                            aria-label={`${REVENUE_WORK_QUEUE_LABELS[queue]} queue with ${count} cases`}
                             className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left ${
                               workQueue === queue ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 hover:bg-slate-50"
                             }`}
@@ -1353,7 +1473,10 @@ export function RevenueCycleView() {
           )}
 
           {activeView === "Work Queues" && (
-            <div className={`grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_420px] transition-opacity ${loading && queueRows.length > 0 ? "opacity-60" : "opacity-100"}`}>
+            <div
+              className={`grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_420px] transition-opacity ${loading && queueRows.length > 0 ? "opacity-60" : "opacity-100"}`}
+              aria-busy={loading}
+            >
               <div className="space-y-4">
                 {loading && queueRows.length === 0 && <RevenueQueueSkeleton />}
                 <div className="flex flex-wrap items-center gap-2">
@@ -1361,6 +1484,8 @@ export function RevenueCycleView() {
                     <button
                       key={queue}
                       onClick={() => setWorkQueue(queue)}
+                      aria-pressed={workQueue === queue}
+                      aria-label={`Show ${REVENUE_WORK_QUEUE_LABELS[queue]} cases`}
                       className={`rounded-full px-3 py-1.5 text-[11px] ${
                         workQueue === queue ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
                       }`}
@@ -1382,7 +1507,9 @@ export function RevenueCycleView() {
                       return (
                       <button
                         key={row.id}
-                        onClick={() => setSelectedCaseId(row.id)}
+                        onClick={() => selectRevenueCase(row.id)}
+                        aria-pressed={selectedCaseId === row.id}
+                        aria-label={`Open revenue case for ${row.patientId}. Queue ${REVENUE_WORK_QUEUE_LABELS[row.currentWorkQueue]}. Status ${REVENUE_STATUS_LABELS[row.currentRevenueStatus]}.`}
                         className={`grid w-full gap-3 rounded-2xl border px-4 py-4 text-left transition-all lg:grid-cols-[minmax(0,1.1fr)_220px_170px] ${
                           selectedCaseId === row.id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                         }`}

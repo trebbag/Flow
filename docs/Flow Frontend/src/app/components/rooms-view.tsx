@@ -538,16 +538,16 @@ export function RoomsView() {
             <Card className="border-0 shadow-sm">
               <CardContent className="p-5 space-y-4">
                 <h2 className="text-[15px]" style={{ fontWeight: 700 }}>Report issue</h2>
-                <select value={issueRoom?.id || ""} onChange={(event) => setIssueRoom(roomCards.find((room) => room.id === event.target.value) || null)} className="w-full h-10 rounded-lg border border-gray-200 px-3 text-[12px] bg-white">
+                <select aria-label="Issue room" value={issueRoom?.id || ""} onChange={(event) => setIssueRoom(roomCards.find((room) => room.id === event.target.value) || null)} className="w-full h-10 rounded-lg border border-gray-200 px-3 text-[12px] bg-white">
                   <option value="">Select room...</option>
                   {roomCards.map((room) => <option key={room.id} value={room.id}>{room.name} - {room.clinicName}</option>)}
                 </select>
-                <select value={issueType} onChange={(event) => setIssueType(event.target.value as RoomIssueType)} className="w-full h-10 rounded-lg border border-gray-200 px-3 text-[12px] bg-white">
+                <select aria-label="Issue type" value={issueType} onChange={(event) => setIssueType(event.target.value as RoomIssueType)} className="w-full h-10 rounded-lg border border-gray-200 px-3 text-[12px] bg-white">
                   {issueTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                 </select>
-                <input value={issueTitle} onChange={(event) => setIssueTitle(event.target.value)} placeholder="Issue title" className="w-full h-10 rounded-lg border border-gray-200 px-3 text-[12px]" />
-                <textarea value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} placeholder="Optional note" className="w-full min-h-[88px] rounded-lg border border-gray-200 px-3 py-2 text-[12px]" />
-                <label className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={issueHold} onChange={(event) => setIssueHold(event.target.checked)} /> Place room on hold</label>
+                <input aria-label="Issue title" value={issueTitle} onChange={(event) => setIssueTitle(event.target.value)} placeholder="Issue title" className="w-full h-10 rounded-lg border border-gray-200 px-3 text-[12px]" />
+                <textarea aria-label="Issue note" value={issueDescription} onChange={(event) => setIssueDescription(event.target.value)} placeholder="Optional note" className="w-full min-h-[88px] rounded-lg border border-gray-200 px-3 py-2 text-[12px]" />
+                <label className="flex items-center gap-2 text-[12px]"><input aria-label="Place room on hold" type="checkbox" checked={issueHold} onChange={(event) => setIssueHold(event.target.checked)} /> Place room on hold</label>
                 <button onClick={() => submitIssue().catch(() => undefined)} disabled={!issueRoom || !issueTitle.trim()} className="w-full h-10 rounded-lg bg-slate-900 text-white text-[12px] disabled:opacity-50">Create Office Manager task</button>
               </CardContent>
             </Card>

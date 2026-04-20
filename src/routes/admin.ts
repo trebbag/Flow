@@ -4,7 +4,7 @@ import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { env } from "../lib/env.js";
-import { ApiError, assert } from "../lib/errors.js";
+import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import {
   formatClinicDisplayName,
@@ -401,7 +401,7 @@ async function syncUserFromDirectory(params: {
     where: { id: params.userId },
     include: { roles: true }
   });
-  assert(existing, 404, "User not found");
+  requireCondition(existing, 404, "User not found");
 
   const syncTimestamp = new Date();
   if (!params.directoryUser) {
@@ -477,6 +477,17 @@ const assignmentOverrideSchema = z.object({
   reason: z.string().trim().min(3).max(500)
 });
 
+const patientIdentityReviewQuerySchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  status: z.enum(["open", "resolved", "ignored"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+const patientIdentityReviewUpdateSchema = z.object({
+  status: z.enum(["resolved", "ignored"]),
+  patientId: z.string().uuid().optional(),
+});
+
 async function getFirstActiveFacility() {
   return prisma.facility.findFirst({
     where: { status: { not: "archived" } },
@@ -499,7 +510,7 @@ async function resolveFacilityForRequest(request: FastifyRequest, requestedFacil
 
   if (requested) {
     const facility = await prisma.facility.findUnique({ where: { id: requested } });
-    assert(facility, 404, "Facility not found");
+    requireCondition(facility, 404, "Facility not found");
     if (scopedIds && !scopedIds.includes(facility.id)) {
       throw new ApiError(403, "Facility is outside your assigned scope");
     }
@@ -511,12 +522,12 @@ async function resolveFacilityForRequest(request: FastifyRequest, requestedFacil
       where: { id: { in: scopedIds } },
       orderBy: { createdAt: "asc" }
     });
-    assert(facility, 404, "No facilities available in your scope");
+    requireCondition(facility, 404, "No facilities available in your scope");
     return facility;
   }
 
   const facility = await getFirstActiveFacility();
-  assert(facility, 404, "No facility found");
+  requireCondition(facility, 404, "No facility found");
   return facility;
 }
 
@@ -546,8 +557,8 @@ async function resolveClinicForFacility(clinicId: string, facilityId: string) {
     where: { id: clinicId },
     select: { id: true, facilityId: true }
   });
-  assert(clinic, 404, "Clinic not found");
-  assert(clinic.facilityId === facilityId, 400, "Clinic is outside the selected facility scope");
+  requireCondition(clinic, 404, "Clinic not found");
+  requireCondition(clinic.facilityId === facilityId, 400, "Clinic is outside the selected facility scope");
   return clinic;
 }
 
@@ -564,7 +575,7 @@ async function assertUserRoleForFacility(params: {
       OR: [{ facilityId }, { clinic: { facilityId } }]
     }
   });
-  assert(matchedRole, 400, `Selected user is not assigned to role ${role} in this facility`);
+  requireCondition(matchedRole, 400, `Selected user is not assigned to role ${role} in this facility`);
 }
 
 async function syncUserActiveFacilityToScope(params: {
@@ -581,7 +592,7 @@ async function syncUserActiveFacilityToScope(params: {
       }
     }
   });
-  assert(user, 404, "User not found");
+  requireCondition(user, 404, "User not found");
 
   const availableFacilityIds = Array.from(
     new Set(
@@ -834,7 +845,7 @@ async function restoreRoomWithAllocatedNumber(roomId: string) {
     try {
       return await prisma.$transaction(async (tx) => {
         const room = await tx.clinicRoom.findUnique({ where: { id: roomId } });
-        assert(room, 404, "Room not found");
+        requireCondition(room, 404, "Room not found");
         const roomNumber = await nextRoomNumberForFacility(room.facilityId, tx);
         const restored = await tx.clinicRoom.update({
           where: { id: roomId },
@@ -922,6 +933,155 @@ async function ignoreMissingSchema<T>(operation: () => Promise<T>) {
       return null;
     }
     throw error;
+  }
+}
+
+// Historically referenced operational entities should archive rather than hard-delete.
+async function clinicRequiresArchival(clinicId: string) {
+  const [
+    encounterCount,
+    officeRollupCount,
+    roomRollupCount,
+    revenueRollupCount,
+    roomIssueCount,
+    checklistCount,
+    roomEventCount,
+    safetyEventCount,
+  ] = await Promise.all([
+    prisma.encounter.count({ where: { clinicId } }),
+    ignoreMissingSchema(() => prisma.officeManagerDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.revenueCycleDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomIssue.count({ where: { clinicId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomChecklistRun.count({ where: { clinicId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomOperationalEvent.count({ where: { clinicId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.safetyEvent.count({ where: { encounter: { clinicId } } })).then((value) => value || 0),
+  ]);
+
+  return (
+    encounterCount > 0 ||
+    officeRollupCount > 0 ||
+    roomRollupCount > 0 ||
+    revenueRollupCount > 0 ||
+    roomIssueCount > 0 ||
+    checklistCount > 0 ||
+    roomEventCount > 0 ||
+    safetyEventCount > 0
+  );
+}
+
+async function roomRequiresArchival(roomId: string) {
+  const [encounterCount, issueCount, checklistCount, eventCount, occupancyCount] = await Promise.all([
+    prisma.encounter.count({ where: { roomId } }),
+    ignoreMissingSchema(() => prisma.roomIssue.count({ where: { roomId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomChecklistRun.count({ where: { roomId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomOperationalEvent.count({ where: { roomId } })).then((value) => value || 0),
+    ignoreMissingSchema(() => prisma.roomOperationalState.count({ where: { roomId, occupiedEncounterId: { not: null } } })).then((value) => value || 0),
+  ]);
+
+  return encounterCount > 0 || issueCount > 0 || checklistCount > 0 || eventCount > 0 || occupancyCount > 0;
+}
+
+async function upsertPatientAliasInTx(
+  tx: Prisma.TransactionClient,
+  params: {
+    patientId: string;
+    facilityId: string;
+    aliasType: string;
+    aliasValue?: string | null;
+    normalizedAliasValue?: string | null;
+  },
+) {
+  const aliasValue = params.aliasValue?.trim() || null;
+  const normalizedAliasValue = params.normalizedAliasValue?.trim() || null;
+  if (!aliasValue || !normalizedAliasValue) {
+    return;
+  }
+
+  await tx.patientAlias.upsert({
+    where: {
+      patientId_aliasType_normalizedAliasValue: {
+        patientId: params.patientId,
+        aliasType: params.aliasType,
+        normalizedAliasValue,
+      },
+    },
+    create: {
+      patientId: params.patientId,
+      facilityId: params.facilityId,
+      aliasType: params.aliasType,
+      aliasValue,
+      normalizedAliasValue,
+    },
+    update: {
+      aliasValue,
+    },
+  });
+}
+
+function sameIsoBirthDate(left?: Date | null, right?: Date | null) {
+  if (!left || !right) return false;
+  return left.toISOString().slice(0, 10) === right.toISOString().slice(0, 10);
+}
+
+async function migratePatientReferencesToCanonical(
+  tx: Prisma.TransactionClient,
+  params: {
+    sourcePatientId: string;
+    targetPatientId: string;
+    facilityId: string;
+  },
+) {
+  if (params.sourcePatientId === params.targetPatientId) {
+    return;
+  }
+
+  const aliases = await tx.patientAlias.findMany({
+    where: { patientId: params.sourcePatientId },
+    select: {
+      aliasType: true,
+      aliasValue: true,
+      normalizedAliasValue: true,
+    },
+  });
+
+  await tx.incomingSchedule.updateMany({
+    where: { patientRecordId: params.sourcePatientId },
+    data: { patientRecordId: params.targetPatientId },
+  });
+  await tx.encounter.updateMany({
+    where: { patientRecordId: params.sourcePatientId },
+    data: { patientRecordId: params.targetPatientId },
+  });
+  await tx.revenueCase.updateMany({
+    where: { patientRecordId: params.sourcePatientId },
+    data: { patientRecordId: params.targetPatientId },
+  });
+
+  for (const alias of aliases) {
+    await upsertPatientAliasInTx(tx, {
+      patientId: params.targetPatientId,
+      facilityId: params.facilityId,
+      aliasType: alias.aliasType,
+      aliasValue: alias.aliasValue,
+      normalizedAliasValue: alias.normalizedAliasValue,
+    });
+  }
+
+  await tx.patientAlias.deleteMany({
+    where: { patientId: params.sourcePatientId },
+  });
+
+  const [incomingCount, encounterCount, revenueCount] = await Promise.all([
+    tx.incomingSchedule.count({ where: { patientRecordId: params.sourcePatientId } }),
+    tx.encounter.count({ where: { patientRecordId: params.sourcePatientId } }),
+    tx.revenueCase.count({ where: { patientRecordId: params.sourcePatientId } }),
+  ]);
+
+  if (incomingCount === 0 && encounterCount === 0 && revenueCount === 0) {
+    await tx.patient.delete({
+      where: { id: params.sourcePatientId },
+    });
   }
 }
 
@@ -1241,7 +1401,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = facilitySchema.partial().parse(request.body);
 
     const existing = await prisma.facility.findUnique({ where: { id: facilityId } });
-    assert(existing, 404, "Facility not found");
+    requireCondition(existing, 404, "Facility not found");
 
     return prisma.facility.update({
       where: { id: facilityId },
@@ -1257,7 +1417,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.post("/admin/clinics", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const dto = clinicSchema.parse(request.body);
-    assert(dto.maRun !== undefined, 400, "Clinic run model is required");
+    requireCondition(dto.maRun !== undefined, 400, "Clinic run model is required");
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
 
     const created = await prisma.clinic.create({
@@ -1283,7 +1443,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         },
         select: { id: true }
       });
-      assert(rooms.length === dto.roomIds.length, 400, "One or more rooms are invalid for this facility");
+      requireCondition(rooms.length === dto.roomIds.length, 400, "One or more rooms are invalid for this facility");
       await prisma.clinicRoomAssignment.createMany({
         data: dto.roomIds.map((roomId) => ({
           clinicId: created.id,
@@ -1301,7 +1461,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = clinicSchema.partial().parse(request.body);
 
     const existing = await prisma.clinic.findUnique({ where: { id: clinicId } });
-    assert(existing, 404, "Clinic not found");
+    requireCondition(existing, 404, "Clinic not found");
     if (dto.maRun !== undefined && dto.maRun !== existing.maRun) {
       throw new ApiError(400, "MA run model is intrinsic and cannot be changed after clinic creation.");
     }
@@ -1309,7 +1469,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const facilityId = dto.facilityId ?? existing.facilityId;
     if (facilityId) {
       const facility = await resolveFacilityForRequest(request, facilityId);
-      assert(facility, 404, "Facility not found");
+      requireCondition(facility, 404, "Facility not found");
     }
 
     const updated = await prisma.clinic.update({
@@ -1339,7 +1499,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         },
         select: { id: true }
       });
-      assert(rooms.length === dto.roomIds.length, 400, "One or more rooms are invalid for this facility");
+      requireCondition(rooms.length === dto.roomIds.length, 400, "One or more rooms are invalid for this facility");
 
       const roomIdSet = new Set(dto.roomIds);
       const existingAssignments = await prisma.clinicRoomAssignment.findMany({
@@ -1378,11 +1538,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.delete("/admin/clinics/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const clinicId = (request.params as { id: string }).id;
     const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
-    assert(clinic, 404, "Clinic not found");
+    requireCondition(clinic, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
 
-    const encounterCount = await prisma.encounter.count({ where: { clinicId } });
-    if (encounterCount > 0) {
+    const shouldArchive = await clinicRequiresArchival(clinicId);
+    if (shouldArchive) {
       const archived = await prisma.$transaction(async (tx) => {
         await tx.clinicRoomAssignment.updateMany({
           where: { clinicId },
@@ -1437,7 +1597,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.post("/admin/clinics/:id/restore", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const clinicId = (request.params as { id: string }).id;
     const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
-    assert(clinic, 404, "Clinic not found");
+    requireCondition(clinic, 404, "Clinic not found");
     const restored = await prisma.clinic.update({
       where: { id: clinicId },
       data: { status: "active" }
@@ -1521,14 +1681,14 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = reasonSchema.parse(request.body);
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
     const clinicIds = Array.from(new Set(dto.clinicIds));
-    assert(clinicIds.length > 0, 400, "At least one clinic must be selected");
+    requireCondition(clinicIds.length > 0, 400, "At least one clinic must be selected");
 
     const clinics = await prisma.clinic.findMany({
       where: { id: { in: clinicIds } },
       select: { id: true, facilityId: true, status: true }
     });
-    assert(clinics.length === clinicIds.length, 400, "One or more clinics are invalid");
-    assert(
+    requireCondition(clinics.length === clinicIds.length, 400, "One or more clinics are invalid");
+    requireCondition(
       clinics.every((clinic) => clinic.facilityId === facility.id && clinic.status !== "archived"),
       400,
       "Visit reasons can only be assigned to non-archived clinics in the selected facility"
@@ -1558,9 +1718,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       });
     });
 
-    assert(created, 500, "Failed to create visit reason");
+    requireCondition(created, 500, "Failed to create visit reason");
     const mapped = mapReasonRow(created);
-    assert(mapped.clinicIds.length > 0, 500, "Visit reason clinic assignments were not persisted");
+    requireCondition(mapped.clinicIds.length > 0, 500, "Visit reason clinic assignments were not persisted");
     return mapped;
   });
 
@@ -1572,9 +1732,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: reasonId },
       include: { clinicAssignments: { select: { clinicId: true } } }
     });
-    assert(reason, 404, "Visit reason not found");
+    requireCondition(reason, 404, "Visit reason not found");
     const facility = await resolveFacilityForRequest(request, reason.facilityId || undefined);
-    assert(reason.facilityId === facility.id, 400, "Visit reason is outside selected facility");
+    requireCondition(reason.facilityId === facility.id, 400, "Visit reason is outside selected facility");
 
     let clinicIds: string[] | undefined = undefined;
     if (dto.clinicIds) {
@@ -1583,8 +1743,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: { in: clinicIds } },
         select: { id: true, facilityId: true, status: true }
       });
-      assert(clinics.length === clinicIds.length, 400, "One or more clinics are invalid");
-      assert(
+      requireCondition(clinics.length === clinicIds.length, 400, "One or more clinics are invalid");
+      requireCondition(
         clinics.every((clinic) => clinic.facilityId === facility.id && clinic.status !== "archived"),
         400,
         "Visit reasons can only be assigned to non-archived clinics in the selected facility"
@@ -1622,16 +1782,16 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       });
     });
 
-    assert(updated, 500, "Failed to update visit reason");
+    requireCondition(updated, 500, "Failed to update visit reason");
     const mapped = mapReasonRow(updated);
-    assert(mapped.clinicIds.length > 0, 500, "Visit reason clinic assignments were not persisted");
+    requireCondition(mapped.clinicIds.length > 0, 500, "Visit reason clinic assignments were not persisted");
     return mapped;
   });
 
   app.delete("/admin/reasons/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const reasonId = (request.params as { id: string }).id;
     const reason = await prisma.reasonForVisit.findUnique({ where: { id: reasonId } });
-    assert(reason, 404, "Visit reason not found");
+    requireCondition(reason, 404, "Visit reason not found");
     await resolveFacilityForRequest(request, reason.facilityId || undefined);
 
     const archived = await prisma.reasonForVisit.update({
@@ -1743,7 +1903,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
     const currentIds = rooms.map((room) => room.id).sort();
     const nextIds = [...dto.roomIds].sort();
-    assert(
+    requireCondition(
       currentIds.length === nextIds.length &&
         currentIds.every((entry, index) => entry === nextIds[index]),
       400,
@@ -1797,7 +1957,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       .parse(request.body);
 
     const room = await prisma.clinicRoom.findUnique({ where: { id: roomId } });
-    assert(room, 404, "Room not found");
+    requireCondition(room, 404, "Room not found");
     await resolveFacilityForRequest(request, room.facilityId);
 
     if (dto.roomNumber !== undefined) {
@@ -1825,11 +1985,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.delete("/admin/rooms/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const roomId = (request.params as { id: string }).id;
     const room = await prisma.clinicRoom.findUnique({ where: { id: roomId } });
-    assert(room, 404, "Room not found");
+    requireCondition(room, 404, "Room not found");
     await resolveFacilityForRequest(request, room.facilityId);
 
-    const usedCount = await prisma.encounter.count({ where: { roomId } });
-    if (usedCount > 0) {
+    const shouldArchive = await roomRequiresArchival(roomId);
+    if (shouldArchive) {
       const archived = await prisma.$transaction(async (tx) => {
         await tx.clinicRoomAssignment.updateMany({
           where: { roomId },
@@ -1851,7 +2011,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.post("/admin/rooms/:id/restore", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const roomId = (request.params as { id: string }).id;
     const room = await prisma.clinicRoom.findUnique({ where: { id: roomId } });
-    assert(room, 404, "Room not found");
+    requireCondition(room, 404, "Room not found");
     await resolveFacilityForRequest(request, room.facilityId);
     const restored = await restoreRoomWithAllocatedNumber(roomId);
     await prisma.roomOperationalState.upsert({
@@ -1940,12 +2100,12 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: clinicId },
       select: { id: true, facilityId: true, maRun: true, status: true }
     });
-    assert(clinic, 404, "Clinic not found");
-    assert(clinic.facilityId, 400, "Clinic must belong to a facility");
+    requireCondition(clinic, 404, "Clinic not found");
+    requireCondition(clinic.facilityId, 400, "Clinic must belong to a facility");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
-    assert(clinic.status !== "archived", 400, "Cannot manage assignments for archived clinics");
+    requireCondition(clinic.status !== "archived", 400, "Cannot manage assignments for archived clinics");
 
-    assert(normalizedMaUserId, 400, "An MA assignment is required for this clinic");
+    requireCondition(normalizedMaUserId, 400, "An MA assignment is required for this clinic");
     await assertUserRoleForFacility({
       userId: normalizedMaUserId,
       role: RoleName.MA,
@@ -1955,11 +2115,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: normalizedMaUserId },
       select: { id: true, name: true, status: true }
     });
-    assert(maUser, 404, "MA user not found");
-    assert(maUser.status === "active", 400, "Selected MA user is not active");
+    requireCondition(maUser, 404, "MA user not found");
+    requireCondition(maUser.status === "active", 400, "Selected MA user is not active");
 
     if (!clinic.maRun) {
-      assert(normalizedProviderUserId, 400, "A provider assignment is required for non MA-run clinics");
+      requireCondition(normalizedProviderUserId, 400, "A provider assignment is required for non MA-run clinics");
     }
 
     let providerUser: { id: string; name: string; status: string } | null = null;
@@ -1973,8 +2133,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: normalizedProviderUserId },
         select: { id: true, name: true, status: true }
       });
-      assert(providerUser, 404, "Provider user not found");
-      assert(providerUser.status === "active", 400, "Selected provider user is not active");
+      requireCondition(providerUser, 404, "Provider user not found");
+      requireCondition(providerUser.status === "active", 400, "Selected provider user is not active");
     }
 
     const assignment = await prisma.$transaction(async (tx) => {
@@ -1988,7 +2148,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         : null;
 
       if (!clinic.maRun) {
-        assert(providerId, 400, "Provider assignment is required for non MA-run clinics");
+        requireCondition(providerId, 400, "Provider assignment is required for non MA-run clinics");
       }
 
       return tx.clinicAssignment.upsert({
@@ -2032,7 +2192,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const defaultTo = todayStart.minus({ days: 1 });
     const from = parseFacilityDateBoundary(query.from, timezone, "start", defaultFrom);
     const to = parseFacilityDateBoundary(query.to, timezone, "end", defaultTo);
-    assert(to >= from, 400, "Encounter recovery date range is invalid.");
+    requireCondition(to >= from, 400, "Encounter recovery date range is invalid.");
     const unresolvedOnly = parseQueryBoolean(query.unresolvedOnly, true);
     const search = query.search?.trim() || "";
 
@@ -2170,7 +2330,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = assignmentOverrideSchema.parse(request.body);
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
-    assert(endsAt > startsAt, 400, "Temporary coverage end must be after the start.");
+    requireCondition(endsAt > startsAt, 400, "Temporary coverage end must be after the start.");
 
     const [clinic, user] = await Promise.all([
       prisma.clinic.findUnique({
@@ -2182,11 +2342,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         select: { id: true, status: true }
       })
     ]);
-    assert(clinic, 404, "Clinic not found");
-    assert(clinic.facilityId === dto.facilityId, 400, "Clinic is outside the selected facility.");
-    assert(clinic.status === "active", 400, "Temporary coverage can only be added for active clinics.");
-    assert(user, 404, "User not found");
-    assert(user.status === "active", 400, "Temporary coverage can only be added for active users.");
+    requireCondition(clinic, 404, "Clinic not found");
+    requireCondition(clinic.facilityId === dto.facilityId, 400, "Clinic is outside the selected facility.");
+    requireCondition(clinic.status === "active", 400, "Temporary coverage can only be added for active clinics.");
+    requireCondition(user, 404, "User not found");
+    requireCondition(user.status === "active", 400, "Temporary coverage can only be added for active users.");
     await resolveFacilityForRequest(request, dto.facilityId);
     await assertUserRoleForFacility({ userId: dto.userId, role: dto.role, facilityId: dto.facilityId });
 
@@ -2210,7 +2370,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: overrideId },
       select: { id: true, facilityId: true, revokedAt: true }
     });
-    assert(existing, 404, "Temporary coverage override not found");
+    requireCondition(existing, 404, "Temporary coverage override not found");
     await resolveFacilityForRequest(request, existing.facilityId);
     if (existing.revokedAt) return existing;
     return prisma.temporaryClinicAssignmentOverride.update({
@@ -2397,14 +2557,14 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const { templateId, dto, request } = params;
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
     const reasonIds = Array.from(new Set(dto.reasonIds?.length ? dto.reasonIds : dto.reasonForVisitId ? [dto.reasonForVisitId] : []));
-    assert(reasonIds.length > 0, 400, "At least one visit reason must be selected");
+    requireCondition(reasonIds.length > 0, 400, "At least one visit reason must be selected");
 
     const reasons = await prisma.reasonForVisit.findMany({
       where: { id: { in: reasonIds } },
       select: { id: true, facilityId: true, status: true }
     });
-    assert(reasons.length === reasonIds.length, 400, "One or more visit reasons are invalid");
-    assert(
+    requireCondition(reasons.length === reasonIds.length, 400, "One or more visit reasons are invalid");
+    requireCondition(
       reasons.every((reason) => reason.facilityId === facility.id && reason.status !== "archived"),
       400,
       "Templates can only be assigned to non-archived reasons in the selected facility"
@@ -2474,7 +2634,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       });
     });
 
-    assert(template, 500, "Failed to save template");
+    requireCondition(template, 500, "Failed to save template");
     return mapTemplateRow(template as TemplateWithAssignments);
   }
 
@@ -2487,7 +2647,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const templateId = (request.params as { id: string }).id;
     const dto = parseTemplatePayload(request.body);
     const existing = await prisma.template.findUnique({ where: { id: templateId } });
-    assert(existing, 404, "Template not found");
+    requireCondition(existing, 404, "Template not found");
     return upsertTemplate({ templateId, dto, request });
   });
 
@@ -2495,14 +2655,14 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const templateId = (request.params as { id: string }).id;
     const dto = parseTemplatePayload(request.body);
     const existing = await prisma.template.findUnique({ where: { id: templateId } });
-    assert(existing, 404, "Template not found");
+    requireCondition(existing, 404, "Template not found");
     return upsertTemplate({ templateId, dto, request });
   });
 
   app.delete("/admin/templates/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const templateId = (request.params as { id: string }).id;
     const template = await prisma.template.findUnique({ where: { id: templateId } });
-    assert(template, 404, "Template not found");
+    requireCondition(template, 404, "Template not found");
     await resolveFacilityForRequest(request, template.facilityId);
 
     const archived = await prisma.template.update({
@@ -2552,7 +2712,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = thresholdSchema.parse(request.body);
     const metric = dto.metric ?? AlertThresholdMetric.stage;
     const normalizedStatus = metric === AlertThresholdMetric.overall_visit ? null : dto.status || null;
-    assert(metric !== AlertThresholdMetric.stage || normalizedStatus, 400, "Status is required for stage thresholds");
+    requireCondition(metric !== AlertThresholdMetric.stage || normalizedStatus, 400, "Status is required for stage thresholds");
 
     let facilityId = dto.facilityId || undefined;
     if (dto.clinicId) {
@@ -2560,7 +2720,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: dto.clinicId },
         select: { facilityId: true }
       });
-      assert(clinic, 404, "Clinic not found");
+      requireCondition(clinic, 404, "Clinic not found");
       facilityId = clinic.facilityId || undefined;
     }
     const facility = await resolveFacilityForRequest(request, facilityId);
@@ -2609,7 +2769,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const thresholdId = (request.params as { id: string }).id;
     const dto = thresholdSchema.parse(request.body);
     const existing = await prisma.alertThreshold.findUnique({ where: { id: thresholdId } });
-    assert(existing, 404, "Threshold not found");
+    requireCondition(existing, 404, "Threshold not found");
 
     const metric = dto.metric ?? existing.metric;
     const normalizedStatus =
@@ -2618,7 +2778,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         : dto.status === undefined
           ? existing.status
           : dto.status;
-    assert(metric !== AlertThresholdMetric.stage || normalizedStatus, 400, "Status is required for stage thresholds");
+    requireCondition(metric !== AlertThresholdMetric.stage || normalizedStatus, 400, "Status is required for stage thresholds");
 
     let facilityId = dto.facilityId || existing.facilityId;
     if (dto.clinicId) {
@@ -2626,7 +2786,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: dto.clinicId },
         select: { facilityId: true }
       });
-      assert(clinic, 404, "Clinic not found");
+      requireCondition(clinic, 404, "Clinic not found");
       facilityId = clinic.facilityId || facilityId;
     }
     const facility = await resolveFacilityForRequest(request, facilityId);
@@ -2657,13 +2817,13 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const existingRows = await prisma.alertThreshold.findMany({
       where: { id: { in: Array.from(rowsById.keys()) } }
     });
-    assert(existingRows.length === dto.rows.length, 404, "One or more thresholds were not found");
+    requireCondition(existingRows.length === dto.rows.length, 404, "One or more thresholds were not found");
 
     const facilityIdSet = new Set(existingRows.map((row) => row.facilityId));
     const requestedFacilityId = dto.facilityId || existingRows[0]?.facilityId;
-    assert(requestedFacilityId, 400, "Facility is required");
+    requireCondition(requestedFacilityId, 400, "Facility is required");
     const facility = await resolveFacilityForRequest(request, requestedFacilityId);
-    assert(
+    requireCondition(
       facilityIdSet.size === 1 && facilityIdSet.has(facility.id),
       400,
       "Bulk threshold update must target one facility"
@@ -2684,7 +2844,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         },
         select: { id: true }
       });
-      assert(clinics.length === clinicIds.length, 400, "One or more threshold clinics are outside the selected facility");
+      requireCondition(clinics.length === clinicIds.length, 400, "One or more threshold clinics are outside the selected facility");
     }
 
     await prisma.$transaction(async (tx) => {
@@ -2697,7 +2857,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             : payload.status === undefined
               ? existing.status
               : payload.status;
-        assert(metric !== AlertThresholdMetric.stage || status, 400, "Status is required for stage thresholds");
+        requireCondition(metric !== AlertThresholdMetric.stage || status, 400, "Status is required for stage thresholds");
 
         await tx.alertThreshold.update({
           where: { id: existing.id },
@@ -2726,7 +2886,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.delete("/admin/thresholds/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const thresholdId = (request.params as { id: string }).id;
     const existing = await prisma.alertThreshold.findUnique({ where: { id: thresholdId } });
-    assert(existing, 404, "Threshold not found");
+    requireCondition(existing, 404, "Threshold not found");
     await resolveFacilityForRequest(request, existing.facilityId);
     return prisma.alertThreshold.delete({ where: { id: thresholdId } });
   });
@@ -2878,7 +3038,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         }
       }
     });
-    assert(connector, 400, "AthenaOne connector is not configured for this facility");
+    requireCondition(connector, 400, "AthenaOne connector is not configured for this facility");
 
     const previewDate = dto.dateOfService || new Date().toISOString().slice(0, 10);
     const localPreviewRows = await prisma.incomingSchedule.findMany({
@@ -2956,7 +3116,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         }
       }
     });
-    assert(connector, 400, "AthenaOne connector is not configured for this facility");
+    requireCondition(connector, 400, "AthenaOne connector is not configured for this facility");
 
     const previewDate = dto.dateOfService || new Date().toISOString().slice(0, 10);
     const previewResult = await previewAthenaRevenueMonitoring({
@@ -3025,7 +3185,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         }
       }
     });
-    assert(connector, 400, "AthenaOne connector is not configured for this facility");
+    requireCondition(connector, 400, "AthenaOne connector is not configured for this facility");
 
     const importDate = dto.dateOfService || new Date().toISOString().slice(0, 10);
     const previewResult = await previewAthenaRevenueMonitoring({
@@ -3287,7 +3447,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: dto.clinicId },
       select: { facilityId: true }
     });
-    assert(clinic, 404, "Clinic not found");
+    requireCondition(clinic, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
     return prisma.notificationPolicy.create({
       data: {
@@ -3312,7 +3472,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { id: dto.clinicId },
       select: { facilityId: true }
     });
-    assert(clinic, 404, "Clinic not found");
+    requireCondition(clinic, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
     return prisma.notificationPolicy.update({
       where: { id: policyId },
@@ -3340,12 +3500,12 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         clinicId: true
       }
     });
-    assert(policy, 404, "Notification policy not found");
+    requireCondition(policy, 404, "Notification policy not found");
     const clinic = await prisma.clinic.findUnique({
       where: { id: policy.clinicId },
       select: { facilityId: true }
     });
-    assert(clinic, 404, "Clinic not found");
+    requireCondition(clinic, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
     return prisma.notificationPolicy.delete({ where: { id: policyId } });
   });
@@ -3355,7 +3515,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const policy = await prisma.notificationPolicy.findUnique({
       where: { id: policyId }
     });
-    assert(policy, 404, "Notification policy not found");
+    requireCondition(policy, 404, "Notification policy not found");
     const clinic = await prisma.clinic.findUnique({
       where: { id: policy.clinicId },
       select: {
@@ -3364,7 +3524,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         name: true
       }
     });
-    assert(clinic?.facilityId, 404, "Clinic not found");
+    requireCondition(clinic?.facilityId, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
 
     const recipients = (Array.isArray(policy.recipientsJson) ? policy.recipientsJson : [])
@@ -3450,6 +3610,161 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return users;
   });
 
+  app.get("/admin/patient-identity-reviews", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const query = patientIdentityReviewQuerySchema.parse(request.query);
+    const facility = await resolveFacilityForRequest(request, query.facilityId);
+    const reviews = await prisma.patientIdentityReview.findMany({
+      where: {
+        facilityId: facility.id,
+        ...(query.status ? { status: query.status } : {}),
+      },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            sourcePatientId: true,
+            displayName: true,
+            dateOfBirth: true,
+          },
+        },
+      },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: query.limit || 100,
+    });
+
+    const matchedPatientIds = Array.from(
+      new Set(
+        reviews.flatMap((review) =>
+          Array.isArray(review.matchedPatientIdsJson)
+            ? review.matchedPatientIdsJson.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+            : [],
+        ),
+      ),
+    );
+
+    const matchedPatients = matchedPatientIds.length > 0
+      ? await prisma.patient.findMany({
+          where: {
+            facilityId: facility.id,
+            id: { in: matchedPatientIds },
+          },
+          select: {
+            id: true,
+            sourcePatientId: true,
+            displayName: true,
+            dateOfBirth: true,
+          },
+        })
+      : [];
+    const matchedPatientsById = new Map(matchedPatients.map((patient) => [patient.id, patient]));
+
+    return reviews.map((review) => {
+      const reviewMatchedPatientIds = Array.isArray(review.matchedPatientIdsJson)
+        ? review.matchedPatientIdsJson.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+        : [];
+      return {
+        ...review,
+        matchedPatientIds: reviewMatchedPatientIds,
+        matchedPatients: reviewMatchedPatientIds
+          .map((patientId) => matchedPatientsById.get(patientId))
+          .filter((patient): patient is NonNullable<typeof patient> => Boolean(patient)),
+      };
+    });
+  });
+
+  app.post("/admin/patient-identity-reviews/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const reviewId = (request.params as { id: string }).id;
+    const dto = patientIdentityReviewUpdateSchema.parse(request.body);
+    const review = await prisma.patientIdentityReview.findUnique({
+      where: { id: reviewId },
+    });
+    requireCondition(review, 404, "Patient identity review not found");
+
+    await resolveFacilityForRequest(request, review.facilityId);
+
+    const resolved = await prisma.$transaction(async (tx) => {
+      let targetPatientId = dto.patientId?.trim() || review.patientId || null;
+
+      if (dto.status === "resolved") {
+        requireCondition(targetPatientId, 400, "Resolved reviews must choose a canonical patient", "PATIENT_IDENTITY_TARGET_REQUIRED");
+        const targetPatient = await tx.patient.findUnique({
+          where: { id: targetPatientId },
+          select: {
+            id: true,
+            facilityId: true,
+            displayName: true,
+            dateOfBirth: true,
+          },
+        });
+        requireCondition(targetPatient, 404, "Canonical patient not found", "PATIENT_NOT_FOUND");
+        requireCondition(targetPatient.facilityId === review.facilityId, 400, "Canonical patient is outside the selected facility", "PATIENT_OUTSIDE_FACILITY_SCOPE");
+
+        if (review.dateOfBirth && targetPatient.dateOfBirth && !sameIsoBirthDate(review.dateOfBirth, targetPatient.dateOfBirth)) {
+          throw new ApiError({
+            statusCode: 409,
+            code: "PATIENT_DATE_OF_BIRTH_CONFLICT",
+            message: "Selected patient has a conflicting date of birth.",
+          });
+        }
+
+        await upsertPatientAliasInTx(tx, {
+          patientId: targetPatient.id,
+          facilityId: review.facilityId,
+          aliasType: "source_patient_id",
+          aliasValue: review.sourcePatientId,
+          normalizedAliasValue: review.normalizedSourcePatientId,
+        });
+        await upsertPatientAliasInTx(tx, {
+          patientId: targetPatient.id,
+          facilityId: review.facilityId,
+          aliasType: "display_name",
+          aliasValue: review.displayName,
+          normalizedAliasValue: review.normalizedDisplayName,
+        });
+
+        if (review.patientId && review.patientId !== targetPatient.id) {
+          await migratePatientReferencesToCanonical(tx, {
+            sourcePatientId: review.patientId,
+            targetPatientId: targetPatient.id,
+            facilityId: review.facilityId,
+          });
+        }
+
+        await tx.patient.update({
+          where: { id: targetPatient.id },
+          data: {
+            displayName: targetPatient.displayName || review.displayName || undefined,
+            dateOfBirth: targetPatient.dateOfBirth || review.dateOfBirth || undefined,
+          },
+        });
+
+        targetPatientId = targetPatient.id;
+      }
+
+      return tx.patientIdentityReview.update({
+        where: { id: review.id },
+        data: {
+          status: dto.status,
+          patientId: targetPatientId,
+          contextJson:
+            dto.status === "resolved"
+              ? ({
+                  ...(review.contextJson && typeof review.contextJson === "object" && !Array.isArray(review.contextJson)
+                    ? (review.contextJson as Record<string, unknown>)
+                    : {}),
+                  resolvedByUserId: request.user!.id,
+                  resolvedAt: new Date().toISOString(),
+                } as Prisma.InputJsonValue)
+              : review.contextJson === null
+                ? Prisma.JsonNull
+                : (review.contextJson as Prisma.InputJsonValue),
+        },
+      });
+    });
+
+    return resolved;
+  });
+
   app.get("/admin/directory-users", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const query = directorySearchSchema.parse(request.query);
     return searchEntraDirectoryUsers(query.query);
@@ -3458,9 +3773,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.post("/admin/users/provision", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const dto = provisionUserSchema.parse(request.body);
     const directoryUser = await getEntraDirectoryUserByObjectId(dto.objectId);
-    assert(directoryUser, 404, "Microsoft Entra user was not found");
-    assert(directoryUser.accountEnabled, 400, "Microsoft Entra user is disabled");
-    assert(directoryUser.userType.toLowerCase() === "member", 400, "Guest and B2B Microsoft accounts are not allowed");
+    requireCondition(directoryUser, 404, "Microsoft Entra user was not found");
+    requireCondition(directoryUser.accountEnabled, 400, "Microsoft Entra user is disabled");
+    requireCondition(directoryUser.userType.toLowerCase() === "member", 400, "Guest and B2B Microsoft accounts are not allowed");
 
     const normalizedFacilityIds = Array.from(
       new Set(
@@ -3479,7 +3794,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: dto.clinicId },
         select: { facilityId: true }
       });
-      assert(clinic, 404, "Clinic not found");
+      requireCondition(clinic, 404, "Clinic not found");
       clinicFacilityId = clinic.facilityId ?? null;
       await resolveFacilityForRequest(request, clinicFacilityId || undefined);
     }
@@ -3613,10 +3928,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         cognitoSub: true
       }
     });
-    assert(existing, 404, "User not found");
+    requireCondition(existing, 404, "User not found");
 
     const objectId = resolveUserDirectoryObjectId(existing);
-    assert(objectId, 400, "User is not linked to Microsoft Entra");
+    requireCondition(objectId, 400, "User is not linked to Microsoft Entra");
 
     const directoryUser = await getEntraDirectoryUserByObjectId(objectId, {
       email: existing.email,
@@ -3668,7 +3983,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: dto.clinicId },
         select: { facilityId: true }
       });
-      assert(clinic, 404, "Clinic not found");
+      requireCondition(clinic, 404, "Clinic not found");
       clinicFacilityId = clinic.facilityId ?? null;
       await resolveFacilityForRequest(request, clinicFacilityId || undefined);
     }
@@ -3737,7 +4052,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const userId = (request.params as { id: string }).id;
     const dto = updateUserSchema.parse(request.body);
     const existing = await prisma.user.findUnique({ where: { id: userId } });
-    assert(existing, 404, "User not found");
+    requireCondition(existing, 404, "User not found");
 
     if (isStrictEntraProvisioningMode()) {
       const attemptedIdentityEdit = Boolean(dto.email || dto.name || dto.firstName || dto.lastName || dto.credential);
@@ -3798,9 +4113,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
-    assert(user, 404, "User not found");
-    assert(user.id !== actorUserId, 400, "You cannot archive the current signed-in admin user");
-    assert(user.status === "suspended", 400, "Only suspended users can be archived");
+    requireCondition(user, 404, "User not found");
+    requireCondition(user.id !== actorUserId, 400, "You cannot archive the current signed-in admin user");
+    requireCondition(user.status === "suspended", 400, "Only suspended users can be archived");
 
     const archivedName = user.name.endsWith(" (Archived)") ? user.name : `${user.name} (Archived)`;
 
@@ -3882,8 +4197,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = roleSchema.parse(request.body);
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    assert(user, 404, "User not found");
-    assert(user.status !== "archived", 400, "Cannot assign roles to archived users");
+    requireCondition(user, 404, "User not found");
+    requireCondition(user.status !== "archived", 400, "Cannot assign roles to archived users");
 
     let clinicFacilityId: string | null = null;
     if (dto.clinicId) {
@@ -3891,7 +4206,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         where: { id: dto.clinicId },
         select: { id: true, facilityId: true }
       });
-      assert(clinic, 404, "Clinic not found");
+      requireCondition(clinic, 404, "Clinic not found");
       clinicFacilityId = clinic.facilityId ?? null;
     }
 

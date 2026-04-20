@@ -1,5 +1,6 @@
 import { buildApp } from "./app.js";
 import { env } from "./lib/env.js";
+import { backfillCanonicalPatients } from "./lib/patients.js";
 import { prisma } from "./lib/prisma.js";
 import { startRevenueSyncWorker, stopRevenueSyncWorker } from "./lib/revenue-sync-queue.js";
 
@@ -7,6 +8,7 @@ const app = buildApp();
 
 async function start() {
   try {
+    await backfillCanonicalPatients(prisma);
     startRevenueSyncWorker({
       db: prisma,
       logger: {

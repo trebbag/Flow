@@ -116,6 +116,7 @@ const requiresRebuild =
 
 if (requiresRebuild) {
   db.exec(`
+DROP TABLE IF EXISTS IdempotencyRecord;
 DROP TABLE IF EXISTS EventOutbox;
 DROP TABLE IF EXISTS AuditLog;
 DROP TABLE IF EXISTS RoomDailyRollup;
@@ -159,6 +160,9 @@ DROP TABLE IF EXISTS MaProviderMap;
 DROP TABLE IF EXISTS Provider;
 DROP TABLE IF EXISTS UserRole;
 DROP TABLE IF EXISTS User;
+DROP TABLE IF EXISTS PatientIdentityReview;
+DROP TABLE IF EXISTS PatientAlias;
+DROP TABLE IF EXISTS Patient;
 DROP TABLE IF EXISTS Clinic;
 DROP TABLE IF EXISTS IntegrationConnector;
 DROP TABLE IF EXISTS Facility;
@@ -195,6 +199,52 @@ CREATE TABLE IF NOT EXISTS Facility (
   timezone TEXT NOT NULL DEFAULT 'America/New_York',
   status TEXT NOT NULL DEFAULT 'active',
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Patient (
+  id TEXT PRIMARY KEY NOT NULL,
+  facilityId TEXT NOT NULL,
+  sourcePatientId TEXT NOT NULL,
+  normalizedSourcePatientId TEXT NOT NULL,
+  displayName TEXT,
+  dateOfBirth TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  UNIQUE (facilityId, normalizedSourcePatientId)
+);
+
+CREATE TABLE IF NOT EXISTS PatientAlias (
+  id TEXT PRIMARY KEY NOT NULL,
+  patientId TEXT NOT NULL,
+  facilityId TEXT NOT NULL,
+  aliasType TEXT NOT NULL,
+  aliasValue TEXT NOT NULL,
+  normalizedAliasValue TEXT NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (patientId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  UNIQUE (patientId, aliasType, normalizedAliasValue)
+);
+
+CREATE TABLE IF NOT EXISTS PatientIdentityReview (
+  id TEXT PRIMARY KEY NOT NULL,
+  facilityId TEXT NOT NULL,
+  patientId TEXT,
+  sourcePatientId TEXT NOT NULL,
+  normalizedSourcePatientId TEXT NOT NULL,
+  displayName TEXT,
+  normalizedDisplayName TEXT,
+  dateOfBirth TEXT,
+  reasonCode TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  matchedPatientIdsJson TEXT,
+  contextJson TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (patientId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS Clinic (
@@ -377,6 +427,7 @@ CREATE TABLE IF NOT EXISTS IncomingImportBatch (
 CREATE TABLE IF NOT EXISTS IncomingSchedule (
   id TEXT PRIMARY KEY NOT NULL,
   clinicId TEXT NOT NULL,
+  patientRecordId TEXT,
   dateOfService TEXT NOT NULL,
   patientId TEXT NOT NULL,
   appointmentTime TEXT,
@@ -400,6 +451,7 @@ CREATE TABLE IF NOT EXISTS IncomingSchedule (
   intakeData TEXT,
   importBatchId TEXT,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (patientRecordId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (providerId) REFERENCES Provider(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (reasonForVisitId) REFERENCES ReasonForVisit(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (importBatchId) REFERENCES IncomingImportBatch(id) ON UPDATE CASCADE ON DELETE SET NULL
@@ -428,6 +480,7 @@ CREATE TABLE IF NOT EXISTS IncomingImportIssue (
 CREATE TABLE IF NOT EXISTS Encounter (
   id TEXT PRIMARY KEY NOT NULL,
   patientId TEXT NOT NULL,
+  patientRecordId TEXT,
   clinicId TEXT NOT NULL,
   providerId TEXT,
   reasonForVisitId TEXT,
@@ -453,6 +506,7 @@ CREATE TABLE IF NOT EXISTS Encounter (
   checkoutData TEXT,
   intakeData TEXT,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (patientRecordId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (providerId) REFERENCES Provider(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (reasonForVisitId) REFERENCES ReasonForVisit(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE SET NULL,
@@ -505,6 +559,8 @@ CREATE TABLE IF NOT EXISTS Task (
   acknowledgedBy TEXT,
   completedAt TEXT,
   completedBy TEXT,
+  archivedAt TEXT,
+  archivedBy TEXT,
   notes TEXT,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL,
@@ -659,6 +715,7 @@ CREATE TABLE IF NOT EXISTS RevenueCase (
   facilityId TEXT NOT NULL,
   clinicId TEXT NOT NULL,
   patientId TEXT NOT NULL,
+  patientRecordId TEXT,
   providerId TEXT,
   dateOfService TEXT NOT NULL,
   currentRevenueStatus TEXT NOT NULL,
@@ -692,6 +749,7 @@ CREATE TABLE IF NOT EXISTS RevenueCase (
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE CASCADE,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  FOREIGN KEY (patientRecordId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (providerId) REFERENCES Provider(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (assignedToUserId) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
@@ -936,6 +994,7 @@ CREATE TABLE IF NOT EXISTS RoomDailyRollup (
 CREATE TABLE IF NOT EXISTS AuditLog (
   id TEXT PRIMARY KEY NOT NULL,
   requestId TEXT NOT NULL,
+  idempotencyKey TEXT,
   occurredAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   actorUserId TEXT,
   actorRole TEXT,
@@ -948,6 +1007,20 @@ CREATE TABLE IF NOT EXISTS AuditLog (
   entityType TEXT,
   entityId TEXT,
   payloadJson TEXT
+);
+
+CREATE TABLE IF NOT EXISTS IdempotencyRecord (
+  id TEXT PRIMARY KEY NOT NULL,
+  actorUserId TEXT NOT NULL,
+  method TEXT NOT NULL,
+  routeKey TEXT NOT NULL,
+  idempotencyKey TEXT NOT NULL,
+  requestHash TEXT NOT NULL,
+  statusCode INTEGER NOT NULL,
+  responseJson TEXT NOT NULL,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (actorUserId, method, routeKey, idempotencyKey)
 );
 
 CREATE TABLE IF NOT EXISTS EventOutbox (
@@ -985,6 +1058,7 @@ CREATE TABLE IF NOT EXISTS IntegrationConnector (
 );
 
 CREATE INDEX IF NOT EXISTS Clinic_facilityId_idx ON Clinic(facilityId);
+CREATE INDEX IF NOT EXISTS Patient_facilityId_createdAt_idx ON Patient(facilityId, createdAt);
 CREATE INDEX IF NOT EXISTS Provider_clinicId_active_idx ON Provider(clinicId, active);
 CREATE INDEX IF NOT EXISTS UserRole_clinicId_idx ON UserRole(clinicId);
 CREATE INDEX IF NOT EXISTS UserRole_facilityId_idx ON UserRole(facilityId);
@@ -1047,6 +1121,12 @@ CREATE INDEX IF NOT EXISTS IncomingImportIssue_facilityId_date_status_idx ON Inc
 CREATE INDEX IF NOT EXISTS IncomingImportIssue_clinicId_status_idx ON IncomingImportIssue(clinicId, status);
 CREATE INDEX IF NOT EXISTS Encounter_clinicId_currentStatus_idx ON Encounter(clinicId, currentStatus);
 CREATE INDEX IF NOT EXISTS Encounter_clinicId_dateOfService_idx ON Encounter(clinicId, dateOfService);
+CREATE INDEX IF NOT EXISTS Patient_facilityId_dateOfBirth_idx ON Patient(facilityId, dateOfBirth);
+CREATE INDEX IF NOT EXISTS PatientAlias_facilityId_aliasType_normalizedAliasValue_idx ON PatientAlias(facilityId, aliasType, normalizedAliasValue);
+CREATE INDEX IF NOT EXISTS PatientAlias_patientId_aliasType_idx ON PatientAlias(patientId, aliasType);
+CREATE INDEX IF NOT EXISTS PatientIdentityReview_facilityId_status_createdAt_idx ON PatientIdentityReview(facilityId, status, createdAt);
+CREATE INDEX IF NOT EXISTS PatientIdentityReview_facilityId_normalizedSourcePatientId_idx ON PatientIdentityReview(facilityId, normalizedSourcePatientId);
+CREATE INDEX IF NOT EXISTS PatientIdentityReview_patientId_status_idx ON PatientIdentityReview(patientId, status);
 CREATE INDEX IF NOT EXISTS StatusChangeEvent_encounterId_changedAt_idx ON StatusChangeEvent(encounterId, changedAt);
 CREATE INDEX IF NOT EXISTS Task_encounterId_status_idx ON Task(encounterId, status);
 CREATE INDEX IF NOT EXISTS Task_clinicId_status_createdAt_idx ON Task(clinicId, status, createdAt);
@@ -1089,11 +1169,77 @@ CREATE INDEX IF NOT EXISTS AuditLog_requestId_idx ON AuditLog(requestId);
 CREATE INDEX IF NOT EXISTS AuditLog_route_method_idx ON AuditLog(route, method);
 CREATE INDEX IF NOT EXISTS AuditLog_facilityId_occurredAt_idx ON AuditLog(facilityId, occurredAt);
 CREATE INDEX IF NOT EXISTS AuditLog_clinicId_occurredAt_idx ON AuditLog(clinicId, occurredAt);
+CREATE INDEX IF NOT EXISTS IdempotencyRecord_routeKey_createdAt_idx ON IdempotencyRecord(routeKey, createdAt);
 CREATE INDEX IF NOT EXISTS EventOutbox_status_createdAt_idx ON EventOutbox(status, createdAt);
 CREATE INDEX IF NOT EXISTS EventOutbox_topic_createdAt_idx ON EventOutbox(topic, createdAt);
 CREATE INDEX IF NOT EXISTS EventOutbox_aggregateType_aggregateId_idx ON EventOutbox(aggregateType, aggregateId);
 CREATE INDEX IF NOT EXISTS AlertThreshold_facility_clinic_metric_status_idx ON AlertThreshold(facilityId, clinicId, metric, status);
 CREATE INDEX IF NOT EXISTS IntegrationConnector_vendor_enabled_idx ON IntegrationConnector(vendor, enabled);
+`);
+
+db.exec(`
+DROP TRIGGER IF EXISTS Encounter_require_version_bump_on_business_update;
+CREATE TRIGGER Encounter_require_version_bump_on_business_update
+BEFORE UPDATE ON Encounter
+FOR EACH ROW
+WHEN (
+  NEW.currentStatus IS NOT OLD.currentStatus OR
+  NEW.providerId IS NOT OLD.providerId OR
+  NEW.reasonForVisitId IS NOT OLD.reasonForVisitId OR
+  NEW.assignedMaUserId IS NOT OLD.assignedMaUserId OR
+  NEW.roomId IS NOT OLD.roomId OR
+  NEW.checkInAt IS NOT OLD.checkInAt OR
+  NEW.dateOfService IS NOT OLD.dateOfService OR
+  NEW.roomingStartAt IS NOT OLD.roomingStartAt OR
+  NEW.roomingCompleteAt IS NOT OLD.roomingCompleteAt OR
+  NEW.providerStartAt IS NOT OLD.providerStartAt OR
+  NEW.providerEndAt IS NOT OLD.providerEndAt OR
+  NEW.checkoutCompleteAt IS NOT OLD.checkoutCompleteAt OR
+  NEW.closedAt IS NOT OLD.closedAt OR
+  NEW.walkIn IS NOT OLD.walkIn OR
+  NEW.insuranceVerified IS NOT OLD.insuranceVerified OR
+  NEW.arrivalNotes IS NOT OLD.arrivalNotes OR
+  NEW.closureType IS NOT OLD.closureType OR
+  NEW.closureNotes IS NOT OLD.closureNotes OR
+  NEW.roomingData IS NOT OLD.roomingData OR
+  NEW.clinicianData IS NOT OLD.clinicianData OR
+  NEW.checkoutData IS NOT OLD.checkoutData OR
+  NEW.intakeData IS NOT OLD.intakeData
+) AND NEW.version <= OLD.version
+BEGIN
+  SELECT RAISE(ABORT, 'ENCOUNTER_VERSION_REQUIRED');
+END;
+`);
+
+if (hasTable("IncomingSchedule") && !hasColumn("IncomingSchedule", "patientRecordId")) {
+  db.exec(`ALTER TABLE IncomingSchedule ADD COLUMN patientRecordId TEXT;`);
+}
+
+if (hasTable("Encounter") && !hasColumn("Encounter", "patientRecordId")) {
+  db.exec(`ALTER TABLE Encounter ADD COLUMN patientRecordId TEXT;`);
+}
+
+if (hasTable("RevenueCase") && !hasColumn("RevenueCase", "patientRecordId")) {
+  db.exec(`ALTER TABLE RevenueCase ADD COLUMN patientRecordId TEXT;`);
+}
+
+if (hasTable("AuditLog") && !hasColumn("AuditLog", "idempotencyKey")) {
+  db.exec(`ALTER TABLE AuditLog ADD COLUMN idempotencyKey TEXT;`);
+}
+
+if (hasTable("Task") && !hasColumn("Task", "archivedAt")) {
+  db.exec(`ALTER TABLE Task ADD COLUMN archivedAt TEXT;`);
+}
+
+if (hasTable("Task") && !hasColumn("Task", "archivedBy")) {
+  db.exec(`ALTER TABLE Task ADD COLUMN archivedBy TEXT;`);
+}
+
+db.exec(`
+CREATE INDEX IF NOT EXISTS IncomingSchedule_patientRecordId_idx ON IncomingSchedule(patientRecordId);
+CREATE INDEX IF NOT EXISTS Encounter_patientRecordId_idx ON Encounter(patientRecordId);
+CREATE INDEX IF NOT EXISTS RevenueCase_patientRecordId_idx ON RevenueCase(patientRecordId);
+CREATE INDEX IF NOT EXISTS AuditLog_idempotencyKey_idx ON AuditLog(idempotencyKey);
 `);
 
 db.close();

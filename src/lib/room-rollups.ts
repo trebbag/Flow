@@ -8,6 +8,7 @@ import {
   type RoomDailyRollup
 } from "@prisma/client";
 import { DateTime } from "luxon";
+import { ApiError } from "./errors.js";
 import { MAX_HISTORY_DAYS, listDateKeys } from "./office-manager-rollups.js";
 
 export { MAX_HISTORY_DAYS, listDateKeys };
@@ -179,7 +180,11 @@ function parseIssueRollups(value: Prisma.JsonValue | null | undefined): IssueRol
 function dayBounds(dateKey: string, timezone: string) {
   const start = DateTime.fromISO(dateKey, { zone: timezone }).startOf("day");
   if (!start.isValid) {
-    throw new Error(`Invalid date: ${dateKey}`);
+    throw new ApiError({
+      statusCode: 400,
+      code: "INVALID_DATE_KEY",
+      message: `Invalid date: ${dateKey}`,
+    });
   }
   const end = start.plus({ days: 1 });
   const todayKey = DateTime.now().setZone(timezone).toISODate();
@@ -210,7 +215,11 @@ export async function computeRoomDailyRollup(
     select: { id: true, timezone: true, facilityId: true }
   });
   if (!clinicRow) {
-    throw new Error(`Clinic '${clinic.id}' was not found.`);
+    throw new ApiError({
+      statusCode: 404,
+      code: "CLINIC_NOT_FOUND",
+      message: `Clinic '${clinic.id}' was not found.`,
+    });
   }
 
   const timezone = clinic.timezone || clinicRow.timezone || "America/New_York";
@@ -241,7 +250,11 @@ export async function computeRoomDailyRollup(
   const roomIds = roomRows.map((room) => room.id);
   const facilityId = clinic.facilityId || clinicRow.facilityId || roomRows[0]?.facilityId;
   if (!facilityId) {
-    throw new Error(`Clinic '${clinic.id}' does not have a facility for room rollups.`);
+    throw new ApiError({
+      statusCode: 400,
+      code: "CLINIC_FACILITY_SCOPE_MISSING",
+      message: `Clinic '${clinic.id}' does not have a facility for room rollups.`,
+    });
   }
 
   const roomRollups = new Map<string, RoomRollupRaw>();

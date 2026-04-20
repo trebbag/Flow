@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus, TemplateType } from "@prisma/client";
+import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus, ScheduleSource, TemplateType } from "@prisma/client";
 import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
+import { ensurePatientRecord } from "../src/lib/patients.js";
 import { authHeaders, bootstrapCore, jwtHeaders, prisma, resetDb } from "./helpers.js";
 
 const app = buildApp();
@@ -14,6 +15,7 @@ async function createRevenueWorkflowEncounter(params: {
   checkoutUserId: string;
   maUserId: string;
   clinicianUserId: string;
+  roomId?: string;
   patientId?: string;
   roomingData?: Record<string, unknown>;
   clinicianData?: Record<string, unknown>;
@@ -64,22 +66,26 @@ async function createRevenueWorkflowEncounter(params: {
   expect(toRooming.statusCode).toBe(200);
   encounter = toRooming.json();
 
-  const clinicRoomAssignment = await prisma.clinicRoomAssignment.findFirst({
-    where: {
-      clinicId: params.clinicId,
-      active: true,
-    },
-    select: { roomId: true },
-    orderBy: { createdAt: "asc" },
-  });
-  expect(clinicRoomAssignment?.roomId).toBeTruthy();
+  const roomId =
+    params.roomId ||
+    (
+      await prisma.clinicRoomAssignment.findFirst({
+        where: {
+          clinicId: params.clinicId,
+          active: true,
+        },
+        select: { roomId: true },
+        orderBy: { createdAt: "asc" },
+      })
+    )?.roomId;
+  expect(roomId).toBeTruthy();
 
   const saveRooming = await app.inject({
     method: "PATCH",
     url: `/encounters/${encounter.id}/rooming`,
     headers: authHeaders(params.maUserId, RoleName.MA),
     payload: {
-      roomId: clinicRoomAssignment!.roomId,
+      roomId,
       data: {
         vitals: "120/80",
         allergiesChanged: "No",
@@ -109,6 +115,7 @@ async function createRevenueWorkflowEncounter(params: {
     },
   });
   expect(saveRooming.statusCode).toBe(200);
+  encounter = saveRooming.json();
 
   const toReady = await app.inject({
     method: "PATCH",
@@ -208,6 +215,345 @@ describe("Flow backend core relationships", () => {
     const incoming = await prisma.incomingSchedule.findUnique({ where: { id: ctx.incoming.id } });
     expect(incoming?.checkedInEncounterId).toBe(encounter.id);
     expect(incoming?.checkedInAt).not.toBeNull();
+  });
+
+  it("replays idempotent encounter creation and rejects key reuse with a different payload", async () => {
+    const ctx = await bootstrapCore();
+    const baseHeaders = {
+      ...authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      "Idempotency-Key": "encounter-create-pt-100",
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: baseHeaders,
+      payload: {
+        patientId: "PT-IDEMPOTENT-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+
+    expect(first.statusCode).toBe(200);
+    const created = first.json();
+
+    const replay = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: baseHeaders,
+      payload: {
+        patientId: "PT-IDEMPOTENT-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().id).toBe(created.id);
+
+    const records = await prisma.encounter.findMany({
+      where: {
+        clinicId: ctx.clinic.id,
+        patientId: "PT-IDEMPOTENT-1",
+      },
+    });
+    expect(records).toHaveLength(1);
+
+    const conflicting = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: baseHeaders,
+      payload: {
+        patientId: "PT-IDEMPOTENT-2",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+
+    expect(conflicting.statusCode).toBe(409);
+    expect(conflicting.json()).toEqual(
+      expect.objectContaining({
+        code: "IDEMPOTENCY_KEY_REUSED",
+      }),
+    );
+  });
+
+  it("reuses a canonical patient record when source identifiers differ but DOB-backed identity matches", async () => {
+    const ctx = await bootstrapCore();
+    const dob = new Date(Date.UTC(1990, 0, 2, 0, 0, 0));
+
+    const primary = await ensurePatientRecord(prisma, {
+      facilityId: ctx.facility.id,
+      sourcePatientId: "MRN-001",
+      displayName: "Jane Doe",
+      dateOfBirth: dob,
+    });
+
+    const alias = await ensurePatientRecord(prisma, {
+      facilityId: ctx.facility.id,
+      sourcePatientId: "ALT 999",
+      displayName: "Jane Doe",
+      dateOfBirth: dob,
+    });
+
+    expect(alias.id).toBe(primary.id);
+    expect(await prisma.patient.count()).toBe(1);
+  });
+
+  it("normalizes patient name aliases before DOB-backed matching", async () => {
+    const ctx = await bootstrapCore();
+    const dob = new Date(Date.UTC(1988, 6, 14, 0, 0, 0));
+
+    const primary = await ensurePatientRecord(prisma, {
+      facilityId: ctx.facility.id,
+      sourcePatientId: "ROB-100",
+      displayName: "Robert Smith",
+      dateOfBirth: dob,
+    });
+
+    const alias = await ensurePatientRecord(prisma, {
+      facilityId: ctx.facility.id,
+      sourcePatientId: "BOB-200",
+      displayName: "Bob Smith",
+      dateOfBirth: dob,
+    });
+
+    expect(alias.id).toBe(primary.id);
+    expect(await prisma.patient.count()).toBe(1);
+  });
+
+  it("creates patient identity reviews instead of silently merging ambiguous canonical matches", async () => {
+    const ctx = await bootstrapCore();
+    const dob = new Date(Date.UTC(1988, 6, 14, 0, 0, 0));
+
+    const primary = await prisma.patient.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "ROB-100",
+        normalizedSourcePatientId: "rob100",
+        displayName: "Robert Smith",
+        dateOfBirth: dob,
+      },
+    });
+    const duplicate = await prisma.patient.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "BOB-200",
+        normalizedSourcePatientId: "bob200",
+        displayName: "Bob Smith",
+        dateOfBirth: dob,
+      },
+    });
+
+    const created = await ensurePatientRecord(prisma, {
+      facilityId: ctx.facility.id,
+      sourcePatientId: "NEW-300",
+      displayName: "Bob Smith",
+      dateOfBirth: dob,
+    });
+
+    expect(created.id).not.toBe(primary.id);
+    expect(created.id).not.toBe(duplicate.id);
+    expect(await prisma.patient.count()).toBe(3);
+
+    const review = await prisma.patientIdentityReview.findFirst({
+      where: {
+        facilityId: ctx.facility.id,
+        normalizedSourcePatientId: "new300",
+        status: "open",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(review?.reasonCode).toBe("AMBIGUOUS_ALIAS_MATCH");
+    expect(review?.matchedPatientIdsJson).toEqual(
+      expect.arrayContaining([primary.id, duplicate.id]),
+    );
+  });
+
+  it("allows admins to resolve patient identity reviews onto a canonical patient", async () => {
+    const ctx = await bootstrapCore();
+    const dob = new Date(Date.UTC(1991, 2, 9, 0, 0, 0));
+
+    const canonical = await prisma.patient.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "MRN-001",
+        normalizedSourcePatientId: "mrn001",
+        displayName: "Jane Doe",
+        dateOfBirth: dob,
+      },
+    });
+    await prisma.patientIdentityReview.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "ALT-999",
+        normalizedSourcePatientId: "alt999",
+        displayName: "Jane Doe",
+        normalizedDisplayName: "jane doe",
+        dateOfBirth: dob,
+        reasonCode: "AMBIGUOUS_ALIAS_MATCH",
+        matchedPatientIdsJson: [canonical.id],
+      },
+    });
+
+    const reviews = await app.inject({
+      method: "GET",
+      url: `/admin/patient-identity-reviews?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+    expect(reviews.statusCode).toBe(200);
+    const openReview = (reviews.json() as Array<{ id: string }>)[0];
+    expect(openReview?.id).toBeTruthy();
+
+    const resolved = await app.inject({
+      method: "POST",
+      url: `/admin/patient-identity-reviews/${openReview.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        status: "resolved",
+        patientId: canonical.id,
+      },
+    });
+    expect(resolved.statusCode).toBe(200);
+    expect(resolved.json()).toEqual(
+      expect.objectContaining({
+        status: "resolved",
+        patientId: canonical.id,
+      }),
+    );
+
+    const alias = await prisma.patientAlias.findFirst({
+      where: {
+        patientId: canonical.id,
+        aliasType: "source_patient_id",
+        normalizedAliasValue: "alt999",
+      },
+    });
+    expect(alias?.aliasValue).toBe("ALT-999");
+  });
+
+  it("enforces encounter version bumps at the persistence layer for business-field updates", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-VERSION-TRIGGER-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    const encounter = created.json();
+
+    await expect(
+      prisma.encounter.update({
+        where: { id: encounter.id },
+        data: {
+          checkInAt: new Date(),
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "P2003",
+    });
+  });
+
+  it("rejects stale rooming writes after the encounter version has advanced", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-ROOMING-CAS-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    let encounter = created.json();
+
+    const toRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "Rooming",
+        version: encounter.version,
+      },
+    });
+    expect(toRooming.statusCode).toBe(200);
+    encounter = toRooming.json();
+
+    const firstSave = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        version: encounter.version,
+        data: {
+          allergiesChanged: "No",
+          medicationReconciliationChanged: "No",
+          labChanged: "No",
+          pharmacyChanged: "No",
+          "service.capture_items": [],
+        },
+      },
+    });
+    expect(firstSave.statusCode).toBe(200);
+
+    const staleSave = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        version: encounter.version,
+        data: {
+          allergiesChanged: "Yes",
+        },
+      },
+    });
+    expect(staleSave.statusCode).toBe(409);
+    expect(staleSave.json()).toEqual(
+      expect.objectContaining({
+        code: "VERSION_MISMATCH",
+      }),
+    );
+  });
+
+  it("reports readiness with database and revenue sync worker state", async () => {
+    await bootstrapCore();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/ready",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        status: "ready",
+        database: expect.objectContaining({ status: "ok" }),
+        revenueSyncWorker: expect.objectContaining({
+          running: expect.any(Boolean),
+          pendingCount: expect.any(Number),
+        }),
+      }),
+    );
   });
 
   it("accepts required intake yes/no fields when the value is explicitly No", async () => {
@@ -1113,7 +1459,8 @@ describe("Flow backend core relationships", () => {
       where: { id: unresolvedEncounterId },
       data: {
         dateOfService: archivedDate,
-        currentStatus: "ReadyForProvider"
+        currentStatus: "ReadyForProvider",
+        version: { increment: 1 }
       }
     });
 
@@ -1297,6 +1644,7 @@ describe("Flow backend core relationships", () => {
       }
     });
     expect(roomed.statusCode).toBe(200);
+    encounter = roomed.json();
 
     let advanced = await app.inject({
       method: "PATCH",
@@ -1566,6 +1914,54 @@ describe("Flow backend core relationships", () => {
     expect(first.status).toBe(first.currentStatus);
     expect(first.providerName).toBeTruthy();
     expect(first.reasonForVisit).toBeTruthy();
+  });
+
+  it("returns paginated encounter envelopes when requested", async () => {
+    const ctx = await bootstrapCore();
+    const date = ctx.day.toISOString().slice(0, 10);
+
+    for (const patientId of ["PT-PAGE-ENCOUNTER-1", "PT-PAGE-ENCOUNTER-2", "PT-PAGE-ENCOUNTER-3"]) {
+      const created = await app.inject({
+        method: "POST",
+        url: "/encounters",
+        headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+        payload: {
+          patientId,
+          clinicId: ctx.clinic.id,
+          providerId: ctx.provider.id,
+          reasonForVisitId: ctx.reason.id,
+          walkIn: true,
+        },
+      });
+      expect(created.statusCode).toBe(200);
+    }
+
+    const firstPage = await app.inject({
+      method: "GET",
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}&pageSize=2`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json()).toEqual(
+      expect.objectContaining({
+        items: expect.any(Array),
+        nextCursor: expect.any(String),
+        pageSize: 2,
+      }),
+    );
+    expect(firstPage.json().items).toHaveLength(2);
+
+    const secondPage = await app.inject({
+      method: "GET",
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}&pageSize=2&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json().items).toHaveLength(1);
+    expect(secondPage.json().nextCursor).toBeNull();
+    expect(new Set([...firstPage.json().items, ...secondPage.json().items].map((row: { id: string }) => row.id)).size).toBe(3);
   });
 
   it("accepts cancel DTO aliases closureType and closureNotes", async () => {
@@ -1932,6 +2328,7 @@ describe("Flow backend core relationships", () => {
       }
     });
     expect(roomingDataSaved.statusCode).toBe(200);
+    const roomingVersion = roomingDataSaved.json().version;
     expect(roomingDataSaved.json()).toEqual(
       expect.objectContaining({
         providerId: ctx.provider.id,
@@ -1946,7 +2343,7 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.ma.id, RoleName.MA),
       payload: {
         toStatus: "ReadyForProvider",
-        version: encounter.version + 1
+        version: roomingVersion
       }
     });
     expect(toReady.statusCode).toBe(200);
@@ -2015,6 +2412,7 @@ describe("Flow backend core relationships", () => {
       },
     });
     expect(roomingDataSaved.statusCode).toBe(200);
+    const roomingVersion = roomingDataSaved.json().version;
 
     const toReadyBlocked = await app.inject({
       method: "PATCH",
@@ -2022,7 +2420,7 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.ma.id, RoleName.MA),
       payload: {
         toStatus: "ReadyForProvider",
-        version: encounter.version + 1,
+        version: roomingVersion,
       },
     });
     expect(toReadyBlocked.statusCode).toBe(400);
@@ -2096,6 +2494,7 @@ describe("Flow backend core relationships", () => {
       },
     });
     expect(saveRooming.statusCode).toBe(200);
+    encounter = saveRooming.json();
 
     const toReady = await app.inject({
       method: "PATCH",
@@ -2594,6 +2993,144 @@ describe("Flow backend core relationships", () => {
       }
     });
     expect(restoredLink?.active).toBe(true);
+  });
+
+  it("returns paginated incoming envelopes when requested", async () => {
+    const ctx = await bootstrapCore();
+    const date = ctx.day.toISOString().slice(0, 10);
+    const batch = await prisma.incomingImportBatch.findFirstOrThrow({
+      where: { clinicId: ctx.clinic.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    for (const [patientId, hour] of [
+      ["PT-INCOMING-PAGE-1", 15],
+      ["PT-INCOMING-PAGE-2", 16],
+    ] as const) {
+      await prisma.incomingSchedule.create({
+        data: {
+          clinicId: ctx.clinic.id,
+          dateOfService: ctx.day,
+          patientId,
+          appointmentTime: `${String(hour - 5).padStart(2, "0")}:00`,
+          appointmentAt: new Date(Date.UTC(ctx.day.getUTCFullYear(), ctx.day.getUTCMonth(), ctx.day.getUTCDate(), hour, 0, 0)),
+          providerId: ctx.provider.id,
+          providerLastName: "A",
+          reasonForVisitId: ctx.reason.id,
+          reasonText: ctx.reason.name,
+          source: "csv",
+          rawPayloadJson: { source: "pagination-test" },
+          isValid: true,
+          importBatchId: batch.id,
+        },
+      });
+    }
+
+    const firstPage = await app.inject({
+      method: "GET",
+      url: `/incoming?clinicId=${ctx.clinic.id}&date=${date}&pageSize=2`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json().items).toHaveLength(2);
+    expect(firstPage.json().pageSize).toBe(2);
+    expect(firstPage.json().nextCursor).toEqual(expect.any(String));
+
+    const secondPage = await app.inject({
+      method: "GET",
+      url: `/incoming?clinicId=${ctx.clinic.id}&date=${date}&pageSize=2&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json().items).toHaveLength(1);
+    expect(secondPage.json().nextCursor).toBeNull();
+  });
+
+  it("paginates deduped incoming envelopes across raw batch boundaries", async () => {
+    const ctx = await bootstrapCore();
+    const date = ctx.day.toISOString().slice(0, 10);
+    const batch = await prisma.incomingImportBatch.findFirstOrThrow({
+      where: { clinicId: ctx.clinic.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    await prisma.incomingSchedule.createMany({
+      data: [
+        ...Array.from({ length: 101 }, (_, index) => ({
+          clinicId: ctx.clinic.id,
+          dateOfService: ctx.day,
+          patientId: "PT-INCOMING-DUPE",
+          appointmentTime: "09:00",
+          appointmentAt: new Date(Date.UTC(ctx.day.getUTCFullYear(), ctx.day.getUTCMonth(), ctx.day.getUTCDate(), 14, 0, index)),
+          providerId: ctx.provider.id,
+          providerLastName: "A",
+          reasonForVisitId: ctx.reason.id,
+          reasonText: ctx.reason.name,
+          source: ScheduleSource.csv,
+          rawPayloadJson: { source: "pagination-dedupe-test", index },
+          isValid: true,
+          importBatchId: batch.id,
+        })),
+        {
+          clinicId: ctx.clinic.id,
+          dateOfService: ctx.day,
+          patientId: "PT-INCOMING-NEXT",
+          appointmentTime: "10:00",
+          appointmentAt: new Date(Date.UTC(ctx.day.getUTCFullYear(), ctx.day.getUTCMonth(), ctx.day.getUTCDate(), 15, 0, 0)),
+          providerId: ctx.provider.id,
+          providerLastName: "A",
+          reasonForVisitId: ctx.reason.id,
+          reasonText: ctx.reason.name,
+          source: ScheduleSource.csv,
+          rawPayloadJson: { source: "pagination-dedupe-test", index: 102 },
+          isValid: true,
+          importBatchId: batch.id,
+        },
+        {
+          clinicId: ctx.clinic.id,
+          dateOfService: ctx.day,
+          patientId: "PT-INCOMING-LAST",
+          appointmentTime: "11:00",
+          appointmentAt: new Date(Date.UTC(ctx.day.getUTCFullYear(), ctx.day.getUTCMonth(), ctx.day.getUTCDate(), 16, 0, 0)),
+          providerId: ctx.provider.id,
+          providerLastName: "A",
+          reasonForVisitId: ctx.reason.id,
+          reasonText: ctx.reason.name,
+          source: ScheduleSource.csv,
+          rawPayloadJson: { source: "pagination-dedupe-test", index: 103 },
+          isValid: true,
+          importBatchId: batch.id,
+        },
+      ],
+    });
+
+    const firstPage = await app.inject({
+      method: "GET",
+      url: `/incoming?clinicId=${ctx.clinic.id}&date=${date}&pageSize=3`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json().items.map((item: { patientId: string }) => item.patientId)).toEqual([
+      "PT-100",
+      "PT-INCOMING-DUPE",
+      "PT-INCOMING-NEXT",
+    ]);
+    expect(firstPage.json().nextCursor).toEqual(expect.any(String));
+
+    const secondPage = await app.inject({
+      method: "GET",
+      url: `/incoming?clinicId=${ctx.clinic.id}&date=${date}&pageSize=3&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json().items.map((item: { patientId: string }) => item.patientId)).toEqual([
+      "PT-INCOMING-LAST",
+    ]);
+    expect(secondPage.json().nextCursor).toBeNull();
   });
 
   it("hard deletes unreferenced rooms and removes assignments", async () => {
@@ -3682,7 +4219,8 @@ describe("Flow backend core relationships", () => {
     await prisma.encounter.update({
       where: { id: encounterId },
       data: {
-        checkInAt: older
+        checkInAt: older,
+        version: { increment: 1 }
       }
     });
     await prisma.alertState.update({
@@ -3757,7 +4295,8 @@ describe("Flow backend core relationships", () => {
     await prisma.encounter.update({
       where: { id: encounterId },
       data: {
-        checkInAt: oldCheckIn
+        checkInAt: oldCheckIn,
+        version: { increment: 1 }
       }
     });
     await prisma.alertState.update({
@@ -3819,7 +4358,8 @@ describe("Flow backend core relationships", () => {
     await prisma.encounter.update({
       where: { id: encounterId },
       data: {
-        checkInAt: older
+        checkInAt: older,
+        version: { increment: 1 }
       }
     });
     await prisma.alertState.update({
@@ -3927,7 +4467,8 @@ describe("Flow backend core relationships", () => {
     await prisma.encounter.update({
       where: { id: encounterId },
       data: {
-        checkInAt: older
+        checkInAt: older,
+        version: { increment: 1 }
       }
     });
     await prisma.alertState.update({
@@ -4080,6 +4621,84 @@ describe("Flow backend core relationships", () => {
     expect(completed.json().completedAt).toBeTruthy();
     expect(completed.json().completedBy).toBe(ctx.ma.id);
     expect(completed.json().notes).toContain("Completed");
+  });
+
+  it("archives tasks instead of hard deleting historical task records", async () => {
+    const ctx = await bootstrapCore();
+
+    const createdEncounter = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-TASK-ARCHIVE-1",
+        clinicId: ctx.clinic.id,
+        incomingId: ctx.incoming.id,
+      },
+    });
+    expect(createdEncounter.statusCode).toBe(200);
+    const encounterId = createdEncounter.json().id as string;
+
+    const createdTask = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        encounterId,
+        taskType: "rooming_follow_up",
+        description: "Archive instead of delete",
+        assignedToRole: RoleName.MA,
+      },
+    });
+    expect(createdTask.statusCode).toBe(200);
+    const taskId = createdTask.json().id as string;
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/tasks/${taskId}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual(
+      expect.objectContaining({
+        status: "archived",
+      }),
+    );
+
+    const archivedTask = await prisma.task.findUnique({ where: { id: taskId } });
+    expect(archivedTask?.archivedAt).toBeTruthy();
+    expect(archivedTask?.status).toBe("archived");
+
+    const defaultList = await app.inject({
+      method: "GET",
+      url: "/tasks?mine=true&includeCompleted=true",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+    });
+    expect(defaultList.statusCode).toBe(200);
+    expect((defaultList.json() as Array<{ id: string }>).some((task) => task.id === taskId)).toBe(false);
+
+    const archivedList = await app.inject({
+      method: "GET",
+      url: "/tasks?mine=true&includeCompleted=true&includeArchived=true",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+    });
+    expect(archivedList.statusCode).toBe(200);
+    expect((archivedList.json() as Array<{ id: string }>).some((task) => task.id === taskId)).toBe(true);
+
+    const patchArchived = await app.inject({
+      method: "PATCH",
+      url: `/tasks/${taskId}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        notes: "should fail",
+      },
+    });
+    expect(patchArchived.statusCode).toBe(400);
+    expect(patchArchived.json()).toEqual(
+      expect.objectContaining({
+        code: "TASK_ARCHIVED",
+      }),
+    );
   });
 
   it("returns deterministic non-500 delete outcomes for notification and threshold rows", async () => {
@@ -4549,6 +5168,94 @@ describe("Flow backend core relationships", () => {
       },
     });
     expect(mutateEncounter.statusCode).toBe(403);
+  });
+
+  it("returns paginated revenue case envelopes when requested", async () => {
+    const ctx = await bootstrapCore();
+    const date = ctx.day.toISOString().slice(0, 10);
+    const extraRooms = await Promise.all(
+      [3, 4].map(async (roomNumber) => {
+        const room = await prisma.clinicRoom.create({
+          data: {
+            facilityId: ctx.facility.id,
+            name: `Revenue Room ${roomNumber}`,
+            roomNumber,
+            roomType: "exam",
+            status: "active",
+            sortOrder: roomNumber,
+          },
+        });
+        await prisma.clinicRoomAssignment.create({
+          data: {
+            clinicId: ctx.clinic.id,
+            roomId: room.id,
+            active: true,
+          },
+        });
+        await prisma.roomOperationalState.create({
+          data: {
+            roomId: room.id,
+            currentStatus: "Ready",
+            lastReadyAt: new Date(),
+          },
+        });
+        await prisma.roomChecklistRun.create({
+          data: {
+            roomId: room.id,
+            clinicId: ctx.clinic.id,
+            facilityId: ctx.facility.id,
+            kind: "DayStart",
+            dateKey: date,
+            itemsJson: [{ key: "test", label: `Room ${roomNumber} ready`, completed: true }],
+            completed: true,
+            completedAt: new Date(),
+            completedByUserId: ctx.admin.id,
+          },
+        });
+        return room;
+      }),
+    );
+    const roomIds = [ctx.clinicRoomA.id, ...extraRooms.map((room) => room.id)];
+
+    for (const [index, patientId] of ["PT-REV-PAGE-1", "PT-REV-PAGE-2", "PT-REV-PAGE-3"].entries()) {
+      await createRevenueWorkflowEncounter({
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        checkinUserId: ctx.checkin.id,
+        checkoutUserId: ctx.admin.id,
+        maUserId: ctx.ma.id,
+        clinicianUserId: ctx.clinician.id,
+        roomId: roomIds[index],
+        patientId,
+        clinicianData: {
+          "coding.working_diagnosis_codes_text": "I10",
+          "coding.working_procedure_codes_text": "99213",
+          "coding.documentation_complete": true,
+        },
+      });
+    }
+
+    const firstPage = await app.inject({
+      method: "GET",
+      url: `/revenue-cases?clinicId=${ctx.clinic.id}&from=${date}&to=${date}&pageSize=2`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json().items).toHaveLength(2);
+    expect(firstPage.json().pageSize).toBe(2);
+    expect(firstPage.json().nextCursor).toEqual(expect.any(String));
+
+    const secondPage = await app.inject({
+      method: "GET",
+      url: `/revenue-cases?clinicId=${ctx.clinic.id}&from=${date}&to=${date}&pageSize=2&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json().items).toHaveLength(1);
+    expect(secondPage.json().nextCursor).toBeNull();
   });
 
   it("allows Revenue Cycle staff to list in-scope users for revenue assignment and closeout ownership", async () => {

@@ -627,6 +627,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       try {
         if (roomId || roomingPayload) {
           latestPersisted = applyEncounterMutationResult(await encounterApi.updateRooming(id, {
+            version: workingEncounter.version,
             ...(roomId ? { roomId } : {}),
             ...(roomingPayload ? { data: roomingPayload } : {}),
           }));
@@ -683,7 +684,8 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
           if (overrides.roomNumber) {
             const room = (roomsByClinicRef.current[current.clinicId] || []).find((entry) => entry.name === overrides.roomNumber);
             if (room) {
-              await encounterApi.updateRooming(id, { roomId: room.id });
+              const updated = await encounterApi.updateRooming(id, { roomId: room.id, version });
+              version = Number((updated as any).version || version + 1);
             }
           }
 

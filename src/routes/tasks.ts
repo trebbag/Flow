@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { AlertInboxKind, RoleName, TaskSourceType } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { ApiError, assert } from "../lib/errors.js";
+import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 
@@ -142,7 +142,7 @@ async function resolveTaskScope(dto: {
       include: { clinic: { select: { id: true, facilityId: true } } }
     }
     );
-    assert(encounter, 404, "Encounter not found");
+    requireCondition(encounter, 404, "Encounter not found");
     clinicId = encounter.clinicId;
     facilityId = encounter.clinic?.facilityId || facilityId;
   }
@@ -158,14 +158,14 @@ async function resolveTaskScope(dto: {
         }
       }
     });
-    assert(room, 404, "Room not found");
+    requireCondition(room, 404, "Room not found");
     const link = room.clinicLinks[0];
     clinicId = clinicId || link?.clinicId || null;
     facilityId = facilityId || link?.clinic.facilityId || room.facilityId;
   }
 
-  assert(facilityId, 400, "Task facility scope is required.");
-  assert(clinicId, 400, "Task clinic scope is required.");
+  requireCondition(facilityId, 400, "Task facility scope is required.");
+  requireCondition(clinicId, 400, "Task clinic scope is required.");
   return { facilityId, clinicId };
 }
 
@@ -188,12 +188,15 @@ export async function registerTaskRoutes(app: FastifyInstance) {
       roomId?: string;
       mine?: string;
       includeCompleted?: string;
+      includeArchived?: string;
     };
     const includeCompleted = String(query.includeCompleted || "true").toLowerCase() !== "false";
+    const includeArchived = String(query.includeArchived || "false").toLowerCase() === "true";
     const mine = String(query.mine || "false").toLowerCase() === "true";
     const where = {
       encounterId: query.encounterId,
       roomId: query.roomId,
+      ...(includeArchived ? {} : { archivedAt: null }),
       ...(mine
         ? {
             OR: [
@@ -294,7 +297,8 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     const dto = updateTaskSchema.parse(request.body);
 
     const task = await prisma.task.findUnique({ where: { id: taskId } });
-    assert(task, 404, "Task not found");
+    requireCondition(task, 404, "Task not found");
+    requireCondition(!task.archivedAt, 400, "Archived tasks cannot be modified", "TASK_ARCHIVED");
 
     const assignedToUserId =
       dto.assignedToUserId !== undefined ? dto.assignedToUserId : task.assignedToUserId;
@@ -314,7 +318,7 @@ export async function registerTaskRoutes(app: FastifyInstance) {
       const serviceCaptureItems = Array.isArray(roomingData["service.capture_items"])
         ? roomingData["service.capture_items"]
         : [];
-      assert(
+      requireCondition(
         serviceCaptureItems.length > 0,
         400,
         "Complete structured MA service capture in the encounter before closing this service-capture task.",
@@ -370,12 +374,24 @@ export async function registerTaskRoutes(app: FastifyInstance) {
   app.delete("/tasks/:id", { preHandler: guard }, async (request) => {
     const taskId = (request.params as { id: string }).id;
     const task = await prisma.task.findUnique({ where: { id: taskId } });
-    assert(task, 404, "Task not found");
+    requireCondition(task, 404, "Task not found");
 
     if (request.user!.role !== RoleName.Admin && task.createdBy !== request.user!.id) {
       throw new ApiError(403, "Only the task creator or an admin can delete this task.");
     }
 
-    return prisma.task.delete({ where: { id: taskId } });
+    if (task.archivedAt) {
+      return { status: "archived", taskId: task.id };
+    }
+
+    const archived = await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        status: "archived",
+        archivedAt: new Date(),
+        archivedBy: request.user!.id,
+      },
+    });
+    return { status: "archived", task: archived };
   });
 }

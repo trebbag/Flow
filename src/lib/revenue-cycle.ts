@@ -20,6 +20,12 @@ import {
   TaskSourceType,
 } from "@prisma/client";
 import { DateTime } from "luxon";
+import {
+  clinicDateKeyFromDate,
+  clinicDateKeyNow,
+  clinicUtcDayRangeFromDateKey,
+} from "./clinic-time.js";
+import { ensurePatientRecord, extractPatientIdentityHints } from "./patients.js";
 import { createInboxAlert } from "./user-alert-inbox.js";
 
 const TODAY_WINDOW_DAYS = 30;
@@ -944,11 +950,39 @@ function toCollectionOutcome(value: string | null): CollectionOutcome | null {
 }
 
 function getDateKey(date: Date, timezone: string) {
-  return DateTime.fromJSDate(date, { zone: "utc" }).setZone(timezone).toISODate() || "";
+  return clinicDateKeyFromDate(date, timezone);
 }
 
 function todayDateKey(timezone: string) {
-  return DateTime.now().setZone(timezone).toISODate() || "";
+  return clinicDateKeyNow(timezone);
+}
+
+async function resolveRevenueScopeTimezone(
+  db: PrismaClient | Prisma.TransactionClient,
+  params: { clinicIds?: string[]; facilityId?: string | null },
+) {
+  if (params.facilityId) {
+    const facility = await db.facility.findUnique({
+      where: { id: params.facilityId },
+      select: { timezone: true },
+    });
+    if (facility?.timezone) return facility.timezone;
+  }
+
+  if (params.clinicIds && params.clinicIds.length > 0) {
+    const clinic = await db.clinic.findFirst({
+      where: { id: { in: params.clinicIds } },
+      select: { timezone: true },
+    });
+    if (clinic?.timezone) return clinic.timezone;
+  }
+
+  const facility = await db.facility.findFirst({
+    where: { status: "active" },
+    orderBy: { createdAt: "asc" },
+    select: { timezone: true },
+  });
+  return facility?.timezone || "America/New_York";
 }
 
 function parseCheckoutTracking(encounter: {
@@ -1654,6 +1688,17 @@ export async function syncRevenueCaseForEncounter(
   const financial = parseFinancialReadiness(encounter, settings.estimateDefaults);
   const checkoutTracking = parseCheckoutTracking(encounter);
   const chargeCapture = parseChargeCapture(encounter, settings.serviceCatalog);
+  const identityHints = extractPatientIdentityHints(encounter.intakeData, encounter.roomingData, encounter.clinicianData, encounter.checkoutData);
+  const patientRecordId =
+    encounter.patientRecordId ||
+    (
+      await ensurePatientRecord(db, {
+        facilityId: encounter.clinic.facilityId,
+        sourcePatientId: encounter.patientId,
+        displayName: identityHints.displayName,
+        dateOfBirth: identityHints.dateOfBirth,
+      })
+    ).id;
 
   const upsertedCase = await db.revenueCase.upsert({
     where: { encounterId: encounter.id },
@@ -1662,6 +1707,7 @@ export async function syncRevenueCaseForEncounter(
       facilityId: encounter.clinic.facilityId,
       clinicId: encounter.clinicId,
       patientId: encounter.patientId,
+      patientRecordId,
       providerId: encounter.providerId,
       dateOfService: encounter.dateOfService,
       assignedToRole: RoleName.RevenueCycle,
@@ -1670,6 +1716,7 @@ export async function syncRevenueCaseForEncounter(
       facilityId: encounter.clinic.facilityId,
       clinicId: encounter.clinicId,
       patientId: encounter.patientId,
+      patientRecordId,
       providerId: encounter.providerId,
       dateOfService: encounter.dateOfService,
     },
@@ -1998,17 +2045,22 @@ export async function syncRevenueCasesForScope(
   db: PrismaClient | Prisma.TransactionClient,
   params: { clinicIds?: string[]; facilityId?: string | null; fromDateKey?: string | null; toDateKey?: string | null },
 ) {
-  const start = (params.fromDateKey || DateTime.now().minus({ days: TODAY_WINDOW_DAYS }).toISODate() || "").trim();
-  const end = (params.toDateKey || DateTime.now().toISODate() || "").trim();
-  const startDate = DateTime.fromISO(start, { zone: "utc" }).startOf("day");
-  const endDate = DateTime.fromISO(end, { zone: "utc" }).endOf("day");
+  const timezone = await resolveRevenueScopeTimezone(db, params);
+  const end = (params.toDateKey || clinicDateKeyNow(timezone) || "").trim();
+  const start = (
+    params.fromDateKey ||
+    DateTime.fromISO(end, { zone: timezone }).minus({ days: TODAY_WINDOW_DAYS }).toISODate() ||
+    ""
+  ).trim();
+  const startRange = clinicUtcDayRangeFromDateKey(start, timezone);
+  const endRange = clinicUtcDayRangeFromDateKey(end, timezone);
   const staleBefore = new Date(Date.now() - REVENUE_SCOPE_SYNC_STALE_MS);
 
   const encounters = await db.encounter.findMany({
     where: {
       clinicId: params.clinicIds && params.clinicIds.length > 0 ? { in: params.clinicIds } : undefined,
       clinic: params.facilityId ? { facilityId: params.facilityId } : undefined,
-      dateOfService: { gte: startDate.toJSDate(), lte: endDate.toJSDate() },
+      dateOfService: { gte: startRange.start, lte: endRange.end },
     },
     select: {
       id: true,
@@ -2127,14 +2179,22 @@ export async function buildRevenueCaseList(
     userId?: string;
     userRole?: RoleName;
     detailLevel?: "summary" | "full";
+    pagination?: {
+      offset: number;
+      pageSize: number;
+    } | null;
   },
 ) : Promise<RevenueCaseListRow[]> {
   const search = params.search?.trim();
+  const timezone =
+    params.fromDateKey?.trim() || params.toDateKey?.trim() || params.facilityId || (params.clinicIds && params.clinicIds.length > 0)
+      ? await resolveRevenueScopeTimezone(db, params)
+      : "America/New_York";
   const fromDate = params.fromDateKey?.trim()
-    ? DateTime.fromISO(params.fromDateKey.trim()).startOf("day").toJSDate()
+    ? clinicUtcDayRangeFromDateKey(params.fromDateKey.trim(), timezone).start
     : undefined;
   const toDate = params.toDateKey?.trim()
-    ? DateTime.fromISO(params.toDateKey.trim()).endOf("day").toJSDate()
+    ? clinicUtcDayRangeFromDateKey(params.toDateKey.trim(), timezone).end
     : undefined;
   const where = {
     id: params.revenueCaseId,
@@ -2170,6 +2230,15 @@ export async function buildRevenueCaseList(
       : {}),
   } satisfies Prisma.RevenueCaseWhereInput;
 
+  const orderBy: Prisma.RevenueCaseOrderByWithRelationInput[] = [
+    { priority: "asc" },
+    { dueAt: "asc" },
+    { updatedAt: "desc" },
+    { id: "asc" },
+  ];
+  const take = params.pagination ? params.pagination.pageSize + 1 : undefined;
+  const skip = params.pagination ? params.pagination.offset : undefined;
+
   if (params.detailLevel === "summary") {
     const rows = await db.revenueCase.findMany({
       where,
@@ -2197,7 +2266,9 @@ export async function buildRevenueCaseList(
           select: { id: true },
         },
       },
-      orderBy: [{ priority: "asc" }, { dueAt: "asc" }, { updatedAt: "desc" }],
+      orderBy,
+      take,
+      skip,
     });
 
     return rows.map((row) => ({
@@ -2218,7 +2289,9 @@ export async function buildRevenueCaseList(
   const rows = await db.revenueCase.findMany({
     where,
     include: revenueCaseFullSelect.include,
-    orderBy: [{ priority: "asc" }, { dueAt: "asc" }, { updatedAt: "desc" }],
+    orderBy,
+    take,
+    skip,
   });
 
   return rows.map((row) => ({

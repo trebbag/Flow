@@ -12,6 +12,7 @@ export const prisma = new PrismaClient({
 
 export async function resetDb() {
   await prisma.auditLog.deleteMany();
+  await prisma.idempotencyRecord.deleteMany();
   await prisma.eventOutbox.deleteMany();
   await prisma.revenueCycleDailyRollup.deleteMany();
   await prisma.roomDailyRollup.deleteMany();
@@ -50,6 +51,9 @@ export async function resetDb() {
   await prisma.user.deleteMany();
   await prisma.clinic.deleteMany();
   await prisma.integrationConnector.deleteMany();
+  await prisma.patientIdentityReview.deleteMany();
+  await prisma.patientAlias.deleteMany();
+  await prisma.patient.deleteMany();
   await prisma.facility.deleteMany();
   await prisma.alertThreshold.deleteMany();
   await prisma.notificationPolicy.deleteMany();

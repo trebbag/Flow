@@ -1,11 +1,26 @@
+import type { ComponentType } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { RootLayout } from "./components/layout";
 import { RouteErrorBoundary } from "./components/route-error-boundary";
 import { AppBootstrapProvider } from "./components/app-bootstrap";
 import { BootstrapLoadingScreen } from "./components/bootstrap-loading-screen";
+import { SectionErrorBoundary } from "./components/section-error-boundary";
 
 function RouteHydrateFallback() {
   return <BootstrapLoadingScreen phase="session_restoration" />;
+}
+
+function withSectionBoundary<T extends object>(
+  section: string,
+  Component: ComponentType<T>,
+) {
+  return function SectionWrapped(props: T) {
+    return (
+      <SectionErrorBoundary section={section}>
+        <Component {...props} />
+      </SectionErrorBoundary>
+    );
+  };
 }
 
 const router = createBrowserRouter([
@@ -76,7 +91,10 @@ const router = createBrowserRouter([
       {
         path: "revenue-cycle",
         lazy: async () => ({
-          Component: (await import("./components/revenue-cycle-view")).RevenueCycleView,
+          Component: withSectionBoundary(
+            "Revenue Cycle",
+            (await import("./components/revenue-cycle-view")).RevenueCycleView,
+          ),
         }),
       },
       {
@@ -88,13 +106,19 @@ const router = createBrowserRouter([
       {
         path: "encounter/:id",
         lazy: async () => ({
-          Component: (await import("./components/encounter-detail-view")).EncounterDetailView,
+          Component: withSectionBoundary(
+            "Encounter Detail",
+            (await import("./components/encounter-detail-view")).EncounterDetailView,
+          ),
         }),
       },
       {
         path: "analytics",
         lazy: async () => ({
-          Component: (await import("./components/analytics-view")).AnalyticsView,
+          Component: withSectionBoundary(
+            "Analytics",
+            (await import("./components/analytics-view")).AnalyticsView,
+          ),
         }),
       },
       {
@@ -112,7 +136,10 @@ const router = createBrowserRouter([
       {
         path: "settings",
         lazy: async () => ({
-          Component: (await import("./components/admin-console")).AdminConsole,
+          Component: withSectionBoundary(
+            "Admin Console",
+            (await import("./components/admin-console")).AdminConsole,
+          ),
         }),
       },
       {

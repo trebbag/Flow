@@ -13,7 +13,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { ApiError, assert } from "../lib/errors.js";
+import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import {
@@ -260,7 +260,7 @@ export async function registerRoomRoutes(app: FastifyInstance) {
         where: { id: dto.encounterId, clinicId: context.clinic.id },
         select: { id: true }
       });
-      assert(encounter, 400, "Encounter is not in this room clinic scope");
+      requireCondition(encounter, 400, "Encounter is not in this room clinic scope");
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -355,7 +355,7 @@ export async function registerRoomRoutes(app: FastifyInstance) {
     const issueId = (request.params as { issueId: string }).issueId;
     const dto = updateIssueSchema.parse(request.body || {});
     const issue = await prisma.roomIssue.findUnique({ where: { id: issueId } });
-    assert(issue, 404, "Room issue not found");
+    requireCondition(issue, 404, "Room issue not found");
     const clinicIds = await getRoomScopeClinicIds(request.user!, issue.clinicId);
     if (!clinicIds.includes(issue.clinicId)) {
       throw new ApiError(403, "Issue is outside your room scope");

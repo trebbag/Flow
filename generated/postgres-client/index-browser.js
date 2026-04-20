@@ -150,6 +150,45 @@ exports.Prisma.FacilityScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.PatientScalarFieldEnum = {
+  id: 'id',
+  facilityId: 'facilityId',
+  sourcePatientId: 'sourcePatientId',
+  normalizedSourcePatientId: 'normalizedSourcePatientId',
+  displayName: 'displayName',
+  dateOfBirth: 'dateOfBirth',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PatientAliasScalarFieldEnum = {
+  id: 'id',
+  patientId: 'patientId',
+  facilityId: 'facilityId',
+  aliasType: 'aliasType',
+  aliasValue: 'aliasValue',
+  normalizedAliasValue: 'normalizedAliasValue',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PatientIdentityReviewScalarFieldEnum = {
+  id: 'id',
+  facilityId: 'facilityId',
+  patientId: 'patientId',
+  sourcePatientId: 'sourcePatientId',
+  normalizedSourcePatientId: 'normalizedSourcePatientId',
+  displayName: 'displayName',
+  normalizedDisplayName: 'normalizedDisplayName',
+  dateOfBirth: 'dateOfBirth',
+  reasonCode: 'reasonCode',
+  status: 'status',
+  matchedPatientIdsJson: 'matchedPatientIdsJson',
+  contextJson: 'contextJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.ClinicScalarFieldEnum = {
   id: 'id',
   facilityId: 'facilityId',
@@ -293,6 +332,7 @@ exports.Prisma.IncomingImportBatchScalarFieldEnum = {
 exports.Prisma.IncomingScheduleScalarFieldEnum = {
   id: 'id',
   clinicId: 'clinicId',
+  patientRecordId: 'patientRecordId',
   dateOfService: 'dateOfService',
   patientId: 'patientId',
   appointmentTime: 'appointmentTime',
@@ -336,6 +376,7 @@ exports.Prisma.IncomingImportIssueScalarFieldEnum = {
 exports.Prisma.EncounterScalarFieldEnum = {
   id: 'id',
   patientId: 'patientId',
+  patientRecordId: 'patientRecordId',
   clinicId: 'clinicId',
   providerId: 'providerId',
   reasonForVisitId: 'reasonForVisitId',
@@ -406,6 +447,8 @@ exports.Prisma.TaskScalarFieldEnum = {
   acknowledgedBy: 'acknowledgedBy',
   completedAt: 'completedAt',
   completedBy: 'completedBy',
+  archivedAt: 'archivedAt',
+  archivedBy: 'archivedBy',
   notes: 'notes',
   updatedAt: 'updatedAt'
 };
@@ -416,6 +459,7 @@ exports.Prisma.RevenueCaseScalarFieldEnum = {
   facilityId: 'facilityId',
   clinicId: 'clinicId',
   patientId: 'patientId',
+  patientRecordId: 'patientRecordId',
   providerId: 'providerId',
   dateOfService: 'dateOfService',
   currentRevenueStatus: 'currentRevenueStatus',
@@ -789,6 +833,7 @@ exports.Prisma.RevenueCycleDailyRollupScalarFieldEnum = {
 exports.Prisma.AuditLogScalarFieldEnum = {
   id: 'id',
   requestId: 'requestId',
+  idempotencyKey: 'idempotencyKey',
   occurredAt: 'occurredAt',
   actorUserId: 'actorUserId',
   actorRole: 'actorRole',
@@ -801,6 +846,19 @@ exports.Prisma.AuditLogScalarFieldEnum = {
   entityType: 'entityType',
   entityId: 'entityId',
   payloadJson: 'payloadJson'
+};
+
+exports.Prisma.IdempotencyRecordScalarFieldEnum = {
+  id: 'id',
+  actorUserId: 'actorUserId',
+  method: 'method',
+  routeKey: 'routeKey',
+  idempotencyKey: 'idempotencyKey',
+  requestHash: 'requestHash',
+  statusCode: 'statusCode',
+  responseJson: 'responseJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.EventOutboxScalarFieldEnum = {
@@ -1077,6 +1135,9 @@ exports.OutboxStatus = exports.$Enums.OutboxStatus = {
 exports.Prisma.ModelName = {
   User: 'User',
   Facility: 'Facility',
+  Patient: 'Patient',
+  PatientAlias: 'PatientAlias',
+  PatientIdentityReview: 'PatientIdentityReview',
   Clinic: 'Clinic',
   Provider: 'Provider',
   UserRole: 'UserRole',
@@ -1119,6 +1180,7 @@ exports.Prisma.ModelName = {
   RoomDailyRollup: 'RoomDailyRollup',
   RevenueCycleDailyRollup: 'RevenueCycleDailyRollup',
   AuditLog: 'AuditLog',
+  IdempotencyRecord: 'IdempotencyRecord',
   EventOutbox: 'EventOutbox',
   IntegrationConnector: 'IntegrationConnector'
 };

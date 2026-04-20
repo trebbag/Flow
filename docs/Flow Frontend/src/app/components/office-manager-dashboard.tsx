@@ -1734,6 +1734,7 @@ export function OfficeManagerDashboard() {
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-muted-foreground" />
             <select
+              aria-label="Office manager clinic filter"
               value={selectedClinic}
               onChange={(e) => setSelectedClinic(e.target.value)}
               className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px] focus:outline-none focus:border-indigo-300"

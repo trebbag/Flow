@@ -66,6 +66,10 @@ export async function recordMutationOperationalEvent(request: FastifyRequest, st
   const route = request.routeOptions.url || request.url.split("?")[0] || "/";
   const method = request.method.toUpperCase();
   const requestId = request.correlationId || request.id;
+  const idempotencyKey =
+    typeof request.headers["idempotency-key"] === "string" && request.headers["idempotency-key"].trim().length > 0
+      ? request.headers["idempotency-key"].trim()
+      : null;
   const params = asStringMap(request.params);
   const topic = normalizeRoute(route);
   const eventType = `${method.toLowerCase()}.${topic}`;
@@ -95,6 +99,7 @@ export async function recordMutationOperationalEvent(request: FastifyRequest, st
   await prisma.auditLog.create({
     data: {
       requestId,
+      idempotencyKey,
       actorUserId: request.user?.id,
       actorRole: request.user?.role,
       authSource: request.user?.authSource,

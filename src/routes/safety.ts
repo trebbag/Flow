@@ -3,7 +3,7 @@ import { AlertInboxKind, RoleName } from "@prisma/client";
 import { z } from "zod";
 import { env } from "../lib/env.js";
 import { prisma } from "../lib/prisma.js";
-import { ApiError, assert } from "../lib/errors.js";
+import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 
@@ -42,7 +42,7 @@ export async function registerSafetyRoutes(app: FastifyInstance) {
         }
       }
     });
-    assert(encounter, 404, "Encounter not found");
+    requireCondition(encounter, 404, "Encounter not found");
 
     const active = await prisma.safetyEvent.findFirst({
       where: {
@@ -109,7 +109,7 @@ export async function registerSafetyRoutes(app: FastifyInstance) {
       },
       orderBy: { activatedAt: "desc" }
     });
-    assert(activeEvent, 404, "No active safety event found");
+    requireCondition(activeEvent, 404, "No active safety event found");
 
     const resolved = await prisma.safetyEvent.update({
       where: { id: activeEvent.id },

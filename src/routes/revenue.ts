@@ -15,8 +15,11 @@ import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { ApiError, assert } from "../lib/errors.js";
+import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
+import { clinicDateKeyNow } from "../lib/clinic-time.js";
+import { withIdempotentMutation } from "../lib/idempotency.js";
+import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
 import {
   buildRevenueCaseList,
   buildRevenueExpectationSummary,
@@ -37,17 +40,26 @@ import {
   formatRoomDisplayName,
   formatUserDisplayName,
 } from "../lib/display-names.js";
+import {
+  normalizeDocumentationSummaryJson,
+  normalizeEncounterJsonRead,
+  normalizeProcedureLinesJson,
+  normalizeServiceCaptureItemsJson,
+  normalizeStringArrayJson,
+} from "../lib/persisted-json.js";
 
-const listRevenueCasesSchema = z.object({
-  clinicId: z.string().uuid().optional(),
-  encounterId: z.string().uuid().optional(),
-  dayBucket: z.nativeEnum(RevenueDayBucket).optional(),
-  workQueue: z.nativeEnum(RevenueWorkQueue).optional(),
-  search: z.string().optional(),
-  mine: z.coerce.boolean().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
-});
+const listRevenueCasesSchema = z
+  .object({
+    clinicId: z.string().uuid().optional(),
+    encounterId: z.string().uuid().optional(),
+    dayBucket: z.nativeEnum(RevenueDayBucket).optional(),
+    workQueue: z.nativeEnum(RevenueWorkQueue).optional(),
+    search: z.string().optional(),
+    mine: z.coerce.boolean().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+  })
+  .merge(paginationQuerySchema);
 
 const revenueHistorySchema = z.object({
   clinicId: z.string().uuid().optional(),
@@ -56,37 +68,15 @@ const revenueHistorySchema = z.object({
 });
 
 function readStringArray(value: Prisma.JsonValue | null | undefined): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+  return normalizeStringArrayJson(value);
 }
 
 function readProcedureLines(value: Prisma.JsonValue | null | undefined): RevenueProcedureLine[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry, index) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
-      const line = entry as Record<string, unknown>;
-      const cptCode = typeof line.cptCode === "string" ? line.cptCode.trim() : "";
-      if (!cptCode) return null;
-      return {
-        lineId: typeof line.lineId === "string" && line.lineId.trim() ? line.lineId.trim() : `line-${index + 1}`,
-        cptCode,
-        modifiers: Array.isArray(line.modifiers)
-          ? line.modifiers.filter((modifier): modifier is string => typeof modifier === "string" && modifier.trim().length > 0)
-          : [],
-        units: Number.isFinite(Number(line.units)) && Number(line.units) > 0 ? Number(line.units) : 1,
-        diagnosisPointers: Array.isArray(line.diagnosisPointers)
-          ? line.diagnosisPointers
-              .map((pointer) => Number(pointer))
-              .filter((pointer) => Number.isInteger(pointer) && pointer > 0)
-          : [],
-      } satisfies RevenueProcedureLine;
-    })
-    .filter((entry): entry is RevenueProcedureLine => Boolean(entry));
+  return normalizeProcedureLinesJson(value) as RevenueProcedureLine[];
 }
 
 function readJsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
+  return normalizeDocumentationSummaryJson(value);
 }
 
 function mapChargeCaptureRecord(
@@ -106,41 +96,7 @@ function mapChargeCaptureRecord(
 }
 
 function readServiceCaptureItems(value: Prisma.JsonValue | null | undefined): RevenueServiceCaptureItem[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
-      const item = entry as Record<string, unknown>;
-      const id = typeof item.id === "string" ? item.id.trim() : "";
-      const label = typeof item.label === "string" ? item.label.trim() : "";
-      if (!id || !label) return null;
-      return {
-        id,
-        catalogItemId: typeof item.catalogItemId === "string" && item.catalogItemId.trim() ? item.catalogItemId.trim() : null,
-        label,
-        sourceRole: typeof item.sourceRole === "string" && item.sourceRole.trim() ? item.sourceRole.trim() : RoleName.MA,
-        sourceTaskId: typeof item.sourceTaskId === "string" && item.sourceTaskId.trim() ? item.sourceTaskId.trim() : null,
-        quantity: Number.isFinite(Number(item.quantity)) && Number(item.quantity) > 0 ? Number(item.quantity) : 1,
-        note: typeof item.note === "string" && item.note.trim() ? item.note.trim() : null,
-        performedAt: typeof item.performedAt === "string" && item.performedAt.trim() ? item.performedAt.trim() : null,
-        capturedByUserId: typeof item.capturedByUserId === "string" && item.capturedByUserId.trim() ? item.capturedByUserId.trim() : null,
-        suggestedProcedureCode:
-          typeof item.suggestedProcedureCode === "string" && item.suggestedProcedureCode.trim()
-            ? item.suggestedProcedureCode.trim()
-            : null,
-        expectedChargeCents: Number.isFinite(Number(item.expectedChargeCents)) ? Number(item.expectedChargeCents) : null,
-        detailSchemaKey:
-          typeof item.detailSchemaKey === "string" && item.detailSchemaKey.trim()
-            ? item.detailSchemaKey.trim()
-            : "generic_service",
-        detailJson:
-          item.detailJson && typeof item.detailJson === "object" && !Array.isArray(item.detailJson)
-            ? (item.detailJson as Record<string, unknown>)
-            : null,
-        detailComplete: item.detailComplete !== false,
-      } satisfies RevenueServiceCaptureItem;
-    })
-    .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
+  return normalizeServiceCaptureItemsJson(value) as RevenueServiceCaptureItem[];
 }
 
 const updateRevenueCaseSchema = z.object({
@@ -359,9 +315,9 @@ function mapRevenueCaseRow(row: Awaited<ReturnType<typeof buildRevenueCaseList>>
       checkoutCompleteAt: row.encounter.checkoutCompleteAt,
       roomName: formatRoomDisplayName(row.encounter.room),
       reasonForVisit: formatReasonDisplayName(row.encounter.reason),
-      roomingData: readJsonObject(row.encounter.roomingData),
-      clinicianData: readJsonObject(row.encounter.clinicianData),
-      checkoutData: readJsonObject(row.encounter.checkoutData),
+      roomingData: normalizeEncounterJsonRead("roomingData", row.encounter.roomingData),
+      clinicianData: normalizeEncounterJsonRead("clinicianData", row.encounter.clinicianData),
+      checkoutData: normalizeEncounterJsonRead("checkoutData", row.encounter.checkoutData),
     },
     financialReadiness: row.financialReadiness,
     checkoutCollectionTracking: row.checkoutCollectionTracking,
@@ -401,14 +357,14 @@ async function assertRevenueCaseReadable(revenueCaseId: string, user: { clinicId
     where: { id: revenueCaseId },
     select: { id: true, clinicId: true, facilityId: true, encounterId: true },
   });
-  assert(revenueCase, 404, "Revenue case not found");
+  requireCondition(revenueCase, 404, "Revenue case not found");
   if (user.clinicId && revenueCase.clinicId !== user.clinicId) throw new ApiError(403, "Revenue case is outside your assigned scope");
   if (user.facilityId && revenueCase.facilityId !== user.facilityId) throw new ApiError(403, "Revenue case is outside your facility scope");
   return revenueCase;
 }
 
 function assertAthenaHandoffRole(role: RoleName | null | undefined) {
-  assert(
+  requireCondition(
     role === RoleName.RevenueCycle || role === RoleName.OfficeManager || role === RoleName.Admin,
     400,
     "Athena handoff ownership must stay with Revenue Cycle, Office Manager, or Admin.",
@@ -421,10 +377,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
   app.get("/dashboard/revenue-cycle", { preHandler: revenueGuard }, async (request) => {
     const query = listRevenueCasesSchema.parse(request.query);
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
-    const toDate = query.to || DateTime.now().toISODate()!;
+    const toDate = query.to || clinicDateKeyNow(clinics[0]?.timezone);
     const fromDate = query.from || toDate;
     const facilityId = request.user!.facilityId || clinics[0]?.facilityId;
-    assert(facilityId, 400, "Revenue settings require a facility scope.");
+    requireCondition(facilityId, 400, "Revenue settings require a facility scope.");
     const settings = await getRevenueSettings(prisma, facilityId);
 
     const rows = await buildRevenueCaseList(prisma, {
@@ -545,7 +501,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
   app.get("/dashboard/revenue-cycle/history", { preHandler: revenueGuard }, async (request) => {
     const query = revenueHistorySchema.parse(request.query);
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
-    const effectiveTo = (query.to || DateTime.now().toISODate() || "").trim();
+    const effectiveTo = (query.to || clinicDateKeyNow(clinics[0]?.timezone) || "").trim();
     const effectiveFrom = (query.from || DateTime.fromISO(effectiveTo).minus({ days: 4 }).toISODate() || "").trim();
     let dateKeys: string[];
     try {
@@ -659,8 +615,9 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
   app.get("/revenue-cases", { preHandler: revenueGuard }, async (request) => {
     const query = listRevenueCasesSchema.parse(request.query);
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
-    const toDate = query.to || DateTime.now().toISODate()!;
-    const fromDate = query.from || DateTime.now().minus({ days: 14 }).toISODate()!;
+    const toDate = query.to || clinicDateKeyNow(clinics[0]?.timezone);
+    const fromDate = query.from || DateTime.fromISO(toDate).minus({ days: 14 }).toISODate()!;
+    const pagination = resolveOptionalPagination(query, { pageSize: 100 });
 
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
@@ -675,9 +632,15 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       userId: request.user!.id,
       userRole: request.user!.role,
       detailLevel: "summary",
+      pagination,
     });
 
-    return rows.map(mapRevenueCaseRow);
+    const mappedRows = rows.map(mapRevenueCaseRow);
+    if (!pagination) {
+      return mappedRows;
+    }
+
+    return paginateItems(mappedRows, pagination);
   });
 
   app.get("/revenue-cases/:id", { preHandler: revenueGuard }, async (request) => {
@@ -689,218 +652,266 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       detailLevel: "full",
     });
     const row = rows[0] || null;
-    assert(row, 404, "Revenue case not found");
+    requireCondition(row, 404, "Revenue case not found");
     return mapRevenueCaseRow(row);
   });
 
   app.patch("/revenue-cases/:id", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = updateRevenueCaseSchema.parse(request.body);
-    const revenueCase = await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    if (dto.checkoutTracking?.collectionOutcome && ["CollectedPartial", "NotCollected", "Deferred"].includes(dto.checkoutTracking.collectionOutcome)) {
-      assert(dto.checkoutTracking.missedCollectionReason, 400, "A missed-collection reason is required for partial, deferred, or not-collected outcomes.");
-    }
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const revenueCase = await assertRevenueCaseReadable(revenueCaseId, request.user!);
+        if (dto.checkoutTracking?.collectionOutcome && ["CollectedPartial", "NotCollected", "Deferred"].includes(dto.checkoutTracking.collectionOutcome)) {
+          requireCondition(
+            dto.checkoutTracking.missedCollectionReason,
+            400,
+            "A missed-collection reason is required for partial, deferred, or not-collected outcomes.",
+            "MISSED_COLLECTION_REASON_REQUIRED",
+          );
+        }
 
-    await prisma.$transaction(async (tx) => {
-      if (dto.financialReadiness) {
-        await tx.financialReadiness.upsert({
-          where: { revenueCaseId },
-          create: {
-            revenueCaseId,
-            ...dto.financialReadiness,
-          },
-          update: dto.financialReadiness,
-        });
-      }
-      if (dto.checkoutTracking) {
-        await tx.checkoutCollectionTracking.upsert({
-          where: { revenueCaseId },
-          create: {
-            revenueCaseId,
-            ...dto.checkoutTracking,
-          },
-          update: dto.checkoutTracking,
-        });
-      }
-      if (dto.chargeCapture) {
-        const normalized = normalizeChargeCaptureInput(dto.chargeCapture);
-        await tx.chargeCaptureRecord.upsert({
-          where: { revenueCaseId },
-          create: {
-            revenueCaseId,
-            documentationComplete: normalized.documentationComplete,
-            codingStage: normalized.codingStage,
-            icd10CodesJson: normalized.icd10CodesJson as Prisma.InputJsonValue,
-            procedureLinesJson: normalized.procedureLinesJson as Prisma.InputJsonValue,
-            cptCodesJson: normalized.cptCodesJson as Prisma.InputJsonValue,
-            modifiersJson: normalized.modifiersJson as Prisma.InputJsonValue,
-            unitsJson: normalized.unitsJson as Prisma.InputJsonValue,
-            codingNote: normalized.codingNote,
-            readyForAthenaAt: dto.readyForAthena ? new Date() : null,
-          },
-          update: {
-            documentationComplete: normalized.documentationComplete,
-            codingStage: normalized.codingStage,
-            icd10CodesJson: normalized.icd10CodesJson as Prisma.InputJsonValue,
-            procedureLinesJson: normalized.procedureLinesJson as Prisma.InputJsonValue,
-            cptCodesJson: normalized.cptCodesJson as Prisma.InputJsonValue,
-            modifiersJson: normalized.modifiersJson as Prisma.InputJsonValue,
-            unitsJson: normalized.unitsJson as Prisma.InputJsonValue,
-            codingNote: normalized.codingNote,
-            readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
-          },
-        });
-      }
-      if (dto.checklistUpdates?.length) {
-        for (const item of dto.checklistUpdates) {
-          await tx.revenueChecklistItem.update({
-            where: { id: item.id },
+        await prisma.$transaction(async (tx) => {
+          if (dto.financialReadiness) {
+            await tx.financialReadiness.upsert({
+              where: { revenueCaseId },
+              create: {
+                revenueCaseId,
+                ...dto.financialReadiness,
+              },
+              update: dto.financialReadiness,
+            });
+          }
+          if (dto.checkoutTracking) {
+            await tx.checkoutCollectionTracking.upsert({
+              where: { revenueCaseId },
+              create: {
+                revenueCaseId,
+                ...dto.checkoutTracking,
+              },
+              update: dto.checkoutTracking,
+            });
+          }
+          if (dto.chargeCapture) {
+            const normalized = normalizeChargeCaptureInput(dto.chargeCapture);
+            await tx.chargeCaptureRecord.upsert({
+              where: { revenueCaseId },
+              create: {
+                revenueCaseId,
+                documentationComplete: normalized.documentationComplete,
+                codingStage: normalized.codingStage,
+                icd10CodesJson: normalized.icd10CodesJson as Prisma.InputJsonValue,
+                procedureLinesJson: normalized.procedureLinesJson as Prisma.InputJsonValue,
+                cptCodesJson: normalized.cptCodesJson as Prisma.InputJsonValue,
+                modifiersJson: normalized.modifiersJson as Prisma.InputJsonValue,
+                unitsJson: normalized.unitsJson as Prisma.InputJsonValue,
+                codingNote: normalized.codingNote,
+                readyForAthenaAt: dto.readyForAthena ? new Date() : null,
+              },
+              update: {
+                documentationComplete: normalized.documentationComplete,
+                codingStage: normalized.codingStage,
+                icd10CodesJson: normalized.icd10CodesJson as Prisma.InputJsonValue,
+                procedureLinesJson: normalized.procedureLinesJson as Prisma.InputJsonValue,
+                cptCodesJson: normalized.cptCodesJson as Prisma.InputJsonValue,
+                modifiersJson: normalized.modifiersJson as Prisma.InputJsonValue,
+                unitsJson: normalized.unitsJson as Prisma.InputJsonValue,
+                codingNote: normalized.codingNote,
+                readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
+              },
+            });
+          }
+          if (dto.checklistUpdates?.length) {
+            for (const item of dto.checklistUpdates) {
+              await tx.revenueChecklistItem.update({
+                where: { id: item.id },
+                data: {
+                  status: item.status,
+                  evidenceText: item.evidenceText,
+                  completedAt: item.status === "completed" ? new Date() : null,
+                  completedByUserId: item.status === "completed" ? request.user!.id : null,
+                },
+              });
+            }
+          }
+
+          await tx.revenueCase.update({
+            where: { id: revenueCaseId },
             data: {
-              status: item.status,
-              evidenceText: item.evidenceText,
-              completedAt: item.status === "completed" ? new Date() : null,
-              completedByUserId: item.status === "completed" ? request.user!.id : null,
+              assignedToUserId: dto.assignedToUserId,
+              assignedToRole: dto.assignedToRole,
+              priority: dto.priority,
+              currentBlockerCategory: dto.blockerCategory,
+              currentBlockerText: dto.blockerText,
+              dueAt: dto.dueAt ? new Date(dto.dueAt) : dto.dueAt === null ? null : undefined,
+              readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
+              athenaHandoffStartedAt: dto.athenaHandoffStarted === undefined ? undefined : dto.athenaHandoffStarted ? new Date() : null,
+              athenaHandoffConfirmedAt:
+                dto.athenaHandoffConfirmed === undefined
+                  ? undefined
+                  : dto.athenaHandoffConfirmed
+                    ? new Date()
+                    : null,
+              athenaHandoffConfirmedByUserId:
+                dto.athenaHandoffConfirmed === undefined
+                  ? undefined
+                  : dto.athenaHandoffConfirmed
+                    ? request.user!.id
+                    : null,
+              athenaHandoffNote: dto.athenaHandoffNote,
             },
           });
-        }
-      }
 
-      await tx.revenueCase.update({
-        where: { id: revenueCaseId },
-        data: {
-          assignedToUserId: dto.assignedToUserId,
-          assignedToRole: dto.assignedToRole,
-          priority: dto.priority,
-          currentBlockerCategory: dto.blockerCategory,
-          currentBlockerText: dto.blockerText,
-          dueAt: dto.dueAt ? new Date(dto.dueAt) : dto.dueAt === null ? null : undefined,
-          readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
-          athenaHandoffStartedAt: dto.athenaHandoffStarted === undefined ? undefined : dto.athenaHandoffStarted ? new Date() : null,
-          athenaHandoffConfirmedAt:
-            dto.athenaHandoffConfirmed === undefined
-              ? undefined
-              : dto.athenaHandoffConfirmed
-                ? new Date()
-                : null,
-          athenaHandoffConfirmedByUserId:
-            dto.athenaHandoffConfirmed === undefined
-              ? undefined
-              : dto.athenaHandoffConfirmed
-                ? request.user!.id
-                : null,
-          athenaHandoffNote: dto.athenaHandoffNote,
-        },
-      });
+          await tx.revenueCaseEvent.create({
+            data: {
+              revenueCaseId,
+              eventType: "case_updated",
+              actorUserId: request.user!.id,
+              eventText: "Revenue case updated",
+              payloadJson: dto as Prisma.InputJsonValue,
+            },
+          });
 
-      await tx.revenueCaseEvent.create({
-        data: {
-          revenueCaseId,
-          eventType: "case_updated",
-          actorUserId: request.user!.id,
-          eventText: "Revenue case updated",
-          payloadJson: dto as Prisma.InputJsonValue,
-        },
-      });
+          await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+        });
 
-      await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+        const row = (
+          await buildRevenueCaseList(prisma, {
+            revenueCaseId,
+            facilityId: request.user!.facilityId,
+            detailLevel: "full",
+          })
+        )[0];
+        requireCondition(row, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+        return mapRevenueCaseRow(row);
+      },
     });
-
-    const row = (
-      await buildRevenueCaseList(prisma, {
-        revenueCaseId,
-        facilityId: request.user!.facilityId,
-        detailLevel: "full",
-      })
-    )[0];
-    assert(row, 404, "Revenue case not found");
-    return mapRevenueCaseRow(row);
   });
 
   app.patch("/revenue-cases/:id/assign", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = assignRevenueCaseSchema.parse(request.body);
-    await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    assertAthenaHandoffRole(dto.assignedToRole);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        await assertRevenueCaseReadable(revenueCaseId, request.user!);
+        assertAthenaHandoffRole(dto.assignedToRole);
 
-    const updated = await prisma.revenueCase.update({
-      where: { id: revenueCaseId },
-      data: {
-        assignedToUserId: dto.assignedToUserId,
-        assignedToRole: dto.assignedToRole,
+        const updated = await prisma.$transaction(async (tx) => {
+          const row = await tx.revenueCase.update({
+            where: { id: revenueCaseId },
+            data: {
+              assignedToUserId: dto.assignedToUserId,
+              assignedToRole: dto.assignedToRole,
+            },
+          });
+
+          await tx.revenueCaseEvent.create({
+            data: {
+              revenueCaseId,
+              eventType: "assignment_updated",
+              actorUserId: request.user!.id,
+              eventText: `Assigned to ${dto.assignedToRole}${dto.assignedToUserId ? ` (${dto.assignedToUserId})` : ""}`,
+            },
+          });
+
+          await syncRevenueCaseForEncounter(tx, row.encounterId);
+          return row;
+        });
+        const row = (
+          await buildRevenueCaseList(prisma, {
+            revenueCaseId,
+            facilityId: request.user!.facilityId,
+            detailLevel: "full",
+          })
+        )[0];
+        requireCondition(row, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+        return mapRevenueCaseRow(row);
       },
     });
-
-    await prisma.revenueCaseEvent.create({
-      data: {
-        revenueCaseId,
-        eventType: "assignment_updated",
-        actorUserId: request.user!.id,
-        eventText: `Assigned to ${dto.assignedToRole}${dto.assignedToUserId ? ` (${dto.assignedToUserId})` : ""}`,
-      },
-    });
-
-    await syncRevenueCaseForEncounter(prisma, updated.encounterId);
-    const row = (
-      await buildRevenueCaseList(prisma, {
-        revenueCaseId,
-        facilityId: request.user!.facilityId,
-        detailLevel: "full",
-      })
-    )[0];
-    assert(row, 404, "Revenue case not found");
-    return mapRevenueCaseRow(row);
   });
 
   app.post("/revenue-cases/:id/provider-clarifications", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = providerQuerySchema.parse(request.body);
-    await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    const created = await createRevenueProviderClarification(prisma, {
-      revenueCaseId,
-      requestedByUserId: request.user!.id,
-      questionText: dto.questionText,
-      queryType: dto.queryType,
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        await assertRevenueCaseReadable(revenueCaseId, request.user!);
+        const created = await createRevenueProviderClarification(prisma, {
+          revenueCaseId,
+          requestedByUserId: request.user!.id,
+          questionText: dto.questionText,
+          queryType: dto.queryType,
+        });
+        requireCondition(created, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+        return created;
+      },
     });
-    assert(created, 404, "Revenue case not found");
-    return created;
   });
 
   app.post("/revenue-cases/:id/provider-query", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = providerQuerySchema.parse(request.body);
-    await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    const created = await createRevenueProviderClarification(prisma, {
-      revenueCaseId,
-      requestedByUserId: request.user!.id,
-      questionText: dto.questionText,
-      queryType: dto.queryType,
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        await assertRevenueCaseReadable(revenueCaseId, request.user!);
+        const created = await createRevenueProviderClarification(prisma, {
+          revenueCaseId,
+          requestedByUserId: request.user!.id,
+          questionText: dto.questionText,
+          queryType: dto.queryType,
+        });
+        requireCondition(created, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+        return created;
+      },
     });
-    assert(created, 404, "Revenue case not found");
-    return created;
   });
 
   const patchProviderClarification = async (request: any) => {
     const clarificationId = (request.params as { id: string }).id;
     const dto = providerClarificationPatchSchema.parse(request.body);
-    assert(dto.responseText || dto.status || dto.resolve !== undefined, 400, "No provider clarification updates were supplied.");
-    const updated = await respondToRevenueProviderClarification(prisma, {
-      clarificationId,
-      actorUserId: request.user!.id,
-      responseText: dto.responseText || "Updated in Flow",
-      resolve: dto.resolve ?? dto.status === ProviderClarificationStatus.Resolved,
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        requireCondition(
+          dto.responseText || dto.status || dto.resolve !== undefined,
+          400,
+          "No provider clarification updates were supplied.",
+          "PROVIDER_QUERY_UPDATE_REQUIRED",
+        );
+        const updated = await respondToRevenueProviderClarification(prisma, {
+          clarificationId,
+          actorUserId: request.user!.id,
+          responseText: dto.responseText || "Updated in Flow",
+          resolve: dto.resolve ?? dto.status === ProviderClarificationStatus.Resolved,
+        });
+        requireCondition(updated, 404, "Provider clarification not found", "PROVIDER_QUERY_NOT_FOUND");
+        if (dto.status === ProviderClarificationStatus.Open) {
+          await prisma.providerClarification.update({
+            where: { id: clarificationId },
+            data: {
+              status: ProviderClarificationStatus.Open,
+              respondedAt: null,
+              resolvedAt: null,
+            },
+          });
+        }
+        return prisma.providerClarification.findUnique({ where: { id: clarificationId } });
+      },
     });
-    assert(updated, 404, "Provider clarification not found");
-    if (dto.status === ProviderClarificationStatus.Open) {
-      await prisma.providerClarification.update({
-        where: { id: clarificationId },
-        data: {
-          status: ProviderClarificationStatus.Open,
-          respondedAt: null,
-          resolvedAt: null,
-        },
-      });
-    }
-    return prisma.providerClarification.findUnique({ where: { id: clarificationId } });
   };
 
   app.patch(
@@ -918,219 +929,248 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
   app.post("/revenue-cases/:id/athena-handoff-confirm", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = athenaHandoffConfirmSchema.parse(request.body);
-    await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    assertAthenaHandoffRole(request.user!.role);
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        await assertRevenueCaseReadable(revenueCaseId, request.user!);
+        assertAthenaHandoffRole(request.user!.role);
 
-    await prisma.$transaction(async (tx) => {
-      if (dto.checklistUpdates?.length) {
-        for (const item of dto.checklistUpdates) {
-          await tx.revenueChecklistItem.update({
-            where: { id: item.id },
+        await prisma.$transaction(async (tx) => {
+          if (dto.checklistUpdates?.length) {
+            for (const item of dto.checklistUpdates) {
+              await tx.revenueChecklistItem.update({
+                where: { id: item.id },
+                data: {
+                  status: item.status,
+                  evidenceText: item.evidenceText,
+                  completedAt: item.status === "completed" ? new Date() : null,
+                  completedByUserId: item.status === "completed" ? request.user!.id : null,
+                },
+              });
+            }
+          }
+
+          const revenueCase = await tx.revenueCase.findUnique({ where: { id: revenueCaseId } });
+          requireCondition(revenueCase, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+
+          await tx.revenueCase.update({
+            where: { id: revenueCaseId },
             data: {
-              status: item.status,
-              evidenceText: item.evidenceText,
-              completedAt: item.status === "completed" ? new Date() : null,
-              completedByUserId: item.status === "completed" ? request.user!.id : null,
+              athenaHandoffOwnerUserId: revenueCase.athenaHandoffOwnerUserId || request.user!.id,
+              athenaHandoffStartedAt: revenueCase.athenaHandoffStartedAt || new Date(),
+              athenaHandoffConfirmedAt: new Date(),
+              athenaHandoffConfirmedByUserId: request.user!.id,
+              athenaHandoffNote: dto.athenaHandoffNote || null,
+              closeoutState:
+                revenueCase.closeoutState === RevenueCloseoutState.ClosedResolved
+                  ? RevenueCloseoutState.ClosedResolved
+                  : RevenueCloseoutState.Open,
             },
           });
-        }
-      }
 
-      const revenueCase = await tx.revenueCase.findUnique({ where: { id: revenueCaseId } });
-      assert(revenueCase, 404, "Revenue case not found");
+          await tx.revenueCaseEvent.create({
+            data: {
+              revenueCaseId,
+              eventType: "athena_handoff_confirmed",
+              actorUserId: request.user!.id,
+              eventText: dto.athenaHandoffNote || "Athena handoff confirmed in Flow",
+            },
+          });
 
-      await tx.revenueCase.update({
-        where: { id: revenueCaseId },
-        data: {
-          athenaHandoffOwnerUserId: revenueCase.athenaHandoffOwnerUserId || request.user!.id,
-          athenaHandoffStartedAt: revenueCase.athenaHandoffStartedAt || new Date(),
-          athenaHandoffConfirmedAt: new Date(),
-          athenaHandoffConfirmedByUserId: request.user!.id,
-          athenaHandoffNote: dto.athenaHandoffNote || null,
-          closeoutState:
-            revenueCase.closeoutState === RevenueCloseoutState.ClosedResolved
-              ? RevenueCloseoutState.ClosedResolved
-              : RevenueCloseoutState.Open,
-        },
-      });
+          await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+        });
 
-      await tx.revenueCaseEvent.create({
-        data: {
-          revenueCaseId,
-          eventType: "athena_handoff_confirmed",
-          actorUserId: request.user!.id,
-          eventText: dto.athenaHandoffNote || "Athena handoff confirmed in Flow",
-        },
-      });
-
-      await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+        const row = (
+          await buildRevenueCaseList(prisma, {
+            revenueCaseId,
+            facilityId: request.user!.facilityId,
+            detailLevel: "full",
+          })
+        )[0];
+        requireCondition(row, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+        return mapRevenueCaseRow(row);
+      },
     });
-
-    const row = (
-      await buildRevenueCaseList(prisma, {
-        revenueCaseId,
-        facilityId: request.user!.facilityId,
-        detailLevel: "full",
-      })
-    )[0];
-    assert(row, 404, "Revenue case not found");
-    return mapRevenueCaseRow(row);
   });
 
   app.post("/revenue-cases/:id/roll", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
     const dto = rollRevenueCaseSchema.parse(request.body);
-    await assertRevenueCaseReadable(revenueCaseId, request.user!);
-    const revenueCase = await prisma.revenueCase.findUnique({ where: { id: revenueCaseId }, include: { clinic: { select: { timezone: true } } } });
-    assert(revenueCase, 404, "Revenue case not found");
-    const rolledFromDateKey = DateTime.now().setZone(revenueCase.clinic.timezone).toISODate() || null;
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        await assertRevenueCaseReadable(revenueCaseId, request.user!);
+        const revenueCase = await prisma.revenueCase.findUnique({ where: { id: revenueCaseId }, include: { clinic: { select: { timezone: true } } } });
+        requireCondition(revenueCase, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+        const rolledFromDateKey = clinicDateKeyNow(revenueCase.clinic.timezone) || null;
 
-    const updated = await prisma.revenueCase.update({
-      where: { id: revenueCaseId },
-      data: {
-        rolledFromDateKey,
-        rollReason: dto.rollReason,
-        currentDayBucket: RevenueDayBucket.Rolled,
-        assignedToUserId: dto.assignedToUserId,
-        assignedToRole: dto.assignedToRole,
-        dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
-        closeoutState: RevenueCloseoutState.RolledOver,
+        return prisma.$transaction(async (tx) => {
+          const updated = await tx.revenueCase.update({
+            where: { id: revenueCaseId },
+            data: {
+              rolledFromDateKey,
+              rollReason: dto.rollReason,
+              currentDayBucket: RevenueDayBucket.Rolled,
+              assignedToUserId: dto.assignedToUserId,
+              assignedToRole: dto.assignedToRole,
+              dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
+              closeoutState: RevenueCloseoutState.RolledOver,
+            },
+          });
+
+          await tx.revenueCaseEvent.create({
+            data: {
+              revenueCaseId,
+              eventType: "rolled",
+              actorUserId: request.user!.id,
+              eventText: dto.rollReason,
+            },
+          });
+
+          await syncRevenueCaseForEncounter(tx, updated.encounterId);
+          return updated;
+        });
       },
     });
-
-    await prisma.revenueCaseEvent.create({
-      data: {
-        revenueCaseId,
-        eventType: "rolled",
-        actorUserId: request.user!.id,
-        eventText: dto.rollReason,
-      },
-    });
-
-    await syncRevenueCaseForEncounter(prisma, updated.encounterId);
-    return updated;
   });
 
   app.post("/revenue-closeout", { preHandler: revenueGuard }, async (request) => {
     const dto = revenueCloseoutSchema.parse(request.body);
-    const clinics = await resolveClinicsInScope(request.user!, dto.clinicId);
-    assert(clinics.length === 1, 400, "Revenue day close is clinic-specific. Select a single clinic before closing the day.");
-    const targetDate = (dto.date || DateTime.now().toISODate() || "").trim();
-    await syncRevenueCasesForScope(prisma, {
-      clinicIds: clinics.map((clinic) => clinic.id),
-      facilityId: request.user!.facilityId,
-      fromDateKey: targetDate,
-      toDateKey: targetDate,
-    });
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const clinics = await resolveClinicsInScope(request.user!, dto.clinicId);
+        requireCondition(clinics.length === 1, 400, "Revenue day close is clinic-specific. Select a single clinic before closing the day.", "REVENUE_CLOSEOUT_REQUIRES_SINGLE_CLINIC");
+        const targetDate = (dto.date || clinicDateKeyNow(clinics[0]?.timezone) || "").trim();
+        await syncRevenueCasesForScope(prisma, {
+          clinicIds: clinics.map((clinic) => clinic.id),
+          facilityId: request.user!.facilityId,
+          fromDateKey: targetDate,
+          toDateKey: targetDate,
+        });
 
-    const unresolved = await prisma.revenueCase.findMany({
-      where: {
-        clinicId: { in: clinics.map((clinic) => clinic.id) },
-        currentDayBucket: RevenueDayBucket.Today,
-        currentRevenueStatus: {
-          notIn: [RevenueStatus.MonitoringOnly, RevenueStatus.Closed],
-        },
+        const unresolved = await prisma.revenueCase.findMany({
+          where: {
+            clinicId: { in: clinics.map((clinic) => clinic.id) },
+            currentDayBucket: RevenueDayBucket.Today,
+            currentRevenueStatus: {
+              notIn: [RevenueStatus.MonitoringOnly, RevenueStatus.Closed],
+            },
+          },
+          select: {
+            id: true,
+            patientId: true,
+            providerId: true,
+            encounterId: true,
+            currentWorkQueue: true,
+            currentRevenueStatus: true,
+            assignedToUserId: true,
+            assignedToRole: true,
+          },
+        });
+
+        const items = dto.items || [];
+        const itemMap = new Map(items.map((item) => [item.revenueCaseId, item]));
+        const missing = unresolved.filter((row) => !itemMap.has(row.id));
+        if (missing.length > 0) {
+          throw new ApiError({
+            statusCode: 400,
+            code: "REVENUE_CLOSEOUT_METADATA_MISSING",
+            message: `${missing.length} unresolved revenue case(s) still need closeout metadata.`,
+          });
+        }
+
+        for (const item of items) {
+          requireCondition(item.ownerUserId || item.ownerRole, 400, "Every unresolved case needs an owner.", "REVENUE_CLOSEOUT_OWNER_REQUIRED");
+        }
+
+        return prisma.$transaction(async (tx) => {
+          const run = await tx.revenueCloseoutRun.create({
+            data: {
+              facilityId: request.user!.facilityId!,
+              clinicId: clinics[0]!.id,
+              dateKey: targetDate,
+              closedByUserId: request.user!.id,
+              unresolvedCount: unresolved.length,
+              rolledCount: items.filter((item) => item.rollover).length,
+              note: dto.note || null,
+            },
+          });
+
+          for (const unresolvedCase of unresolved) {
+            const item = itemMap.get(unresolvedCase.id)!;
+            await tx.revenueCloseoutItem.create({
+              data: {
+                closeoutRunId: run.id,
+                revenueCaseId: unresolvedCase.id,
+                queue: unresolvedCase.currentWorkQueue,
+                snapshotStatus: unresolvedCase.currentRevenueStatus,
+                ownerUserId: item.ownerUserId || unresolvedCase.assignedToUserId || null,
+                ownerRole: item.ownerRole || unresolvedCase.assignedToRole || RoleName.RevenueCycle,
+                reasonNotCompleted: item.reasonNotCompleted,
+                nextAction: item.nextAction,
+                dueAt: new Date(item.dueAt),
+                rollover: item.rollover,
+                patientId: unresolvedCase.patientId,
+                providerId: unresolvedCase.providerId,
+              },
+            });
+
+            await tx.revenueCase.update({
+              where: { id: unresolvedCase.id },
+              data: {
+                assignedToUserId: item.ownerUserId || unresolvedCase.assignedToUserId || null,
+                assignedToRole: item.ownerRole || unresolvedCase.assignedToRole || RoleName.RevenueCycle,
+                dueAt: new Date(item.dueAt),
+                rolledFromDateKey: item.rollover ? targetDate : null,
+                rollReason: item.rollover ? item.reasonNotCompleted : null,
+                closeoutState: item.rollover ? RevenueCloseoutState.RolledOver : RevenueCloseoutState.ClosedUnresolved,
+                currentDayBucket: item.rollover ? RevenueDayBucket.Rolled : RevenueDayBucket.Yesterday,
+              },
+            });
+
+            await tx.revenueChecklistItem.updateMany({
+              where: {
+                revenueCaseId: unresolvedCase.id,
+                group: "day_close",
+              },
+              data: {
+                status: "completed",
+                completedAt: new Date(),
+                completedByUserId: request.user!.id,
+                evidenceText: `${item.reasonNotCompleted} | Next: ${item.nextAction}`,
+              },
+            });
+
+            await tx.revenueCaseEvent.create({
+              data: {
+                revenueCaseId: unresolvedCase.id,
+                eventType: item.rollover ? "closeout_rolled" : "closeout_unresolved",
+                actorUserId: request.user!.id,
+                eventText: item.reasonNotCompleted,
+                payloadJson: {
+                  nextAction: item.nextAction,
+                  dueAt: item.dueAt,
+                  rollover: item.rollover,
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
+
+          return {
+            date: targetDate,
+            rolledCount: items.filter((item) => item.rollover).length,
+            unresolvedCount: unresolved.length,
+            status: "closed",
+          };
+        });
       },
-      select: {
-        id: true,
-        patientId: true,
-        providerId: true,
-        encounterId: true,
-        currentWorkQueue: true,
-        currentRevenueStatus: true,
-        assignedToUserId: true,
-        assignedToRole: true,
-      },
     });
-
-    const items = dto.items || [];
-    const itemMap = new Map(items.map((item) => [item.revenueCaseId, item]));
-    const missing = unresolved.filter((row) => !itemMap.has(row.id));
-    if (missing.length > 0) {
-      throw new ApiError(400, `${missing.length} unresolved revenue case(s) still need closeout metadata.`);
-    }
-
-    for (const item of items) {
-      assert(item.ownerUserId || item.ownerRole, 400, "Every unresolved case needs an owner.");
-    }
-
-    const run = await prisma.revenueCloseoutRun.create({
-      data: {
-        facilityId: request.user!.facilityId!,
-        clinicId: clinics[0]!.id,
-        dateKey: targetDate,
-        closedByUserId: request.user!.id,
-        unresolvedCount: unresolved.length,
-        rolledCount: items.filter((item) => item.rollover).length,
-        note: dto.note || null,
-      },
-    });
-
-    for (const unresolvedCase of unresolved) {
-      const item = itemMap.get(unresolvedCase.id)!;
-      await prisma.revenueCloseoutItem.create({
-        data: {
-          closeoutRunId: run.id,
-          revenueCaseId: unresolvedCase.id,
-          queue: unresolvedCase.currentWorkQueue,
-          snapshotStatus: unresolvedCase.currentRevenueStatus,
-          ownerUserId: item.ownerUserId || unresolvedCase.assignedToUserId || null,
-          ownerRole: item.ownerRole || unresolvedCase.assignedToRole || RoleName.RevenueCycle,
-          reasonNotCompleted: item.reasonNotCompleted,
-          nextAction: item.nextAction,
-          dueAt: new Date(item.dueAt),
-          rollover: item.rollover,
-          patientId: unresolvedCase.patientId,
-          providerId: unresolvedCase.providerId,
-        },
-      });
-
-      await prisma.revenueCase.update({
-        where: { id: unresolvedCase.id },
-        data: {
-          assignedToUserId: item.ownerUserId || unresolvedCase.assignedToUserId || null,
-          assignedToRole: item.ownerRole || unresolvedCase.assignedToRole || RoleName.RevenueCycle,
-          dueAt: new Date(item.dueAt),
-          rolledFromDateKey: item.rollover ? targetDate : null,
-          rollReason: item.rollover ? item.reasonNotCompleted : null,
-          closeoutState: item.rollover ? RevenueCloseoutState.RolledOver : RevenueCloseoutState.ClosedUnresolved,
-          currentDayBucket: item.rollover ? RevenueDayBucket.Rolled : RevenueDayBucket.Yesterday,
-        },
-      });
-
-      await prisma.revenueChecklistItem.updateMany({
-        where: {
-          revenueCaseId: unresolvedCase.id,
-          group: "day_close",
-        },
-        data: {
-          status: "completed",
-          completedAt: new Date(),
-          completedByUserId: request.user!.id,
-          evidenceText: `${item.reasonNotCompleted} | Next: ${item.nextAction}`,
-        },
-      });
-
-      await prisma.revenueCaseEvent.create({
-        data: {
-          revenueCaseId: unresolvedCase.id,
-          eventType: item.rollover ? "closeout_rolled" : "closeout_unresolved",
-          actorUserId: request.user!.id,
-          eventText: item.reasonNotCompleted,
-          payloadJson: {
-            nextAction: item.nextAction,
-            dueAt: item.dueAt,
-            rollover: item.rollover,
-          } as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    return {
-      date: targetDate,
-      rolledCount: items.filter((item) => item.rollover).length,
-      unresolvedCount: unresolved.length,
-      status: "closed",
-    };
   });
 }

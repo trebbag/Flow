@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { getEncounterStageSeconds, getEncounterTotalSeconds } from "./encounter-timers";
 import { getClinicalCodeReference, searchClinicalCodes, type ClinicalCodeReference } from "./clinical-code-reference";
 import type { RevenueCaseDetail, RevenueServiceCaptureItem, RevenueSettings } from "./types";
+import { useUnsavedChangesGuard } from "./use-unsaved-changes-guard";
 
 // ── Status progression ──
 
@@ -217,6 +218,14 @@ function normalizeTemplateValueMap(value: unknown): Record<string, string | bool
   );
 }
 
+function areTemplateValueMapsEqual(a: Record<string, string | boolean>, b: Record<string, string | boolean>) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
 function detailValueToString(value: unknown) {
   if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -296,6 +305,31 @@ function parseServiceCaptureItems(value: unknown): RevenueServiceCaptureItem[] {
       } satisfies RevenueServiceCaptureItem;
     })
     .filter((entry): entry is RevenueServiceCaptureItem => Boolean(entry));
+}
+
+function comparableServiceCaptureItems(items: RevenueServiceCaptureItem[]) {
+  return items
+    .map((item) => ({
+      id: item.id,
+      catalogItemId: item.catalogItemId || null,
+      label: item.label,
+      sourceRole: item.sourceRole,
+      sourceTaskId: item.sourceTaskId || null,
+      quantity: item.quantity || 1,
+      note: item.note || null,
+      performedAt: item.performedAt || null,
+      capturedByUserId: item.capturedByUserId || null,
+      suggestedProcedureCode: item.suggestedProcedureCode || null,
+      expectedChargeCents: item.expectedChargeCents ?? null,
+      detailSchemaKey: item.detailSchemaKey || "generic_service",
+      detailJson: item.detailJson || null,
+      detailComplete: item.detailComplete !== false,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function areServiceCaptureItemsEqual(left: RevenueServiceCaptureItem[], right: RevenueServiceCaptureItem[]) {
+  return JSON.stringify(comparableServiceCaptureItems(left)) === JSON.stringify(comparableServiceCaptureItems(right));
 }
 
 function splitStructuredCodes(value: unknown) {
@@ -1062,6 +1096,54 @@ export function EncounterDetailView() {
   const procedureSearchResults = useMemo(() => searchClinicalCodes("procedure", procedureInput), [procedureInput]);
   const documentationAttested = safeTemplateVals["coding.documentation_complete"] === true;
   const documentationAttestationNote = String(safeTemplateVals[CLINICIAN_DOCUMENTATION_ATTESTATION_NOTE_KEY] || "");
+  const persistedStageTemplateVals = useMemo(() => {
+    if (!baseEnc) return {};
+    switch (safeStatus) {
+      case "Rooming":
+        return normalizeTemplateValueMap(baseEnc.roomingData);
+      case "Optimizing":
+        return normalizeTemplateValueMap(baseEnc.clinicianData);
+      case "CheckOut":
+        return normalizeTemplateValueMap(baseEnc.checkoutData);
+      default:
+        return {};
+    }
+  }, [baseEnc, safeStatus]);
+  const persistedServiceCaptureItems = useMemo(
+    () => parseServiceCaptureItems((baseEnc?.roomingData as Record<string, unknown> | null)?.[ROOMING_SERVICE_CAPTURE_KEY]),
+    [baseEnc?.roomingData],
+  );
+  const encounterHasUnsavedChanges = useMemo(() => {
+    if (!baseEnc || isEncounterReadOnly) return false;
+    const currentVals = templateValues[safeStatus] || {};
+    const stageDraftChanged = !areTemplateValueMapsEqual(currentVals, persistedStageTemplateVals);
+    const roomChanged = safeStatus === "Rooming" && (localRoom || "") !== (baseEnc.roomNumber || "");
+    const serviceCaptureChanged =
+      safeStatus === "Rooming" && !areServiceCaptureItemsEqual(serviceCaptureItems, persistedServiceCaptureItems);
+    const transientInputsDirty =
+      diagnosisInput.trim().length > 0 ||
+      procedureInput.trim().length > 0 ||
+      customServiceLabel.trim().length > 0 ||
+      customServiceNote.trim().length > 0;
+    return stageDraftChanged || roomChanged || serviceCaptureChanged || transientInputsDirty;
+  }, [
+    baseEnc,
+    customServiceLabel,
+    customServiceNote,
+    diagnosisInput,
+    isEncounterReadOnly,
+    localRoom,
+    persistedServiceCaptureItems,
+    persistedStageTemplateVals,
+    procedureInput,
+    safeStatus,
+    serviceCaptureItems,
+    templateValues,
+  ]);
+  useUnsavedChangesGuard(
+    encounterHasUnsavedChanges && !isAdvancing && !savingRecoveryRoom && !savingClarificationId,
+    "You have unsaved encounter changes. Leave this screen and discard them?",
+  );
 
   if (!baseEnc && loadingEncounter) {
     return (
@@ -1148,7 +1230,7 @@ export function EncounterDetailView() {
         throw new Error("Select a valid room before saving.");
       }
 
-      await encounterApi.updateRooming(enc.id, { roomId });
+      await encounterApi.updateRooming(enc.id, { roomId, version: enc.version });
       await ctx.refreshData();
       const refreshed = await ctx.fetchEncounter(enc.id, { force: true });
       setLocalRoom(refreshed?.roomNumber || "");
@@ -1679,6 +1761,7 @@ export function EncounterDetailView() {
                     <select
                       value={localRoom}
                       onChange={(event) => setLocalRoom(event.target.value)}
+                      aria-label="Recovery room assignment"
                       className="h-10 w-full rounded-lg border border-blue-200 bg-white px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-100"
                     >
                       {recoveryRoomOptions.map((option) => (
@@ -2083,6 +2166,7 @@ export function EncounterDetailView() {
                         <select
                           value={localRoom}
                           onChange={(e) => setLocalRoom(e.target.value)}
+                          aria-label="Assigned room"
                           className={`w-full h-10 pl-10 pr-4 rounded-lg border bg-white text-[13px] appearance-none transition-all hover:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100 ${
                             localRoom ? "border-emerald-300 focus:border-emerald-400" : "border-gray-200 focus:border-violet-400"
                           }`}
@@ -2122,6 +2206,7 @@ export function EncounterDetailView() {
                           placeholder="Notes for this rooming session..."
                           value={roomingNotes}
                           onChange={(e) => setRoomingNotes(e.target.value)}
+                          aria-label="Rooming notes"
                           disabled={isEncounterReadOnly}
                           className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] hover:border-violet-300 focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                         />
@@ -2153,6 +2238,7 @@ export function EncounterDetailView() {
                               key={item.id}
                               type="button"
                               onClick={() => addServiceCaptureFromCatalog(item.id)}
+                              aria-label={`Add service capture item ${item.label}${item.suggestedProcedureCode ? ` procedure code ${item.suggestedProcedureCode}` : ""}`}
                               disabled={isEncounterReadOnly}
                               className="rounded-full border border-cyan-200 bg-white px-3 py-1.5 text-[11px] text-cyan-700 hover:bg-cyan-50 disabled:opacity-50"
                               style={{ fontWeight: 600 }}
@@ -2166,6 +2252,7 @@ export function EncounterDetailView() {
                           <input
                             value={customServiceLabel}
                             onChange={(event) => setCustomServiceLabel(event.target.value)}
+                            aria-label="Custom service label"
                             placeholder="Other service label"
                             disabled={isEncounterReadOnly}
                             className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
@@ -2173,6 +2260,7 @@ export function EncounterDetailView() {
                           <input
                             value={customServiceNote}
                             onChange={(event) => setCustomServiceNote(event.target.value)}
+                            aria-label="Custom service note"
                             placeholder="Optional note for other service"
                             disabled={isEncounterReadOnly}
                             className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-[12px] focus:outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:opacity-60"
@@ -2180,6 +2268,7 @@ export function EncounterDetailView() {
                           <button
                             type="button"
                             onClick={addCustomServiceCapture}
+                            aria-label="Add custom service capture item"
                             disabled={isEncounterReadOnly}
                             className="h-10 px-3 rounded-lg bg-cyan-600 text-white text-[12px] hover:bg-cyan-700 transition-colors disabled:opacity-50"
                             style={{ fontWeight: 600 }}
@@ -2226,6 +2315,7 @@ export function EncounterDetailView() {
                                     type="text"
                                     inputMode="numeric"
                                     value={String(item.quantity || 1)}
+                                    aria-label={`Quantity for ${item.label}`}
                                     onChange={(event) =>
                                       updateServiceCaptureItem(item.id, (current) => ({
                                         ...current,
@@ -2243,6 +2333,7 @@ export function EncounterDetailView() {
                                   <input
                                     type="text"
                                     value={item.note || ""}
+                                    aria-label={`MA note for ${item.label}`}
                                     onChange={(event) =>
                                       updateServiceCaptureItem(item.id, (current) => ({
                                         ...current,
@@ -2278,6 +2369,7 @@ export function EncounterDetailView() {
                                             value={fieldValue}
                                             onChange={(event) => updateServiceCaptureDetail(item.id, field.key, event.target.value)}
                                             disabled={isEncounterReadOnly}
+                                            aria-label={`${item.label} ${field.label}`}
                                             placeholder={field.placeholder || field.label}
                                             className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[12px] resize-none focus:outline-none focus:ring-2 ${
                                               invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-cyan-200 focus:border-cyan-300 focus:ring-cyan-100"
@@ -2289,6 +2381,7 @@ export function EncounterDetailView() {
                                               value={fieldValue}
                                               onChange={(event) => updateServiceCaptureDetail(item.id, field.key, event.target.value)}
                                               disabled={isEncounterReadOnly}
+                                              aria-label={`${item.label} ${field.label}`}
                                               className={`h-10 w-full rounded-lg border bg-white px-3 pr-9 text-[12px] appearance-none focus:outline-none focus:ring-2 ${
                                                 invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-cyan-200 focus:border-cyan-300 focus:ring-cyan-100"
                                               } disabled:opacity-60`}
@@ -2307,6 +2400,7 @@ export function EncounterDetailView() {
                                             value={fieldValue}
                                             onChange={(event) => updateServiceCaptureDetail(item.id, field.key, event.target.value)}
                                             disabled={isEncounterReadOnly}
+                                            aria-label={`${item.label} ${field.label}`}
                                             placeholder={field.placeholder || field.label}
                                             className={`h-10 w-full rounded-lg border bg-white px-3 text-[12px] focus:outline-none focus:ring-2 ${
                                               invalid ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-cyan-200 focus:border-cyan-300 focus:ring-cyan-100"
@@ -2553,6 +2647,7 @@ export function EncounterDetailView() {
                           placeholder={enc.status === "Optimizing" ? "Add notes for MA, front desk, and checkout teams..." : "Add notes..."}
                           value={typeof currentTemplateVals.encounter_notes === "string" ? currentTemplateVals.encounter_notes : ""}
                           onChange={(event) => setFieldValue("encounter_notes", event.target.value)}
+                          aria-label={enc.status === "Optimizing" ? "Visit notes for team" : "Encounter notes"}
                           disabled={isEncounterReadOnly}
                           className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
                         />
@@ -2759,6 +2854,7 @@ export function EncounterDetailView() {
                                     [query.id]: event.target.value,
                                   }))
                                 }
+                                aria-label={`Response to clarification ${query.questionText}`}
                                 placeholder="Answer only what Revenue Cycle needs to finish charge capture or Athena handoff."
                                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] focus:outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none"
                               />
@@ -2853,6 +2949,7 @@ export function EncounterDetailView() {
                                   </div>
                                   <button
                                     onClick={() => ctx.removeTask(task.id)}
+                                    aria-label={`Remove task ${task.description}`}
                                     className="text-gray-300 hover:text-red-400 transition-colors shrink-0 mt-0.5"
                                   >
                                     <X className="w-3.5 h-3.5" />
@@ -2884,6 +2981,7 @@ export function EncounterDetailView() {
                               <select
                                 value={newTask.taskType}
                                 onChange={(e) => setNewTask((prev) => ({ ...prev, taskType: e.target.value }))}
+                                aria-label="Task type"
                                 className="w-full h-9 px-3 rounded-lg border border-teal-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
                               >
                                 <option value="">Select type...</option>
@@ -2903,6 +3001,7 @@ export function EncounterDetailView() {
                                 placeholder="Describe the task..."
                                 value={newTask.description}
                                 onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
+                                aria-label="Task description"
                                 className="w-full px-3 py-2 rounded-lg border border-teal-200 bg-white text-[13px] focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 resize-none"
                               />
                             </div>
@@ -2916,6 +3015,7 @@ export function EncounterDetailView() {
                                 <select
                                   value={newTask.assignedToRole}
                                   onChange={(e) => setNewTask((prev) => ({ ...prev, assignedToRole: e.target.value }))}
+                                  aria-label="Assign task to role"
                                   className="w-full h-9 px-3 rounded-lg border border-teal-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
                                 >
                                   <option value="">Unassigned</option>
@@ -2931,6 +3031,7 @@ export function EncounterDetailView() {
                                 <select
                                   value={newTask.priority}
                                   onChange={(e) => setNewTask((prev) => ({ ...prev, priority: Number(e.target.value) }))}
+                                  aria-label="Task priority"
                                   className="w-full h-9 px-3 rounded-lg border border-teal-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
                                 >
                                   {priorityOptions.map((opt) => (
@@ -2946,6 +3047,7 @@ export function EncounterDetailView() {
                                 type="checkbox"
                                 checked={newTask.blocking}
                                 onChange={(e) => setNewTask((prev) => ({ ...prev, blocking: e.target.checked }))}
+                                aria-label="Mark task as blocking"
                                 className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-400"
                               />
                               <span className="text-[12px] text-gray-700">Blocking task</span>
@@ -2974,6 +3076,7 @@ export function EncounterDetailView() {
                                   description: `${taskTypeOptions.find((t) => t.value === newTask.taskType)?.label || newTask.taskType}: ${newTask.description.slice(0, 60)}`,
                                 });
                               }}
+                              aria-label="Create encounter task"
                               className="w-full h-10 rounded-lg bg-teal-600 text-white text-[13px] flex items-center justify-center gap-2 hover:bg-teal-700 transition-colors shadow-sm"
                               style={{ fontWeight: 500 }}
                             >
@@ -3139,12 +3242,14 @@ function StructuredCodeComposer({
             }
           }}
           placeholder={placeholder}
+          aria-label={label}
           disabled={disabled}
           className="h-10 flex-1 rounded-xl border border-cyan-100 px-3 text-[12px] outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <button
           type="button"
           onClick={onAdd}
+          aria-label={`Add ${label}`}
           disabled={disabled}
           className="inline-flex items-center gap-1 rounded-full bg-cyan-700 px-4 py-2 text-[11px] text-white disabled:opacity-50"
           style={{ fontWeight: 700 }}
@@ -3162,6 +3267,7 @@ function StructuredCodeComposer({
                 key={code}
                 type="button"
                 onClick={() => onSuggestionClick(code)}
+                aria-label={`Use suggested ${codeKind} code ${code}`}
                 disabled={disabled}
                 className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700 disabled:opacity-50"
               >
@@ -3185,6 +3291,7 @@ function StructuredCodeComposer({
                   key={entry.code}
                   type="button"
                   onClick={() => onSuggestionClick(entry.code)}
+                  aria-label={`Use ${codeKind} code ${entry.code}`}
                   disabled={disabled}
                   className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left disabled:opacity-50"
                 >
@@ -3204,6 +3311,7 @@ function StructuredCodeComposer({
             key={code}
             type="button"
             onClick={() => onRemove(code)}
+            aria-label={`Remove ${codeKind} code ${code}`}
             disabled={disabled}
             className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-3 py-1.5 text-[11px] text-cyan-700 disabled:opacity-50"
           >
@@ -3294,6 +3402,8 @@ function TemplateFieldInput({
               type="button"
               onClick={() => onChange(option === "yes")}
               aria-invalid={showError}
+              aria-pressed={current === option}
+              aria-label={`${field.name}: ${option === "yes" ? "Yes" : "No"}`}
               disabled={disabled}
               className={`h-10 rounded-lg border text-[12px] transition-colors ${
                 current === option
@@ -3325,6 +3435,7 @@ function TemplateFieldInput({
           placeholder={field.name}
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
+          aria-label={field.name}
           aria-invalid={showError}
           disabled={disabled}
           className={`${textInputClass} resize-none disabled:cursor-not-allowed disabled:opacity-60`}
@@ -3345,6 +3456,7 @@ function TemplateFieldInput({
           <select
             value={typeof value === "string" ? value : ""}
             onChange={(e) => onChange(e.target.value)}
+            aria-label={field.name}
             aria-invalid={showError}
             disabled={disabled}
             className={`${shortInputClass} pr-10 disabled:cursor-not-allowed disabled:opacity-60`}
@@ -3434,6 +3546,7 @@ function TemplateFieldInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
           inputMode={inputMode}
+          aria-label={field.name}
           aria-invalid={showError}
           disabled={disabled}
           onWheel={(event) => event.currentTarget.blur()}
@@ -3455,6 +3568,7 @@ function TemplateFieldInput({
         placeholder={field.name}
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onChange(e.target.value)}
+        aria-label={field.name}
         aria-invalid={showError}
         disabled={disabled}
         className={`${shortInputClass} disabled:cursor-not-allowed disabled:opacity-60`}

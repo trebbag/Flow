@@ -1,9 +1,14 @@
 import { DateTime } from "luxon";
+import { ApiError } from "./errors.js";
 
 export function normalizeDate(date: string, timezone: string): Date {
   const parsed = DateTime.fromISO(date, { zone: timezone });
   if (!parsed.isValid) {
-    throw new Error(`Invalid date '${date}'. Expected ISO date format (YYYY-MM-DD).`);
+    throw new ApiError({
+      statusCode: 400,
+      code: "INVALID_DATE",
+      message: `Invalid date '${date}'. Expected ISO date format (YYYY-MM-DD).`,
+    });
   }
   return parsed.startOf("day").toUTC().toJSDate();
 }
@@ -11,7 +16,11 @@ export function normalizeDate(date: string, timezone: string): Date {
 export function dateRangeForDay(date: string, timezone: string): { start: Date; end: Date } {
   const start = DateTime.fromISO(date, { zone: timezone }).startOf("day");
   if (!start.isValid) {
-    throw new Error(`Invalid date '${date}'. Expected ISO date format (YYYY-MM-DD).`);
+    throw new ApiError({
+      statusCode: 400,
+      code: "INVALID_DATE",
+      message: `Invalid date '${date}'. Expected ISO date format (YYYY-MM-DD).`,
+    });
   }
   return {
     start: start.toUTC().toJSDate(),

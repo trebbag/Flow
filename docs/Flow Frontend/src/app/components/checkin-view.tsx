@@ -786,6 +786,7 @@ export function CheckInView() {
           <div className="mb-5">
             <FormField label="Incoming Patient" icon={Inbox}>
               <select
+                aria-label="Incoming patient"
                 value={selectedIncoming}
                 onChange={(e) => handleSelectIncoming(e.target.value)}
                 className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -812,6 +813,7 @@ export function CheckInView() {
             <FormField label="Patient ID" required icon={User}>
               <input
                 type="text"
+                aria-label="Patient ID"
                 placeholder="PT-XXXX"
                 value={patientId}
                 onChange={(e) => setPatientId(e.target.value)}
@@ -820,6 +822,7 @@ export function CheckInView() {
             </FormField>
             <FormField label="Clinic" required icon={CircleDot}>
               <select
+                aria-label="Clinic"
                 value={selectedClinic}
                 onChange={(e) => setSelectedClinic(e.target.value)}
                 className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -836,6 +839,7 @@ export function CheckInView() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <FormField label="Provider" required={providerRequired} icon={Stethoscope}>
               <select
+                aria-label="Provider"
                 value={selectedProvider}
                 onChange={(e) => setSelectedProvider(e.target.value)}
                 className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -860,6 +864,7 @@ export function CheckInView() {
               <FormField label="Appointment Time" icon={Clock}>
                 <input
                   type="time"
+                  aria-label="Appointment time"
                   value={appointmentTime}
                   onChange={(e) => setAppointmentTime(e.target.value)}
                   className="w-full h-10 pl-10 pr-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -872,6 +877,7 @@ export function CheckInView() {
           <div className="mt-4">
             <FormField label="Visit Reason" required icon={FileCheck}>
               <select
+                aria-label="Visit reason"
                 value={selectedReason}
                 onChange={(e) => {
                   setSelectedReason(e.target.value);
@@ -987,6 +993,7 @@ export function CheckInView() {
                   </label>
                   <div className="relative">
                     <select
+                      aria-label="Eligibility status"
                       value={eligibilityStatus}
                       onChange={(event) => setEligibilityStatus(event.target.value as typeof eligibilityStatus)}
                       className="w-full h-10 rounded-lg border border-gray-200 bg-white px-4 pr-10 text-[13px] appearance-none focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -1005,6 +1012,7 @@ export function CheckInView() {
                     Financial Class
                   </label>
                   <input
+                    aria-label="Financial class"
                     value={financialClass}
                     onChange={(event) => setFinancialClass(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -1017,6 +1025,7 @@ export function CheckInView() {
                     Primary Payer
                   </label>
                   <input
+                    aria-label="Primary payer"
                     value={primaryPayerName}
                     onChange={(event) => setPrimaryPayerName(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -1029,6 +1038,7 @@ export function CheckInView() {
                     Primary Plan
                   </label>
                   <input
+                    aria-label="Primary plan"
                     value={primaryPlanName}
                     onChange={(event) => setPrimaryPlanName(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -1041,6 +1051,7 @@ export function CheckInView() {
                     Secondary Payer
                   </label>
                   <input
+                    aria-label="Secondary payer"
                     value={secondaryPayerName}
                     onChange={(event) => setSecondaryPayerName(event.target.value)}
                     className="w-full h-10 px-4 rounded-lg border border-gray-200 bg-white text-[13px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
@@ -1054,6 +1065,7 @@ export function CheckInView() {
                   </label>
                   <input
                     type="text"
+                    aria-label="Prior balance"
                     inputMode="decimal"
                     value={outstandingPriorBalance}
                     onChange={(event) => setOutstandingPriorBalance(event.target.value)}
@@ -1068,6 +1080,7 @@ export function CheckInView() {
                   </label>
                   <input
                     type="text"
+                    aria-label="Patient estimate"
                     inputMode="decimal"
                     value={patientEstimateAmount}
                     onChange={(event) => setPatientEstimateAmount(event.target.value)}
@@ -1082,6 +1095,7 @@ export function CheckInView() {
                   </label>
                   <input
                     type="text"
+                    aria-label="Expected point of service collection"
                     inputMode="decimal"
                     value={expectedPosCollectionAmount}
                     onChange={(event) => setExpectedPosCollectionAmount(event.target.value)}
@@ -1096,6 +1110,7 @@ export function CheckInView() {
                   Benefits Summary / Coverage Note
                 </label>
                 <textarea
+                  aria-label="Benefits summary"
                   value={benefitsSummary}
                   onChange={(event) => setBenefitsSummary(event.target.value)}
                   rows={3}

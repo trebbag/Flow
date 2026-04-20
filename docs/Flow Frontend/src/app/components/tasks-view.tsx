@@ -201,6 +201,7 @@ export function TasksView() {
 
                       <div className="flex items-start gap-2">
                         <textarea
+                          aria-label={`Notes for task ${task.description}`}
                           value={notes}
                           onChange={(event) =>
                             setNotesByTask((prev) => ({

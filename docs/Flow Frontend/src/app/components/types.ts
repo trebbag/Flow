@@ -991,6 +991,7 @@ export interface UpdateStatusRequest {
 }
 
 export interface UpdateRoomingRequest {
+  version?: number;
   roomId?: string | null;
   data?: Record<string, unknown>;
 }

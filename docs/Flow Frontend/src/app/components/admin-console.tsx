@@ -487,7 +487,17 @@ function SectionHeader({ icon: Icon, title, count, actionLabel, onAction, iconCo
   );
 }
 
-function SearchInput({ value, onChange, placeholder = "Search..." }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function SearchInput({
+  value,
+  onChange,
+  placeholder = "Search...",
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+}) {
   return (
     <div className="relative">
       <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -496,10 +506,15 @@ function SearchInput({ value, onChange, placeholder = "Search..." }: { value: st
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label={ariaLabel || placeholder}
         className="h-8 pl-9 pr-3 w-full rounded-lg border border-gray-200 bg-white text-[12px] focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
       />
       {value && (
-        <button onClick={() => onChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+        <button
+          onClick={() => onChange("")}
+          aria-label={`Clear ${ariaLabel || placeholder}`}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
           <X className="w-3 h-3" />
         </button>
       )}
@@ -775,6 +790,7 @@ function FacilityRoomsTab({
                 <select
                   value={pendingFacilityId}
                   onChange={(event) => setPendingFacilityId(event.target.value)}
+                  aria-label="Select active facility"
                   className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-[12px] min-w-[280px] disabled:bg-gray-100 disabled:text-gray-500"
                   disabled={!editingActiveFacility}
                 >
@@ -838,6 +854,7 @@ function FacilityRoomsTab({
                     <input
                       type="text"
                       value={item.value || ""}
+                      aria-label={item.label}
                       onChange={(event) =>
                         setFacilityDraft((prev) => ({ ...prev, [item.field]: event.target.value } as typeof prev))
                       }
@@ -867,7 +884,7 @@ function FacilityRoomsTab({
                 <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px] px-1.5 h-5">{filteredRooms.length}</Badge>
               </div>
               <div className="flex items-center gap-2">
-                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]">
+                <select value={filterType} onChange={e => setFilterType(e.target.value)} aria-label="Filter facility rooms by type" className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]">
                   <option value="all">All Types</option>
                   {roomTypes.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                 </select>
@@ -1102,10 +1119,20 @@ function ClinicsTab({ onAddClinic, onEditClinic }: { onAddClinic: () => void; on
                 const clinicRooms = assignableRooms.filter((room) => selectedRoomIds.includes(room.id));
                 return (
                   <div key={clinic.id}>
-                    <div
-                      className="rounded-lg border border-gray-100 p-4 flex items-center gap-4 hover:border-emerald-200 transition-colors cursor-pointer"
-                      onClick={() => setExpandedClinic(expandedClinic === clinic.id ? null : clinic.id)}
-                    >
+                  <div
+                    className="rounded-lg border border-gray-100 p-4 flex items-center gap-4 hover:border-emerald-200 transition-colors cursor-pointer"
+                    onClick={() => setExpandedClinic(expandedClinic === clinic.id ? null : clinic.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expandedClinic === clinic.id}
+                    aria-label={`${expandedClinic === clinic.id ? "Collapse" : "Expand"} clinic ${clinic.name}`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setExpandedClinic(expandedClinic === clinic.id ? null : clinic.id);
+                      }
+                    }}
+                  >
                       <div className="w-3 h-8 rounded-full" style={{ backgroundColor: clinic.color }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -1340,6 +1367,16 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
             key={role}
             className={`rounded-lg border p-2.5 cursor-pointer transition-colors ${roleFilter === role ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}
             onClick={() => setRoleFilter(roleFilter === role ? "all" : role)}
+            role="button"
+            tabIndex={0}
+            aria-pressed={roleFilter === role}
+            aria-label={`${roleFilter === role ? "Clear" : "Apply"} role filter ${role}`}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setRoleFilter(roleFilter === role ? "all" : role);
+              }
+            }}
           >
             <div className="text-[15px]" style={{ fontWeight: 600 }}>{count}</div>
             <div className="text-[10px] text-muted-foreground truncate">{role}</div>
@@ -1354,19 +1391,39 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="w-64">
-              <SearchInput value={search} onChange={setSearch} placeholder="Search by name or email..." />
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search by name or email..."
+                ariaLabel="Search users by name or email"
+              />
             </div>
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]">
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+              aria-label="Filter users by role"
+              className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+            >
               <option value="all">All Roles</option>
               {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]">
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              aria-label="Filter users by status"
+              className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+            >
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
             </select>
             {(search || roleFilter !== "all" || statusFilter !== "all") && (
-              <button onClick={() => { setSearch(""); setRoleFilter("all"); setStatusFilter("all"); }} className="text-[11px] text-indigo-600 hover:text-indigo-800" style={{ fontWeight: 500 }}>
+              <button
+                onClick={() => { setSearch(""); setRoleFilter("all"); setStatusFilter("all"); }}
+                aria-label="Clear user filters"
+                className="text-[11px] text-indigo-600 hover:text-indigo-800"
+                style={{ fontWeight: 500 }}
+              >
                 Clear Filters
               </button>
             )}
@@ -1381,6 +1438,16 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                   <div
                     className={`rounded-lg border p-3 flex items-center gap-3 transition-colors cursor-pointer ${u.status === "suspended" ? "border-red-100 bg-red-50/30" : "border-gray-100 hover:border-gray-200"}`}
                     onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expandedUser === u.id}
+                    aria-label={`${expandedUser === u.id ? "Collapse" : "Expand"} user ${u.name}`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setExpandedUser(expandedUser === u.id ? null : u.id);
+                      }
+                    }}
                   >
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-[11px] shrink-0 ${u.status === "suspended" ? "bg-gray-400" : "bg-gradient-to-br from-indigo-400 to-purple-500"}`} style={{ fontWeight: 600 }}>
                       {u.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
@@ -2485,6 +2552,7 @@ function AssignmentsTab() {
                           <label className="text-[11px] text-muted-foreground mb-1.5 block">Provider *</label>
                           <select
                             value={draftProviderId}
+                            aria-label={`Select provider for clinic ${row.clinicName}`}
                             onChange={(event) =>
                               setDraftProviderByClinic((prev) => ({ ...prev, [row.clinicId]: event.target.value }))
                             }
@@ -2503,6 +2571,7 @@ function AssignmentsTab() {
                         <label className="text-[11px] text-muted-foreground mb-1.5 block">MA *</label>
                         <select
                           value={draftMaId}
+                          aria-label={`Select MA for clinic ${row.clinicName}`}
                           onChange={(event) =>
                             setDraftMaByClinic((prev) => ({ ...prev, [row.clinicId]: event.target.value }))
                           }
@@ -2573,6 +2642,7 @@ function AssignmentsTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">Role</label>
                 <select
                   value={overrideDraft.role}
+                  aria-label="Temporary coverage role"
                   onChange={(event) =>
                     setOverrideDraft((current) => ({ ...current, role: event.target.value as "MA" | "Clinician", userId: "" }))
                   }
@@ -2586,6 +2656,7 @@ function AssignmentsTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">User</label>
                 <select
                   value={overrideDraft.userId}
+                  aria-label="Temporary coverage user"
                   onChange={(event) => setOverrideDraft((current) => ({ ...current, userId: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 >
@@ -2599,6 +2670,7 @@ function AssignmentsTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">Clinic</label>
                 <select
                   value={overrideDraft.clinicId}
+                  aria-label="Temporary coverage clinic"
                   onChange={(event) => setOverrideDraft((current) => ({ ...current, clinicId: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 >
@@ -2613,6 +2685,7 @@ function AssignmentsTab() {
                 <input
                   type="datetime-local"
                   value={overrideDraft.startsAt}
+                  aria-label="Temporary coverage start time"
                   onChange={(event) => setOverrideDraft((current) => ({ ...current, startsAt: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 />
@@ -2622,6 +2695,7 @@ function AssignmentsTab() {
                 <input
                   type="datetime-local"
                   value={overrideDraft.endsAt}
+                  aria-label="Temporary coverage end time"
                   onChange={(event) => setOverrideDraft((current) => ({ ...current, endsAt: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 />
@@ -2630,6 +2704,7 @@ function AssignmentsTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">Reason</label>
                 <input
                   value={overrideDraft.reason}
+                  aria-label="Temporary coverage reason"
                   onChange={(event) => setOverrideDraft((current) => ({ ...current, reason: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                   placeholder="Coverage reason"
@@ -2803,6 +2878,7 @@ function ArchivedEncountersTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">Clinic</label>
                 <select
                   value={filters.clinicId}
+                  aria-label="Filter archived encounters by clinic"
                   onChange={(event) => setFilters((current) => ({ ...current, clinicId: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 >
@@ -2818,6 +2894,7 @@ function ArchivedEncountersTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">Status</label>
                 <select
                   value={filters.status}
+                  aria-label="Filter archived encounters by status"
                   onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 >
@@ -2832,6 +2909,7 @@ function ArchivedEncountersTab() {
                 <input
                   type="date"
                   value={filters.from}
+                  aria-label="Archived encounters from date"
                   onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 />
@@ -2841,6 +2919,7 @@ function ArchivedEncountersTab() {
                 <input
                   type="date"
                   value={filters.to}
+                  aria-label="Archived encounters to date"
                   onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                 />
@@ -2849,6 +2928,7 @@ function ArchivedEncountersTab() {
                 <label className="text-[11px] text-muted-foreground mb-1.5 block">Search</label>
                 <input
                   value={filters.search}
+                  aria-label="Search archived encounters"
                   onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
                   className="h-9 w-full px-2.5 rounded-lg border border-gray-200 bg-white text-[12px]"
                   placeholder="Patient ID or encounter ID"
@@ -2859,6 +2939,7 @@ function ArchivedEncountersTab() {
                   <input
                     type="checkbox"
                     checked={filters.unresolvedOnly}
+                    aria-label="Show unresolved archived encounters only"
                     onChange={(event) => setFilters((current) => ({ ...current, unresolvedOnly: event.target.checked }))}
                     className="rounded border-gray-300"
                   />
@@ -2917,7 +2998,7 @@ function ArchivedEncountersTab() {
                           <button
                             onClick={() =>
                               runEncounterRowAction(row, "Release room", () =>
-                                encounterApi.updateRooming(row.id, { roomId: null }),
+                                encounterApi.updateRooming(row.id, { roomId: null, version: row.version }),
                               ).catch(() => undefined)
                             }
                             disabled={releaseBusy || !!rowActionKey}
@@ -5622,7 +5703,7 @@ function AuditLogTab() {
             <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px] px-1.5 h-5">{filtered.length}</Badge>
           </div>
           <div className="flex items-center gap-2">
-            <select value={filterEntity} onChange={e => setFilterEntity(e.target.value)} className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]">
+            <select value={filterEntity} onChange={e => setFilterEntity(e.target.value)} aria-label="Filter audit log by entity" className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]">
               <option value="all">All Entities</option>
               {entities.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
