@@ -386,12 +386,16 @@ function actorForRole(user, role, adminAuth, facilityId) {
 }
 
 async function main() {
-  if (!devUserId && !hasBearerToken) {
-    console.info("Skipping live e2e check because no dev-user or bearer-token auth was provided.");
+  if (!devUserId && !hasBearerToken && !hasProofAuth) {
+    console.info("Skipping live e2e check because no proof, dev-user, or bearer-token auth was provided.");
     return;
   }
 
-  const adminAuth = { userId: devUserId, role: devRole };
+  const adminAuth = hasProofAuth
+    ? { userId: proofUserId.trim(), role: proofRole }
+    : hasBearerToken
+      ? { role: "Admin" }
+      : { userId: devUserId, role: devRole };
   const context = await request("/auth/context", { auth: adminAuth });
   const facilityId =
     context?.activeFacilityId ||
