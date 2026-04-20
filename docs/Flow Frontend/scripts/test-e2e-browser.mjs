@@ -469,6 +469,7 @@ async function main() {
       data: roomingData,
     },
   });
+  const roomedEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
 
   let preview = null;
   let browser;
@@ -523,7 +524,7 @@ async function main() {
       auth: true,
       body: {
         toStatus: clinic.maRun ? "CheckOut" : "ReadyForProvider",
-        version: movedToRooming.version,
+        version: roomedEncounter.version,
       },
     });
 
