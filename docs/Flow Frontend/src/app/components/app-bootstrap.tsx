@@ -20,6 +20,7 @@ import {
   completeMicrosoftSignIn,
   type CompleteMicrosoftSignInResult,
 } from "./complete-microsoft-signin";
+import { hasMicrosoftLoginPending } from "./microsoft-auth";
 
 export type BootstrapPhase =
   | "idle"
@@ -49,6 +50,23 @@ function messageFromError(error: unknown) {
   return error instanceof Error ? error.message : "Flow could not finish startup.";
 }
 
+function fallbackPathFromWindow() {
+  if (typeof window === "undefined") return "/";
+
+  const { pathname, search, hash } = window.location;
+  if (pathname === "/login") {
+    const params = new URLSearchParams(search);
+    return params.get("next") || "/";
+  }
+
+  if (pathname === "/auth/callback") {
+    return "/";
+  }
+
+  const resolved = `${pathname}${search}${hash}`;
+  return resolved || "/";
+}
+
 export function AppBootstrapProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<BootstrapPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +77,7 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
   const bootstrapPromiseRef = useRef<Promise<string | null> | null>(null);
   const lastRunRef = useRef<{ kind: BootstrapRunKind; nextPath?: string } | null>(null);
   const restoredSessionKeyRef = useRef<string | null>(null);
+  const microsoftRedirectPending = !session && hasMicrosoftLoginPending();
 
   const hydrateOverview = useCallback(
     async (inputSession: AuthSession, inputContext: AuthContextSummary) => {
@@ -237,6 +256,18 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
   }, [authContext, phase, restoreSessionBootstrap, session]);
 
   useEffect(() => {
+    if (session) return;
+    if (phase !== "idle") return;
+    if (!hasMicrosoftLoginPending()) return;
+
+    const fallbackPath = fallbackPathFromWindow();
+    void completeMicrosoftBootstrap(fallbackPath).catch((nextError) => {
+      setError(messageFromError(nextError));
+      setPhase("error");
+    });
+  }, [completeMicrosoftBootstrap, phase, session]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     const refreshContext = () => {
@@ -271,7 +302,7 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
       authContext,
       overviewSnapshot,
       isBootstrapping:
-        phase !== "idle" && phase !== "ready" && phase !== "error",
+        microsoftRedirectPending || (phase !== "idle" && phase !== "ready" && phase !== "error"),
       completeMicrosoftBootstrap,
       retryBootstrap,
     }),
@@ -279,6 +310,7 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
       authContext,
       completeMicrosoftBootstrap,
       error,
+      microsoftRedirectPending,
       overviewSnapshot,
       phase,
       retryBootstrap,

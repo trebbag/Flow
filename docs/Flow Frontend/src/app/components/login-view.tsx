@@ -89,6 +89,11 @@ export function LoginView() {
     return hasMicrosoftLoginPending() && /login\.microsoftonline\.com/i.test(document.referrer || "");
   }, [loginRedirectPayloadDetected]);
 
+  const microsoftLoginPending = useMemo(
+    () => microsoftConfigured && (loginRedirectReturnDetected || hasMicrosoftLoginPending()),
+    [loginRedirectReturnDetected, microsoftConfigured],
+  );
+
   const finalizeSession = async (session: AuthSession, redirectTarget = nextPath) => {
     applySession(session);
     const context = await auth.getContext();
@@ -132,7 +137,7 @@ export function LoginView() {
 
   useEffect(() => {
     if (!microsoftConfigured) return;
-    if (!loginRedirectReturnDetected) return;
+    if (!microsoftLoginPending) return;
 
     let cancelled = false;
     setLoading(true);
@@ -157,7 +162,7 @@ export function LoginView() {
     return () => {
       cancelled = true;
     };
-  }, [bootstrap, loginRedirectReturnDetected, microsoftConfigured, navigate, nextPath]);
+  }, [bootstrap, microsoftConfigured, microsoftLoginPending, navigate, nextPath]);
 
   useEffect(() => {
     const existing = loadSession();
@@ -266,7 +271,7 @@ export function LoginView() {
   const showModeSwitcher = !productionStyleAuthOnly;
   const modeColumns = enableDevHeaderLogin ? "grid-cols-3" : microsoftConfigured ? "grid-cols-2" : "grid-cols-1";
 
-  if (loginRedirectReturnDetected || bootstrap.isBootstrapping) {
+  if (microsoftLoginPending || bootstrap.isBootstrapping) {
     return (
       <BootstrapLoadingScreen
         phase={bootstrap.phase === "idle" ? "microsoft_redirect" : bootstrap.phase}
