@@ -372,6 +372,7 @@ export function OverviewPage() {
                   key={stage}
                   type="button"
                   onClick={() => navigate(route)}
+                  aria-label={`Open ${statusLabels[stage]} workflow view with ${count} encounters`}
                   className="rounded-xl border p-4 text-left transition-colors hover:bg-gray-50"
                   style={{ borderColor: `${color}30`, backgroundColor: `${color}10` }}
                 >

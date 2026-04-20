@@ -87,7 +87,7 @@ import {
 import { useEncounters } from "./encounter-context";
 import { applySession, loadSession, saveSession } from "./auth-session";
 import { labelUserName } from "./display-names";
-import type { EncounterStatus, RevenueSettings } from "./types";
+import type { EncounterStatus, RevenueSettings, PatientIdentityReview } from "./types";
 import {
   ADMIN_REFRESH_EVENT,
   FACILITY_CONTEXT_CHANGED_EVENT,
@@ -382,6 +382,14 @@ function normalizeScheduleImportText(input: string) {
 
 function incomingDispositionLabel(reason: IncomingDispositionReason | string) {
   return String(reason || "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function patientIdentityReasonLabel(reasonCode: string) {
+  return String(reasonCode || "")
     .split("_")
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -5742,6 +5750,243 @@ function AuditLogTab() {
   );
 }
 
+function PatientIdentityReviewsTab() {
+  const { facility } = useAdminConsoleData();
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "resolved" | "ignored">("open");
+  const [reviews, setReviews] = useState<PatientIdentityReview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyReviewId, setBusyReviewId] = useState<string | null>(null);
+
+  const loadReviews = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await admin.listPatientIdentityReviews({
+        facilityId: facility.id,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        limit: 100,
+      });
+      setReviews(rows);
+    } catch (loadError) {
+      setError((loadError as Error).message || "Unable to load patient identity reviews.");
+    } finally {
+      setLoading(false);
+    }
+  }, [facility.id, statusFilter]);
+
+  useEffect(() => {
+    loadReviews().catch(() => undefined);
+  }, [loadReviews]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadReviews().catch(() => undefined);
+    };
+    window.addEventListener(ADMIN_REFRESH_EVENT, handleRefresh);
+    return () => window.removeEventListener(ADMIN_REFRESH_EVENT, handleRefresh);
+  }, [loadReviews]);
+
+  const updateReview = async (review: PatientIdentityReview, dto: { status: "resolved" | "ignored"; patientId?: string }) => {
+    setBusyReviewId(review.id);
+    try {
+      await admin.updatePatientIdentityReview(review.id, dto);
+      toast.success(dto.status === "resolved" ? "Patient identity review resolved" : "Patient identity review ignored");
+      await loadReviews();
+      requestAdminRefresh();
+    } catch (updateError) {
+      toast.error("Unable to update patient identity review", {
+        description: (updateError as Error).message || "Please try again.",
+      });
+    } finally {
+      setBusyReviewId(null);
+    }
+  };
+
+  return (
+    <TabPanel accentColor="indigo">
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-5">
+          <SectionHeader
+            icon={UserCog}
+            title="Patient Identity Reviews"
+            count={reviews.length}
+            iconColor="text-indigo-500"
+            secondaryAction={
+              <>
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as "all" | "open" | "resolved" | "ignored")}
+                  aria-label="Filter patient identity reviews by status"
+                  className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px]"
+                >
+                  <option value="open">Open</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="ignored">Ignored</option>
+                  <option value="all">All</option>
+                </select>
+                <button
+                  onClick={() => loadReviews().catch(() => undefined)}
+                  aria-label="Refresh patient identity reviews"
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-600 hover:bg-gray-50 transition-colors"
+                  style={{ fontWeight: 500 }}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </>
+            }
+          />
+          <p className="text-[12px] text-muted-foreground mb-4">
+            Review ambiguous patient identity matches before we merge source aliases into a canonical record. Open items are safe to resolve only when the suggested patient is clearly correct.
+          </p>
+
+          {error ? (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700" aria-live="polite">
+              {error}
+            </div>
+          ) : null}
+
+          {loading && reviews.length === 0 ? (
+            <EmptyState icon={RefreshCw} message="Loading patient identity reviews..." />
+          ) : reviews.length === 0 ? (
+            <EmptyState icon={Shield} message="No patient identity reviews match the current filter." />
+          ) : (
+            <div className="space-y-3">
+              {reviews.map((review) => {
+                const canonicalCandidates = Array.from(
+                  new Map(
+                    [review.patient, ...review.matchedPatients]
+                      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+                      .map((candidate) => [candidate.id, candidate]),
+                  ).values(),
+                );
+                const busy = busyReviewId === review.id;
+                const reviewLabel = review.displayName || review.sourcePatientId;
+                return (
+                  <div
+                    key={review.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    aria-busy={busy}
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[14px]" style={{ fontWeight: 700 }}>
+                            {reviewLabel}
+                          </span>
+                          <Badge className="border-0 bg-indigo-100 text-indigo-700 text-[10px] h-5">
+                            {patientIdentityReasonLabel(review.reasonCode)}
+                          </Badge>
+                          <Badge
+                            className={`border-0 text-[10px] h-5 ${
+                              review.status === "resolved"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : review.status === "ignored"
+                                  ? "bg-slate-200 text-slate-700"
+                                  : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {review.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+                          <span>Source ID: {review.sourcePatientId}</span>
+                          <span>DOB: {review.dateOfBirth ? formatDateTime(review.dateOfBirth) : "—"}</span>
+                          <span>Opened: {formatDateTime(review.createdAt)}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => updateReview(review, { status: "ignored" }).catch(() => undefined)}
+                        disabled={busy || review.status === "ignored"}
+                        aria-label={`Ignore patient identity review for ${reviewLabel}`}
+                        className="h-9 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        style={{ fontWeight: 600 }}
+                      >
+                        Ignore Review
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500" style={{ fontWeight: 700 }}>
+                          Current canonical link
+                        </div>
+                        {review.patient ? (
+                          <div className="mt-2 text-[12px] text-slate-700">
+                            <div style={{ fontWeight: 700 }}>{review.patient.displayName || review.patient.sourcePatientId}</div>
+                            <div className="text-muted-foreground">Source ID: {review.patient.sourcePatientId}</div>
+                            <div className="text-muted-foreground">DOB: {review.patient.dateOfBirth ? formatDateTime(review.patient.dateOfBirth) : "—"}</div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 text-[12px] text-muted-foreground">No canonical patient is linked yet.</div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="text-[11px] uppercase tracking-wide text-slate-500" style={{ fontWeight: 700 }}>
+                            Suggested canonical patients
+                          </div>
+                          <Badge className="border-0 bg-white text-slate-600 text-[10px] h-5">
+                            {canonicalCandidates.length}
+                          </Badge>
+                        </div>
+                        {canonicalCandidates.length === 0 ? (
+                          <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-white px-3 py-3 text-[12px] text-muted-foreground">
+                            No safe canonical candidate was found automatically. Leave this review open or ignore it until an operator can confirm the right patient.
+                          </div>
+                        ) : (
+                          <div className="mt-3 space-y-2">
+                            {canonicalCandidates.map((candidate) => (
+                              <div key={candidate.id} className="rounded-lg border border-white bg-white px-3 py-3">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="text-[13px] text-slate-800" style={{ fontWeight: 700 }}>
+                                      {candidate.displayName || candidate.sourcePatientId}
+                                    </div>
+                                    <div className="mt-1 text-[12px] text-muted-foreground">
+                                      Source ID: {candidate.sourcePatientId}
+                                      {" · "}
+                                      DOB: {candidate.dateOfBirth ? formatDateTime(candidate.dateOfBirth) : "—"}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => updateReview(review, { status: "resolved", patientId: candidate.id }).catch(() => undefined)}
+                                    disabled={busy || review.status === "resolved"}
+                                    aria-label={`Resolve patient identity review for ${reviewLabel} using canonical patient ${candidate.displayName || candidate.sourcePatientId}`}
+                                    className="h-9 px-3 rounded-lg bg-slate-900 text-white text-[12px] hover:bg-black disabled:opacity-50"
+                                    style={{ fontWeight: 600 }}
+                                  >
+                                    {busy ? "Saving..." : "Use This Patient"}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {review.status === "open" && canonicalCandidates.length > 1 ? (
+                      <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-3 text-[12px] text-amber-800">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>
+                          Multiple canonical matches were found. Resolve this only when the source ID, DOB, and display name all line up with the same patient record.
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </TabPanel>
+  );
+}
+
 // ── Modal type state ──
 type ModalType = null | "facility" | "clinic" | "user" | "room" | "reason" | "template" | "threshold" | "notification";
 
@@ -6434,7 +6679,11 @@ export function AdminConsole() {
           <div className="hidden sm:flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={() => setActiveTab("incoming")} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => setActiveTab("incoming")}
+                  aria-label="Open incoming uploads tab"
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                >
                   <Upload className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
@@ -6442,7 +6691,11 @@ export function AdminConsole() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={() => setActiveTab("revenue")} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => setActiveTab("revenue")}
+                  aria-label="Open revenue operations tab"
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                >
                   <DollarSign className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
@@ -6450,7 +6703,11 @@ export function AdminConsole() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button onClick={() => toast.info("Exporting all configuration...")} className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => toast.info("Exporting all configuration...")}
+                  aria-label="Export admin configuration"
+                  className="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                >
                   <Download className="w-4 h-4" />
                 </button>
               </TooltipTrigger>
@@ -6476,6 +6733,7 @@ export function AdminConsole() {
             <TabsTrigger value="facility" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-purple-200 transition-all"><Building className="w-3.5 h-3.5 mr-1.5" /> Facility & Rooms</TabsTrigger>
             <TabsTrigger value="clinics" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-emerald-200 transition-all"><Building2 className="w-3.5 h-3.5 mr-1.5" /> Clinics</TabsTrigger>
             <TabsTrigger value="users" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-200 transition-all"><Users className="w-3.5 h-3.5 mr-1.5" /> Users & Roles</TabsTrigger>
+            <TabsTrigger value="patient-identity" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-indigo-200 transition-all"><UserCog className="w-3.5 h-3.5 mr-1.5" /> Patient Identity</TabsTrigger>
             <TabsTrigger value="assignments" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-cyan-200 transition-all"><Link2 className="w-3.5 h-3.5 mr-1.5" /> Assignments</TabsTrigger>
             <TabsTrigger value="encounters" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-indigo-200 transition-all"><History className="w-3.5 h-3.5 mr-1.5" /> Archived Encounters</TabsTrigger>
             <TabsTrigger value="incoming" className="text-[12px] rounded-lg px-3 py-2 data-[state=active]:bg-sky-50 data-[state=active]:text-sky-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-sky-200 transition-all"><Upload className="w-3.5 h-3.5 mr-1.5" /> Incoming Uploads</TabsTrigger>
@@ -6526,6 +6784,7 @@ export function AdminConsole() {
                 onOpenAssignments={() => setActiveTab("assignments")}
               />
             </TabsContent>
+            <TabsContent value="patient-identity"><PatientIdentityReviewsTab /></TabsContent>
             <TabsContent value="assignments"><AssignmentsTab /></TabsContent>
             <TabsContent value="encounters"><ArchivedEncountersTab /></TabsContent>
             <TabsContent value="incoming">

@@ -128,36 +128,31 @@ async function main() {
   const stagingBearerToken = (process.env.STAGING_FRONTEND_BEARER_TOKEN || "").trim();
   const stagingDevUserId = (process.env.STAGING_VITE_DEV_USER_ID || "").trim();
   const stagingDevRole = (process.env.STAGING_VITE_DEV_ROLE || "Admin").trim() || "Admin";
-  const stagingRoleTokens = {
-    FrontDeskCheckIn: (process.env.STAGING_ROLE_TOKEN_FRONTDESKCHECKIN || "").trim(),
-    MA: (process.env.STAGING_ROLE_TOKEN_MA || "").trim(),
-    Clinician: (process.env.STAGING_ROLE_TOKEN_CLINICIAN || "").trim(),
-    FrontDeskCheckOut: (process.env.STAGING_ROLE_TOKEN_FRONTDESKCHECKOUT || "").trim(),
-    RevenueCycle: (process.env.STAGING_ROLE_TOKEN_REVENUECYCLE || "").trim()
-  };
+  const stagingProofUserId =
+    (process.env.STAGING_PROOF_USER_ID || process.env.STAGING_FRONTEND_PROOF_USER_ID || "").trim();
+  const stagingProofRole =
+    (process.env.STAGING_PROOF_ROLE || process.env.STAGING_FRONTEND_PROOF_ROLE || "Admin").trim() || "Admin";
+  const stagingProofSecret =
+    (process.env.STAGING_PROOF_SECRET || process.env.STAGING_FRONTEND_PROOF_SECRET || "").trim();
   const frontendRepoPath = (process.env.FRONTEND_REPO_PATH || "docs/Flow Frontend").trim() || "docs/Flow Frontend";
 
   const missing: string[] = [];
   if (!stagingApiBaseUrl) {
     missing.push("Set STAGING_FRONTEND_API_BASE_URL (or PILOT_API_BASE_URL) before running staging validation.");
   }
-  if (!stagingBearerToken && !stagingDevUserId) {
-    missing.push("Provide STAGING_FRONTEND_BEARER_TOKEN (preferred) or STAGING_VITE_DEV_USER_ID for authenticated frontend checks.");
-  }
-  if (stagingBearerToken) {
-    const missingRoleTokens = Object.entries(stagingRoleTokens)
-      .filter(([, value]) => !value)
-      .map(([role]) => role);
-    if (missingRoleTokens.length > 0) {
-      missing.push(
-        `Provide per-role staging bearer tokens for role proof: ${missingRoleTokens
-          .map((role) => `STAGING_ROLE_TOKEN_${role.toUpperCase()}`)
-          .join(", ")}.`
-      );
-    }
+  if (!stagingBearerToken && !stagingDevUserId && !(stagingProofUserId && stagingProofSecret)) {
+    missing.push(
+      "Provide durable proof auth (STAGING_PROOF_USER_ID + STAGING_PROOF_SECRET), STAGING_FRONTEND_BEARER_TOKEN, or STAGING_VITE_DEV_USER_ID for authenticated frontend checks.",
+    );
   }
 
-  const authMode = stagingBearerToken ? "bearer" : stagingDevUserId ? "dev-header" : "none";
+  const authMode = stagingProofUserId && stagingProofSecret
+    ? "proof-header"
+    : stagingBearerToken
+      ? "bearer"
+      : stagingDevUserId
+        ? "dev-header"
+        : "none";
   const steps: StepResult[] = [];
 
   if (missing.length === 0) {
@@ -182,6 +177,12 @@ async function main() {
           FRONTEND_REPO_PATH: frontendRepoPath,
           FRONTEND_API_BASE_URL: stagingApiBaseUrl,
           VITE_API_BASE_URL: stagingApiBaseUrl,
+          FRONTEND_PROOF_USER_ID: stagingProofUserId || undefined,
+          VITE_PROOF_USER_ID: stagingProofUserId || undefined,
+          FRONTEND_PROOF_ROLE: stagingProofRole,
+          VITE_PROOF_ROLE: stagingProofRole,
+          FRONTEND_PROOF_SECRET: stagingProofSecret || undefined,
+          VITE_PROOF_SECRET: stagingProofSecret || undefined,
           FRONTEND_BEARER_TOKEN: stagingBearerToken || undefined,
           VITE_BEARER_TOKEN: stagingBearerToken || undefined,
           FRONTEND_DEV_USER_ID: stagingDevUserId || undefined,
@@ -201,6 +202,12 @@ async function main() {
         {
           STAGING_FRONTEND_API_BASE_URL: stagingApiBaseUrl,
           PILOT_API_BASE_URL: stagingApiBaseUrl,
+          STAGING_PROOF_USER_ID: stagingProofUserId || undefined,
+          STAGING_FRONTEND_PROOF_USER_ID: stagingProofUserId || undefined,
+          STAGING_PROOF_ROLE: stagingProofRole,
+          STAGING_FRONTEND_PROOF_ROLE: stagingProofRole,
+          STAGING_PROOF_SECRET: stagingProofSecret || undefined,
+          STAGING_FRONTEND_PROOF_SECRET: stagingProofSecret || undefined,
           STAGING_FRONTEND_BEARER_TOKEN: stagingBearerToken || undefined,
           STAGING_VITE_DEV_USER_ID: stagingDevUserId || undefined,
           STAGING_VITE_DEV_ROLE: stagingDevRole
@@ -217,6 +224,12 @@ async function main() {
         {
           STAGING_FRONTEND_API_BASE_URL: stagingApiBaseUrl,
           PILOT_API_BASE_URL: stagingApiBaseUrl,
+          STAGING_PROOF_USER_ID: stagingProofUserId || undefined,
+          STAGING_FRONTEND_PROOF_USER_ID: stagingProofUserId || undefined,
+          STAGING_PROOF_ROLE: stagingProofRole,
+          STAGING_FRONTEND_PROOF_ROLE: stagingProofRole,
+          STAGING_PROOF_SECRET: stagingProofSecret || undefined,
+          STAGING_FRONTEND_PROOF_SECRET: stagingProofSecret || undefined,
           STAGING_FRONTEND_BEARER_TOKEN: stagingBearerToken || undefined,
           STAGING_VITE_DEV_USER_ID: stagingDevUserId || undefined,
           STAGING_VITE_DEV_ROLE: stagingDevRole

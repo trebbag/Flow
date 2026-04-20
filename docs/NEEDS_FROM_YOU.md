@@ -19,18 +19,10 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
    - see [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md) for the exact PHI-facing approval gate that is still external to the repo
 
 3. Staging proof credentials and environment inputs
-   - keep `STAGING_FRONTEND_BEARER_TOKEN` fresh or replace it with a more durable proof path
-   - provide role-specific staging JWTs or live Entra sessions for:
-     - `FrontDeskCheckIn`
-     - `MA`
-     - `Clinician`
-     - `FrontDeskCheckOut`
-     - `OfficeManager`
-     - `RevenueCycle`
    - confirm staging API and frontend hostnames remain final
-   - current status on April 18, 2026:
-     - authenticated staging admin proof is green
-     - broader role proof is blocked only by missing per-role staging auth
+   - current status on April 20, 2026:
+     - the repo now supports a durable proof-header verification path using `AUTH_PROOF_HEADER_SECRET`
+     - the remaining external dependency is simply keeping the staging proof identity user active in Flow with Admin scope
 
 4. AthenaOne staging connector inputs, if that integration is in pilot scope
    - base URL
@@ -64,9 +56,9 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 ## Operational Follow-Ups
 
 - Assign at least one real pilot user the `OfficeManager` role before the final role-by-role staging proof.
-- Keep using `pnpm staging:auth:refresh` from a signed-in Azure CLI session before authenticated staging verification runs if you stay on the current short-lived bearer-token workflow.
+- If the durable proof path is unavailable in a future environment, `pnpm staging:auth:refresh` remains the fallback for short-lived bearer verification.
 - Confirm the scheduled Entra directory sync behaves as expected after future pilot-user provisioning changes.
-- If you want local authenticated frontend-live checks to run instead of being skipped, set either `VITE_DEV_USER_ID` / `FRONTEND_DEV_USER_ID` or `VITE_BEARER_TOKEN` / `FRONTEND_BEARER_TOKEN` in the shell before running `pnpm frontend:verify-live`.
+- If you want local authenticated frontend-live checks to run instead of being skipped, set either proof auth (`VITE_PROOF_USER_ID` + `VITE_PROOF_SECRET`), dev-header auth, or bearer auth in the shell before running `pnpm frontend:verify-live`.
 - Before PHI-facing pilot activation, close the external owner approvals listed in [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md).
 - Before real staging proof of the revenue cockpit, configure the AthenaOne connector with the real revenue-monitoring endpoint in `revenuePath` and valid connector credentials for the pilot facility so the new preview/import path can exercise real downstream Athena data.
 - Before real staging proof of the time-of-service RCM workflow, review and confirm the seeded MA service catalog and charge schedule in `Admin -> Revenue Operations Settings` so expected-money totals reflect your pilot operating model rather than demo defaults.

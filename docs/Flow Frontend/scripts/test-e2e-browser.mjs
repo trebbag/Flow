@@ -15,10 +15,23 @@ const devRole =
   process.env.VITE_DEV_ROLE ||
   process.env.FRONTEND_DEV_ROLE ||
   "Admin";
+const proofUserId =
+  process.env.VITE_PROOF_USER_ID ||
+  process.env.FRONTEND_PROOF_USER_ID ||
+  "";
+const proofRole =
+  process.env.VITE_PROOF_ROLE ||
+  process.env.FRONTEND_PROOF_ROLE ||
+  "Admin";
+const proofSecret =
+  process.env.VITE_PROOF_SECRET ||
+  process.env.FRONTEND_PROOF_SECRET ||
+  "";
 const bearerToken =
   process.env.VITE_BEARER_TOKEN ||
   process.env.FRONTEND_BEARER_TOKEN ||
   "";
+const hasProofAuth = proofUserId.trim().length > 0 && proofSecret.trim().length > 0;
 const hasBearerToken = bearerToken.trim().length > 0;
 
 const previewPort = Number(process.env.FRONTEND_E2E_PORT || 4173);
@@ -58,6 +71,13 @@ function clinicFutureSlot(minutesAhead = 90, timeZone = "America/New_York") {
 }
 
 function authHeaders() {
+  if (hasProofAuth) {
+    return {
+      "x-proof-user-id": proofUserId.trim(),
+      "x-proof-role": proofRole,
+      "x-proof-secret": proofSecret.trim(),
+    };
+  }
   if (hasBearerToken) {
     return {
       authorization: `Bearer ${bearerToken.trim()}`,
@@ -283,8 +303,8 @@ async function gotoFrontend(page, path = "/") {
 }
 
 async function main() {
-  if (!devUserId && !hasBearerToken) {
-    console.info("Skipping browser e2e check because no dev-user or bearer-token auth was provided.");
+  if (!devUserId && !hasBearerToken && !hasProofAuth) {
+    console.info("Skipping browser e2e check because no proof, dev-user, or bearer auth was provided.");
     return;
   }
 
@@ -484,7 +504,15 @@ async function main() {
 
     browser = await chromium.launch({ headless: true });
     context = await browser.newContext();
-    const seededSession = hasBearerToken
+    const seededSession = hasProofAuth
+      ? {
+          mode: "proof_header",
+          role: resolvedRole,
+          userId: proofUserId.trim(),
+          proofSecret: proofSecret.trim(),
+          facilityId: originalFacilityId,
+        }
+      : hasBearerToken
       ? {
           mode: "bearer",
           role: resolvedRole,

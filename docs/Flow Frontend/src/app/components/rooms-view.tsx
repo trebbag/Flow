@@ -447,6 +447,8 @@ export function RoomsView() {
                     <button
                       key={kind}
                       onClick={() => setChecklistKind(kind)}
+                      aria-pressed={checklistKind === kind}
+                      aria-label={`Open ${checklistTitle(kind)} checklist`}
                       className={`h-9 rounded-lg border text-[12px] ${checklistKind === kind ? "border-slate-900 bg-slate-900 text-white" : "border-gray-200 bg-white text-slate-700 hover:bg-gray-50"}`}
                     >
                       {checklistTitle(kind)}
@@ -461,6 +463,8 @@ export function RoomsView() {
                       <button
                         key={room.id}
                         onClick={() => setChecklistRoomId(room.id)}
+                        aria-pressed={selected}
+                        aria-label={`Select room ${room.name} for ${checklistTitle(checklistKind)}`}
                         className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${selected ? "border-slate-900 bg-slate-50" : "border-gray-200 hover:bg-gray-50"}`}
                       >
                         <div className="flex items-center justify-between gap-2">

@@ -10,6 +10,12 @@ type AuthActor =
       token: string;
     }
   | {
+      kind: "proof";
+      role: RoleName;
+      userId: string;
+      proofSecret: string;
+    }
+  | {
       kind: "dev";
       role: RoleName;
       userId: string;
@@ -48,6 +54,10 @@ function headersFor(actor: AuthActor, facilityId?: string) {
   };
   if (actor.kind === "bearer") {
     headers.authorization = `Bearer ${actor.token}`;
+  } else if (actor.kind === "proof") {
+    headers["x-proof-user-id"] = actor.userId;
+    headers["x-proof-role"] = actor.role;
+    headers["x-proof-secret"] = actor.proofSecret;
   } else {
     headers["x-dev-user-id"] = actor.userId;
     headers["x-dev-role"] = actor.role;
@@ -216,7 +226,7 @@ async function probeRoleFacilitySwitch(params: {
 
   return {
     role: params.actor.role,
-    userId: params.actor.kind === "dev" ? params.actor.userId : "token",
+    userId: params.actor.kind === "bearer" ? "token" : params.actor.userId,
     ok: true,
     skipped: false,
     detail: "Switch and restore persisted",
@@ -286,25 +296,39 @@ async function main() {
   const adminBearer = (process.env.STAGING_FRONTEND_BEARER_TOKEN || "").trim();
   const devUserId = (process.env.STAGING_VITE_DEV_USER_ID || "").trim();
   const devRole = ((process.env.STAGING_VITE_DEV_ROLE || "Admin").trim() || "Admin") as RoleName;
+  const proofUserId =
+    (process.env.STAGING_PROOF_USER_ID || process.env.STAGING_FRONTEND_PROOF_USER_ID || "").trim();
+  const proofRole =
+    ((process.env.STAGING_PROOF_ROLE || process.env.STAGING_FRONTEND_PROOF_ROLE || "Admin").trim() || "Admin") as RoleName;
+  const proofSecret =
+    (process.env.STAGING_PROOF_SECRET || process.env.STAGING_FRONTEND_PROOF_SECRET || "").trim();
 
   const missing: string[] = [];
   if (!apiBaseUrl) {
     missing.push("Set STAGING_FRONTEND_API_BASE_URL (or PILOT_API_BASE_URL)");
   }
-  if (!adminBearer && !devUserId) {
-    missing.push("Provide STAGING_FRONTEND_BEARER_TOKEN or STAGING_VITE_DEV_USER_ID");
+  if (!adminBearer && !devUserId && !(proofUserId && proofSecret)) {
+    missing.push("Provide STAGING_PROOF_USER_ID + STAGING_PROOF_SECRET, STAGING_FRONTEND_BEARER_TOKEN, or STAGING_VITE_DEV_USER_ID");
   }
 
-  const authMode = adminBearer ? "bearer" : devUserId ? "dev-header" : "none";
+  const authMode = proofUserId && proofSecret
+    ? "proof-header"
+    : adminBearer
+      ? "bearer"
+      : devUserId
+        ? "dev-header"
+        : "none";
   const results: ProbeResult[] = [];
 
   let createdFacilityId = "";
   const createdProbeUserIds: string[] = [];
 
   if (missing.length === 0) {
-    const adminActor: AuthActor = adminBearer
-      ? { kind: "bearer", role: "Admin", token: adminBearer }
-      : { kind: "dev", role: devRole, userId: devUserId };
+    const adminActor: AuthActor = proofUserId && proofSecret
+      ? { kind: "proof", role: proofRole, userId: proofUserId, proofSecret }
+      : adminBearer
+        ? { kind: "bearer", role: "Admin", token: adminBearer }
+        : { kind: "dev", role: devRole, userId: devUserId };
 
     const { facilityIds, createdFacilityId: facilityId } = await ensureTwoFacilities(apiBaseUrl, adminActor);
     createdFacilityId = facilityId;
@@ -322,7 +346,34 @@ async function main() {
         "RevenueCycle"
       ];
 
-      if (devUserId) {
+      if (proofUserId && proofSecret) {
+        for (const role of roleProbeTargets) {
+          const userId = await createRoleProbeUser({
+            apiBaseUrl,
+            adminActor,
+            role,
+            facilityIds
+          });
+          if (!userId) {
+            results.push({
+              role,
+              userId: "",
+              ok: false,
+              skipped: false,
+              detail: "Failed to create probe user",
+              availableFacilities: []
+            });
+            continue;
+          }
+          createdProbeUserIds.push(userId);
+          results.push(
+            await probeRoleFacilitySwitch({
+              apiBaseUrl,
+              actor: { kind: "proof", role, userId, proofSecret }
+            })
+          );
+        }
+      } else if (devUserId) {
         for (const role of roleProbeTargets) {
           const userId = await createRoleProbeUser({
             apiBaseUrl,

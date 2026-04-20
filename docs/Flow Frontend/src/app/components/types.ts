@@ -411,6 +411,32 @@ export interface AdminEncounterRecoveryRow {
   needsRecovery: boolean;
 }
 
+export interface PatientIdentityCandidate {
+  id: string;
+  sourcePatientId: string;
+  displayName: string | null;
+  dateOfBirth: string | null;
+}
+
+export interface PatientIdentityReview {
+  id: string;
+  facilityId: string;
+  patientId: string | null;
+  sourcePatientId: string;
+  normalizedSourcePatientId: string;
+  displayName: string | null;
+  normalizedDisplayName: string | null;
+  dateOfBirth: string | null;
+  reasonCode: string;
+  status: "open" | "resolved" | "ignored";
+  matchedPatientIds: string[];
+  contextJson?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  patient?: PatientIdentityCandidate | null;
+  matchedPatients: PatientIdentityCandidate[];
+}
+
 // ── View-model types (enriched for UI display) ───────────────────────
 
 /**

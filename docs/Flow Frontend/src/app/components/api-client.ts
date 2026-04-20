@@ -26,6 +26,7 @@ import type {
   NotificationPolicy,
   ClinicAssignment,
   AdminEncounterRecoveryRow,
+  PatientIdentityReview,
   ReasonStatus,
   TemplateStatus,
   TemplateFieldDefinition,
@@ -74,6 +75,7 @@ const BASE_URL =
   "http://localhost:4000";
 
 const defaultDevHeaders: Record<string, string> = {};
+const defaultProofHeaders: Record<string, string> = {};
 const viteEnv = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
 const nodeEnv = (typeof process !== "undefined" && (process as any).env) || {};
 const isProductionRuntime = Boolean(viteEnv.PROD) || String(nodeEnv.NODE_ENV || "").toLowerCase() === "production";
@@ -83,12 +85,33 @@ const devUserId =
 const devRole =
   viteEnv.VITE_DEV_ROLE ||
   nodeEnv.VITE_DEV_ROLE;
+const proofUserId =
+  viteEnv.VITE_PROOF_USER_ID ||
+  nodeEnv.VITE_PROOF_USER_ID ||
+  viteEnv.FRONTEND_PROOF_USER_ID ||
+  nodeEnv.FRONTEND_PROOF_USER_ID;
+const proofRole =
+  viteEnv.VITE_PROOF_ROLE ||
+  nodeEnv.VITE_PROOF_ROLE ||
+  viteEnv.FRONTEND_PROOF_ROLE ||
+  nodeEnv.FRONTEND_PROOF_ROLE ||
+  "Admin";
+const proofSecret =
+  viteEnv.VITE_PROOF_SECRET ||
+  nodeEnv.VITE_PROOF_SECRET ||
+  viteEnv.FRONTEND_PROOF_SECRET ||
+  nodeEnv.FRONTEND_PROOF_SECRET;
 const enableDevHeadersRaw = viteEnv.VITE_ENABLE_DEV_HEADERS ?? nodeEnv.VITE_ENABLE_DEV_HEADERS;
 const enableDevHeaders =
   String(enableDevHeadersRaw ?? (!isProductionRuntime || Boolean(devUserId) ? "true" : "false")).toLowerCase() === "true";
 if (enableDevHeaders) {
   if (devUserId) defaultDevHeaders["x-dev-user-id"] = devUserId;
   if (devRole) defaultDevHeaders["x-dev-role"] = devRole;
+}
+if (proofUserId && proofSecret) {
+  defaultProofHeaders["x-proof-user-id"] = proofUserId;
+  defaultProofHeaders["x-proof-role"] = proofRole;
+  defaultProofHeaders["x-proof-secret"] = proofSecret;
 }
 
 type CachedGetEntry = {
@@ -311,8 +334,9 @@ if (typeof window !== "undefined") {
 
 async function resolveAuthHeaders(extraHeaders?: Record<string, string>) {
   const session = getCurrentSession();
+  const fallbackHeaders = proofUserId && proofSecret ? defaultProofHeaders : defaultDevHeaders;
   const headers: Record<string, string> = {
-    ...(session ? buildHeaders(session) : defaultDevHeaders),
+    ...(session ? buildHeaders(session) : fallbackHeaders),
     ...(extraHeaders || {}),
   };
 
@@ -1602,6 +1626,31 @@ export const admin = {
     return apiFetch<StaffUser[]>(`/admin/users${q ? `?${q}` : ""}`, {
       cacheTtlMs: 15_000,
       signal: options?.signal,
+    });
+  },
+  listPatientIdentityReviews(params?: {
+    facilityId?: string;
+    status?: "open" | "resolved" | "ignored";
+    limit?: number;
+    signal?: AbortSignal;
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.facilityId) qs.set("facilityId", params.facilityId);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const q = qs.toString();
+    return apiFetch<PatientIdentityReview[]>(`/admin/patient-identity-reviews${q ? `?${q}` : ""}`, {
+      cacheTtlMs: 10_000,
+      signal: params?.signal,
+    });
+  },
+  updatePatientIdentityReview(
+    id: string,
+    dto: { status: "resolved" | "ignored"; patientId?: string },
+  ) {
+    return apiFetch<PatientIdentityReview>(`/admin/patient-identity-reviews/${id}`, {
+      method: "POST",
+      body: JSON.stringify(dto),
     });
   },
   searchDirectoryUsers(query: string) {

@@ -69,9 +69,22 @@ FRONTEND_BEARER_TOKEN=<valid-admin-jwt> \
 pnpm frontend:verify-live
 ```
 
+Durable proof-header mode (preferred for staging verification):
+
+```bash
+FRONTEND_API_BASE_URL=https://<staging-api-host> \
+FRONTEND_PROOF_USER_ID=<existing-admin-user-id> \
+FRONTEND_PROOF_SECRET=<AUTH_PROOF_HEADER_SECRET from the staging web app> \
+FRONTEND_PROOF_ROLE=Admin \
+pnpm frontend:verify-live
+```
+
 Frontend runtime env values (in `docs/Flow Frontend`):
 
 - `VITE_API_BASE_URL` (default `http://localhost:4000`)
+- `VITE_PROOF_USER_ID` (optional; durable proof auth for staging verification)
+- `VITE_PROOF_ROLE` (optional; defaults to `Admin` for proof auth)
+- `VITE_PROOF_SECRET` (optional; shared proof secret configured in backend app settings)
 - `VITE_BEARER_TOKEN` (optional; used by live verification scripts in JWT mode)
 - `VITE_ENABLE_DEV_HEADERS` (optional; default `true` in local dev, `false` in production builds)
 - `VITE_ENABLE_DEV_HEADER_LOGIN` (optional; default `true` in local dev, `false` in production builds unless `VITE_DEV_USER_ID` is present)
@@ -92,7 +105,8 @@ GitHub Actions workflows:
    - Manual (`workflow_dispatch`) staging verification against your staging API.
    - Requires:
      - `vars.STAGING_FRONTEND_API_BASE_URL`
-     - either `secrets.STAGING_FRONTEND_BEARER_TOKEN` (preferred) or `secrets.STAGING_VITE_DEV_USER_ID` (dev-header fallback only)
+     - `secrets.STAGING_VITE_DEV_USER_ID` for the proof identity user id
+     - Azure OIDC workflow variables so the job can read `AUTH_PROOF_HEADER_SECRET` from the staging web app app settings
    - Optional:
      - `vars.STAGING_VITE_DEV_ROLE` (defaults to `Admin`)
      - `vars.STAGING_FRONTEND_E2E_PORT` (defaults to `4173`)

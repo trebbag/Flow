@@ -46,6 +46,9 @@ export function buildApp() {
       "Content-Type",
       "x-dev-user-id",
       "x-dev-role",
+      "x-proof-user-id",
+      "x-proof-role",
+      "x-proof-secret",
       "x-facility-id",
       "x-correlation-id",
       "Idempotency-Key"

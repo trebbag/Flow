@@ -1,13 +1,14 @@
 import type { Role } from "./types";
 import { dispatchSessionChanged } from "./app-events";
 
-export type AuthMode = "dev_header" | "bearer" | "microsoft";
+export type AuthMode = "dev_header" | "proof_header" | "bearer" | "microsoft";
 
 export type AuthSession = {
   mode: AuthMode;
   role: Role;
   userId?: string;
   token?: string;
+  proofSecret?: string;
   facilityId?: string;
   accountHomeId?: string;
   username?: string;
@@ -21,7 +22,7 @@ const STORAGE_KEY = "flow_auth_session";
 let currentSession: AuthSession | null = null;
 
 function isAuthMode(value: unknown): value is AuthMode {
-  return value === "dev_header" || value === "bearer" || value === "microsoft";
+  return value === "dev_header" || value === "proof_header" || value === "bearer" || value === "microsoft";
 }
 
 export function buildHeaders(session: AuthSession): Record<string, string> {
@@ -35,6 +36,22 @@ export function buildHeaders(session: AuthSession): Record<string, string> {
   if (session.mode === "microsoft") {
     const headers: Record<string, string> = {};
     if (session.facilityId) headers["x-facility-id"] = session.facilityId;
+    return headers;
+  }
+
+  if (session.mode === "proof_header") {
+    const headers: Record<string, string> = {
+      "x-proof-role": session.role,
+    };
+    if (session.userId) {
+      headers["x-proof-user-id"] = session.userId;
+    }
+    if (session.proofSecret) {
+      headers["x-proof-secret"] = session.proofSecret;
+    }
+    if (session.facilityId) {
+      headers["x-facility-id"] = session.facilityId;
+    }
     return headers;
   }
 

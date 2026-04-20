@@ -13,10 +13,23 @@ const devRole =
   process.env.VITE_DEV_ROLE ||
   process.env.FRONTEND_DEV_ROLE ||
   "Admin";
+const proofUserId =
+  process.env.VITE_PROOF_USER_ID ||
+  process.env.FRONTEND_PROOF_USER_ID ||
+  "";
+const proofRole =
+  process.env.VITE_PROOF_ROLE ||
+  process.env.FRONTEND_PROOF_ROLE ||
+  "Admin";
+const proofSecret =
+  process.env.VITE_PROOF_SECRET ||
+  process.env.FRONTEND_PROOF_SECRET ||
+  "";
 const bearerToken =
   process.env.VITE_BEARER_TOKEN ||
   process.env.FRONTEND_BEARER_TOKEN ||
   "";
+const hasProofAuth = proofUserId.trim().length > 0 && proofSecret.trim().length > 0;
 const hasBearerToken = bearerToken.trim().length > 0;
 
 function dateIso() {
@@ -30,7 +43,11 @@ function dateIso() {
 async function request(path, { auth = false } = {}) {
   const headers = {};
   if (auth) {
-    if (hasBearerToken) {
+    if (hasProofAuth) {
+      headers["x-proof-user-id"] = proofUserId.trim();
+      headers["x-proof-role"] = proofRole;
+      headers["x-proof-secret"] = proofSecret.trim();
+    } else if (hasBearerToken) {
       headers.authorization = `Bearer ${bearerToken.trim()}`;
     } else if (devUserId) {
       headers["x-dev-user-id"] = devUserId;
@@ -56,9 +73,9 @@ async function main() {
   const health = await request("/health");
   assert.equal(health?.status, "ok", "/health should return status=ok");
 
-  if (!devUserId && !hasBearerToken) {
+  if (!devUserId && !hasBearerToken && !hasProofAuth) {
     console.info(
-      "Skipping authenticated contract checks because dev-user or bearer-token auth is not set.",
+      "Skipping authenticated contract checks because proof, dev-user, or bearer auth is not set.",
     );
     return;
   }

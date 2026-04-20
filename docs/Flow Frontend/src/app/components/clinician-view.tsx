@@ -530,6 +530,7 @@ function PatientRow({
   return (
     <button
       onClick={onSelect}
+      aria-label={`Open clinician preview for ${e.patientId} in ${e.status === "ReadyForProvider" ? "Ready for Provider" : e.status}`}
       className={`w-full text-left px-5 py-4 flex items-center gap-4 transition-colors cursor-pointer ${
         !isLast ? "border-b border-gray-50" : ""
       } ${
@@ -672,6 +673,7 @@ function PatientPreviewPanel({
 
         <button
           onClick={onClose}
+          aria-label={`Close clinician preview for ${e.patientId}`}
           className="shrink-0 w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors ml-1"
         >
           <X className="w-4 h-4 text-gray-400" />

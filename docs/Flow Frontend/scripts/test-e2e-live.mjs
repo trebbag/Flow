@@ -13,10 +13,23 @@ const devRole =
   process.env.VITE_DEV_ROLE ||
   process.env.FRONTEND_DEV_ROLE ||
   "Admin";
+const proofUserId =
+  process.env.VITE_PROOF_USER_ID ||
+  process.env.FRONTEND_PROOF_USER_ID ||
+  "";
+const proofRole =
+  process.env.VITE_PROOF_ROLE ||
+  process.env.FRONTEND_PROOF_ROLE ||
+  "Admin";
+const proofSecret =
+  process.env.VITE_PROOF_SECRET ||
+  process.env.FRONTEND_PROOF_SECRET ||
+  "";
 const bearerToken =
   process.env.VITE_BEARER_TOKEN ||
   process.env.FRONTEND_BEARER_TOKEN ||
   "";
+const hasProofAuth = proofUserId.trim().length > 0 && proofSecret.trim().length > 0;
 const hasBearerToken = bearerToken.trim().length > 0;
 const targetClinicId =
   process.env.FRONTEND_TEST_CLINIC_ID ||
@@ -29,6 +42,15 @@ const targetClinicName =
 
 function authHeaders({ userId, role, facilityId } = {}) {
   const headers = {};
+  if (hasProofAuth) {
+    headers["x-proof-user-id"] = proofUserId.trim();
+    headers["x-proof-role"] = role || proofRole;
+    headers["x-proof-secret"] = proofSecret.trim();
+    if (facilityId) {
+      headers["x-facility-id"] = facilityId;
+    }
+    return headers;
+  }
   if (hasBearerToken) {
     headers.authorization = `Bearer ${bearerToken.trim()}`;
     if (facilityId) {

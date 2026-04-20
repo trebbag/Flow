@@ -2888,6 +2888,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const existing = await prisma.alertThreshold.findUnique({ where: { id: thresholdId } });
     requireCondition(existing, 404, "Threshold not found");
     await resolveFacilityForRequest(request, existing.facilityId);
+    // Thresholds are configuration-only rows. Historical alert evidence remains in
+    // alert state, inbox alerts, and audit/outbox records, so hard delete is allowed here.
     return prisma.alertThreshold.delete({ where: { id: thresholdId } });
   });
 
@@ -3507,6 +3509,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     });
     requireCondition(clinic, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
+    // Notification policies are configuration-only rows. Historical alert delivery
+    // evidence lives outside this row, so hard delete is allowed here.
     return prisma.notificationPolicy.delete({ where: { id: policyId } });
   });
 

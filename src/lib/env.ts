@@ -15,6 +15,7 @@ const envSchema = z.object({
   TRUST_PROXY: z.coerce.boolean().default(false),
   AUTH_MODE: z.enum(["dev_header", "jwt", "hybrid"]).optional(),
   AUTH_ALLOW_DEV_HEADERS: z.coerce.boolean().optional(),
+  AUTH_PROOF_HEADER_SECRET: z.string().trim().optional(),
   AUTH_ALLOW_IMPLICIT_ADMIN: z.coerce.boolean().default(false),
   ENTRA_STRICT_MODE: z.coerce.boolean().optional(),
   ENTRA_TENANT_ID: z.string().trim().optional(),

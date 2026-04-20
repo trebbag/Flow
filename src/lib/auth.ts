@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { timingSafeEqual } from "node:crypto";
 import { RoleName } from "@prisma/client";
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from "jose";
 import { env } from "./env.js";
@@ -13,7 +14,7 @@ export type RequestUser = {
   facilityId: string | null;
   activeFacilityId: string | null;
   availableFacilityIds: string[];
-  authSource: "jwt" | "dev_header";
+  authSource: "jwt" | "dev_header" | "proof_header";
   identityProvider?: string | null;
   entraObjectId?: string | null;
   entraTenantId?: string | null;
@@ -137,6 +138,16 @@ function hasBearerToken(request: FastifyRequest) {
   return Boolean(extractBearerToken(request));
 }
 
+function matchesProofSecret(candidate: string | null) {
+  const expected = env.AUTH_PROOF_HEADER_SECRET?.trim() || "";
+  const provided = candidate?.trim() || "";
+  if (!expected || !provided) return false;
+  const expectedBytes = Buffer.from(expected);
+  const providedBytes = Buffer.from(provided);
+  if (expectedBytes.length !== providedBytes.length) return false;
+  return timingSafeEqual(expectedBytes, providedBytes);
+}
+
 function dedupeRoleNames(rows: Array<{ role: RoleName }>) {
   return Array.from(new Set(rows.map((row) => row.role)));
 }
@@ -154,6 +165,57 @@ function resolveStoredEntraObjectId(user: {
   cognitoSub: string | null;
 }) {
   return user.entraObjectId || user.cognitoSub || null;
+}
+
+async function resolveHeaderScopedUser(params: {
+  userId: string | null;
+  role: RoleName | null;
+  facilityId: string | null;
+  authSource: RequestUser["authSource"];
+}) {
+  const headerUserId = params.userId?.trim() || null;
+  if (!headerUserId) return null;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: headerUserId },
+    include: {
+      roles: {
+        include: {
+          clinic: { select: { facilityId: true } }
+        }
+      }
+    }
+  });
+
+  if (!dbUser || dbUser.roles.length === 0 || dbUser.status !== "active") {
+    return null;
+  }
+
+  const selectedRole =
+    (params.role && dbUser.roles.some((entry) => entry.role === params.role) ? params.role : null) ?? dbUser.roles[0]!.role;
+  const roleRows = dbUser.roles.filter((entry) => entry.role === selectedRole);
+  const facilityScopeResult = await resolveFacilityScopeForRole({
+    selectedRole,
+    roleRows,
+    requestedFacilityId: params.facilityId,
+    persistedActiveFacilityId: dbUser.activeFacilityId
+  });
+  const selectedScope =
+    roleRows.find((entry) => {
+      if (!facilityScopeResult.activeFacilityId) return true;
+      return (entry.facilityId || entry.clinic?.facilityId || null) === facilityScopeResult.activeFacilityId;
+    }) || roleRows[0] || dbUser.roles[0]!;
+
+  return {
+    id: dbUser.id,
+    role: selectedRole,
+    roles: dedupeRoleNames(dbUser.roles),
+    clinicId: selectedScope.clinicId,
+    facilityId: facilityScopeResult.activeFacilityId,
+    activeFacilityId: facilityScopeResult.activeFacilityId,
+    availableFacilityIds: facilityScopeResult.availableFacilityIds,
+    authSource: params.authSource
+  } satisfies RequestUser;
 }
 
 async function resolveFacilityScopeForRole(params: {
@@ -440,49 +502,14 @@ async function resolveUserFromDevHeaders(request: FastifyRequest): Promise<Reque
   const headerUserId = (request.headers["x-dev-user-id"] as string | undefined)?.trim();
   const headerRole = asRole((request.headers["x-dev-role"] as string | undefined)?.trim());
   const headerFacilityId = (request.headers["x-facility-id"] as string | undefined)?.trim() || null;
-
-  if (headerUserId) {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: headerUserId },
-      include: {
-        roles: {
-          include: {
-            clinic: { select: { facilityId: true } }
-          }
-        }
-      }
-    });
-
-    if (dbUser && dbUser.roles.length > 0 && dbUser.status === "active") {
-      const selectedRole =
-        (headerRole && dbUser.roles.some((entry) => entry.role === headerRole) ? headerRole : null) ?? dbUser.roles[0]!.role;
-      const roleRows = dbUser.roles.filter((entry) => entry.role === selectedRole);
-      const facilityScopeResult = await resolveFacilityScopeForRole({
-        selectedRole,
-        roleRows,
-        requestedFacilityId: headerFacilityId,
-        persistedActiveFacilityId: dbUser.activeFacilityId
-      });
-      const selectedScope =
-        roleRows.find((entry) => {
-          if (!facilityScopeResult.activeFacilityId) return true;
-          return (entry.facilityId || entry.clinic?.facilityId || null) === facilityScopeResult.activeFacilityId;
-        }) || roleRows[0] || dbUser.roles[0]!;
-
-      return {
-        id: dbUser.id,
-        role: selectedRole,
-        roles: dedupeRoleNames(dbUser.roles),
-        clinicId: selectedScope.clinicId,
-        facilityId: facilityScopeResult.activeFacilityId,
-        activeFacilityId: facilityScopeResult.activeFacilityId,
-        availableFacilityIds: facilityScopeResult.availableFacilityIds,
-        authSource: "dev_header"
-      };
-    }
-
-    return null;
-  }
+  const scopedUser = await resolveHeaderScopedUser({
+    userId: headerUserId,
+    role: headerRole,
+    facilityId: headerFacilityId,
+    authSource: "dev_header",
+  });
+  if (scopedUser) return scopedUser;
+  if (headerUserId) return null;
 
   if (!env.AUTH_ALLOW_IMPLICIT_ADMIN) {
     return null;
@@ -518,7 +545,27 @@ async function resolveUserFromDevHeaders(request: FastifyRequest): Promise<Reque
   return null;
 }
 
+async function resolveUserFromProofHeaders(request: FastifyRequest): Promise<RequestUser | null> {
+  if (!env.AUTH_PROOF_HEADER_SECRET) return null;
+  const proofSecret = (request.headers["x-proof-secret"] as string | undefined)?.trim() || null;
+  if (!matchesProofSecret(proofSecret)) return null;
+
+  const headerUserId = (request.headers["x-proof-user-id"] as string | undefined)?.trim() || null;
+  const headerRole = asRole((request.headers["x-proof-role"] as string | undefined)?.trim());
+  const headerFacilityId = (request.headers["x-facility-id"] as string | undefined)?.trim() || null;
+
+  return resolveHeaderScopedUser({
+    userId: headerUserId,
+    role: headerRole,
+    facilityId: headerFacilityId,
+    authSource: "proof_header",
+  });
+}
+
 export async function resolveRequestUser(request: FastifyRequest): Promise<RequestUser | null> {
+  const proofUser = await resolveUserFromProofHeaders(request);
+  if (proofUser) return proofUser;
+
   if (env.AUTH_MODE === "jwt") {
     return resolveUserFromJwt(request);
   }
@@ -550,8 +597,8 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   if (!user) {
     const message =
       env.AUTH_MODE === "jwt"
-        ? "Unauthorized. Provide a valid Bearer token."
-        : "Unauthorized. Provide a valid Bearer token or x-dev-user-id/x-dev-role headers.";
+        ? "Unauthorized. Provide a valid Bearer token or proof headers."
+        : "Unauthorized. Provide a valid Bearer token, proof headers, or x-dev-user-id/x-dev-role headers.";
     reply.code(401).send({ message });
     return;
   }

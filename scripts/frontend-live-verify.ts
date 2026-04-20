@@ -7,14 +7,18 @@ async function main() {
   const apiBaseUrl = process.env.FRONTEND_API_BASE_URL || "http://localhost:4000";
   const hasDevAuth = Boolean(process.env.VITE_DEV_USER_ID || process.env.FRONTEND_DEV_USER_ID);
   const hasBearerAuth = Boolean(process.env.VITE_BEARER_TOKEN || process.env.FRONTEND_BEARER_TOKEN);
+  const hasProofAuth = Boolean(
+    (process.env.VITE_PROOF_USER_ID || process.env.FRONTEND_PROOF_USER_ID) &&
+      (process.env.VITE_PROOF_SECRET || process.env.FRONTEND_PROOF_SECRET),
+  );
 
   if (!frontendRepoPath) {
     throw new Error("FRONTEND_REPO_PATH is required to run frontend live wiring verification.");
   }
 
-  if (!hasDevAuth && !hasBearerAuth) {
+  if (!hasDevAuth && !hasBearerAuth && !hasProofAuth) {
     console.info(
-      "No frontend auth env detected (set VITE_DEV_USER_ID/FRONTEND_DEV_USER_ID or VITE_BEARER_TOKEN/FRONTEND_BEARER_TOKEN). Authenticated checks may be skipped.",
+      "No frontend auth env detected (set proof, dev-header, or bearer auth env vars). Authenticated checks may be skipped.",
     );
   }
 
