@@ -203,6 +203,29 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForEncounterOnBoard({
+  clinicId,
+  date,
+  encounterId,
+  auth,
+  label,
+  attempts = 8,
+  delayMs = 250,
+}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const rows = await request(`/encounters?clinicId=${clinicId}&date=${date}`, {
+      auth,
+    });
+    if (rows.some((row) => row.id === encounterId)) {
+      return rows;
+    }
+    if (attempt < attempts) {
+      await wait(delayMs);
+    }
+  }
+  throw new Error(`${label} should include created encounter`);
+}
+
 const providerCredentialSuffixes = new Set([
   "md",
   "do",
@@ -562,15 +585,21 @@ async function main() {
   assert.equal(created.status || created.currentStatus, "Lobby", "new encounter should start in Lobby");
 
   const today = isoDateToday();
-  const checkinBoard = await request(`/encounters?clinicId=${clinic.id}&date=${today}`, {
+  await waitForEncounterOnBoard({
+    clinicId: clinic.id,
+    date: today,
+    encounterId: created.id,
     auth: checkinAuth,
+    label: "check-in board",
   });
-  assert.ok(checkinBoard.some((row) => row.id === created.id), "check-in board should include created encounter");
 
-  const maBoard = await request(`/encounters?clinicId=${clinic.id}&date=${today}`, {
+  await waitForEncounterOnBoard({
+    clinicId: clinic.id,
+    date: today,
+    encounterId: created.id,
     auth: maAuth,
+    label: "MA board",
   });
-  assert.ok(maBoard.some((row) => row.id === created.id), "MA board should include assigned encounter");
 
   const roomed = await request(`/encounters/${created.id}/rooming`, {
     method: "PATCH",
