@@ -51,11 +51,6 @@ jobs:
             exit 1
           fi
 
-          if [[ -z "${AZURE_RESOURCE_GROUP}" ]]; then
-            echo "Missing GitHub variable: AZURE_RESOURCE_GROUP"
-            exit 1
-          fi
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
         with:
@@ -75,9 +70,21 @@ jobs:
 
       - name: Load staging database settings
         run: |
+          RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}"
+          if [[ -z "${RESOURCE_GROUP}" ]]; then
+            RESOURCE_GROUP="$(az webapp list \
+              --query "[?name=='${AZURE_WEBAPP_NAME}'].resourceGroup | [0]" \
+              -o tsv)"
+          fi
+
+          if [[ -z "${RESOURCE_GROUP}" ]]; then
+            echo "Unable to determine Azure resource group for ${AZURE_WEBAPP_NAME}"
+            exit 1
+          fi
+
           POSTGRES_DATABASE_URL="$(az webapp config appsettings list \
             --name "${AZURE_WEBAPP_NAME}" \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --resource-group "${RESOURCE_GROUP}" \
             --query "[?name=='POSTGRES_DATABASE_URL'].value | [0]" \
             -o tsv)"
 
@@ -86,7 +93,10 @@ jobs:
             exit 1
           fi
 
-          echo "POSTGRES_DATABASE_URL=${POSTGRES_DATABASE_URL}" >> "${GITHUB_ENV}"
+          {
+            echo "AZURE_RESOURCE_GROUP=${RESOURCE_GROUP}"
+            echo "POSTGRES_DATABASE_URL=${POSTGRES_DATABASE_URL}"
+          } >> "${GITHUB_ENV}"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
