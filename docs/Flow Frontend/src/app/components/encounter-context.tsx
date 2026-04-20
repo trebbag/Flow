@@ -504,21 +504,27 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       refreshData().catch(() => undefined);
     }, 30000);
 
-    const baseUrl =
-      (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
-      "http://localhost:4000";
-
     let source: EventSource | null = null;
-    try {
-      source = new EventSource(`${baseUrl.replace(/\/$/, "")}/events/stream`);
-      source.onmessage = () => {
-        refreshData().catch(() => undefined);
-      };
-      source.onerror = () => {
-        source?.close();
-      };
-    } catch {
-      // EventSource is optional; polling remains active.
+    const eventStreamExplicitlyEnabled =
+      String(
+        ((typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_ENABLE_EVENT_STREAM) ?? "false"),
+      ).toLowerCase() === "true";
+    const session = loadSession();
+    if (eventStreamExplicitlyEnabled && session?.mode === "dev_header") {
+      const baseUrl =
+        (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
+        "http://localhost:4000";
+      try {
+        source = new EventSource(`${baseUrl.replace(/\/$/, "")}/events/stream`);
+        source.onmessage = () => {
+          refreshData().catch(() => undefined);
+        };
+        source.onerror = () => {
+          source?.close();
+        };
+      } catch {
+        // EventSource is optional; polling remains active.
+      }
     }
 
     const onExternalRefresh = () => {

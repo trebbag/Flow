@@ -2,11 +2,17 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 import { RootLayout } from "./components/layout";
 import { RouteErrorBoundary } from "./components/route-error-boundary";
 import { AppBootstrapProvider } from "./components/app-bootstrap";
+import { BootstrapLoadingScreen } from "./components/bootstrap-loading-screen";
+
+function RouteHydrateFallback() {
+  return <BootstrapLoadingScreen phase="session_restoration" />;
+}
 
 const router = createBrowserRouter([
   {
     path: "/login",
     errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => ({
       Component: (await import("./components/login-view")).LoginView,
     }),
@@ -14,6 +20,7 @@ const router = createBrowserRouter([
   {
     path: "/auth/callback",
     errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => ({
       Component: (await import("./components/auth-callback-view")).AuthCallbackView,
     }),
@@ -22,6 +29,7 @@ const router = createBrowserRouter([
     path: "/",
     Component: RootLayout,
     errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     children: [
       {
         index: true,
