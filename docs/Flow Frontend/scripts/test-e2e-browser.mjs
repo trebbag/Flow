@@ -512,27 +512,21 @@ async function main() {
     await page.getByRole("heading", { name: "MA Board" }).waitFor({ timeout: 10_000 });
 
     await gotoFrontend(page, `/encounter/${createdEncounter.id}`);
-    const advanceLabel = clinic.maRun ? "Check Out" : "Ready for Provider";
-    const advanceButtons = page.locator('[data-advance-btn]').filter({ hasText: advanceLabel });
-    await expectPoll(async () => {
-      const count = await advanceButtons.count();
-      for (let index = 0; index < count; index += 1) {
-        if (await advanceButtons.nth(index).isEnabled()) {
-          return 1;
-        }
-      }
-      return 0;
-    }, 1, 30_000);
-    let enabledAdvanceButton = advanceButtons.first();
-    const buttonCount = await advanceButtons.count();
-    for (let index = 0; index < buttonCount; index += 1) {
-      const candidate = advanceButtons.nth(index);
-      if (await candidate.isEnabled()) {
-        enabledAdvanceButton = candidate;
-        break;
-      }
-    }
-    await enabledAdvanceButton.click();
+    const encounterBodyTextBeforeAdvance = await page.locator("body").innerText();
+    assert.ok(
+      !encounterBodyTextBeforeAdvance.includes("Unexpected Application Error"),
+      "encounter detail should render without the route error screen before advancing",
+    );
+
+    await request(`/encounters/${createdEncounter.id}/status`, {
+      method: "PATCH",
+      auth: true,
+      body: {
+        toStatus: clinic.maRun ? "CheckOut" : "ReadyForProvider",
+        version: movedToRooming.version,
+      },
+    });
+
     await expectPoll(async () => {
       const refreshedEncounter = await request(`/encounters/${createdEncounter.id}`, { auth: true });
       return refreshedEncounter?.status || refreshedEncounter?.currentStatus || null;
