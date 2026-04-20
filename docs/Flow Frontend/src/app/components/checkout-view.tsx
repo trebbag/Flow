@@ -469,6 +469,8 @@ export function CheckOutView() {
                           key={e.id}
                           role="button"
                           tabIndex={0}
+                          aria-label={`Open completed checkout details for ${e.patientId}`}
+                          aria-pressed={selectedCompletedId === e.id}
                           onClick={() => setSelectedCompletedId(e.id)}
                           onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") setSelectedCompletedId(e.id); }}
                           className="w-full text-left rounded-lg border border-gray-100 p-3 flex items-center gap-3 transition-colors cursor-pointer hover:bg-gray-50 hover:border-gray-200"
@@ -571,8 +573,18 @@ function CheckoutCard({
 
       {/* Header row */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${isExpanded ? "Collapse" : "Expand"} checkout card for ${e.patientId}`}
+        aria-expanded={isExpanded}
         className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
         onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggle();
+          }
+        }}
       >
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[13px]"
@@ -1048,6 +1060,7 @@ function CompletedDetailPanel({
         </div>
         <button
           onClick={onClose}
+          aria-label={`Close completed checkout details for ${e.patientId}`}
           className="shrink-0 w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
         >
           <X className="w-4 h-4 text-gray-400" />

@@ -398,6 +398,8 @@ export function SidebarNav() {
       <div className={cn("flex items-center border-b border-white/10", collapsed ? "justify-center px-0 py-5" : "px-5 py-5 gap-3")}>
         <button
           onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={!collapsed}
           className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 hover:from-indigo-400 hover:to-purple-500 transition-all cursor-pointer"
           title={collapsed ? "Expand sidebar (⌘B)" : "Collapse sidebar (⌘B)"}
         >

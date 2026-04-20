@@ -607,22 +607,48 @@ function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message:
   );
 }
 
-function DeleteConfirmDialog({ open, onClose, onConfirm, entityName }: { open: boolean; onClose: () => void; onConfirm: () => void; entityName: string }) {
+function DeleteConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  entityName,
+  variant = "delete",
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  entityName: string;
+  variant?: "delete" | "archive";
+}) {
+  const isArchive = variant === "archive";
   return (
     <AlertDialog open={open} onOpenChange={(v) => !v && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="text-[15px] flex items-center gap-2">
-            <AlertTriangle className="w-4.5 h-4.5 text-red-500" /> Confirm Deletion
+            <AlertTriangle className={`w-4.5 h-4.5 ${isArchive ? "text-amber-500" : "text-red-500"}`} />
+            {isArchive ? "Confirm Archive" : "Confirm Deletion"}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-[13px]">
-            Are you sure you want to delete <span style={{ fontWeight: 600 }}>{entityName}</span>? This action cannot be undone.
+            {isArchive ? (
+              <>
+                Archive <span style={{ fontWeight: 600 }}>{entityName}</span>? Flow preserves historical references when they
+                exist, and only removes setup-only rows when no operational history exists.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete <span style={{ fontWeight: 600 }}>{entityName}</span>? This action cannot be undone.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel className="h-9 text-[13px]">Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className="h-9 text-[13px] bg-red-600 hover:bg-red-700">
-            Delete
+          <AlertDialogAction
+            onClick={onConfirm}
+            className={`h-9 text-[13px] ${isArchive ? "bg-amber-600 hover:bg-amber-700" : "bg-red-600 hover:bg-red-700"}`}
+          >
+            {isArchive ? "Archive" : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -966,12 +992,14 @@ function FacilityRoomsTab({
                           />
                           <button
                             onClick={() => onEditRoom(r)}
+                            aria-label={`Edit room ${r.name}`}
                             className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-gray-600"
                           >
                             <Pencil className="w-3 h-3" />
                           </button>
                           <button
                             onClick={() => setDeleteTarget({ id: r.id, name: r.name })}
+                            aria-label={`Archive room ${r.name}`}
                             className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-red-500"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -1059,13 +1087,14 @@ function FacilityRoomsTab({
                 }
                 requestAdminRefresh();
               } catch (error) {
-                toast.error("Delete failed", {
-                  description: (error as Error).message || "Unable to delete room",
+                toast.error("Archive failed", {
+                  description: (error as Error).message || "Unable to archive room",
                 });
               }
             })();
           }}
           entityName={deleteTarget?.name || ""}
+          variant="archive"
         />
       </div>
     </TabPanel>
@@ -1242,7 +1271,7 @@ function ClinicsTab({ onAddClinic, onEditClinic }: { onAddClinic: () => void; on
                             className="h-7 px-3 rounded-lg border border-red-200 text-[11px] text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5"
                             style={{ fontWeight: 500 }}
                           >
-                            <Trash2 className="w-3 h-3" /> Delete Clinic
+                            <Trash2 className="w-3 h-3" /> Archive Clinic
                           </button>
                         </div>
                       </div>
@@ -1304,13 +1333,14 @@ function ClinicsTab({ onAddClinic, onEditClinic }: { onAddClinic: () => void; on
                 }
                 requestAdminRefresh();
               } catch (error) {
-                toast.error("Delete failed", {
-                  description: (error as Error).message || "Unable to delete clinic",
+                toast.error("Archive failed", {
+                  description: (error as Error).message || "Unable to archive clinic",
                 });
               }
             })();
           }}
           entityName={deleteTarget?.name || ""}
+          variant="archive"
         />
       </div>
     </TabPanel>
@@ -1671,7 +1701,7 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
                             className="h-7 px-3 rounded-lg border border-red-200 text-[11px] text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5"
                             style={{ fontWeight: 500 }}
                           >
-                            <Trash2 className="w-3 h-3" /> Delete User
+                            <Trash2 className="w-3 h-3" /> Archive User
                           </button>
                         )}
                       </div>
@@ -1795,7 +1825,7 @@ function ReasonsTemplatesTab({
                           className="h-7 px-3 rounded-lg border border-red-200 text-[11px] text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5"
                           style={{ fontWeight: 500 }}
                         >
-                          <Trash2 className="w-3 h-3" /> Delete
+                          <Trash2 className="w-3 h-3" /> Archive
                         </button>
                       </div>
                     </div>
@@ -1891,7 +1921,7 @@ function ReasonsTemplatesTab({
                           className="h-7 px-3 rounded-lg border border-red-200 text-[11px] text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5"
                           style={{ fontWeight: 500 }}
                         >
-                          <Trash2 className="w-3 h-3" /> Delete
+                          <Trash2 className="w-3 h-3" /> Archive
                         </button>
                       </div>
                     </div>
@@ -1937,6 +1967,7 @@ function ReasonsTemplatesTab({
             }).catch(() => undefined);
           }}
           entityName={deleteTarget?.name || ""}
+          variant="archive"
         />
       </div>
     </TabPanel>
@@ -2178,6 +2209,7 @@ function ThresholdsTab({ onAddThreshold, facilityId }: { onAddThreshold: () => v
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => setDeleteTarget({ id: t.id, name: `${thresholdLabel(t)} override for ${clinic?.shortCode || "clinic"}` })}
+                              aria-label={`Delete ${thresholdLabel(t)} override for ${clinic?.shortCode || "clinic"}`}
                               className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -2315,12 +2347,14 @@ function NotificationsTab({
                     </button>
                     <button
                       onClick={() => onEditPolicy(np)}
+                      aria-label={`Edit ${np.severity} ${np.status} notification policy`}
                       className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => setDeleteTarget({ id: np.id, name: `${np.severity} ${np.status} policy` })}
+                      aria-label={`Delete ${np.severity} ${np.status} notification policy`}
                       className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -5753,6 +5787,7 @@ function AuditLogTab() {
 function PatientIdentityReviewsTab() {
   const { facility } = useAdminConsoleData();
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "resolved" | "ignored">("open");
+  const [searchQuery, setSearchQuery] = useState("");
   const [reviews, setReviews] = useState<PatientIdentityReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -5787,6 +5822,82 @@ function PatientIdentityReviewsTab() {
     return () => window.removeEventListener(ADMIN_REFRESH_EVENT, handleRefresh);
   }, [loadReviews]);
 
+  const visibleReviews = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const scoreReview = (review: PatientIdentityReview) => {
+      const candidateCount = Array.from(
+        new Map(
+          [review.patient, ...review.matchedPatients]
+            .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+            .map((candidate) => [candidate.id, candidate]),
+        ).values(),
+      ).length;
+
+      if (review.status !== "open") return 4;
+      if (candidateCount === 1) return 0;
+      if (candidateCount > 1) return 1;
+      return 2;
+    };
+
+    return reviews
+      .filter((review) => {
+        if (!query) return true;
+        const searchable = [
+          review.displayName,
+          review.sourcePatientId,
+          review.reasonCode,
+          patientIdentityReasonLabel(review.reasonCode),
+          review.patient?.displayName,
+          review.patient?.sourcePatientId,
+          ...review.matchedPatients.flatMap((candidate) => [candidate.displayName, candidate.sourcePatientId]),
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join(" ")
+          .toLowerCase();
+        return searchable.includes(query);
+      })
+      .sort((left, right) => {
+        const priorityDiff = scoreReview(left) - scoreReview(right);
+        if (priorityDiff !== 0) return priorityDiff;
+        return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      });
+  }, [reviews, searchQuery]);
+
+  const reviewSummary = useMemo(() => {
+    return visibleReviews.reduce(
+      (summary, review) => {
+        const candidateCount = Array.from(
+          new Map(
+            [review.patient, ...review.matchedPatients]
+              .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+              .map((candidate) => [candidate.id, candidate]),
+          ).values(),
+        ).length;
+
+        if (review.status === "open") {
+          summary.open += 1;
+          if (candidateCount === 1) summary.quickResolve += 1;
+          else if (candidateCount > 1) summary.ambiguous += 1;
+          else summary.noCandidate += 1;
+        } else if (review.status === "resolved") {
+          summary.resolved += 1;
+        } else if (review.status === "ignored") {
+          summary.ignored += 1;
+        }
+
+        return summary;
+      },
+      {
+        open: 0,
+        quickResolve: 0,
+        ambiguous: 0,
+        noCandidate: 0,
+        resolved: 0,
+        ignored: 0,
+      },
+    );
+  }, [visibleReviews]);
+
   const updateReview = async (review: PatientIdentityReview, dto: { status: "resolved" | "ignored"; patientId?: string }) => {
     setBusyReviewId(review.id);
     try {
@@ -5810,10 +5921,20 @@ function PatientIdentityReviewsTab() {
           <SectionHeader
             icon={UserCog}
             title="Patient Identity Reviews"
-            count={reviews.length}
+            count={visibleReviews.length}
             iconColor="text-indigo-500"
             secondaryAction={
               <>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    aria-label="Search patient identity reviews"
+                    placeholder="Search source ID or patient"
+                    className="h-8 w-[190px] rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-[12px]"
+                  />
+                </div>
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as "all" | "open" | "resolved" | "ignored")}
@@ -5841,19 +5962,44 @@ function PatientIdentityReviewsTab() {
             Review ambiguous patient identity matches before we merge source aliases into a canonical record. Open items are safe to resolve only when the suggested patient is clearly correct.
           </p>
 
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wide text-indigo-600">Open Queue</div>
+              <div className="mt-1 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{reviewSummary.open}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wide text-emerald-700">Quick Resolve</div>
+              <div className="mt-1 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{reviewSummary.quickResolve}</div>
+            </div>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wide text-amber-700">Ambiguous</div>
+              <div className="mt-1 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{reviewSummary.ambiguous}</div>
+            </div>
+            <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wide text-rose-700">Needs Research</div>
+              <div className="mt-1 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>{reviewSummary.noCandidate}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-wide text-slate-600">Resolved / Ignored</div>
+              <div className="mt-1 text-[20px] text-slate-900" style={{ fontWeight: 700 }}>
+                {reviewSummary.resolved} / {reviewSummary.ignored}
+              </div>
+            </div>
+          </div>
+
           {error ? (
             <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700" aria-live="polite">
               {error}
             </div>
           ) : null}
 
-          {loading && reviews.length === 0 ? (
+          {loading && visibleReviews.length === 0 ? (
             <EmptyState icon={RefreshCw} message="Loading patient identity reviews..." />
-          ) : reviews.length === 0 ? (
+          ) : visibleReviews.length === 0 ? (
             <EmptyState icon={Shield} message="No patient identity reviews match the current filter." />
           ) : (
             <div className="space-y-3">
-              {reviews.map((review) => {
+              {visibleReviews.map((review) => {
                 const canonicalCandidates = Array.from(
                   new Map(
                     [review.patient, ...review.matchedPatients]
@@ -5863,6 +6009,7 @@ function PatientIdentityReviewsTab() {
                 );
                 const busy = busyReviewId === review.id;
                 const reviewLabel = review.displayName || review.sourcePatientId;
+                const quickResolveCandidate = canonicalCandidates.length === 1 ? canonicalCandidates[0] : null;
                 return (
                   <div
                     key={review.id}
@@ -5895,16 +6042,38 @@ function PatientIdentityReviewsTab() {
                           <span>DOB: {review.dateOfBirth ? formatDateTime(review.dateOfBirth) : "—"}</span>
                           <span>Opened: {formatDateTime(review.createdAt)}</span>
                         </div>
+                        <div className="mt-2 text-[12px] text-slate-600">
+                          {review.reasonCode === "AMBIGUOUS_ALIAS_MATCH"
+                            ? "Multiple canonical patients matched the same source alias. Check source ID, DOB, and display name together before resolving."
+                            : review.reasonCode === "CONFLICTING_DATE_OF_BIRTH"
+                              ? "The source alias matched a patient with a conflicting date of birth. Review carefully before resolving."
+                              : review.reasonCode === "CONFLICTING_DISPLAY_NAME"
+                                ? "The source alias matched a patient, but the display name differs enough to require operator confirmation."
+                                : "Backfill could not safely link this source patient to a canonical patient automatically."}
+                        </div>
                       </div>
-                      <button
-                        onClick={() => updateReview(review, { status: "ignored" }).catch(() => undefined)}
-                        disabled={busy || review.status === "ignored"}
-                        aria-label={`Ignore patient identity review for ${reviewLabel}`}
-                        className="h-9 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        style={{ fontWeight: 600 }}
-                      >
-                        Ignore Review
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {quickResolveCandidate && review.status === "open" ? (
+                          <button
+                            onClick={() => updateReview(review, { status: "resolved", patientId: quickResolveCandidate.id }).catch(() => undefined)}
+                            disabled={busy}
+                            aria-label={`Quick resolve patient identity review for ${reviewLabel} using ${quickResolveCandidate.displayName || quickResolveCandidate.sourcePatientId}`}
+                            className="h-9 px-3 rounded-lg bg-emerald-600 text-white text-[12px] hover:bg-emerald-700 disabled:opacity-50"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {busy ? "Saving..." : "Quick Resolve"}
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() => updateReview(review, { status: "ignored" }).catch(() => undefined)}
+                          disabled={busy || review.status === "ignored"}
+                          aria-label={`Ignore patient identity review for ${reviewLabel}`}
+                          className="h-9 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          style={{ fontWeight: 600 }}
+                        >
+                          Ignore Review
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
@@ -5942,8 +6111,20 @@ function PatientIdentityReviewsTab() {
                               <div key={candidate.id} className="rounded-lg border border-white bg-white px-3 py-3">
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                   <div className="min-w-0">
-                                    <div className="text-[13px] text-slate-800" style={{ fontWeight: 700 }}>
-                                      {candidate.displayName || candidate.sourcePatientId}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <div className="text-[13px] text-slate-800" style={{ fontWeight: 700 }}>
+                                        {candidate.displayName || candidate.sourcePatientId}
+                                      </div>
+                                      {quickResolveCandidate?.id === candidate.id ? (
+                                        <Badge className="border-0 bg-emerald-100 text-emerald-700 text-[10px] h-5">
+                                          Recommended
+                                        </Badge>
+                                      ) : null}
+                                      {review.patient?.id === candidate.id ? (
+                                        <Badge className="border-0 bg-indigo-100 text-indigo-700 text-[10px] h-5">
+                                          Current Link
+                                        </Badge>
+                                      ) : null}
                                     </div>
                                     <div className="mt-1 text-[12px] text-muted-foreground">
                                       Source ID: {candidate.sourcePatientId}
@@ -5958,7 +6139,7 @@ function PatientIdentityReviewsTab() {
                                     className="h-9 px-3 rounded-lg bg-slate-900 text-white text-[12px] hover:bg-black disabled:opacity-50"
                                     style={{ fontWeight: 600 }}
                                   >
-                                    {busy ? "Saving..." : "Use This Patient"}
+                                    {busy ? "Saving..." : quickResolveCandidate?.id === candidate.id ? "Resolve Review" : "Use This Patient"}
                                   </button>
                                 </div>
                               </div>

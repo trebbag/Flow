@@ -947,6 +947,8 @@ async function clinicRequiresArchival(clinicId: string) {
     checklistCount,
     roomEventCount,
     safetyEventCount,
+    taskCount,
+    alertInboxCount,
   ] = await Promise.all([
     prisma.encounter.count({ where: { clinicId } }),
     ignoreMissingSchema(() => prisma.officeManagerDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
@@ -956,6 +958,8 @@ async function clinicRequiresArchival(clinicId: string) {
     ignoreMissingSchema(() => prisma.roomChecklistRun.count({ where: { clinicId } })).then((value) => value || 0),
     ignoreMissingSchema(() => prisma.roomOperationalEvent.count({ where: { clinicId } })).then((value) => value || 0),
     ignoreMissingSchema(() => prisma.safetyEvent.count({ where: { encounter: { clinicId } } })).then((value) => value || 0),
+    prisma.task.count({ where: { clinicId } }),
+    ignoreMissingSchema(() => prisma.userAlertInbox.count({ where: { clinicId } })).then((value) => value || 0),
   ]);
 
   return (
@@ -966,20 +970,23 @@ async function clinicRequiresArchival(clinicId: string) {
     roomIssueCount > 0 ||
     checklistCount > 0 ||
     roomEventCount > 0 ||
-    safetyEventCount > 0
+    safetyEventCount > 0 ||
+    taskCount > 0 ||
+    alertInboxCount > 0
   );
 }
 
 async function roomRequiresArchival(roomId: string) {
-  const [encounterCount, issueCount, checklistCount, eventCount, occupancyCount] = await Promise.all([
+  const [encounterCount, issueCount, checklistCount, eventCount, occupancyCount, taskCount] = await Promise.all([
     prisma.encounter.count({ where: { roomId } }),
     ignoreMissingSchema(() => prisma.roomIssue.count({ where: { roomId } })).then((value) => value || 0),
     ignoreMissingSchema(() => prisma.roomChecklistRun.count({ where: { roomId } })).then((value) => value || 0),
     ignoreMissingSchema(() => prisma.roomOperationalEvent.count({ where: { roomId } })).then((value) => value || 0),
     ignoreMissingSchema(() => prisma.roomOperationalState.count({ where: { roomId, occupiedEncounterId: { not: null } } })).then((value) => value || 0),
+    prisma.task.count({ where: { roomId } }),
   ]);
 
-  return encounterCount > 0 || issueCount > 0 || checklistCount > 0 || eventCount > 0 || occupancyCount > 0;
+  return encounterCount > 0 || issueCount > 0 || checklistCount > 0 || eventCount > 0 || occupancyCount > 0 || taskCount > 0;
 }
 
 async function upsertPatientAliasInTx(

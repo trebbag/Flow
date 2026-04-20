@@ -235,6 +235,7 @@ export function MABoardView() {
           <select
             value={clinicFilter}
             onChange={(e) => setClinicFilter(e.target.value)}
+            aria-label="Filter MA board by clinic"
             className="h-8 px-3 rounded-lg border border-gray-200 bg-white text-[12px] appearance-none focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-100"
           >
             <option value="all">All Clinics</option>
@@ -245,6 +246,8 @@ export function MABoardView() {
           {/* Wall mode toggle */}
           <button
             onClick={() => setWallMode(!wallMode)}
+            aria-label={wallMode ? "Exit wall mode" : "Enter wall mode"}
+            aria-pressed={wallMode}
             className="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:text-purple-600 hover:border-purple-200 transition-colors"
             title={wallMode ? "Exit Wall Mode" : "Enter Wall Mode"}
           >

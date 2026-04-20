@@ -2301,7 +2301,11 @@ export function EncounterDetailView() {
                                   </div>
                                 </div>
                                 {!isEncounterReadOnly && (
-                                  <button onClick={() => removeServiceCaptureItem(item.id)} className="text-rose-500">
+                                  <button
+                                    onClick={() => removeServiceCaptureItem(item.id)}
+                                    aria-label={`Remove service capture item ${item.label}`}
+                                    className="text-rose-500"
+                                  >
                                     <X className="w-4 h-4" />
                                   </button>
                                 )}
@@ -2967,6 +2971,7 @@ export function EncounterDetailView() {
                               <span className="text-[12px]" style={{ fontWeight: 600 }}>New Task</span>
                               <button
                                 onClick={() => { setShowTaskForm(false); setNewTask({ ...emptyTask }); }}
+                                aria-label="Close new task form"
                                 className="text-gray-400 hover:text-gray-600 transition-colors"
                               >
                                 <X className="w-4 h-4" />
