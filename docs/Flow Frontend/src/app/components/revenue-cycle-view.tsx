@@ -434,56 +434,47 @@ export function RevenueCycleView() {
   async function refreshRevenue() {
     setLoading(true);
     try {
-      const [dashboardResult, queueResult] = await Promise.allSettled([
-        dashboards.revenueCycle({ dayBucket, workQueue, mine: mineOnly, search }),
-        revenueCases.list({ dayBucket, workQueue, mine: mineOnly, search }),
-      ]);
+      const dashboardValue = await dashboards.revenueCycle({ dayBucket, workQueue, mine: mineOnly, search });
+      const normalizedCases = Array.isArray(dashboardValue?.cases) ? dashboardValue.cases : [];
+      const normalizedDashboard: RevenueDashboardSnapshot = {
+        ...dashboardValue,
+        cases: normalizedCases,
+      };
 
-      const dashboardValue = dashboardResult.status === "fulfilled" ? dashboardResult.value : dashboard;
-      const queueValue = queueResult.status === "fulfilled" ? queueResult.value : queueRows;
-      const nextCoreLoadError =
-        dashboardResult.status === "rejected" && queueResult.status === "rejected"
-          ? describeLoadError(dashboardResult.reason, describeLoadError(queueResult.reason))
-          : dashboardResult.status === "rejected" && !dashboard
-            ? describeLoadError(dashboardResult.reason)
-            : queueResult.status === "rejected" && queueRows.length === 0
-              ? describeLoadError(queueResult.reason)
-              : null;
-      setCoreLoadError(nextCoreLoadError);
+      setDashboard(normalizedDashboard);
+      setQueueRows(normalizedCases);
+      setCoreLoadError(null);
 
-      if (dashboardValue) {
-        setDashboard(dashboardValue);
-        const nextSettings: RevenueSettings = {
-          facilityId: session?.facilityId || "",
-          missedCollectionReasons: dashboardValue.settings?.missedCollectionReasons || [],
-          providerQueryTemplates: dashboardValue.settings?.providerQueryTemplates || [],
-          athenaLinkTemplate: dashboardValue.settings?.athenaLinkTemplate || "",
-          queueSla: {},
-          dayCloseDefaults: { defaultDueHours: 18, requireNextAction: true },
-          estimateDefaults: dashboardValue.settings?.estimateDefaults || {
-            defaultPatientEstimateCents: 0,
-            defaultPosCollectionPercent: 100,
-            explainEstimateByDefault: true,
-          },
-          athenaChecklistDefaults: dashboardValue.settings?.checklistDefaults?.athena_handoff_attestation || [],
-          checklistDefaults: dashboardValue.settings?.checklistDefaults || {},
-          serviceCatalog: dashboardValue.settings?.serviceCatalog || [],
-          chargeSchedule: dashboardValue.settings?.chargeSchedule || [],
-          reimbursementRules: dashboardValue.settings?.reimbursementRules || [],
-        };
-        setSettings(nextSettings);
-      }
+      const nextSettings: RevenueSettings = {
+        facilityId: session?.facilityId || "",
+        missedCollectionReasons: normalizedDashboard.settings?.missedCollectionReasons || [],
+        providerQueryTemplates: normalizedDashboard.settings?.providerQueryTemplates || [],
+        athenaLinkTemplate: normalizedDashboard.settings?.athenaLinkTemplate || "",
+        queueSla: {},
+        dayCloseDefaults: { defaultDueHours: 18, requireNextAction: true },
+        estimateDefaults: normalizedDashboard.settings?.estimateDefaults || {
+          defaultPatientEstimateCents: 0,
+          defaultPosCollectionPercent: 100,
+          explainEstimateByDefault: true,
+        },
+        athenaChecklistDefaults: normalizedDashboard.settings?.checklistDefaults?.athena_handoff_attestation || [],
+        checklistDefaults: normalizedDashboard.settings?.checklistDefaults || {},
+        serviceCatalog: normalizedDashboard.settings?.serviceCatalog || [],
+        chargeSchedule: normalizedDashboard.settings?.chargeSchedule || [],
+        reimbursementRules: normalizedDashboard.settings?.reimbursementRules || [],
+      };
+      setSettings(nextSettings);
 
-      setQueueRows(queueValue || []);
-
-      const candidateId = selectedCaseId && (queueValue || []).some((row) => row.id === selectedCaseId)
+      const candidateId = selectedCaseId && normalizedCases.some((row) => row.id === selectedCaseId)
         ? selectedCaseId
-        : queueValue?.[0]?.id || dashboardValue?.cases?.[0]?.id || null;
+        : normalizedCases[0]?.id || null;
       setSelectedCaseId(candidateId);
-
-      if (nextCoreLoadError && !dashboardValue && (!queueValue || queueValue.length === 0)) {
+    } catch (error) {
+      const message = describeLoadError(error, "Unable to load Revenue Cycle data.");
+      setCoreLoadError(message);
+      if (!dashboard && queueRows.length === 0) {
         toast.error("Unable to load Revenue Cycle data", {
-          description: nextCoreLoadError,
+          description: message,
         });
       }
     } finally {
@@ -580,7 +571,7 @@ export function RevenueCycleView() {
   }, [activeView, historyFrom, historyTo]);
 
   useEffect(() => {
-    if (activeView === "Day Close" || Boolean(selectedCaseId)) {
+    if (activeView === "Day Close" || (activeView === "Work Queues" && Boolean(selectedCaseId))) {
       refreshUserOptions().catch(() => undefined);
     }
   }, [activeView, selectedCaseId, session?.facilityId]);

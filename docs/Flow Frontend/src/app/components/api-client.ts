@@ -2109,10 +2109,7 @@ export async function primeRouteDataWithOptions(
       ];
       break;
     case "/revenue-cycle":
-      requests = [
-        tasks.list({ assignedToRole: "RevenueCycle" }),
-        admin.listClinics({ facilityId, includeInactive: true, includeArchived: true }),
-      ];
+      requests = [];
       break;
     case "/analytics":
       requests = [
