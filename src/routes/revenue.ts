@@ -695,11 +695,13 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
 
   app.get("/revenue-cases/:id", { preHandler: revenueGuard }, async (request) => {
     const revenueCaseId = (request.params as { id: string }).id;
-    await assertRevenueCaseReadable(revenueCaseId, request.user!);
+    const revenueCase = await assertRevenueCaseReadable(revenueCaseId, request.user!);
+    await syncRevenueCaseForEncounter(prisma, revenueCase.encounterId);
     const rows = await buildRevenueCaseList(prisma, {
+      revenueCaseId,
       facilityId: request.user!.facilityId,
     });
-    const row = rows.find((entry) => entry.id === revenueCaseId);
+    const row = rows[0] || null;
     assert(row, 404, "Revenue case not found");
     return mapRevenueCaseRow(row);
   });

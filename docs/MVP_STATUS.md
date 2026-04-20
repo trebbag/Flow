@@ -1,6 +1,6 @@
 # MVP Status
 
-Updated: April 18, 2026
+Updated: April 19, 2026
 
 ## Percent Complete By Core Area
 
@@ -33,6 +33,8 @@ Updated: April 18, 2026
 - Verified authenticated staging frontend proof with a real Entra bearer token.
 - Verified live room-release behavior on staging (`NeedsTurnover -> Ready`) on a ready-room clinic.
 - Refreshed role-proof evidence so the remaining staging gap is explicitly missing role tokens / live user sessions, not unknown product instability.
+- Replaced the old unauthenticated live-update path with authenticated stream transport backed by the current Flow session.
+- Reduced Revenue read-path overhead by avoiding whole-scope revenue-case rebuilds for every dashboard/detail request.
 
 ## Remaining Work Before Pilot
 
@@ -44,6 +46,7 @@ Updated: April 18, 2026
    - named access-review owner and cadence
    - BAA-dependent production guardrails
    - backup / restore and incident runbook hardening
+   - close the external approval gate in [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md)
 5. Finish the remaining pilot-scope modules if they are still required:
    - Supplies
    - Audits / fluorescent marker workflows
@@ -51,4 +54,4 @@ Updated: April 18, 2026
 
 ## Owner Inputs Still Required
 
-See [NEEDS_FROM_YOU.md](NEEDS_FROM_YOU.md) for the remaining external inputs needed for pilot readiness.
+See [NEEDS_FROM_YOU.md](NEEDS_FROM_YOU.md) and [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md) for the remaining external inputs and PHI-facing approvals needed for pilot readiness.

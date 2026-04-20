@@ -23,6 +23,8 @@ import { DateTime } from "luxon";
 import { createInboxAlert } from "./user-alert-inbox.js";
 
 const TODAY_WINDOW_DAYS = 30;
+const REVENUE_SCOPE_SYNC_STALE_MS = 10 * 60 * 1000;
+const REVENUE_SCOPE_SYNC_BATCH_SIZE = 6;
 
 export const BILLING_FIELD_KEYS = {
   collectionExpected: "billing.collection_expected",
@@ -136,6 +138,14 @@ export type RevenueEstimateDefaults = {
   defaultPatientEstimateCents: number;
   defaultPosCollectionPercent: number;
   explainEstimateByDefault: boolean;
+};
+
+type RevenueSettingsSnapshot = {
+  estimateDefaults: RevenueEstimateDefaults;
+  checklistDefaults: Record<string, RevenueChecklistDefaultItem[]>;
+  serviceCatalog: RevenueServiceCatalogItem[];
+  chargeSchedule: RevenueChargeScheduleItem[];
+  reimbursementRules: RevenueReimbursementRuleItem[];
 };
 
 export type RevenueServiceCaptureItem = {
@@ -1559,7 +1569,11 @@ async function syncChecklistCompletion(
   }
 }
 
-export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.TransactionClient, encounterId: string) {
+export async function syncRevenueCaseForEncounter(
+  db: PrismaClient | Prisma.TransactionClient,
+  encounterId: string,
+  options?: { settings?: RevenueSettingsSnapshot | null },
+) {
   const encounter = await db.encounter.findUnique({
     where: { id: encounterId },
     include: {
@@ -1578,7 +1592,7 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
 
   if (!encounter?.clinic?.facilityId) return null;
 
-  const settings = await getRevenueSettings(db, encounter.clinic.facilityId);
+  const settings = options?.settings || (await getRevenueSettings(db, encounter.clinic.facilityId));
   const financial = parseFinancialReadiness(encounter, settings.estimateDefaults);
   const checkoutTracking = parseCheckoutTracking(encounter);
   const chargeCapture = parseChargeCapture(encounter, settings.serviceCatalog);
@@ -1918,6 +1932,10 @@ export async function syncRevenueCaseForEncounter(db: PrismaClient | Prisma.Tran
   return updated;
 }
 
+function revenueStatusNeedsPeriodicScopeSync(status: RevenueStatus | null | undefined) {
+  return status !== RevenueStatus.MonitoringOnly && status !== RevenueStatus.Closed;
+}
+
 export async function syncRevenueCasesForScope(
   db: PrismaClient | Prisma.TransactionClient,
   params: { clinicIds?: string[]; facilityId?: string | null; fromDateKey?: string | null; toDateKey?: string | null },
@@ -1926,6 +1944,7 @@ export async function syncRevenueCasesForScope(
   const end = (params.toDateKey || DateTime.now().toISODate() || "").trim();
   const startDate = DateTime.fromISO(start, { zone: "utc" }).startOf("day");
   const endDate = DateTime.fromISO(end, { zone: "utc" }).endOf("day");
+  const staleBefore = new Date(Date.now() - REVENUE_SCOPE_SYNC_STALE_MS);
 
   const encounters = await db.encounter.findMany({
     where: {
@@ -1933,12 +1952,30 @@ export async function syncRevenueCasesForScope(
       clinic: params.facilityId ? { facilityId: params.facilityId } : undefined,
       dateOfService: { gte: startDate.toJSDate(), lte: endDate.toJSDate() },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      clinic: { select: { facilityId: true } },
+      revenueCase: {
+        select: {
+          updatedAt: true,
+          currentRevenueStatus: true,
+        },
+      },
+    },
     orderBy: { dateOfService: "desc" },
   });
 
+  const syncCandidates = new Map<string, string>();
   for (const encounter of encounters) {
-    await syncRevenueCaseForEncounter(db, encounter.id);
+    const facilityId = encounter.clinic?.facilityId;
+    if (!facilityId) continue;
+    const revenueCase = encounter.revenueCase;
+    if (
+      !revenueCase ||
+      (revenueStatusNeedsPeriodicScopeSync(revenueCase.currentRevenueStatus) && revenueCase.updatedAt <= staleBefore)
+    ) {
+      syncCandidates.set(encounter.id, facilityId);
+    }
   }
 
   const unresolvedCases = await db.revenueCase.findMany({
@@ -1946,17 +1983,44 @@ export async function syncRevenueCasesForScope(
       clinicId: params.clinicIds && params.clinicIds.length > 0 ? { in: params.clinicIds } : undefined,
       facilityId: params.facilityId || undefined,
       currentRevenueStatus: { notIn: [RevenueStatus.MonitoringOnly, RevenueStatus.Closed] },
+      updatedAt: { lte: staleBefore },
     },
-    select: { encounterId: true },
+    select: { encounterId: true, facilityId: true },
   });
+
   for (const row of unresolvedCases) {
-    await syncRevenueCaseForEncounter(db, row.encounterId);
+    if (row.facilityId) {
+      syncCandidates.set(row.encounterId, row.facilityId);
+    }
+  }
+
+  if (syncCandidates.size === 0) {
+    return;
+  }
+
+  const facilityIds = Array.from(new Set(syncCandidates.values()));
+  const settingsByFacility = new Map<string, RevenueSettingsSnapshot>();
+  for (const facilityId of facilityIds) {
+    settingsByFacility.set(facilityId, await getRevenueSettings(db, facilityId));
+  }
+
+  const candidates = Array.from(syncCandidates.entries()).map(([encounterId, facilityId]) => ({
+    encounterId,
+    settings: settingsByFacility.get(facilityId) || null,
+  }));
+
+  for (let index = 0; index < candidates.length; index += REVENUE_SCOPE_SYNC_BATCH_SIZE) {
+    const batch = candidates.slice(index, index + REVENUE_SCOPE_SYNC_BATCH_SIZE);
+    await Promise.all(
+      batch.map((candidate) => syncRevenueCaseForEncounter(db, candidate.encounterId, { settings: candidate.settings })),
+    );
   }
 }
 
 export async function buildRevenueCaseList(
   db: PrismaClient | Prisma.TransactionClient,
   params: {
+    revenueCaseId?: string;
     clinicIds?: string[];
     facilityId?: string | null;
     encounterId?: string;
@@ -1971,6 +2035,7 @@ export async function buildRevenueCaseList(
   const search = params.search?.trim();
   const rows = await db.revenueCase.findMany({
     where: {
+      id: params.revenueCaseId,
       clinicId: params.clinicIds && params.clinicIds.length > 0 ? { in: params.clinicIds } : undefined,
       facilityId: params.facilityId || undefined,
       encounterId: params.encounterId,

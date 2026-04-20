@@ -16,6 +16,7 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
    - confirm tenant-member-only access for pilot users
    - confirm the final pilot user group membership
    - name the final pilot access-review owner and review cadence for pilot users
+   - see [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md) for the exact PHI-facing approval gate that is still external to the repo
 
 3. Staging proof credentials and environment inputs
    - keep `STAGING_FRONTEND_BEARER_TOKEN` fresh or replace it with a more durable proof path
@@ -50,6 +51,7 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
    - pilot master data payload for facilities, clinics, providers, reasons, and templates
    - named owner for pilot go/no-go signoff
    - backup / restore and incident runbook approver
+   - confirm the final approvers for the items listed in [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md)
 
 6. Time-of-service RCM pilot content
    - finalize the facility-level service catalog that MAs should capture in Flow
@@ -65,6 +67,7 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 - Keep using `pnpm staging:auth:refresh` from a signed-in Azure CLI session before authenticated staging verification runs if you stay on the current short-lived bearer-token workflow.
 - Confirm the scheduled Entra directory sync behaves as expected after future pilot-user provisioning changes.
 - If you want local authenticated frontend-live checks to run instead of being skipped, set either `VITE_DEV_USER_ID` / `FRONTEND_DEV_USER_ID` or `VITE_BEARER_TOKEN` / `FRONTEND_BEARER_TOKEN` in the shell before running `pnpm frontend:verify-live`.
+- Before PHI-facing pilot activation, close the external owner approvals listed in [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md).
 - Before real staging proof of the revenue cockpit, configure the AthenaOne connector with the real revenue-monitoring endpoint in `revenuePath` and valid connector credentials for the pilot facility so the new preview/import path can exercise real downstream Athena data.
 - Before real staging proof of the time-of-service RCM workflow, review and confirm the seeded MA service catalog and charge schedule in `Admin -> Revenue Operations Settings` so expected-money totals reflect your pilot operating model rather than demo defaults.
 - Before clinician-role staging proof of the new optimizing flow, confirm whether the seeded bundled ICD-10/CPT lookup list is sufficient for pilot use or whether you want a larger reference dataset loaded for broader code coverage.

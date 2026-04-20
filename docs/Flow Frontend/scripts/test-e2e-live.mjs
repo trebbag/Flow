@@ -18,6 +18,14 @@ const bearerToken =
   process.env.FRONTEND_BEARER_TOKEN ||
   "";
 const hasBearerToken = bearerToken.trim().length > 0;
+const targetClinicId =
+  process.env.FRONTEND_TEST_CLINIC_ID ||
+  process.env.VITE_TEST_CLINIC_ID ||
+  "";
+const targetClinicName =
+  process.env.FRONTEND_TEST_CLINIC_NAME ||
+  process.env.VITE_TEST_CLINIC_NAME ||
+  "";
 
 function authHeaders({ userId, role, facilityId } = {}) {
   const headers = {};
@@ -445,11 +453,26 @@ async function main() {
     ...assignments.filter((row) => row.clinicStatus === "active" && row.isOperational && row.maRun === false),
     ...assignments.filter((row) => row.clinicStatus === "active" && row.isOperational && row.maRun === true),
   ].filter((row, index, rows) => rows.findIndex((entry) => entry.clinicId === row.clinicId) === index);
+  const preferredAssignmentCandidates =
+    targetClinicId || targetClinicName
+      ? assignmentCandidates.filter((row) => {
+          const candidateClinic = clinics.find((clinicRow) => clinicRow.id === row.clinicId);
+          if (!candidateClinic) return false;
+          if (targetClinicId && candidateClinic.id === targetClinicId) return true;
+          if (targetClinicName && String(candidateClinic.name || "").trim().toLowerCase() === targetClinicName.trim().toLowerCase()) {
+            return true;
+          }
+          return false;
+        })
+      : [];
+  const prioritizedAssignments = preferredAssignmentCandidates.length > 0
+    ? [...preferredAssignmentCandidates, ...assignmentCandidates.filter((row) => !preferredAssignmentCandidates.includes(row))]
+    : assignmentCandidates;
 
   let targetAssignment = null;
   let clinic = null;
   let room = null;
-  for (const candidate of assignmentCandidates) {
+  for (const candidate of prioritizedAssignments) {
     if (!candidate.roomCount || candidate.roomCount <= 0) continue;
     const candidateClinic = clinics.find((row) => row.id === candidate.clinicId);
     if (!candidateClinic || candidateClinic.status !== "active") continue;

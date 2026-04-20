@@ -8,6 +8,7 @@ import {
   admin,
   encounters as encounterApi,
   incoming as incomingApi,
+  openAuthenticatedEventStream,
   safety as safetyApi,
   tasks as tasksApi,
   type IncomingRow,
@@ -504,28 +505,49 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       refreshData().catch(() => undefined);
     }, 30000);
 
-    let source: EventSource | null = null;
-    const eventStreamExplicitlyEnabled =
+    let cancelled = false;
+    let streamCloser: (() => void) | null = null;
+    let streamAbortController: AbortController | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    const eventStreamEnabled =
       String(
-        ((typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_ENABLE_EVENT_STREAM) ?? "false"),
-      ).toLowerCase() === "true";
+        ((typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_ENABLE_EVENT_STREAM) ?? "true"),
+      ).toLowerCase() !== "false";
     const session = loadSession();
-    if (eventStreamExplicitlyEnabled && session?.mode === "dev_header") {
-      const baseUrl =
-        (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
-        "http://localhost:4000";
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimeout) return;
+      reconnectTimeout = setTimeout(() => {
+        reconnectTimeout = null;
+        connectStream().catch(() => undefined);
+      }, 15_000);
+    };
+    const connectStream = async () => {
+      if (!eventStreamEnabled || !session) return;
+      streamAbortController?.abort();
+      const controller = new AbortController();
+      streamAbortController = controller;
       try {
-        source = new EventSource(`${baseUrl.replace(/\/$/, "")}/events/stream`);
-        source.onmessage = () => {
-          refreshData().catch(() => undefined);
-        };
-        source.onerror = () => {
-          source?.close();
-        };
+        const stream = await openAuthenticatedEventStream({
+          signal: controller.signal,
+          onEvent: ({ event }) => {
+            if (event !== "connected") {
+              refreshData().catch(() => undefined);
+            }
+          },
+        });
+        streamCloser = stream.close;
+        stream.completed.finally(() => {
+          if (!cancelled && !controller.signal.aborted) {
+            scheduleReconnect();
+          }
+        });
       } catch {
-        // EventSource is optional; polling remains active.
+        if (!controller.signal.aborted) {
+          scheduleReconnect();
+        }
       }
-    }
+    };
+    connectStream().catch(() => undefined);
 
     const onExternalRefresh = () => {
       refreshData().catch(() => undefined);
@@ -536,8 +558,11 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
+      cancelled = true;
       clearInterval(poll);
-      source?.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      streamCloser?.();
+      streamAbortController?.abort();
       if (typeof window !== "undefined") {
         window.removeEventListener(ADMIN_REFRESH_EVENT, onExternalRefresh);
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onExternalRefresh);

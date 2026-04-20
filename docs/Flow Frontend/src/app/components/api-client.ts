@@ -102,6 +102,11 @@ type ApiFetchOptions = RequestInit & {
   timeoutMs?: number;
 };
 
+type EventStreamMessage = {
+  event: string;
+  data: unknown;
+};
+
 export type AuthContextSummary = {
   userId: string;
   name: string | null;
@@ -289,6 +294,109 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
 
   inflightGets.set(cacheKey, request as Promise<unknown>);
   return request;
+}
+
+export async function openAuthenticatedEventStream(options: {
+  path?: string;
+  onEvent: (message: EventStreamMessage) => void;
+  onError?: (error: Error) => void;
+  signal?: AbortSignal;
+}) {
+  const path = options.path || "/events/stream";
+  const headers = await resolveAuthHeaders();
+  const controller = new AbortController();
+  const callerSignal = options.signal;
+  const forwardAbort = () => controller.abort();
+
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      forwardAbort();
+    } else {
+      callerSignal.addEventListener("abort", forwardAbort, { once: true });
+    }
+  }
+
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: "GET",
+    headers: {
+      ...headers,
+      Accept: "text/event-stream",
+    },
+    cache: "no-store",
+    signal: controller.signal,
+  });
+
+  if (!response.ok || !response.body) {
+    if (callerSignal) callerSignal.removeEventListener("abort", forwardAbort);
+    throw new Error(`Event stream request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let closed = false;
+
+  const emitMessage = (rawMessage: string) => {
+    const lines = rawMessage.split(/\r?\n/);
+    let eventName = "message";
+    const dataLines: string[] = [];
+
+    for (const line of lines) {
+      if (!line || line.startsWith(":")) continue;
+      if (line.startsWith("event:")) {
+        eventName = line.slice("event:".length).trim() || "message";
+        continue;
+      }
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).trim());
+      }
+    }
+
+    if (dataLines.length === 0) return;
+    const rawData = dataLines.join("\n");
+    let parsed: unknown = rawData;
+    try {
+      parsed = JSON.parse(rawData);
+    } catch {
+      // Keep the raw string payload for non-JSON events.
+    }
+    options.onEvent({ event: eventName, data: parsed });
+  };
+
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    controller.abort();
+    if (callerSignal) callerSignal.removeEventListener("abort", forwardAbort);
+  };
+
+  const pump = (async () => {
+    try {
+      while (!closed) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundaryIndex = buffer.indexOf("\n\n");
+        while (boundaryIndex >= 0) {
+          const rawMessage = buffer.slice(0, boundaryIndex).trim();
+          buffer = buffer.slice(boundaryIndex + 2);
+          if (rawMessage) emitMessage(rawMessage);
+          boundaryIndex = buffer.indexOf("\n\n");
+        }
+      }
+    } catch (error) {
+      if (!closed) {
+        options.onError?.(error instanceof Error ? error : new Error(String(error)));
+      }
+    } finally {
+      close();
+    }
+  })();
+
+  return {
+    close,
+    completed: pump,
+  };
 }
 
 // ── Encounters Controller (/encounters) ──────────────────────────────
