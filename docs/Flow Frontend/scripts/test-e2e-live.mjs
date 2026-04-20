@@ -657,13 +657,13 @@ async function main() {
   let providerStarted;
   let providerEnded;
   if (!clinic.maRun) {
-    const clinicianBoard = await request(`/encounters?clinicId=${clinic.id}&date=${today}`, {
+    await waitForEncounterOnBoard({
+      clinicId: clinic.id,
+      date: today,
+      encounterId: created.id,
       auth: clinicianAuth,
+      label: "clinician board",
     });
-    assert.ok(
-      clinicianBoard.some((row) => row.id === created.id),
-      "clinician board should include provider-assigned encounter",
-    );
 
     const readySnapshot = await request(`/encounters/${created.id}`, {
       auth: clinicianAuth,
@@ -707,13 +707,13 @@ async function main() {
     providerEnded = movedReady;
   }
 
-  const checkoutBoard = await request(`/encounters?clinicId=${clinic.id}&date=${today}`, {
+  await waitForEncounterOnBoard({
+    clinicId: clinic.id,
+    date: today,
+    encounterId: created.id,
     auth: checkoutAuth,
+    label: "checkout board",
   });
-  assert.ok(
-    checkoutBoard.some((row) => row.id === created.id),
-    "checkout board should include encounter in downstream status",
-  );
 
   const checkoutSnapshot = await request(`/encounters/${created.id}`, {
     auth: checkoutAuth,
