@@ -74,7 +74,10 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 - Staging proof on April 18, 2026 now shows:
   - room release was validated successfully on `Team J` / `Room 5` through `NeedsTurnover -> Ready`
   - the earlier stale proof-room residue in `Team A` has been cleaned up
-  - broader room-operations validation in `Team A` is still needed during full role-by-role staging proof
+- Additional staging proof on April 19, 2026 now shows:
+  - `Team A` room operations validated successfully through the live happy path
+  - see [staging-room-ops-team-a-20260419.md](verification/staging-room-ops-team-a-20260419.md)
+  - the remaining room-validation work is broader multi-role usage coverage, not unresolved `Team A` room integrity
 
 ## Repository Hygiene Follow-Up
 

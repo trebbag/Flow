@@ -177,17 +177,15 @@ export async function registerEventRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const requestOrigin = typeof request.headers.origin === "string" ? request.headers.origin : null;
       reply.hijack();
+      if (requestOrigin) {
+        reply.raw.setHeader("Access-Control-Allow-Origin", requestOrigin);
+        reply.raw.setHeader("Access-Control-Allow-Credentials", "true");
+        reply.raw.setHeader("Vary", "Origin");
+      }
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
-        ...(requestOrigin
-          ? {
-              "Access-Control-Allow-Origin": requestOrigin,
-              "Access-Control-Allow-Credentials": "true",
-              Vary: "Origin",
-            }
-          : {}),
       });
 
       const writeEvent = (eventName: string, payload: unknown) => {

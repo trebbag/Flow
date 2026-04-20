@@ -32,6 +32,7 @@ Updated: April 19, 2026
 - Enabled read-only encounter review for Front Desk Check-Out users in the frontend route layer.
 - Verified authenticated staging frontend proof with a real Entra bearer token.
 - Verified live room-release behavior on staging (`NeedsTurnover -> Ready`) on a ready-room clinic.
+- Verified the broader `Team A` room-operations happy path in live staging and recorded the evidence in [staging-room-ops-team-a-20260419.md](verification/staging-room-ops-team-a-20260419.md).
 - Refreshed role-proof evidence so the remaining staging gap is explicitly missing role tokens / live user sessions, not unknown product instability.
 - Replaced the old unauthenticated live-update path with authenticated stream transport backed by the current Flow session.
 - Reduced Revenue read-path overhead by avoiding whole-scope revenue-case rebuilds for every dashboard/detail request.
@@ -39,7 +40,7 @@ Updated: April 19, 2026
 ## Remaining Work Before Pilot
 
 1. Run the full role-by-role staging proof with real Entra users or per-role bearer tokens and record the final evidence.
-2. Complete broader room-operations validation in `Team A` during role-by-role staging proof now that the stale proof-room residue has been cleaned up.
+2. Complete broader multi-role staging proof coverage for room operations now that the specific `Team A` room-validation gap is closed.
 3. Finalize the facility service catalog, charge schedule, and payer / financial-class reimbursement rules used by the revenue projection model.
 4. Finalize PHI-facing security controls:
    - MFA / Conditional-Access-equivalent enforcement
