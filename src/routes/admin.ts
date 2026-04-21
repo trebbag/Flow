@@ -31,6 +31,21 @@ import {
   invalidateRevenueSettingsCache,
 } from "../lib/revenue-cycle.js";
 import { getRevenueDailyHistoryRollups, listDateKeys } from "../lib/revenue-rollups.js";
+import {
+  asInputJson,
+  normalizeGenericObjectJson,
+  normalizeQuietHoursJson,
+  normalizeRoleNameArrayJson,
+  normalizeStringArrayJson,
+  normalizeTemplateFieldsJson,
+  parseGenericObjectJsonInput,
+  parseQuietHoursJsonInput,
+  parseRoleNameArrayJsonInput,
+  parseStringArrayJsonInput,
+  parseTemplateFieldsJsonInput,
+} from "../lib/persisted-json.js";
+import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
+import { persistMutationOperationalEventTx, flushOperationalOutbox } from "../lib/operational-events.js";
 
 const facilitySchema = z.object({
   name: z.string().min(1),
@@ -813,10 +828,10 @@ async function createRoomWithAllocatedNumber(params: {
   name: string;
   roomType: string;
   status: string;
-}) {
+}, db: Prisma.TransactionClient | typeof prisma = prisma) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await prisma.$transaction(async (tx) => {
+      const createRoom = async (tx: Prisma.TransactionClient) => {
         const roomNumber = await nextRoomNumberForFacility(params.facilityId, tx);
         return tx.clinicRoom.create({
           data: {
@@ -828,7 +843,11 @@ async function createRoomWithAllocatedNumber(params: {
             sortOrder: roomNumber
           }
         });
-      });
+      };
+      if ("$transaction" in db) {
+        return await db.$transaction(async (tx) => createRoom(tx));
+      }
+      return await createRoom(db);
     } catch (error) {
       if (isRoomNumberConstraintError(error) && attempt < 2) {
         continue;
@@ -1345,6 +1364,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
         return {
           ...clinic,
+          cardTags: normalizeStringArrayJson(clinic.cardTags, request.log, "clinicCardTags"),
           roomIds: roomIdsByClinic.get(clinic.id) || [],
           assignment: assignment
             ? {
@@ -1438,7 +1458,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         autoCloseEnabled: dto.autoCloseEnabled ?? false,
         autoCloseTime: dto.autoCloseTime,
         cardColor: dto.cardColor,
-        cardTags: dto.cardTags ? (dto.cardTags as Prisma.InputJsonValue) : Prisma.JsonNull
+        cardTags: dto.cardTags ? asInputJson(parseStringArrayJsonInput(dto.cardTags, "clinicCardTags")) : Prisma.JsonNull
       }
     });
 
@@ -1491,7 +1511,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         autoCloseEnabled: dto.autoCloseEnabled,
         autoCloseTime: dto.autoCloseTime,
         cardColor: dto.cardColor,
-        cardTags: dto.cardTags ? (dto.cardTags as Prisma.InputJsonValue) : undefined
+        cardTags: dto.cardTags ? asInputJson(parseStringArrayJsonInput(dto.cardTags, "clinicCardTags")) : undefined
       }
     });
 
@@ -1880,19 +1900,29 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = roomSchema.parse(request.body);
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
     const roomType = normalizeRoomType(dto.roomType);
-    const room = await createRoomWithAllocatedNumber({
-      facilityId: facility.id,
-      name: dto.name,
-      roomType,
-      status: dto.status ?? "active"
-    });
-    if (room.status === "active") {
-      await prisma.roomOperationalState.upsert({
-        where: { roomId: room.id },
-        create: { roomId: room.id, currentStatus: "Ready", lastReadyAt: new Date() },
-        update: {}
+    const room = await prisma.$transaction(async (tx) => {
+      const created = await createRoomWithAllocatedNumber({
+        facilityId: facility.id,
+        name: dto.name,
+        roomType,
+        status: dto.status ?? "active"
+      }, tx);
+      if (created.status === "active") {
+        await tx.roomOperationalState.upsert({
+          where: { roomId: created.id },
+          create: { roomId: created.id, currentStatus: "Ready", lastReadyAt: new Date() },
+          update: {}
+        });
+      }
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "ClinicRoom",
+        entityId: created.id,
       });
-    }
+      return created;
+    });
+    await flushOperationalOutbox(prisma);
     return room;
   });
 
@@ -2407,6 +2437,63 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     reasonAssignments: Array<{ reasonId: string }>;
   };
 
+  function buildTemplateIntegrityWarnings(template: TemplateWithAssignments, request: FastifyRequest) {
+    const fields = normalizeTemplateFieldsJson(template.fieldsJson, request.log, "templateFieldsJson");
+    const malformedFieldsJson =
+      template.fieldsJson !== null &&
+      template.fieldsJson !== undefined &&
+      (!Array.isArray(template.fieldsJson) || (template.fieldsJson.length > 0 && fields.length === 0));
+
+    return {
+      fields,
+      integrityWarnings: malformedFieldsJson ? [buildIntegrityWarning("fieldsJson")] : [],
+    };
+  }
+
+  function buildRevenueSettingsIntegrityWarnings(row: {
+    queueSlaJson: Prisma.JsonValue;
+    dayCloseDefaultsJson: Prisma.JsonValue;
+    estimateDefaultsJson: Prisma.JsonValue;
+    athenaChecklistDefaultsJson: Prisma.JsonValue;
+    checklistDefaultsJson: Prisma.JsonValue;
+    serviceCatalogJson: Prisma.JsonValue;
+    chargeScheduleJson: Prisma.JsonValue;
+    reimbursementRulesJson: Prisma.JsonValue;
+  }) {
+    const warnings = [] as ReturnType<typeof buildIntegrityWarning>[];
+    const pushIf = (condition: boolean, field: string) => {
+      if (condition) warnings.push(buildIntegrityWarning(field));
+    };
+
+    pushIf(Boolean(row.queueSlaJson) && (typeof row.queueSlaJson !== "object" || Array.isArray(row.queueSlaJson)), "queueSlaJson");
+    pushIf(
+      Boolean(row.dayCloseDefaultsJson) && (typeof row.dayCloseDefaultsJson !== "object" || Array.isArray(row.dayCloseDefaultsJson)),
+      "dayCloseDefaultsJson",
+    );
+    pushIf(
+      Boolean(row.estimateDefaultsJson) && (typeof row.estimateDefaultsJson !== "object" || Array.isArray(row.estimateDefaultsJson)),
+      "estimateDefaultsJson",
+    );
+    pushIf(
+      Boolean(row.athenaChecklistDefaultsJson) && !Array.isArray(row.athenaChecklistDefaultsJson),
+      "athenaChecklistDefaultsJson",
+    );
+    pushIf(
+      Boolean(row.checklistDefaultsJson) && (typeof row.checklistDefaultsJson !== "object" || Array.isArray(row.checklistDefaultsJson)),
+      "checklistDefaultsJson",
+    );
+    pushIf(Boolean(row.serviceCatalogJson) && !Array.isArray(row.serviceCatalogJson), "serviceCatalogJson");
+    pushIf(Boolean(row.chargeScheduleJson) && !Array.isArray(row.chargeScheduleJson), "chargeScheduleJson");
+    pushIf(
+      row.reimbursementRulesJson !== null &&
+      row.reimbursementRulesJson !== undefined &&
+      !Array.isArray(row.reimbursementRulesJson),
+      "reimbursementRulesJson",
+    );
+
+    return warnings;
+  }
+
   function mapTemplateRow(template: TemplateWithAssignments) {
     const reasonIds = Array.from(
       new Set([
@@ -2414,7 +2501,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         ...template.reasonAssignments.map((entry) => entry.reasonId)
       ])
     );
-    const fields = Array.isArray(template.fieldsJson) ? (template.fieldsJson as unknown[]) : [];
+    const fields = normalizeTemplateFieldsJson(template.fieldsJson);
     const requiredFields = Array.isArray(template.requiredFields) ? (template.requiredFields as string[]) : [];
     return {
       id: template.id,
@@ -2553,7 +2640,32 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       },
       orderBy: [{ type: "asc" }, { name: "asc" }, { createdAt: "asc" }]
     });
-    return templates.map((template) => mapTemplateRow(template as TemplateWithAssignments));
+    const mappedTemplates = templates.map((template) => {
+      const templateRow = template as TemplateWithAssignments;
+      const mapped = mapTemplateRow(templateRow);
+      const { integrityWarnings } = buildTemplateIntegrityWarnings(templateRow, request);
+      return {
+        ...mapped,
+        integrityWarnings,
+      };
+    });
+
+    await Promise.all(
+      mappedTemplates.flatMap((template) =>
+        template.integrityWarnings.map((warning) =>
+          recordPersistedJsonAlert({
+            facilityId: template.facilityId,
+            clinicId: template.clinicId,
+            entityType: "template",
+            entityId: template.id,
+            field: warning.field,
+            requestId: request.id,
+          }),
+        ),
+      ),
+    );
+
+    return mappedTemplates;
   });
 
   async function upsertTemplate(params: {
@@ -2597,7 +2709,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
               clinicId: null,
               reasonForVisitId: reasonIds[0] || null,
               type,
-              fieldsJson: normalizedFields as Prisma.InputJsonValue,
+              fieldsJson: asInputJson(parseTemplateFieldsJsonInput(normalizedFields)),
               jsonSchema: schema.jsonSchema,
               uiSchema: schema.uiSchema,
               requiredFields: schema.requiredFields as Prisma.InputJsonValue,
@@ -2613,7 +2725,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
               clinicId: null,
               reasonForVisitId: reasonIds[0] || null,
               type,
-              fieldsJson: normalizedFields as Prisma.InputJsonValue,
+              fieldsJson: asInputJson(parseTemplateFieldsJsonInput(normalizedFields)),
               jsonSchema: schema.jsonSchema,
               uiSchema: schema.uiSchema,
               requiredFields: schema.requiredFields as Prisma.InputJsonValue
@@ -3320,6 +3432,35 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const query = request.query as { facilityId?: string };
     const facility = await resolveFacilityForRequest(request, query.facilityId);
     const settings = await getRevenueSettings(prisma, facility.id);
+    const rawSettings = await prisma.revenueCycleSettings.findUnique({
+      where: { facilityId: facility.id },
+      select: {
+        queueSlaJson: true,
+        dayCloseDefaultsJson: true,
+        estimateDefaultsJson: true,
+        athenaChecklistDefaultsJson: true,
+        checklistDefaultsJson: true,
+        serviceCatalogJson: true,
+        chargeScheduleJson: true,
+        reimbursementRulesJson: true,
+      },
+    });
+    const integrityWarnings = rawSettings ? buildRevenueSettingsIntegrityWarnings(rawSettings) : [];
+
+    if (integrityWarnings.length > 0) {
+      await Promise.all(
+        integrityWarnings.map((warning) =>
+          recordPersistedJsonAlert({
+            facilityId: facility.id,
+            entityType: "revenueCycleSettings",
+            entityId: facility.id,
+            field: warning.field,
+            requestId: request.id,
+          }),
+        ),
+      );
+    }
+
     return {
       facilityId: facility.id,
       missedCollectionReasons: settings.missedCollectionReasons,
@@ -3343,7 +3484,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         serviceCatalog: [...DEFAULT_REVENUE_SETTINGS.serviceCatalog],
         chargeSchedule: [...DEFAULT_REVENUE_SETTINGS.chargeSchedule],
         reimbursementRules: [...DEFAULT_REVENUE_SETTINGS.reimbursementRules],
-      }
+      },
+      integrityWarnings,
     };
     },
   );
@@ -3357,51 +3499,51 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       where: { facilityId: facility.id },
       create: {
         facilityId: facility.id,
-        missedCollectionReasonsJson: (dto.missedCollectionReasons || existing.missedCollectionReasons) as Prisma.InputJsonValue,
-        queueSlaJson: (dto.queueSla || existing.queueSla) as Prisma.InputJsonValue,
-        dayCloseDefaultsJson: (
-          dto.dayCloseDefaults ? { ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } : existing.dayCloseDefaults
-        ) as Prisma.InputJsonValue,
-        estimateDefaultsJson: (
-          dto.estimateDefaults ? { ...existing.estimateDefaults, ...dto.estimateDefaults } : existing.estimateDefaults
-        ) as Prisma.InputJsonValue,
-        providerQueryTemplatesJson: (dto.providerQueryTemplates || existing.providerQueryTemplates) as Prisma.InputJsonValue,
+        missedCollectionReasonsJson: asInputJson(dto.missedCollectionReasons || existing.missedCollectionReasons),
+        queueSlaJson: asInputJson(dto.queueSla || existing.queueSla),
+        dayCloseDefaultsJson: asInputJson(
+          dto.dayCloseDefaults ? { ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } : existing.dayCloseDefaults,
+        ),
+        estimateDefaultsJson: asInputJson(
+          dto.estimateDefaults ? { ...existing.estimateDefaults, ...dto.estimateDefaults } : existing.estimateDefaults,
+        ),
+        providerQueryTemplatesJson: asInputJson(dto.providerQueryTemplates || existing.providerQueryTemplates),
         athenaLinkTemplate: dto.athenaLinkTemplate ?? existing.athenaLinkTemplate,
-        athenaChecklistDefaultsJson: (dto.athenaChecklistDefaults || existing.athenaChecklistDefaults) as Prisma.InputJsonValue,
-        checklistDefaultsJson: (dto.checklistDefaults || existing.checklistDefaults) as Prisma.InputJsonValue,
-        serviceCatalogJson: (dto.serviceCatalog || existing.serviceCatalog) as Prisma.InputJsonValue,
-        chargeScheduleJson: (dto.chargeSchedule || existing.chargeSchedule) as Prisma.InputJsonValue,
-        reimbursementRulesJson: (dto.reimbursementRules || existing.reimbursementRules) as Prisma.InputJsonValue,
+        athenaChecklistDefaultsJson: asInputJson(dto.athenaChecklistDefaults || existing.athenaChecklistDefaults),
+        checklistDefaultsJson: asInputJson(dto.checklistDefaults || existing.checklistDefaults),
+        serviceCatalogJson: asInputJson(dto.serviceCatalog || existing.serviceCatalog),
+        chargeScheduleJson: asInputJson(dto.chargeSchedule || existing.chargeSchedule),
+        reimbursementRulesJson: asInputJson(dto.reimbursementRules || existing.reimbursementRules),
       },
       update: {
         missedCollectionReasonsJson: dto.missedCollectionReasons
-          ? (dto.missedCollectionReasons as Prisma.InputJsonValue)
+          ? asInputJson(dto.missedCollectionReasons)
           : undefined,
-        queueSlaJson: dto.queueSla ? (dto.queueSla as Prisma.InputJsonValue) : undefined,
+        queueSlaJson: dto.queueSla ? asInputJson(dto.queueSla) : undefined,
         dayCloseDefaultsJson: dto.dayCloseDefaults
-          ? ({ ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } as Prisma.InputJsonValue)
+          ? asInputJson({ ...existing.dayCloseDefaults, ...dto.dayCloseDefaults })
           : undefined,
         estimateDefaultsJson: dto.estimateDefaults
-          ? ({ ...existing.estimateDefaults, ...dto.estimateDefaults } as Prisma.InputJsonValue)
+          ? asInputJson({ ...existing.estimateDefaults, ...dto.estimateDefaults })
           : undefined,
         providerQueryTemplatesJson: dto.providerQueryTemplates
-          ? (dto.providerQueryTemplates as Prisma.InputJsonValue)
+          ? asInputJson(dto.providerQueryTemplates)
           : undefined,
         athenaLinkTemplate: dto.athenaLinkTemplate === undefined ? undefined : dto.athenaLinkTemplate,
         athenaChecklistDefaultsJson: dto.athenaChecklistDefaults
-          ? (dto.athenaChecklistDefaults as Prisma.InputJsonValue)
+          ? asInputJson(dto.athenaChecklistDefaults)
           : undefined,
         checklistDefaultsJson: dto.checklistDefaults
-          ? (dto.checklistDefaults as Prisma.InputJsonValue)
+          ? asInputJson(dto.checklistDefaults)
           : undefined,
         serviceCatalogJson: dto.serviceCatalog
-          ? (dto.serviceCatalog as Prisma.InputJsonValue)
+          ? asInputJson(dto.serviceCatalog)
           : undefined,
         chargeScheduleJson: dto.chargeSchedule
-          ? (dto.chargeSchedule as Prisma.InputJsonValue)
+          ? asInputJson(dto.chargeSchedule)
           : undefined,
         reimbursementRulesJson: dto.reimbursementRules
-          ? (dto.reimbursementRules as Prisma.InputJsonValue)
+          ? asInputJson(dto.reimbursementRules)
           : undefined,
       }
     });
@@ -3443,10 +3585,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     });
     return rows.map((row) => ({
       ...row,
-      recipients: row.recipientsJson,
-      channels: row.channelsJson,
-      escalationRecipients: row.escalationRecipientsJson,
-      quietHours: row.quietHoursJson
+      recipients: normalizeRoleNameArrayJson(row.recipientsJson, request.log, "notificationRecipientsJson"),
+      channels: normalizeStringArrayJson(row.channelsJson, request.log, "notificationChannelsJson"),
+      escalationRecipients: normalizeRoleNameArrayJson(row.escalationRecipientsJson, request.log, "notificationEscalationRecipientsJson"),
+      quietHours: normalizeQuietHoursJson(row.quietHoursJson, request.log, "notificationQuietHoursJson")
     }));
   });
 
@@ -3463,13 +3605,17 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         clinicId: dto.clinicId,
         status: dto.status,
         severity: dto.severity,
-        recipientsJson: dto.recipients as Prisma.InputJsonValue,
-        channelsJson: dto.channels as Prisma.InputJsonValue,
+        recipientsJson: asInputJson(parseRoleNameArrayJsonInput(dto.recipients, "notificationRecipientsJson")),
+        channelsJson: asInputJson(parseStringArrayJsonInput(dto.channels, "notificationChannelsJson")),
         cooldownMinutes: dto.cooldownMinutes,
         ackRequired: dto.ackRequired ?? false,
         escalationAfterMin: dto.escalationAfterMin,
-        escalationRecipientsJson: jsonOrNull(dto.escalationRecipients),
-        quietHoursJson: jsonOrNull(dto.quietHours)
+        escalationRecipientsJson: dto.escalationRecipients
+          ? asInputJson(parseRoleNameArrayJsonInput(dto.escalationRecipients, "notificationEscalationRecipientsJson"))
+          : Prisma.JsonNull,
+        quietHoursJson: dto.quietHours
+          ? asInputJson(parseQuietHoursJsonInput(dto.quietHours, "notificationQuietHoursJson"))
+          : Prisma.JsonNull
       }
     });
   });
@@ -3489,13 +3635,17 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         clinicId: dto.clinicId,
         status: dto.status,
         severity: dto.severity,
-        recipientsJson: dto.recipients as Prisma.InputJsonValue,
-        channelsJson: dto.channels as Prisma.InputJsonValue,
+        recipientsJson: asInputJson(parseRoleNameArrayJsonInput(dto.recipients, "notificationRecipientsJson")),
+        channelsJson: asInputJson(parseStringArrayJsonInput(dto.channels, "notificationChannelsJson")),
         cooldownMinutes: dto.cooldownMinutes,
         ackRequired: dto.ackRequired ?? false,
         escalationAfterMin: dto.escalationAfterMin,
-        escalationRecipientsJson: jsonOrNull(dto.escalationRecipients),
-        quietHoursJson: jsonOrNull(dto.quietHours)
+        escalationRecipientsJson: dto.escalationRecipients
+          ? asInputJson(parseRoleNameArrayJsonInput(dto.escalationRecipients, "notificationEscalationRecipientsJson"))
+          : Prisma.JsonNull,
+        quietHoursJson: dto.quietHours
+          ? asInputJson(parseQuietHoursJsonInput(dto.quietHours, "notificationQuietHoursJson"))
+          : Prisma.JsonNull
       }
     });
   });
@@ -3646,9 +3796,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const matchedPatientIds = Array.from(
       new Set(
         reviews.flatMap((review) =>
-          Array.isArray(review.matchedPatientIdsJson)
-            ? review.matchedPatientIdsJson.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-            : [],
+          normalizeStringArrayJson(review.matchedPatientIdsJson, request.log, "patientIdentityReviewMatchedPatientIdsJson"),
         ),
       ),
     );
@@ -3669,18 +3817,52 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       : [];
     const matchedPatientsById = new Map(matchedPatients.map((patient) => [patient.id, patient]));
 
-    return reviews.map((review) => {
-      const reviewMatchedPatientIds = Array.isArray(review.matchedPatientIdsJson)
-        ? review.matchedPatientIdsJson.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-        : [];
+    const mappedReviews = reviews.map((review) => {
+      const reviewMatchedPatientIds = normalizeStringArrayJson(
+        review.matchedPatientIdsJson,
+        request.log,
+        "patientIdentityReviewMatchedPatientIdsJson",
+      );
+      const normalizedContextJson = normalizeGenericObjectJson(
+        review.contextJson,
+        request.log,
+        "patientIdentityReviewContextJson",
+      );
+      const integrityWarnings = [
+        review.matchedPatientIdsJson !== null &&
+        (!Array.isArray(review.matchedPatientIdsJson) ||
+          (review.matchedPatientIdsJson.length > 0 && reviewMatchedPatientIds.length === 0))
+          ? buildIntegrityWarning("matchedPatientIdsJson")
+          : null,
+        review.contextJson !== null && normalizedContextJson === null ? buildIntegrityWarning("contextJson") : null,
+      ].filter((warning): warning is NonNullable<typeof warning> => Boolean(warning));
+
       return {
         ...review,
         matchedPatientIds: reviewMatchedPatientIds,
+        contextJson: normalizedContextJson,
         matchedPatients: reviewMatchedPatientIds
           .map((patientId) => matchedPatientsById.get(patientId))
           .filter((patient): patient is NonNullable<typeof patient> => Boolean(patient)),
+        integrityWarnings,
       };
     });
+
+    await Promise.all(
+      mappedReviews.flatMap((review) =>
+        review.integrityWarnings.map((warning) =>
+          recordPersistedJsonAlert({
+            facilityId: facility.id,
+            entityType: "patientIdentityReview",
+            entityId: review.id,
+            field: warning.field,
+            requestId: request.id,
+          }),
+        ),
+      ),
+    );
+
+    return mappedReviews;
   });
 
   app.post("/admin/patient-identity-reviews/:id", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
@@ -3759,16 +3941,16 @@ export async function registerAdminRoutes(app: FastifyInstance) {
           patientId: targetPatientId,
           contextJson:
             dto.status === "resolved"
-              ? ({
+              ? asInputJson(parseGenericObjectJsonInput({
                   ...(review.contextJson && typeof review.contextJson === "object" && !Array.isArray(review.contextJson)
                     ? (review.contextJson as Record<string, unknown>)
                     : {}),
                   resolvedByUserId: request.user!.id,
                   resolvedAt: new Date().toISOString(),
-                } as Prisma.InputJsonValue)
+                }, "patientIdentityReviewContextJson"))
               : review.contextJson === null
                 ? Prisma.JsonNull
-                : (review.contextJson as Prisma.InputJsonValue),
+                : asInputJson(parseGenericObjectJsonInput(review.contextJson, "patientIdentityReviewContextJson")),
         },
       });
     });

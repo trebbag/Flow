@@ -820,12 +820,31 @@ export const incoming = {
     return apiFetch<IncomingReferencePayload>(`/incoming/reference${q ? `?${q}` : ""}`);
   },
   listPending(params?: { facilityId?: string; clinicId?: string; date?: string }) {
+    return collectPaginatedItems({
+      signal: undefined,
+      fetchPage: (cursor) =>
+        incoming.listPendingPage({
+          ...params,
+          cursor,
+          pageSize: 50,
+        }),
+    });
+  },
+  listPendingPage(params?: {
+    facilityId?: string;
+    clinicId?: string;
+    date?: string;
+    cursor?: string;
+    pageSize?: number;
+  }) {
     const qs = new URLSearchParams();
     if (params?.facilityId) qs.set("facilityId", params.facilityId);
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.date) qs.set("date", params.date);
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
     const q = qs.toString();
-    return apiFetch<IncomingImportIssue[]>(`/incoming/pending${q ? `?${q}` : ""}`);
+    return apiFetch<PaginatedResponse<IncomingImportIssue>>(`/incoming/pending${q ? `?${q}` : ""}`);
   },
   retryPending(
     id: string,

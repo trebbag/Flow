@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   CodingStage,
   CollectionOutcome,
@@ -47,6 +47,8 @@ import {
   normalizeServiceCaptureItemsJson,
   normalizeStringArrayJson,
 } from "../lib/persisted-json.js";
+import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
+import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 
 const listRevenueCasesSchema = z
   .object({
@@ -58,6 +60,8 @@ const listRevenueCasesSchema = z
     mine: z.coerce.boolean().optional(),
     from: z.string().optional(),
     to: z.string().optional(),
+    includeCases: z.coerce.boolean().optional(),
+    legacyArray: z.coerce.boolean().optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -77,6 +81,19 @@ function readProcedureLines(value: Prisma.JsonValue | null | undefined): Revenue
 
 function readJsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> | null {
   return normalizeDocumentationSummaryJson(value);
+}
+
+async function recordRevenueMutationTx(params: {
+  tx: Prisma.TransactionClient;
+  request: FastifyRequest;
+  revenueCaseId: string;
+}) {
+  await persistMutationOperationalEventTx({
+    db: params.tx,
+    request: params.request,
+    entityType: "RevenueCase",
+    entityId: params.revenueCaseId,
+  });
 }
 
 function mapChargeCaptureRecord(
@@ -451,7 +468,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const athenaDaysToSubmit = averageNullableNumbers(rows.map((row) => row.athenaDaysToSubmit));
     const athenaDaysInAR = averageNullableNumbers(rows.map((row) => row.athenaDaysInAR));
 
-    return {
+    const response = {
       scope: {
         clinicId: query.clinicId || request.user!.clinicId,
         from: fromDate,
@@ -494,8 +511,16 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         reimbursementRules: settings.reimbursementRules,
         checklistDefaults: settings.checklistDefaults,
       },
-      cases: rows.map(mapRevenueCaseRow),
     };
+
+    if (query.includeCases) {
+      return {
+        ...response,
+        cases: rows.map(mapRevenueCaseRow),
+      };
+    }
+
+    return response;
   });
 
   app.get("/dashboard/revenue-cycle/history", { preHandler: revenueGuard }, async (request) => {
@@ -617,7 +642,15 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
     const toDate = query.to || clinicDateKeyNow(clinics[0]?.timezone);
     const fromDate = query.from || DateTime.fromISO(toDate).minus({ days: 14 }).toISODate()!;
-    const pagination = resolveOptionalPagination(query, { pageSize: 100 });
+    const pagination = query.legacyArray
+      ? null
+      : resolveOptionalPagination(
+          {
+            cursor: query.cursor,
+            pageSize: query.pageSize ?? 100,
+          },
+          { pageSize: 100 },
+        );
 
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
@@ -636,7 +669,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     });
 
     const mappedRows = rows.map(mapRevenueCaseRow);
-    if (!pagination) {
+    if (query.legacyArray) {
       return mappedRows;
     }
 
@@ -653,7 +686,46 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     });
     const row = rows[0] || null;
     requireCondition(row, 404, "Revenue case not found");
-    return mapRevenueCaseRow(row);
+    const mapped = mapRevenueCaseRow(row);
+    const integrityWarnings = [
+      row.encounter.roomingData !== null && mapped.encounter.roomingData === null ? buildIntegrityWarning("roomingData") : null,
+      row.encounter.clinicianData !== null && mapped.encounter.clinicianData === null ? buildIntegrityWarning("clinicianData") : null,
+      row.encounter.checkoutData !== null && mapped.encounter.checkoutData === null ? buildIntegrityWarning("checkoutData") : null,
+      row.chargeCaptureRecord?.documentationSummaryJson !== null &&
+      mapped.chargeCaptureRecord?.documentationSummaryJson === null
+        ? buildIntegrityWarning("documentationSummaryJson")
+        : null,
+      Array.isArray(row.chargeCaptureRecord?.procedureLinesJson) &&
+      row.chargeCaptureRecord.procedureLinesJson.length > 0 &&
+      (mapped.chargeCaptureRecord?.procedureLinesJson?.length || 0) === 0
+        ? buildIntegrityWarning("procedureLinesJson")
+        : null,
+      Array.isArray(row.chargeCaptureRecord?.serviceCaptureItemsJson) &&
+      row.chargeCaptureRecord.serviceCaptureItemsJson.length > 0 &&
+      (mapped.chargeCaptureRecord?.serviceCaptureItemsJson?.length || 0) === 0
+        ? buildIntegrityWarning("serviceCaptureItemsJson")
+        : null,
+    ].filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+    if (integrityWarnings.length > 0) {
+      await Promise.all(
+        integrityWarnings.map((warning) =>
+          recordPersistedJsonAlert({
+            facilityId: row.facilityId,
+            clinicId: row.clinicId,
+            entityType: "RevenueCase",
+            entityId: row.id,
+            field: warning.field,
+            requestId: request.correlationId || request.id,
+          }),
+        ),
+      );
+    }
+
+    return {
+      ...mapped,
+      integrityWarnings,
+    };
   });
 
   app.patch("/revenue-cases/:id", { preHandler: revenueGuard }, async (request) => {
@@ -776,8 +848,14 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           });
 
           await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId,
+          });
         });
 
+        await flushOperationalOutbox(prisma);
         const row = (
           await buildRevenueCaseList(prisma, {
             revenueCaseId,
@@ -821,8 +899,14 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           });
 
           await syncRevenueCaseForEncounter(tx, row.encounterId);
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId,
+          });
           return row;
         });
+        await flushOperationalOutbox(prisma);
         const row = (
           await buildRevenueCaseList(prisma, {
             revenueCaseId,
@@ -845,12 +929,22 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       payload: dto,
       execute: async () => {
         await assertRevenueCaseReadable(revenueCaseId, request.user!);
-        const created = await createRevenueProviderClarification(prisma, {
-          revenueCaseId,
-          requestedByUserId: request.user!.id,
-          questionText: dto.questionText,
-          queryType: dto.queryType,
+        const created = await prisma.$transaction(async (tx) => {
+          const row = await createRevenueProviderClarification(tx, {
+            revenueCaseId,
+            requestedByUserId: request.user!.id,
+            questionText: dto.questionText,
+            queryType: dto.queryType,
+          });
+          requireCondition(row, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId,
+          });
+          return row;
         });
+        await flushOperationalOutbox(prisma);
         requireCondition(created, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
         return created;
       },
@@ -866,12 +960,22 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
       payload: dto,
       execute: async () => {
         await assertRevenueCaseReadable(revenueCaseId, request.user!);
-        const created = await createRevenueProviderClarification(prisma, {
-          revenueCaseId,
-          requestedByUserId: request.user!.id,
-          questionText: dto.questionText,
-          queryType: dto.queryType,
+        const created = await prisma.$transaction(async (tx) => {
+          const row = await createRevenueProviderClarification(tx, {
+            revenueCaseId,
+            requestedByUserId: request.user!.id,
+            questionText: dto.questionText,
+            queryType: dto.queryType,
+          });
+          requireCondition(row, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId,
+          });
+          return row;
         });
+        await flushOperationalOutbox(prisma);
         requireCondition(created, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
         return created;
       },
@@ -892,24 +996,35 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           "No provider clarification updates were supplied.",
           "PROVIDER_QUERY_UPDATE_REQUIRED",
         );
-        const updated = await respondToRevenueProviderClarification(prisma, {
-          clarificationId,
-          actorUserId: request.user!.id,
-          responseText: dto.responseText || "Updated in Flow",
-          resolve: dto.resolve ?? dto.status === ProviderClarificationStatus.Resolved,
-        });
-        requireCondition(updated, 404, "Provider clarification not found", "PROVIDER_QUERY_NOT_FOUND");
-        if (dto.status === ProviderClarificationStatus.Open) {
-          await prisma.providerClarification.update({
-            where: { id: clarificationId },
-            data: {
-              status: ProviderClarificationStatus.Open,
-              respondedAt: null,
-              resolvedAt: null,
-            },
+        const updated = await prisma.$transaction(async (tx) => {
+          const row = await respondToRevenueProviderClarification(tx, {
+            clarificationId,
+            actorUserId: request.user!.id,
+            responseText: dto.responseText || "Updated in Flow",
+            resolve: dto.resolve ?? dto.status === ProviderClarificationStatus.Resolved,
           });
-        }
-        return prisma.providerClarification.findUnique({ where: { id: clarificationId } });
+          requireCondition(row, 404, "Provider clarification not found", "PROVIDER_QUERY_NOT_FOUND");
+          const finalRow =
+            dto.status === ProviderClarificationStatus.Open
+              ? await tx.providerClarification.update({
+                  where: { id: clarificationId },
+                  data: {
+                    status: ProviderClarificationStatus.Open,
+                    respondedAt: null,
+                    resolvedAt: null,
+                  },
+                })
+              : row;
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId: finalRow.revenueCaseId,
+          });
+          return finalRow;
+        });
+        await flushOperationalOutbox(prisma);
+        requireCondition(updated, 404, "Provider clarification not found", "PROVIDER_QUERY_NOT_FOUND");
+        return updated;
       },
     });
   };
@@ -980,8 +1095,14 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           });
 
           await syncRevenueCaseForEncounter(tx, revenueCase.encounterId);
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId,
+          });
         });
 
+        await flushOperationalOutbox(prisma);
         const row = (
           await buildRevenueCaseList(prisma, {
             revenueCaseId,
@@ -1008,7 +1129,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         requireCondition(revenueCase, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
         const rolledFromDateKey = clinicDateKeyNow(revenueCase.clinic.timezone) || null;
 
-        return prisma.$transaction(async (tx) => {
+        const updated = await prisma.$transaction(async (tx) => {
           const updated = await tx.revenueCase.update({
             where: { id: revenueCaseId },
             data: {
@@ -1032,8 +1153,15 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           });
 
           await syncRevenueCaseForEncounter(tx, updated.encounterId);
+          await recordRevenueMutationTx({
+            tx,
+            request,
+            revenueCaseId,
+          });
           return updated;
         });
+        await flushOperationalOutbox(prisma);
+        return updated;
       },
     });
   });
@@ -1090,7 +1218,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           requireCondition(item.ownerUserId || item.ownerRole, 400, "Every unresolved case needs an owner.", "REVENUE_CLOSEOUT_OWNER_REQUIRED");
         }
 
-        return prisma.$transaction(async (tx) => {
+        const closeout = await prisma.$transaction(async (tx) => {
           const run = await tx.revenueCloseoutRun.create({
             data: {
               facilityId: request.user!.facilityId!,
@@ -1163,6 +1291,13 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
             });
           }
 
+          await persistMutationOperationalEventTx({
+            db: tx,
+            request,
+            entityType: "RevenueCloseoutRun",
+            entityId: run.id,
+          });
+
           return {
             date: targetDate,
             rolledCount: items.filter((item) => item.rollover).length,
@@ -1170,6 +1305,8 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
             status: "closed",
           };
         });
+        await flushOperationalOutbox(prisma);
+        return closeout;
       },
     });
   });

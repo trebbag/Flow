@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { EncounterStatus, RoleName, TemplateType } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
@@ -28,7 +28,14 @@ import {
   formatUserDisplayName
 } from "../lib/display-names.js";
 import { ensurePatientRecord, extractPatientIdentityHints } from "../lib/patients.js";
-import { asInputJson, normalizeEncounterJsonRead, parseEncounterJsonInput } from "../lib/persisted-json.js";
+import {
+  asInputJson,
+  normalizeEncounterJsonRead,
+  normalizeTemplateFieldsJson,
+  parseEncounterJsonInput,
+} from "../lib/persisted-json.js";
+import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
+import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 
 const defaultAllowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   Incoming: ["Lobby"],
@@ -116,6 +123,7 @@ const listEncountersSchema = z
     status: z.nativeEnum(EncounterStatus).optional(),
     assignedMaUserId: z.string().uuid().optional(),
     date: z.string().optional(),
+    legacyArray: z.coerce.boolean().optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -221,6 +229,19 @@ async function getFacilityTimezone(facilityId?: string | null) {
         select: { timezone: true }
       });
   return facility?.timezone || "America/New_York";
+}
+
+async function recordEncounterMutationTx(params: {
+  tx: Prisma.TransactionClient;
+  request: FastifyRequest;
+  encounterId: string;
+}) {
+  await persistMutationOperationalEventTx({
+    db: params.tx,
+    request: params.request,
+    entityType: "Encounter",
+    entityId: params.encounterId,
+  });
 }
 
 async function getClinicianProviderIds(userId: string) {
@@ -369,19 +390,15 @@ type TemplateFieldDefinition = {
 };
 
 function getTemplateFieldDefinitions(fieldsJson: Prisma.JsonValue | null | undefined) {
-  if (!Array.isArray(fieldsJson)) return [] as TemplateFieldDefinition[];
-  return fieldsJson.map((field) => {
-    const raw =
-      typeof field === "object" && field !== null && !Array.isArray(field)
-        ? (field as Record<string, unknown>)
-        : {};
+  return normalizeTemplateFieldsJson(fieldsJson).map((field) => {
+    const raw = field as Record<string, unknown>;
     return {
       key: typeof raw.key === "string" ? raw.key : undefined,
       name: typeof raw.name === "string" ? raw.name : undefined,
       label: typeof raw.label === "string" ? raw.label : undefined,
       type: typeof raw.type === "string" ? raw.type : undefined,
     };
-  });
+  }) as TemplateFieldDefinition[];
 }
 
 function isTemplateFieldValueMissing(fieldType: string | undefined, value: unknown) {
@@ -1124,9 +1141,15 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
           }
 
           await queueRevenueEncounterSync(tx, created.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: created.id,
+          });
           return created;
         });
 
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(encounter.id);
       },
     });
@@ -1139,7 +1162,15 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     const scopedClinicId =
       requestedClinicId ||
       (user.role === RoleName.MA || user.role === RoleName.Clinician ? undefined : user.clinicId || undefined);
-    const pagination = resolveOptionalPagination(query, { pageSize: 100 });
+    const pagination = query.legacyArray
+      ? null
+      : resolveOptionalPagination(
+          {
+            cursor: query.cursor,
+            pageSize: query.pageSize ?? 100,
+          },
+          { pageSize: 100 },
+        );
     if (scopedClinicId) {
       await resolveScopedClinic(user, scopedClinicId);
     }
@@ -1160,7 +1191,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       pagination,
     });
 
-    if (!pagination) {
+    if (query.legacyArray) {
       return rows;
     }
 
@@ -1226,11 +1257,42 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       : null;
     const appointmentByEncounterId = await lookupEncounterAppointmentMap([encounter.id]);
 
+    const roomingData = normalizeEncounterJsonRead("roomingData", encounter.roomingData, request.log);
+    const clinicianData = normalizeEncounterJsonRead("clinicianData", encounter.clinicianData, request.log);
+    const checkoutData = normalizeEncounterJsonRead("checkoutData", encounter.checkoutData, request.log);
+    const intakeData = normalizeEncounterJsonRead("intakeData", encounter.intakeData, request.log);
+    const integrityWarnings = [
+      encounter.roomingData !== null && roomingData === null ? buildIntegrityWarning("roomingData") : null,
+      encounter.clinicianData !== null && clinicianData === null ? buildIntegrityWarning("clinicianData") : null,
+      encounter.checkoutData !== null && checkoutData === null ? buildIntegrityWarning("checkoutData") : null,
+      encounter.intakeData !== null && intakeData === null ? buildIntegrityWarning("intakeData") : null,
+    ].filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+    if (integrityWarnings.length > 0 && encounter.clinic?.facilityId) {
+      await Promise.all(
+        integrityWarnings.map((warning) =>
+          recordPersistedJsonAlert({
+            facilityId: encounter.clinic!.facilityId!,
+            clinicId: encounter.clinicId,
+            entityType: "Encounter",
+            entityId: encounter.id,
+            field: warning.field,
+            requestId: request.correlationId || request.id,
+          }),
+        ),
+      );
+    }
+
     return withEncounterViewAliases({
       ...encounter,
+      roomingData,
+      clinicianData,
+      checkoutData,
+      intakeData,
       appointmentTime: appointmentByEncounterId.get(encounter.id) || null,
       assignedMaName: assignedMaName?.name || null,
-      assignedMaStatus: assignedMaName?.status || null
+      assignedMaStatus: assignedMaName?.status || null,
+      integrityWarnings,
     });
   });
 
@@ -1306,9 +1368,15 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             });
           }
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: row.id,
+          });
           return row;
         });
 
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });
@@ -1370,8 +1438,14 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             });
           }
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: row.id,
+          });
           return row;
         });
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });
@@ -1495,8 +1569,14 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             },
           });
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: row.id,
+          });
           return row;
         });
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });
@@ -1525,22 +1605,31 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         }
 
         const updated = await prisma.$transaction(async (tx) =>
-          updateEncounterWithVersionTx({
-            tx,
-            encounterId,
-            expectedVersion: dto.version,
-            data: {
-              providerStartAt: encounter.providerStartAt ?? new Date(),
-              currentStatus: "Optimizing",
-            },
-            statusEvent: {
-              fromStatus: encounter.currentStatus,
-              toStatus: "Optimizing",
-              changedByUserId: request.user!.id,
-            },
-            resetAlertStateAt: new Date(),
-          }),
+          {
+            const row = await updateEncounterWithVersionTx({
+              tx,
+              encounterId,
+              expectedVersion: dto.version,
+              data: {
+                providerStartAt: encounter.providerStartAt ?? new Date(),
+                currentStatus: "Optimizing",
+              },
+              statusEvent: {
+                fromStatus: encounter.currentStatus,
+                toStatus: "Optimizing",
+                changedByUserId: request.user!.id,
+              },
+              resetAlertStateAt: new Date(),
+            });
+            await recordEncounterMutationTx({
+              tx,
+              request,
+              encounterId: row.id,
+            });
+            return row;
+          },
         );
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });
@@ -1596,8 +1685,14 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             userId: request.user!.id,
           });
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: row.id,
+          });
           return row;
         });
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });
@@ -1656,8 +1751,14 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             resetAlertStateAt: statusChangedAt,
           });
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: row.id,
+          });
           return row;
         });
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });
@@ -1712,8 +1813,14 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             resetAlertStateAt: now,
           });
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
+          await recordEncounterMutationTx({
+            tx,
+            request,
+            encounterId: row.id,
+          });
           return row;
         });
+        await flushOperationalOutbox(prisma);
         return getHydratedEncounterView(updated.id);
       },
     });

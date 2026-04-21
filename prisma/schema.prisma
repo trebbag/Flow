@@ -1348,6 +1348,21 @@ model IdempotencyRecord {
   @@index([routeKey, createdAt])
 }
 
+model WorkerLease {
+  id              String   @id @default(uuid())
+  leaseKey        String   @unique
+  ownerId         String
+  acquiredAt      DateTime @default(now())
+  expiresAt       DateTime
+  lastHeartbeatAt DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastError       String?
+
+  @@index([expiresAt])
+  @@index([ownerId, expiresAt])
+}
+
 model EventOutbox {
   id            String       @id @default(uuid())
   topic         String

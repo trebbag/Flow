@@ -105,6 +105,7 @@ const requiresRebuild =
   !hasColumn("RevenueCycleSettings", "reimbursementRulesJson") ||
   !hasColumn("RevenueCycleSettings", "serviceCatalogJson") ||
   !hasColumn("RevenueCycleSettings", "chargeScheduleJson") ||
+  !hasTable("WorkerLease") ||
   !hasColumn("RevenueCycleDailyRollup", "facilityId") ||
   !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionExpectedVisitCount") ||
   !hasColumn("RevenueCycleDailyRollup", "sameDayCollectionVisitRate") ||
@@ -118,6 +119,7 @@ if (requiresRebuild) {
   db.exec(`
 DROP TABLE IF EXISTS IdempotencyRecord;
 DROP TABLE IF EXISTS EventOutbox;
+DROP TABLE IF EXISTS WorkerLease;
 DROP TABLE IF EXISTS AuditLog;
 DROP TABLE IF EXISTS RoomDailyRollup;
 DROP TABLE IF EXISTS OfficeManagerDailyRollup;
@@ -1038,6 +1040,18 @@ CREATE TABLE IF NOT EXISTS EventOutbox (
   lastError TEXT
 );
 
+CREATE TABLE IF NOT EXISTS WorkerLease (
+  id TEXT PRIMARY KEY NOT NULL,
+  leaseKey TEXT NOT NULL UNIQUE,
+  ownerId TEXT NOT NULL,
+  acquiredAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expiresAt TEXT NOT NULL,
+  lastHeartbeatAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  lastError TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS IntegrationConnector (
   id TEXT PRIMARY KEY NOT NULL,
   facilityId TEXT NOT NULL,
@@ -1240,6 +1254,8 @@ CREATE INDEX IF NOT EXISTS IncomingSchedule_patientRecordId_idx ON IncomingSched
 CREATE INDEX IF NOT EXISTS Encounter_patientRecordId_idx ON Encounter(patientRecordId);
 CREATE INDEX IF NOT EXISTS RevenueCase_patientRecordId_idx ON RevenueCase(patientRecordId);
 CREATE INDEX IF NOT EXISTS AuditLog_idempotencyKey_idx ON AuditLog(idempotencyKey);
+CREATE INDEX IF NOT EXISTS WorkerLease_expiresAt_idx ON WorkerLease(expiresAt);
+CREATE INDEX IF NOT EXISTS WorkerLease_ownerId_expiresAt_idx ON WorkerLease(ownerId, expiresAt);
 `);
 
 db.close();

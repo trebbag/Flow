@@ -3121,7 +3121,11 @@ function IncomingIntegrationsTab({
   const [csvText, setCsvText] = useState("");
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<any[]>([]);
+  const [rowsNextCursor, setRowsNextCursor] = useState<string | null>(null);
+  const [loadingMoreRows, setLoadingMoreRows] = useState(false);
   const [pendingIssues, setPendingIssues] = useState<any[]>([]);
+  const [pendingNextCursor, setPendingNextCursor] = useState<string | null>(null);
+  const [loadingMorePending, setLoadingMorePending] = useState(false);
   const [reference, setReference] = useState<any | null>(null);
   const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -3293,20 +3297,22 @@ function IncomingIntegrationsTab({
     setReferenceLoading(true);
     try {
       const [incomingRows, importBatches, pendingRows, referencePayload, athenaConnector, revenueSettingsResult] = await Promise.all([
-        incomingApi.list({
+        incomingApi.listPage({
           clinicId: selectedClinicId || undefined,
           date: dateOfService,
           includeCheckedIn: true,
           includeInvalid: true,
+          pageSize: 100,
         }),
         incomingApi.listBatches({
           clinicId: selectedClinicId || undefined,
           date: dateOfService,
         }),
-        incomingApi.listPending({
+        incomingApi.listPendingPage({
           facilityId: selectedFacilityId,
           clinicId: selectedClinicId || undefined,
           date: dateOfService,
+          pageSize: 50,
         }),
         incomingApi.reference({
           facilityId: selectedFacilityId,
@@ -3315,9 +3321,11 @@ function IncomingIntegrationsTab({
         admin.getAthenaOneConnector(selectedFacilityId),
         admin.getRevenueSettings(selectedFacilityId),
       ]);
-      setRows(incomingRows as any[]);
+      setRows((incomingRows?.items || []) as any[]);
+      setRowsNextCursor(incomingRows?.nextCursor || null);
       setBatches(importBatches as any[]);
-      setPendingIssues(pendingRows as any[]);
+      setPendingIssues((pendingRows?.items || []) as any[]);
+      setPendingNextCursor(pendingRows?.nextCursor || null);
       setReference(referencePayload);
       const connectorConfig = (athenaConnector as any)?.config || {};
       const secretState = (connectorConfig as any)?.secretsConfigured || {};
@@ -3379,6 +3387,51 @@ function IncomingIntegrationsTab({
     } finally {
       setLoading(false);
       setReferenceLoading(false);
+    }
+  };
+
+  const loadMoreRows = async () => {
+    if (!rowsNextCursor || loadingMoreRows) return;
+    setLoadingMoreRows(true);
+    try {
+      const nextPage = await incomingApi.listPage({
+        clinicId: selectedClinicId || undefined,
+        date: dateOfService,
+        includeCheckedIn: true,
+        includeInvalid: true,
+        cursor: rowsNextCursor,
+        pageSize: 100,
+      });
+      setRows((prev) => [...prev, ...((nextPage?.items || []) as any[])]);
+      setRowsNextCursor(nextPage?.nextCursor || null);
+    } catch (error) {
+      toast.error("Unable to load more schedule rows", {
+        description: (error as Error).message || "Please try again",
+      });
+    } finally {
+      setLoadingMoreRows(false);
+    }
+  };
+
+  const loadMorePendingIssues = async () => {
+    if (!pendingNextCursor || loadingMorePending) return;
+    setLoadingMorePending(true);
+    try {
+      const nextPage = await incomingApi.listPendingPage({
+        facilityId: selectedFacilityId,
+        clinicId: selectedClinicId || undefined,
+        date: dateOfService,
+        cursor: pendingNextCursor,
+        pageSize: 50,
+      });
+      setPendingIssues((prev) => [...prev, ...((nextPage?.items || []) as any[])]);
+      setPendingNextCursor(nextPage?.nextCursor || null);
+    } catch (error) {
+      toast.error("Unable to load more pending rows", {
+        description: (error as Error).message || "Please try again",
+      });
+    } finally {
+      setLoadingMorePending(false);
     }
   };
 
@@ -5303,16 +5356,17 @@ function IncomingIntegrationsTab({
             {rows.length === 0 ? (
               <EmptyState icon={FileText} message="No incoming schedule rows found for the selected date." />
             ) : (
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {rows.map((row) => {
-                  const validationErrors = Array.isArray(row.validationErrors)
-                    ? row.validationErrors.join("; ")
-                    : "";
-                  const isFinalized = Boolean(row.checkedInAt || row.dispositionAt);
-                  const isEditing = editingRowId === row.id;
-                  const isDispositioning = dispositionRowId === row.id;
-                  return (
-                    <div key={row.id} className="rounded-lg border border-gray-100 p-3">
+              <div className="space-y-3">
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                  {rows.map((row) => {
+                    const validationErrors = Array.isArray(row.validationErrors)
+                      ? row.validationErrors.join("; ")
+                      : "";
+                    const isFinalized = Boolean(row.checkedInAt || row.dispositionAt);
+                    const isEditing = editingRowId === row.id;
+                    const isDispositioning = dispositionRowId === row.id;
+                    return (
+                      <div key={row.id} className="rounded-lg border border-gray-100 p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[13px]" style={{ fontWeight: 600 }}>
                           {row.patientId}
@@ -5496,9 +5550,23 @@ function IncomingIntegrationsTab({
                           </button>
                         </div>
                       )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
+                </div>
+                {rowsNextCursor ? (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => loadMoreRows().catch(() => undefined)}
+                      aria-label="Load more incoming schedule rows"
+                      className="h-9 px-4 rounded-lg border border-cyan-200 bg-cyan-50 text-[12px] text-cyan-700 hover:bg-cyan-100 transition-colors disabled:opacity-50"
+                      style={{ fontWeight: 500 }}
+                      disabled={loadingMoreRows}
+                    >
+                      {loadingMoreRows ? "Loading more..." : "Load More Rows"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </CardContent>
@@ -5535,6 +5603,7 @@ function IncomingIntegrationsTab({
                       {!isEditing ? (
                         <button
                           onClick={() => startPendingEdit(issue)}
+                          aria-label={`Edit and retry pending row ${issue.id}`}
                           className="mt-2 h-7 px-2.5 rounded-lg border border-amber-300 bg-white text-[11px] text-amber-700 hover:bg-amber-100 transition-colors"
                           style={{ fontWeight: 500 }}
                         >
@@ -5551,6 +5620,7 @@ function IncomingIntegrationsTab({
                               <select
                                 value={pendingDraft.clinicId}
                                 onChange={(event) => setPendingDraft((prev) => ({ ...prev, clinicId: event.target.value }))}
+                                aria-label="Pending review clinic"
                                 className={`h-8 w-full px-2.5 rounded-lg bg-white text-[12px] ${
                                   fieldErrors.clinicId.length > 0 ? "border border-red-300" : "border border-gray-200"
                                 }`}
@@ -5572,6 +5642,7 @@ function IncomingIntegrationsTab({
                                 type="text"
                                 value={pendingDraft.patientId}
                                 onChange={(event) => setPendingDraft((prev) => ({ ...prev, patientId: event.target.value }))}
+                                aria-label="Pending review patient ID"
                                 className={`h-8 w-full px-2.5 rounded-lg bg-white text-[12px] ${
                                   fieldErrors.patientId.length > 0 ? "border border-red-300" : "border border-gray-200"
                                 }`}
@@ -5586,6 +5657,7 @@ function IncomingIntegrationsTab({
                                 type="date"
                                 value={pendingDraft.dateOfService}
                                 onChange={(event) => setPendingDraft((prev) => ({ ...prev, dateOfService: event.target.value }))}
+                                aria-label="Pending review appointment date"
                                 className={`h-8 w-full px-2.5 rounded-lg bg-white text-[12px] ${
                                   fieldErrors.dateOfService.length > 0 ? "border border-red-300" : "border border-gray-200"
                                 }`}
@@ -5603,6 +5675,7 @@ function IncomingIntegrationsTab({
                                 type="text"
                                 value={pendingDraft.appointmentTime}
                                 onChange={(event) => setPendingDraft((prev) => ({ ...prev, appointmentTime: event.target.value }))}
+                                aria-label="Pending review appointment time"
                                 className={`h-8 w-full px-2.5 rounded-lg bg-white text-[12px] ${
                                   fieldErrors.appointmentTime.length > 0 ? "border border-red-300" : "border border-gray-200"
                                 }`}
@@ -5621,6 +5694,7 @@ function IncomingIntegrationsTab({
                                 type="text"
                                 value={pendingDraft.providerLastName}
                                 onChange={(event) => setPendingDraft((prev) => ({ ...prev, providerLastName: event.target.value }))}
+                                aria-label="Pending review provider last name"
                                 className={`h-8 w-full px-2.5 rounded-lg bg-white text-[12px] ${
                                   fieldErrors.providerLastName.length > 0 ? "border border-red-300" : "border border-gray-200"
                                 }`}
@@ -5638,6 +5712,7 @@ function IncomingIntegrationsTab({
                                 type="text"
                                 value={pendingDraft.reasonText}
                                 onChange={(event) => setPendingDraft((prev) => ({ ...prev, reasonText: event.target.value }))}
+                                aria-label="Pending review visit reason"
                                 className={`h-8 w-full px-2.5 rounded-lg bg-white text-[12px] ${
                                   fieldErrors.reasonText.length > 0 ? "border border-red-300" : "border border-gray-200"
                                 }`}
@@ -5653,6 +5728,7 @@ function IncomingIntegrationsTab({
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => retryPendingIssue(issue.id).catch(() => undefined)}
+                              aria-label={`Retry pending row ${issue.id}`}
                               className="h-8 px-3 rounded-lg bg-amber-600 text-white text-[11px] hover:bg-amber-700 transition-colors"
                               style={{ fontWeight: 500 }}
                               disabled={retryingPendingId === issue.id}
@@ -5661,6 +5737,7 @@ function IncomingIntegrationsTab({
                             </button>
                             <button
                               onClick={cancelPendingEdit}
+                              aria-label="Cancel pending row edit"
                               className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 hover:bg-gray-50 transition-colors"
                               style={{ fontWeight: 500 }}
                             >
@@ -5672,6 +5749,19 @@ function IncomingIntegrationsTab({
                     </div>
                   );
                 })}
+                {pendingNextCursor ? (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      onClick={() => loadMorePendingIssues().catch(() => undefined)}
+                      aria-label="Load more pending review rows"
+                      className="h-9 px-4 rounded-lg border border-amber-200 bg-amber-50 text-[12px] text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                      style={{ fontWeight: 500 }}
+                      disabled={loadingMorePending}
+                    >
+                      {loadingMorePending ? "Loading more..." : "Load More Pending Rows"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </CardContent>

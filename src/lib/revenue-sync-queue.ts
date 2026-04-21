@@ -1,5 +1,5 @@
+import { hostname } from "node:os";
 import type { PrismaClient, Prisma } from "@prisma/client";
-import { DateTime } from "luxon";
 import { env } from "./env.js";
 import { prisma } from "./prisma.js";
 import { syncRevenueCaseForEncounter, syncRevenueCasesForScope } from "./revenue-cycle.js";
@@ -18,6 +18,7 @@ type RevenueSyncJob = {
 
 type RevenueSyncLogger = {
   error?: (error: unknown, message?: string) => void;
+  warn?: (payload: unknown, message?: string) => void;
 };
 
 export type RevenueSyncWorkerStatus = {
@@ -26,11 +27,14 @@ export type RevenueSyncWorkerStatus = {
   lastSuccessfulDrainAt: string | null;
   lastFailedDrainAt: string | null;
   lastError: string | null;
+  staleLeaseCount: number;
 };
 
 const DEFAULT_SYNC_INTERVAL_MS = 60_000;
 const REVENUE_SYNC_TOPIC = "revenue.sync";
 const REVENUE_SYNC_EVENT = "revenue.sync.requested";
+const LEASE_TTL_MS = 5 * 60_000;
+const WORKER_OWNER_ID = `${hostname()}:${process.pid}:revenue-sync`;
 let syncTimer: NodeJS.Timeout | null = null;
 let activeDrain: Promise<void> | null = null;
 let logger: RevenueSyncLogger | null = null;
@@ -54,11 +58,97 @@ function mergeDateRange(existing: RevenueSyncJob, incoming: RevenueSyncJob) {
 function logSyncError(error: unknown, message: string) {
   lastFailedDrainAt = new Date();
   lastError = error instanceof Error ? error.message : String(error);
-  if (logger?.error) {
-    logger.error(error, message);
-    return;
+  logger?.error?.(error, message);
+}
+
+function leaseKeyForFacility(facilityId: string) {
+  return `revenue-sync:${facilityId}`;
+}
+
+function leaseExpiryFromNow() {
+  return new Date(Date.now() + LEASE_TTL_MS);
+}
+
+async function acquireFacilityLease(db: PrismaClient, facilityId: string) {
+  const leaseKey = leaseKeyForFacility(facilityId);
+  const now = new Date();
+  const expiresAt = leaseExpiryFromNow();
+  const existing = await db.workerLease.findUnique({
+    where: { leaseKey },
+  });
+
+  if (!existing) {
+    try {
+      await db.workerLease.create({
+        data: {
+          leaseKey,
+          ownerId: WORKER_OWNER_ID,
+          acquiredAt: now,
+          expiresAt,
+          lastHeartbeatAt: now,
+          lastError: null,
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
-  console.error(message, error);
+
+  if (existing.ownerId !== WORKER_OWNER_ID && existing.expiresAt > now) {
+    return false;
+  }
+
+  await db.workerLease.update({
+    where: { leaseKey },
+    data: {
+      ownerId: WORKER_OWNER_ID,
+      acquiredAt: existing.ownerId === WORKER_OWNER_ID ? existing.acquiredAt : now,
+      expiresAt,
+      lastHeartbeatAt: now,
+      lastError: null,
+    },
+  });
+  return true;
+}
+
+async function heartbeatFacilityLease(db: PrismaClient, facilityId: string, lastLeaseError?: string | null) {
+  await db.workerLease.update({
+    where: { leaseKey: leaseKeyForFacility(facilityId) },
+    data: {
+      ownerId: WORKER_OWNER_ID,
+      expiresAt: leaseExpiryFromNow(),
+      lastHeartbeatAt: new Date(),
+      lastError: lastLeaseError === undefined ? undefined : lastLeaseError,
+    },
+  });
+}
+
+async function releaseFacilityLease(db: PrismaClient, facilityId: string, leaseError?: string | null) {
+  await db.workerLease.updateMany({
+    where: {
+      leaseKey: leaseKeyForFacility(facilityId),
+      ownerId: WORKER_OWNER_ID,
+    },
+    data: {
+      expiresAt: new Date(),
+      lastHeartbeatAt: new Date(),
+      lastError: leaseError ?? null,
+    },
+  });
+}
+
+async function countStaleLeases(db: PrismaClient) {
+  try {
+    return await db.workerLease.count({
+      where: {
+        leaseKey: { startsWith: "revenue-sync:" },
+        expiresAt: { lt: new Date() },
+      },
+    });
+  } catch {
+    return 0;
+  }
 }
 
 async function recomputePersistedRollups(db: PrismaClient, job: RevenueSyncJob) {
@@ -88,6 +178,7 @@ async function processSyncJob(db: PrismaClient, job: RevenueSyncJob) {
     fromDateKey: job.fromDateKey,
     toDateKey: job.toDateKey,
   });
+  await heartbeatFacilityLease(db, job.facilityId);
   await recomputePersistedRollups(db, job);
 }
 
@@ -229,6 +320,12 @@ export async function flushRevenueSyncQueue(db: PrismaClient = prisma) {
   activeDrain = (async () => {
     const jobs = await loadPendingJobs(db);
     for (const job of jobs) {
+      const acquired = await acquireFacilityLease(db, job.facilityId);
+      if (!acquired) {
+        logger?.warn?.({ facilityId: job.facilityId }, "Skipped revenue sync job because another lease is active");
+        continue;
+      }
+
       try {
         await processSyncJob(db, job);
         await db.eventOutbox.updateMany({
@@ -239,16 +336,19 @@ export async function flushRevenueSyncQueue(db: PrismaClient = prisma) {
             lastError: null,
           },
         });
+        await releaseFacilityLease(db, job.facilityId, null);
         lastSuccessfulDrainAt = new Date();
         lastError = null;
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         await db.eventOutbox.updateMany({
           where: { id: { in: job.outboxIds } },
           data: {
             attempts: { increment: 1 },
-            lastError: error instanceof Error ? error.message : String(error),
+            lastError: message,
           },
         });
+        await releaseFacilityLease(db, job.facilityId, message);
         logSyncError(error, `Failed to process revenue sync job for facility ${job.facilityId}`);
       }
     }
@@ -260,13 +360,16 @@ export async function flushRevenueSyncQueue(db: PrismaClient = prisma) {
 }
 
 export async function getRevenueSyncWorkerStatus(db: PrismaClient = prisma): Promise<RevenueSyncWorkerStatus> {
-  const pendingCount = await db.eventOutbox.count({
-    where: {
-      topic: REVENUE_SYNC_TOPIC,
-      eventType: REVENUE_SYNC_EVENT,
-      status: "pending",
-    },
-  });
+  const [pendingCount, staleLeaseCount] = await Promise.all([
+    db.eventOutbox.count({
+      where: {
+        topic: REVENUE_SYNC_TOPIC,
+        eventType: REVENUE_SYNC_EVENT,
+        status: "pending",
+      },
+    }),
+    countStaleLeases(db),
+  ]);
 
   return {
     running: Boolean(activeDrain || syncTimer),
@@ -274,6 +377,7 @@ export async function getRevenueSyncWorkerStatus(db: PrismaClient = prisma): Pro
     lastSuccessfulDrainAt: lastSuccessfulDrainAt?.toISOString() || null,
     lastFailedDrainAt: lastFailedDrainAt?.toISOString() || null,
     lastError,
+    staleLeaseCount,
   };
 }
 
@@ -288,6 +392,7 @@ export function startRevenueSyncWorker(options?: {
   logger = options?.logger || null;
   const db = options?.db || prisma;
   const intervalMs = options?.intervalMs || DEFAULT_SYNC_INTERVAL_MS;
+  void flushRevenueSyncQueue(db);
   syncTimer = setInterval(() => {
     void flushRevenueSyncQueue(db);
   }, intervalMs);
@@ -309,4 +414,13 @@ export async function clearRevenueSyncQueueForTests(db: PrismaClient = prisma) {
       eventType: REVENUE_SYNC_EVENT,
     },
   });
+  try {
+    await db.workerLease.deleteMany({
+      where: {
+        leaseKey: { startsWith: "revenue-sync:" },
+      },
+    });
+  } catch {
+    // Older test databases may not have the lease table yet.
+  }
 }

@@ -2374,7 +2374,7 @@ export async function createRevenueProviderClarification(
     ...(clinicAssignment?.providerUserId
       ? { userIds: [clinicAssignment.providerUserId] }
       : { roles: [RoleName.Clinician] }),
-  });
+  }, db);
 
   await db.revenueCaseEvent.create({
     data: {

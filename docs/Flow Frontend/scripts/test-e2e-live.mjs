@@ -243,7 +243,7 @@ async function waitForEncounterOnBoard({
   delayMs = 500,
 }) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const rows = await request(`/encounters?clinicId=${clinicId}&date=${date}`, {
+    const rows = await request(`/encounters?legacyArray=1&clinicId=${clinicId}&date=${date}`, {
       auth,
     });
     if (rows.some((row) => row.id === encounterId)) {
@@ -254,7 +254,7 @@ async function waitForEncounterOnBoard({
     }
   }
 
-  const clinicRows = await request(`/encounters?clinicId=${clinicId}`, {
+  const clinicRows = await request(`/encounters?legacyArray=1&clinicId=${clinicId}`, {
     auth,
   });
   if (clinicRows.some((row) => row.id === encounterId)) {
@@ -605,10 +605,11 @@ async function main() {
   );
   assert.ok(pendingImport.pendingCount >= 1, "expected one pending row for retry");
 
-  const pendingRows = await request(
+  const pendingResponse = await request(
     `/incoming/pending?facilityId=${originalFacilityId}&clinicId=${clinic.id}&date=${importDate}`,
     { auth: checkinAuth },
   );
+  const pendingRows = Array.isArray(pendingResponse) ? pendingResponse : (pendingResponse?.items || []);
   const pendingRow = pendingRows.find((row) => {
     const normalized = row?.normalizedJson || {};
     return String(normalized.patientId || "").includes(`${pendingPatientPrefix}-FIX`);

@@ -529,12 +529,16 @@ export function RevenueCycleView() {
   const [history, setHistory] = useState<RevenueDailyHistoryRollup[]>([]);
   const [historySummary, setHistorySummary] = useState<RevenueHistorySummary | null>(null);
   const [queueRows, setQueueRows] = useState<RevenueCaseDetail[]>([]);
+  const [queueNextCursor, setQueueNextCursor] = useState<string | null>(null);
   const [dayCloseRows, setDayCloseRows] = useState<RevenueCaseDetail[]>([]);
+  const [dayCloseNextCursor, setDayCloseNextCursor] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(() => searchParams.get("case"));
   const [selectedCase, setSelectedCase] = useState<RevenueCaseDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [dayCloseLoading, setDayCloseLoading] = useState(false);
+  const [queueLoadingMore, setQueueLoadingMore] = useState(false);
+  const [dayCloseLoadingMore, setDayCloseLoadingMore] = useState(false);
   const [selectedCaseLoading, setSelectedCaseLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userOptions, setUserOptions] = useState<StaffUser[]>([]);
@@ -582,21 +586,33 @@ export function RevenueCycleView() {
   } = {}) {
     setLoading(true);
     try {
-      const dashboardValue = await dashboards.revenueCycle({
-        dayBucket,
-        workQueue,
-        mine: mineOnly,
-        search,
-        signal,
-      });
+      const [dashboardValue, queuePage] = await Promise.all([
+        dashboards.revenueCycle({
+          dayBucket,
+          workQueue,
+          mine: mineOnly,
+          search,
+          signal,
+        }),
+        revenueCases.listPage({
+          dayBucket,
+          workQueue,
+          mine: mineOnly,
+          search,
+          pageSize: 50,
+          signal,
+        }),
+      ]);
       const normalizedCases = Array.isArray(dashboardValue?.cases) ? dashboardValue.cases : [];
+      const queuePageRows = Array.isArray(queuePage?.items) ? queuePage.items : [];
       const normalizedDashboard: RevenueDashboardSnapshot = {
         ...dashboardValue,
         cases: normalizedCases,
       };
 
       setDashboard(normalizedDashboard);
-      setQueueRows(normalizedCases);
+      setQueueRows(queuePageRows);
+      setQueueNextCursor(queuePage?.nextCursor || null);
       setCoreLoadError(null);
 
       const nextSettings: RevenueSettings = {
@@ -619,9 +635,9 @@ export function RevenueCycleView() {
       };
       setSettings(nextSettings);
 
-      const candidateId = selectedCaseId && normalizedCases.some((row) => row.id === selectedCaseId)
+      const candidateId = selectedCaseId && (queuePageRows.some((row) => row.id === selectedCaseId) || Boolean(selectedCaseId))
         ? selectedCaseId
-        : normalizedCases[0]?.id || null;
+        : queuePageRows[0]?.id || null;
       setSelectedCaseId(candidateId);
       toast.dismiss(REVENUE_CORE_TOAST_ID);
     } catch (error) {
@@ -681,9 +697,10 @@ export function RevenueCycleView() {
   } = {}) {
     setDayCloseLoading(true);
     try {
-      const rows = await revenueCases.list({ dayBucket: "Today", from: isoDate(0), to: isoDate(0), signal });
-      const unresolvedRows = (rows || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus));
+      const page = await revenueCases.listPage({ dayBucket: "Today", from: isoDate(0), to: isoDate(0), pageSize: 50, signal });
+      const unresolvedRows = (page?.items || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus));
       setDayCloseRows(unresolvedRows);
+      setDayCloseNextCursor(page?.nextCursor || null);
       setDayCloseLoadError(null);
       setRollDrafts((prev) => {
         const next = { ...prev };
@@ -707,6 +724,57 @@ export function RevenueCycleView() {
       if (!signal?.aborted) {
         setDayCloseLoading(false);
       }
+    }
+  }
+
+  async function loadMoreQueueRows() {
+    if (!queueNextCursor || queueLoadingMore) return;
+    setQueueLoadingMore(true);
+    try {
+      const page = await revenueCases.listPage({
+        dayBucket,
+        workQueue,
+        mine: mineOnly,
+        search,
+        cursor: queueNextCursor,
+        pageSize: 50,
+      });
+      setQueueRows((prev) => [...prev, ...(page?.items || [])]);
+      setQueueNextCursor(page?.nextCursor || null);
+    } catch (error) {
+      const message = describeLoadError(error, "Unable to load more revenue cases.");
+      toast.error("Unable to load more revenue cases", { description: message });
+    } finally {
+      setQueueLoadingMore(false);
+    }
+  }
+
+  async function loadMoreDayCloseRows() {
+    if (!dayCloseNextCursor || dayCloseLoadingMore) return;
+    setDayCloseLoadingMore(true);
+    try {
+      const page = await revenueCases.listPage({
+        dayBucket: "Today",
+        from: isoDate(0),
+        to: isoDate(0),
+        cursor: dayCloseNextCursor,
+        pageSize: 50,
+      });
+      const unresolvedRows = (page?.items || []).filter((row) => !["MonitoringOnly", "Closed"].includes(row.currentRevenueStatus));
+      setDayCloseRows((prev) => [...prev, ...unresolvedRows]);
+      setDayCloseNextCursor(page?.nextCursor || null);
+      setRollDrafts((prev) => {
+        const next = { ...prev };
+        unresolvedRows.forEach((row) => {
+          next[row.id] = next[row.id] || defaultCloseoutDraft(row, session?.userId, settings?.dayCloseDefaults?.defaultDueHours || 18);
+        });
+        return next;
+      });
+    } catch (error) {
+      const message = describeLoadError(error, "Unable to load more day close rows.");
+      toast.error("Unable to load more day close rows", { description: message });
+    } finally {
+      setDayCloseLoadingMore(false);
     }
   }
 
@@ -1583,6 +1651,19 @@ export function RevenueCycleView() {
                       </button>
                     )})}
                   </div>
+                  {queueNextCursor ? (
+                    <div className="mt-4 flex justify-center">
+                      <button
+                        onClick={() => loadMoreQueueRows().catch(() => undefined)}
+                        aria-label="Load more revenue work queue cases"
+                        className="rounded-full border border-slate-200 px-4 py-2 text-[12px] text-slate-700 hover:border-slate-300 disabled:opacity-50"
+                        style={{ fontWeight: 700 }}
+                        disabled={queueLoadingMore}
+                      >
+                        {queueLoadingMore ? "Loading more..." : "Load More Cases"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <RevenueCaseDetailPane
@@ -1796,6 +1877,19 @@ export function RevenueCycleView() {
                     </CardContent>
                   </Card>
                 ))}
+                {dayCloseNextCursor ? (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      onClick={() => loadMoreDayCloseRows().catch(() => undefined)}
+                      aria-label="Load more revenue day close cases"
+                      className="rounded-full border border-slate-200 px-4 py-2 text-[12px] text-slate-700 hover:border-slate-300 disabled:opacity-50"
+                      style={{ fontWeight: 700 }}
+                      disabled={dayCloseLoadingMore}
+                    >
+                      {dayCloseLoadingMore ? "Loading more..." : "Load More Day Close Cases"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <Card className="border-0 shadow-sm">
                 <CardContent className="grid gap-4 p-5 md:grid-cols-3">

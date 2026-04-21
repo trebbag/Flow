@@ -11,7 +11,7 @@ export async function registerHealthRoutes(app: FastifyInstance) {
     try {
       await prisma.$queryRaw`SELECT 1`;
       const revenueSyncWorker = await getRevenueSyncWorkerStatus(prisma);
-      const degraded = revenueSyncWorker.lastError !== null;
+      const degraded = revenueSyncWorker.lastError !== null || revenueSyncWorker.staleLeaseCount > 0;
       const payload = {
         status: degraded ? "degraded" : "ready",
         database: { status: "ok" },
@@ -33,6 +33,7 @@ export async function registerHealthRoutes(app: FastifyInstance) {
           lastSuccessfulDrainAt: null,
           lastFailedDrainAt: null,
           lastError: null,
+          staleLeaseCount: 0,
         },
       };
     }

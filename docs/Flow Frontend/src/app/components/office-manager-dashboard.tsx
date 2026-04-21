@@ -840,9 +840,12 @@ function EncounterRow({ encounter: e, isSelected, onSelect }: {
       : "bg-white border-gray-100";
 
   return (
-    <div
-      className={`rounded-lg border p-3 flex items-center gap-3 transition-all cursor-pointer hover:shadow-sm ${alertBg}`}
+    <button
+      type="button"
+      className={`relative w-full rounded-lg border p-3 flex items-center gap-3 text-left transition-all cursor-pointer hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 ${alertBg}`}
       onClick={onSelect}
+      aria-pressed={isSelected}
+      aria-label={`Open workflow panel for patient ${e.patientId} in ${statusLabels[e.status]}`}
     >
       {e.safetyActive && (
         <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-red-500 rounded-full" />
@@ -887,7 +890,7 @@ function EncounterRow({ encounter: e, isSelected, onSelect }: {
         </div>
       </div>
       {isSelected && <ChevronRight className="w-4 h-4 text-indigo-400 shrink-0" />}
-    </div>
+    </button>
   );
 }
 

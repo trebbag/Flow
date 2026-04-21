@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { subscribeOutboxStreamEvent } from "../lib/event-bus.js";
+import { dispatchOperationalOutboxById } from "../lib/operational-events.js";
 
 const listOutboxQuerySchema = z.object({
   status: z.nativeEnum(OutboxStatus).optional(),
@@ -75,16 +76,7 @@ export async function registerEventRoutes(app: FastifyInstance) {
 
       const row = await prisma.eventOutbox.findUnique({ where: { id: outboxId } });
       requireCondition(row, 404, "Outbox event not found");
-
-      return prisma.eventOutbox.update({
-        where: { id: outboxId },
-        data: {
-          status: OutboxStatus.dispatched,
-          dispatchedAt: new Date(),
-          attempts: row.attempts + 1,
-          lastError: null
-        }
-      });
+      return dispatchOperationalOutboxById(prisma, outboxId);
     }
   );
 

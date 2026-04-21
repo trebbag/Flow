@@ -18,6 +18,7 @@ import type { Role } from "./types";
 import { loadSession } from "./auth-session";
 import { labelClinicName, labelProviderName, labelReasonName, labelRoomName, labelUserName } from "./display-names";
 import { ADMIN_REFRESH_EVENT, FACILITY_CONTEXT_CHANGED_EVENT } from "./app-events";
+import { readEncounterBoardSnapshot, writeEncounterBoardSnapshot } from "./encounter-board-storage";
 
 export type CreatedTask = {
   id: string;
@@ -87,6 +88,7 @@ interface EncounterContextType {
   getCheckoutData: (encounterId: string) => CompletedCheckout | undefined;
 
   isLiveMode: boolean;
+  isBoardSnapshotStale: boolean;
   syncError: string | null;
   refreshData: () => Promise<void>;
   checkInPatient: (input: {
@@ -185,12 +187,26 @@ function todayIsoDate() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function resolveBoardSnapshotScope() {
+  const session = loadSession();
+  const facilityId = session?.facilityId || "unknown-facility";
+  const roleScope = session?.role || "unknown-role";
+  const dateKey = todayIsoDate();
+  return {
+    facilityId,
+    roleScope,
+    dateKey,
+    key: `${facilityId}:${dateKey}:${roleScope}`,
+  };
+}
+
 export function EncounterProvider({ children }: { children: ReactNode }) {
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [maTasks, setMaTasks] = useState<MATask[]>([]);
   const [createdTasks, setCreatedTasks] = useState<CreatedTask[]>([]);
   const [completedCheckouts, setCompletedCheckouts] = useState<CompletedCheckout[]>([]);
   const [isLiveMode, setIsLiveMode] = useState(false);
+  const [isBoardSnapshotStale, setIsBoardSnapshotStale] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [encounterCacheVersion, setEncounterCacheVersion] = useState(0);
 
@@ -201,11 +217,28 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
   const usersByIdRef = useRef<Record<string, LiveUser>>({});
   const usersByNameRef = useRef<Record<string, LiveUser>>({});
   const encountersRef = useRef<Encounter[]>([]);
+  const maTasksRef = useRef<MATask[]>([]);
   const encounterCacheRef = useRef<Record<string, Encounter>>({});
+  const createdTasksRef = useRef<CreatedTask[]>([]);
+  const completedCheckoutsRef = useRef<CompletedCheckout[]>([]);
+  const snapshotScopeKeyRef = useRef<string | null>(null);
+  const liveBoardHydratedRef = useRef(false);
 
   useEffect(() => {
     encountersRef.current = encounters;
   }, [encounters]);
+
+  useEffect(() => {
+    maTasksRef.current = maTasks;
+  }, [maTasks]);
+
+  useEffect(() => {
+    createdTasksRef.current = createdTasks;
+  }, [createdTasks]);
+
+  useEffect(() => {
+    completedCheckoutsRef.current = completedCheckouts;
+  }, [completedCheckouts]);
 
   const mapBackendEncounter = useCallback((raw: any): Encounter => {
     const cachedEncounter =
@@ -365,6 +398,53 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const hydrateBoardSnapshot = useCallback(async () => {
+    const scope = resolveBoardSnapshotScope();
+    snapshotScopeKeyRef.current = scope.key;
+    const snapshot = await readEncounterBoardSnapshot(scope);
+    if (liveBoardHydratedRef.current) {
+      return;
+    }
+
+    if (!snapshot) {
+      setIsBoardSnapshotStale(false);
+      setEncounters([]);
+      encountersRef.current = [];
+      setMaTasks([]);
+      setCreatedTasks([]);
+      setCompletedCheckouts([]);
+      return;
+    }
+
+    setEncounters(snapshot.encounters);
+    encountersRef.current = snapshot.encounters;
+    setMaTasks(snapshot.maTasks);
+    setCreatedTasks(snapshot.createdTasks);
+    setCompletedCheckouts(snapshot.completedCheckouts);
+    setIsBoardSnapshotStale(true);
+    setIsLiveMode(true);
+  }, []);
+
+  const persistBoardSnapshot = useCallback(async (params: {
+    encounters: Encounter[];
+    maTasks: MATask[];
+    createdTasks?: CreatedTask[];
+    completedCheckouts?: CompletedCheckout[];
+  }) => {
+    const scope = resolveBoardSnapshotScope();
+    snapshotScopeKeyRef.current = scope.key;
+    await writeEncounterBoardSnapshot({
+      facilityId: scope.facilityId,
+      roleScope: scope.roleScope,
+      dateKey: scope.dateKey,
+      fetchedAt: new Date().toISOString(),
+      encounters: params.encounters,
+      maTasks: params.maTasks,
+      createdTasks: params.createdTasks || createdTasksRef.current,
+      completedCheckouts: params.completedCheckouts || completedCheckoutsRef.current,
+    });
+  }, []);
+
   const refreshData = useCallback(async () => {
     setSyncError(null);
     const session = loadSession();
@@ -485,8 +565,12 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       errors.push(`Incoming schedule: ${incomingRowsResult.reason instanceof Error ? incomingRowsResult.reason.message : "failed to load"}`);
     }
 
-    if (taskRowsResult.status === "fulfilled") {
-      setMaTasks((taskRowsResult.value as BackendTask[]).map(mapBackendTask));
+    const nextMaTasks =
+      taskRowsResult.status === "fulfilled"
+        ? (taskRowsResult.value as BackendTask[]).map(mapBackendTask)
+        : null;
+    if (nextMaTasks) {
+      setMaTasks(nextMaTasks);
     } else {
       errors.push(`Tasks: ${taskRowsResult.reason instanceof Error ? taskRowsResult.reason.message : "failed to load"}`);
     }
@@ -495,11 +579,35 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       encounterRowsResult.status === "fulfilled" || incomingRowsResult.status === "fulfilled";
 
     setIsLiveMode(criticalSucceeded);
+    if (criticalSucceeded) {
+      liveBoardHydratedRef.current = true;
+      setIsBoardSnapshotStale(false);
+    }
     setSyncError(errors.length > 0 ? errors.join(" | ") : null);
-  }, [mapBackendEncounter, mapBackendTask, mapIncomingRow]);
+
+    if (criticalSucceeded && nextMaTasks && (encounterRowsResult.status === "fulfilled" || incomingRowsResult.status === "fulfilled")) {
+      const mappedEncounters =
+        encounterRowsResult.status === "fulfilled"
+          ? (encounterRowsResult.value as any[]).map((row) => mapBackendEncounter(row))
+          : [];
+      const mappedIncoming =
+        incomingRowsResult.status === "fulfilled"
+          ? (incomingRowsResult.value as any[])
+              .filter((row) => !row.checkedInAt && !row.dispositionAt)
+              .map((row) => mapIncomingRow(row as IncomingRow))
+          : [];
+      const allEncounterRows = [...mappedEncounters, ...mappedIncoming];
+      await persistBoardSnapshot({
+        encounters: allEncounterRows,
+        maTasks: nextMaTasks,
+      });
+    }
+  }, [mapBackendEncounter, mapBackendTask, mapIncomingRow, persistBoardSnapshot]);
 
   useEffect(() => {
-    refreshData();
+    liveBoardHydratedRef.current = false;
+    hydrateBoardSnapshot().catch(() => undefined);
+    refreshData().catch(() => undefined);
 
     const poll = setInterval(() => {
       refreshData().catch(() => undefined);
@@ -550,6 +658,8 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     connectStream().catch(() => undefined);
 
     const onExternalRefresh = () => {
+      liveBoardHydratedRef.current = false;
+      hydrateBoardSnapshot().catch(() => undefined);
       refreshData().catch(() => undefined);
     };
     if (typeof window !== "undefined") {
@@ -568,7 +678,19 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onExternalRefresh);
       }
     };
-  }, [refreshData]);
+  }, [hydrateBoardSnapshot, refreshData]);
+
+  useEffect(() => {
+    if (!liveBoardHydratedRef.current || !snapshotScopeKeyRef.current) {
+      return;
+    }
+    void persistBoardSnapshot({
+      encounters,
+      maTasks,
+      createdTasks,
+      completedCheckouts,
+    });
+  }, [completedCheckouts, createdTasks, encounters, maTasks, persistBoardSnapshot]);
 
   const fetchEncounter = useCallback(
     async (id: string, options?: { force?: boolean }) => {
@@ -912,6 +1034,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       completeCheckout,
       getCheckoutData,
       isLiveMode,
+      isBoardSnapshotStale,
       syncError,
       refreshData,
       checkInPatient,
@@ -934,6 +1057,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
       completeCheckout,
       getCheckoutData,
       isLiveMode,
+      isBoardSnapshotStale,
       syncError,
       refreshData,
       checkInPatient,

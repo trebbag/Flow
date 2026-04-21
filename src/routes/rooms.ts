@@ -10,12 +10,13 @@ import {
   RoomOperationalStatus,
   TaskSourceType
 } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
+import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import {
   getPreRoomingAvailability,
   getRoomDetail,
@@ -23,9 +24,10 @@ import {
   listRoomCards,
   currentRoomDateKey,
   resolveRoomActionContext,
-  transitionRoomOperationalState,
   transitionRoomOperationalStateInTx
 } from "../lib/room-operations.js";
+
+type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const roomsLiveQuerySchema = z.object({
   mine: z.coerce.boolean().optional(),
@@ -108,7 +110,7 @@ async function createOfficeManagerTaskAlert(params: {
   clinicId: string;
   facilityId: string;
   title: string;
-}) {
+}, db: DbClient = prisma) {
   await createInboxAlert({
     facilityId: params.facilityId,
     clinicId: params.clinicId,
@@ -124,6 +126,20 @@ async function createOfficeManagerTaskAlert(params: {
       clinicId: params.clinicId
     },
     roles: [RoleName.OfficeManager]
+  }, db);
+}
+
+async function recordRoomMutationTx(params: {
+  tx: Prisma.TransactionClient;
+  request: FastifyRequest;
+  entityType: string;
+  entityId: string;
+}) {
+  await persistMutationOperationalEventTx({
+    db: params.tx,
+    request: params.request,
+    entityType: params.entityType,
+    entityId: params.entityId,
   });
 }
 
@@ -192,62 +208,96 @@ export async function registerRoomRoutes(app: FastifyInstance) {
     const dto = actionClinicSchema.parse(request.body || {});
     const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
     const dateKey = currentRoomDateKey(context.clinic.timezone);
-    const dayStart = await prisma.roomChecklistRun.findUnique({
-      where: {
-        roomId_kind_dateKey: {
-          roomId,
-          kind: RoomChecklistKind.DayStart,
-          dateKey
-        }
-      },
-      select: { completed: true }
+    const updated = await prisma.$transaction(async (tx) => {
+      const dayStart = await tx.roomChecklistRun.findUnique({
+        where: {
+          roomId_kind_dateKey: {
+            roomId,
+            kind: RoomChecklistKind.DayStart,
+            dateKey
+          }
+        },
+        select: { completed: true }
+      });
+      if (!dayStart?.completed) {
+        throw new ApiError(409, "Complete the Day Start checklist before marking this room ready.");
+      }
+
+      const result = await transitionRoomOperationalStateInTx(tx, {
+        roomId,
+        clinicId: context.clinic.id,
+        facilityId: context.facilityId,
+        toStatus: RoomOperationalStatus.Ready,
+        eventType: RoomEventType.MarkedReady,
+        createdByUserId: request.user!.id,
+        note: dto.note || null,
+        allowedFrom: [RoomOperationalStatus.NeedsTurnover, RoomOperationalStatus.NotReady, RoomOperationalStatus.Ready]
+      });
+      await recordRoomMutationTx({
+        tx,
+        request,
+        entityType: "Room",
+        entityId: roomId,
+      });
+      return result;
     });
-    if (!dayStart?.completed) {
-      throw new ApiError(409, "Complete the Day Start checklist before marking this room ready.");
-    }
-    return transitionRoomOperationalState({
-      roomId,
-      clinicId: context.clinic.id,
-      facilityId: context.facilityId,
-      toStatus: RoomOperationalStatus.Ready,
-      eventType: RoomEventType.MarkedReady,
-      createdByUserId: request.user!.id,
-      note: dto.note || null,
-      allowedFrom: [RoomOperationalStatus.NeedsTurnover, RoomOperationalStatus.NotReady, RoomOperationalStatus.Ready]
-    });
+    await flushOperationalOutbox(prisma);
+    return updated;
   });
 
   app.post("/rooms/:id/actions/place-hold", { preHandler: guard }, async (request) => {
     const roomId = (request.params as { id: string }).id;
     const dto = holdSchema.parse(request.body || {});
     const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
-    return transitionRoomOperationalState({
-      roomId,
-      clinicId: context.clinic.id,
-      facilityId: context.facilityId,
-      toStatus: RoomOperationalStatus.Hold,
-      eventType: RoomEventType.HoldPlaced,
-      createdByUserId: request.user!.id,
-      note: dto.note || null,
-      holdReason: dto.reason,
-      holdNote: dto.note || null
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await transitionRoomOperationalStateInTx(tx, {
+        roomId,
+        clinicId: context.clinic.id,
+        facilityId: context.facilityId,
+        toStatus: RoomOperationalStatus.Hold,
+        eventType: RoomEventType.HoldPlaced,
+        createdByUserId: request.user!.id,
+        note: dto.note || null,
+        holdReason: dto.reason,
+        holdNote: dto.note || null
+      });
+      await recordRoomMutationTx({
+        tx,
+        request,
+        entityType: "Room",
+        entityId: roomId,
+      });
+      return result;
     });
+    await flushOperationalOutbox(prisma);
+    return updated;
   });
 
   app.post("/rooms/:id/actions/clear-hold", { preHandler: guard }, async (request) => {
     const roomId = (request.params as { id: string }).id;
     const dto = clearHoldSchema.parse(request.body || {});
     const context = await resolveRoomActionContext({ roomId, user: request.user!, clinicId: dto.clinicId || null });
-    return transitionRoomOperationalState({
-      roomId,
-      clinicId: context.clinic.id,
-      facilityId: context.facilityId,
-      toStatus: dto.targetStatus,
-      eventType: RoomEventType.HoldCleared,
-      createdByUserId: request.user!.id,
-      note: dto.note || null,
-      allowedFrom: [RoomOperationalStatus.Hold]
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await transitionRoomOperationalStateInTx(tx, {
+        roomId,
+        clinicId: context.clinic.id,
+        facilityId: context.facilityId,
+        toStatus: dto.targetStatus,
+        eventType: RoomEventType.HoldCleared,
+        createdByUserId: request.user!.id,
+        note: dto.note || null,
+        allowedFrom: [RoomOperationalStatus.Hold]
+      });
+      await recordRoomMutationTx({
+        tx,
+        request,
+        entityType: "Room",
+        entityId: roomId,
+      });
+      return result;
     });
+    await flushOperationalOutbox(prisma);
+    return updated;
   });
 
   app.post("/rooms/:id/issues", { preHandler: guard }, async (request) => {
@@ -335,19 +385,26 @@ export async function registerRoomRoutes(app: FastifyInstance) {
         });
       }
 
+      await createOfficeManagerTaskAlert({
+        taskId: task.id,
+        issueId: linkedIssue.id,
+        roomId,
+        roomName: context.room.name,
+        clinicId: context.clinic.id,
+        facilityId: context.facilityId,
+        title: dto.title
+      }, tx);
+
+      await recordRoomMutationTx({
+        tx,
+        request,
+        entityType: "RoomIssue",
+        entityId: linkedIssue.id,
+      });
+
       return { issue: linkedIssue, task };
     });
-
-    await createOfficeManagerTaskAlert({
-      taskId: result.task.id,
-      issueId: result.issue.id,
-      roomId,
-      roomName: context.room.name,
-      clinicId: context.clinic.id,
-      facilityId: context.facilityId,
-      title: dto.title
-    });
-
+    await flushOperationalOutbox(prisma);
     return result;
   });
 
@@ -362,34 +419,45 @@ export async function registerRoomRoutes(app: FastifyInstance) {
     }
 
     const resolved = dto.status === RoomIssueStatus.Resolved;
-    const updated = await prisma.roomIssue.update({
-      where: { id: issueId },
-      data: {
-        status: dto.status,
-        severity: dto.severity,
-        title: dto.title,
-        description: dto.description === undefined ? undefined : dto.description,
-        resolutionNote: dto.resolutionNote,
-        resolvedAt: resolved ? new Date() : undefined,
-        resolvedByUserId: resolved ? request.user!.id : undefined
-      }
-    });
-
-    if (resolved) {
-      await prisma.roomOperationalEvent.create({
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.roomIssue.update({
+        where: { id: issueId },
         data: {
-          roomId: issue.roomId,
-          clinicId: issue.clinicId,
-          facilityId: issue.facilityId,
-          encounterId: issue.encounterId,
-          eventType: RoomEventType.IssueResolved,
-          note: dto.resolutionNote || null,
-          metadataJson: { issueId } as Prisma.InputJsonValue,
-          createdByUserId: request.user!.id
+          status: dto.status,
+          severity: dto.severity,
+          title: dto.title,
+          description: dto.description === undefined ? undefined : dto.description,
+          resolutionNote: dto.resolutionNote,
+          resolvedAt: resolved ? new Date() : undefined,
+          resolvedByUserId: resolved ? request.user!.id : undefined
         }
       });
-    }
 
+      if (resolved) {
+        await tx.roomOperationalEvent.create({
+          data: {
+            roomId: issue.roomId,
+            clinicId: issue.clinicId,
+            facilityId: issue.facilityId,
+            encounterId: issue.encounterId,
+            eventType: RoomEventType.IssueResolved,
+            note: dto.resolutionNote || null,
+            metadataJson: { issueId } as Prisma.InputJsonValue,
+            createdByUserId: request.user!.id
+          }
+        });
+      }
+
+      await recordRoomMutationTx({
+        tx,
+        request,
+        entityType: "RoomIssue",
+        entityId: issueId,
+      });
+
+      return row;
+    });
+    await flushOperationalOutbox(prisma);
     return updated;
   });
 
@@ -460,10 +528,24 @@ export async function registerRoomRoutes(app: FastifyInstance) {
           });
         }
       }
+      await recordRoomMutationTx({
+        tx,
+        request,
+        entityType: "RoomChecklistRun",
+        entityId: run.id,
+      });
       return run;
     });
   }
 
-  app.post("/rooms/checklists/day-start", { preHandler: guard }, async (request) => upsertChecklist(RoomChecklistKind.DayStart, request));
-  app.post("/rooms/checklists/day-end", { preHandler: guard }, async (request) => upsertChecklist(RoomChecklistKind.DayEnd, request));
+  app.post("/rooms/checklists/day-start", { preHandler: guard }, async (request) => {
+    const run = await upsertChecklist(RoomChecklistKind.DayStart, request);
+    await flushOperationalOutbox(prisma);
+    return run;
+  });
+  app.post("/rooms/checklists/day-end", { preHandler: guard }, async (request) => {
+    const run = await upsertChecklist(RoomChecklistKind.DayEnd, request);
+    await flushOperationalOutbox(prisma);
+    return run;
+  });
 }

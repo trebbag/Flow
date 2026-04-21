@@ -172,7 +172,7 @@ async function createRoomingToCheckoutEncounter(adminAuth, facilityId) {
 
 async function findEncounterByStatus(adminAuth, facilityId, status) {
   const rows = await request(
-    `/encounters?status=${encodeURIComponent(status)}`,
+    `/encounters?legacyArray=1&status=${encodeURIComponent(status)}`,
     {
       auth: { ...adminAuth, facilityId },
     },

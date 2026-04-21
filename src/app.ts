@@ -17,7 +17,6 @@ import { registerEventRoutes } from "./routes/events.js";
 import { registerDashboardRoutes } from "./routes/dashboard.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerRevenueRoutes } from "./routes/revenue.js";
-import { isMutatingMethod, recordMutationOperationalEvent } from "./lib/operational-events.js";
 
 export function buildApp() {
   const app = Fastify({
@@ -84,17 +83,6 @@ export function buildApp() {
         : request.id;
     request.correlationId = correlationId;
     reply.header("x-correlation-id", correlationId);
-  });
-
-  app.addHook("onResponse", async (request, reply) => {
-    if (!isMutatingMethod(request.method)) {
-      return;
-    }
-    try {
-      await recordMutationOperationalEvent(request, reply.statusCode);
-    } catch (error) {
-      request.log.error(error as Error, "Failed to capture mutation operational event");
-    }
   });
 
   app.setErrorHandler((error, request, reply) => {

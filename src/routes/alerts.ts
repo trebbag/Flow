@@ -6,6 +6,7 @@ import { requireRoles } from "../lib/auth.js";
 import { listUserInboxAlerts, updateUserInboxAlertStatus } from "../lib/user-alert-inbox.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 import { prisma } from "../lib/prisma.js";
+import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 
 const alertsQuerySchema = z.object({
   tab: z.enum(["active", "archived"]).default("active"),
@@ -46,23 +47,45 @@ export async function registerAlertRoutes(app: FastifyInstance) {
 
   app.post("/alerts/:id/acknowledge", { preHandler: guard }, async (request) => {
     const alertId = (request.params as { id: string }).id;
-    const updated = await updateUserInboxAlertStatus({
-      id: alertId,
-      userId: request.user!.id,
-      status: AlertInboxStatus.archived
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await updateUserInboxAlertStatus({
+        id: alertId,
+        userId: request.user!.id,
+        status: AlertInboxStatus.archived
+      }, tx);
+      requireCondition(result.count > 0, 404, "Alert not found");
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "alerts",
+        entityId: alertId,
+      });
+      return result;
     });
     requireCondition(updated.count > 0, 404, "Alert not found");
+    await flushOperationalOutbox(prisma);
     return { status: "archived", id: alertId };
   });
 
   app.post("/alerts/:id/unarchive", { preHandler: guard }, async (request) => {
     const alertId = (request.params as { id: string }).id;
-    const updated = await updateUserInboxAlertStatus({
-      id: alertId,
-      userId: request.user!.id,
-      status: AlertInboxStatus.active
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await updateUserInboxAlertStatus({
+        id: alertId,
+        userId: request.user!.id,
+        status: AlertInboxStatus.active
+      }, tx);
+      requireCondition(result.count > 0, 404, "Alert not found");
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "alerts",
+        entityId: alertId,
+      });
+      return result;
     });
     requireCondition(updated.count > 0, 404, "Alert not found");
+    await flushOperationalOutbox(prisma);
     return { status: "active", id: alertId };
   });
 }

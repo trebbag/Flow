@@ -876,6 +876,18 @@ exports.Prisma.EventOutboxScalarFieldEnum = {
   lastError: 'lastError'
 };
 
+exports.Prisma.WorkerLeaseScalarFieldEnum = {
+  id: 'id',
+  leaseKey: 'leaseKey',
+  ownerId: 'ownerId',
+  acquiredAt: 'acquiredAt',
+  expiresAt: 'expiresAt',
+  lastHeartbeatAt: 'lastHeartbeatAt',
+  lastError: 'lastError',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.IntegrationConnectorScalarFieldEnum = {
   id: 'id',
   facilityId: 'facilityId',
@@ -1182,6 +1194,7 @@ exports.Prisma.ModelName = {
   AuditLog: 'AuditLog',
   IdempotencyRecord: 'IdempotencyRecord',
   EventOutbox: 'EventOutbox',
+  WorkerLease: 'WorkerLease',
   IntegrationConnector: 'IntegrationConnector'
 };
 

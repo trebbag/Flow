@@ -106,10 +106,10 @@ async function main() {
   const users = await request(`/admin/users?facilityId=${facilityId}`, { auth: true });
   assert.ok(Array.isArray(users), "/admin/users should return an array");
 
-  const encounters = await request(`/encounters?date=${today}&facilityId=${facilityId}`, { auth: true });
+  const encounters = await request(`/encounters?legacyArray=1&date=${today}&facilityId=${facilityId}`, { auth: true });
   assert.ok(Array.isArray(encounters), "/encounters should return an array");
 
-  const incoming = await request(`/incoming?date=${today}&facilityId=${facilityId}`, { auth: true });
+  const incoming = await request(`/incoming?legacyArray=1&date=${today}&facilityId=${facilityId}`, { auth: true });
   assert.ok(Array.isArray(incoming), "/incoming should return an array");
 
   const tasks = await request("/tasks", { auth: true });

@@ -9,7 +9,12 @@ import { normalizeDate, parseAppointmentAt, dateRangeForDay } from "../lib/dates
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
 import { ensurePatientRecord, extractPatientIdentityHints } from "../lib/patients.js";
-import { parseIncomingIntakeDataInput } from "../lib/persisted-json.js";
+import {
+  normalizeIncomingIssueNormalizedJson,
+  parseIncomingIntakeDataInput,
+  parseIncomingIssueNormalizedJsonInput,
+} from "../lib/persisted-json.js";
+import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import {
   formatClinicDisplayName,
   formatProviderDisplayName,
@@ -70,23 +75,21 @@ const listIncomingSchema = z
     date: z.string().optional(),
     includeCheckedIn: z.string().optional(),
     includeInvalid: z.string().optional(),
+    legacyArray: z.coerce.boolean().optional(),
   })
   .merge(paginationQuerySchema);
 
-const incomingIssueNormalizedSchema = z
+const listIncomingPendingSchema = z
   .object({
+    facilityId: z.string().uuid().optional(),
     clinicId: z.string().uuid().optional(),
-    dateOfService: z.string().nullable().optional(),
-    patientId: z.string().optional(),
-    appointmentTime: z.string().nullable().optional(),
-    providerLastName: z.string().nullable().optional(),
-    reasonText: z.string().nullable().optional(),
+    date: z.string().optional(),
+    legacyArray: z.coerce.boolean().optional(),
   })
-  .passthrough();
+  .merge(paginationQuerySchema);
 
 function readIncomingIssueNormalizedJson(value: unknown) {
-  const parsed = incomingIssueNormalizedSchema.safeParse(value);
-  return parsed.success ? parsed.data : {};
+  return normalizeIncomingIssueNormalizedJson(value as Prisma.JsonValue | null | undefined);
 }
 
 function readIncomingIssueRawPayload(value: unknown) {
@@ -635,14 +638,14 @@ async function importRows(
         clinicId,
         dateOfService: validated.dateOfService || normalizedDate,
         rawPayloadJson: (row.rawPayload || row) as Prisma.InputJsonValue,
-        normalizedJson: {
+        normalizedJson: parseIncomingIssueNormalizedJsonInput({
           clinicId,
           dateOfService: validated.dateOfServiceIso,
           patientId: validated.patientId,
           appointmentTime: validated.appointmentTime,
           providerLastName: validated.providerLastName,
           reasonText: validated.reasonText
-        } as Prisma.InputJsonValue,
+        }) as Prisma.InputJsonValue,
         validationErrors: validated.validationErrors as Prisma.InputJsonValue,
         status: "pending",
         retryCount: 0
@@ -793,9 +796,18 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
   });
 
   app.get("/incoming/pending", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
-    const query = request.query as { facilityId?: string; clinicId?: string; date?: string };
+    const query = listIncomingPendingSchema.parse(request.query);
     const user = request.user!;
     const facility = await resolveScopedFacility(user, query.facilityId);
+    const pagination = query.legacyArray
+      ? null
+      : resolveOptionalPagination(
+          {
+            cursor: query.cursor,
+            pageSize: query.pageSize ?? 50,
+          },
+          { pageSize: 50 },
+        );
 
     if (query.clinicId) {
       const scopedClinic = await resolveScopedClinic(user, query.clinicId);
@@ -816,10 +828,20 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         clinic: { select: { id: true, name: true, shortCode: true } },
         batch: { select: { id: true, source: true, fileName: true, createdAt: true, status: true } }
       },
-      orderBy: [{ createdAt: "desc" }]
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(pagination
+        ? {
+            take: pagination.pageSize + 1,
+            skip: pagination.offset,
+          }
+        : {})
     });
 
-    return issues;
+    if (query.legacyArray) {
+      return issues;
+    }
+
+    return paginateItems(issues, pagination!);
   });
 
   app.post("/incoming/pending/:id/retry", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
@@ -893,14 +915,14 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         data: {
           clinicId,
           dateOfService: validated.dateOfService || issue.dateOfService,
-          normalizedJson: {
+          normalizedJson: parseIncomingIssueNormalizedJsonInput({
             clinicId,
             dateOfService: validated.dateOfServiceIso,
             patientId: validated.patientId,
             appointmentTime: validated.appointmentTime,
             providerLastName: validated.providerLastName,
             reasonText: validated.reasonText
-          } as Prisma.InputJsonValue,
+          }) as Prisma.InputJsonValue,
           validationErrors: validated.validationErrors as Prisma.InputJsonValue,
           status: "pending",
           retryCount
@@ -946,14 +968,14 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         data: {
           clinicId,
           dateOfService: validated.dateOfService || issue.dateOfService,
-          normalizedJson: {
+          normalizedJson: parseIncomingIssueNormalizedJsonInput({
             clinicId,
             dateOfService: validated.dateOfServiceIso,
             patientId: validated.patientId,
             appointmentTime: validated.appointmentTime,
             providerLastName: validated.providerLastName,
             reasonText: validated.reasonText
-          } as Prisma.InputJsonValue,
+          }) as Prisma.InputJsonValue,
           validationErrors: Prisma.JsonNull,
           status: "resolved",
           retryCount,
@@ -1170,7 +1192,7 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
             clinicId: issue.clinicId || null,
             dateOfService: issue.dateOfService || normalizedDate,
             rawPayloadJson: issue.row as Prisma.InputJsonValue,
-            normalizedJson: issue.normalized as Prisma.InputJsonValue,
+            normalizedJson: parseIncomingIssueNormalizedJsonInput(issue.normalized) as Prisma.InputJsonValue,
             validationErrors: [issue.message] as Prisma.InputJsonValue,
             status: "pending",
             retryCount: 0
@@ -1394,8 +1416,17 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         }
       });
 
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "IncomingSchedule",
+        entityId: incomingId,
+      });
+
       return { encounterId: encounterId! };
     });
+
+    await flushOperationalOutbox(prisma);
 
     return {
       encounterId: result.encounterId,
@@ -1409,7 +1440,15 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
     const query = listIncomingSchema.parse(request.query);
     const user = request.user!;
     const requestedClinicId = query.clinicId?.trim() || undefined;
-    const pagination = resolveOptionalPagination(query, { pageSize: 100 });
+    const pagination = query.legacyArray
+      ? null
+      : resolveOptionalPagination(
+          {
+            cursor: query.cursor,
+            pageSize: query.pageSize ?? 100,
+          },
+          { pageSize: 100 },
+        );
     if (user.clinicId && requestedClinicId && requestedClinicId !== user.clinicId) {
       throw new ApiError(403, "Clinic is outside your assigned scope");
     }
@@ -1531,7 +1570,7 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
       );
     })();
 
-    if (!pagination) {
+    if (query.legacyArray) {
       return projectedRows;
     }
 

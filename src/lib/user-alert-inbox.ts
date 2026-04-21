@@ -2,7 +2,8 @@ import { AlertInboxStatus, Prisma, RoleName } from "@prisma/client";
 import type { AlertInboxKind, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma.js";
 
-type AlertRecipientDb = Pick<PrismaClient, "user">;
+type DbClient = PrismaClient | Prisma.TransactionClient;
+type AlertRecipientDb = Pick<DbClient, "user">;
 
 function buildScopedRoleClauses(params: {
   facilityId: string;
@@ -75,7 +76,7 @@ export async function createInboxAlert(params: {
   payload?: Record<string, unknown> | null;
   userIds?: string[];
   roles?: RoleName[];
-}) {
+}, db: DbClient = prisma) {
   const userIds =
     params.userIds && params.userIds.length > 0
       ? params.userIds
@@ -83,7 +84,7 @@ export async function createInboxAlert(params: {
           facilityId: params.facilityId,
           clinicId: params.clinicId,
           roles: params.roles
-        });
+        }, db);
   if (userIds.length === 0) return 0;
 
   const rows = userIds.map((userId) => ({
@@ -98,9 +99,9 @@ export async function createInboxAlert(params: {
     payloadJson: params.payload || null,
     status: AlertInboxStatus.active
   }));
-  await prisma.$transaction(
+  await Promise.all(
     rows.map((row) =>
-      prisma.userAlertInbox.upsert({
+      db.userAlertInbox.upsert({
         where: {
           userId_kind_sourceVersionKey: {
             userId: row.userId,
@@ -157,9 +158,9 @@ export async function updateUserInboxAlertStatus(params: {
   id: string;
   userId: string;
   status: AlertInboxStatus;
-}) {
+}, db: DbClient = prisma) {
   const now = new Date();
-  return prisma.userAlertInbox.updateMany({
+  return db.userAlertInbox.updateMany({
     where: {
       id: params.id,
       userId: params.userId

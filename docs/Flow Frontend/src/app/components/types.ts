@@ -786,7 +786,7 @@ export interface RevenueDashboardSnapshot {
     reimbursementRules: RevenueReimbursementRuleItem[];
     checklistDefaults: Record<string, Array<{ label: string; sortOrder: number; required?: boolean }>>;
   };
-  cases: RevenueCaseDetail[];
+  cases?: RevenueCaseDetail[];
 }
 
 export interface RevenueDailyHistoryRollup {

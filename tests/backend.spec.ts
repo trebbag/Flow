@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus, ScheduleSource, TemplateType } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
 import { ensurePatientRecord } from "../src/lib/patients.js";
@@ -439,6 +440,52 @@ describe("Flow backend core relationships", () => {
     expect(alias?.aliasValue).toBe("ALT-999");
   });
 
+  it("surfaces integrity warnings for malformed patient identity review JSON", async () => {
+    const ctx = await bootstrapCore();
+
+    const review = await prisma.patientIdentityReview.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "ALT-JSON-1",
+        normalizedSourcePatientId: "altjson1",
+        reasonCode: "AMBIGUOUS_ALIAS_MATCH",
+        matchedPatientIdsJson: { invalid: true } as unknown as Prisma.InputJsonValue,
+        contextJson: ["unexpected"] as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/admin/patient-identity-reviews?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const rows = response.json() as Array<{
+      id: string;
+      integrityWarnings?: Array<{ field: string }>;
+      matchedPatientIds?: string[];
+      contextJson?: Record<string, unknown> | null;
+    }>;
+    const malformed = rows.find((row) => row.id === review.id);
+    expect(malformed?.matchedPatientIds).toEqual([]);
+    expect(malformed?.contextJson).toBeNull();
+    expect(malformed?.integrityWarnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "matchedPatientIdsJson" }),
+        expect.objectContaining({ field: "contextJson" }),
+      ]),
+    );
+
+    const alerts = await prisma.userAlertInbox.findMany({
+      where: {
+        facilityId: ctx.facility.id,
+        sourceId: { in: [`patientIdentityReview:${review.id}:matchedPatientIdsJson`, `patientIdentityReview:${review.id}:contextJson`] },
+      },
+    });
+    expect(alerts).toHaveLength(2);
+  });
+
   it("enforces encounter version bumps at the persistence layer for business-field updates", async () => {
     const ctx = await bootstrapCore();
     const created = await app.inject({
@@ -749,7 +796,7 @@ describe("Flow backend core relationships", () => {
     });
     expect(outbox).toBeTruthy();
     expect(outbox?.topic).toContain("incoming");
-    expect(outbox?.status).toBe("pending");
+    expect(outbox?.status).toBe("dispatched");
 
     const outboxList = await app.inject({
       method: "GET",
@@ -1410,7 +1457,7 @@ describe("Flow backend core relationships", () => {
 
     const visible = await app.inject({
       method: "GET",
-      url: "/encounters",
+      url: "/encounters?legacyArray=1",
       headers: authHeaders(ctx.ma.id, RoleName.MA)
     });
     expect(visible.statusCode).toBe(200);
@@ -1727,6 +1774,92 @@ describe("Flow backend core relationships", () => {
       }
     });
     expect(alert).toBeTruthy();
+
+    const auditRow = await prisma.auditLog.findFirst({
+      where: { route: "/rooms/:id/issues", entityType: "RoomIssue", entityId: payload.issue.id },
+    });
+    expect(auditRow).toBeTruthy();
+
+    const outboxRow = await prisma.eventOutbox.findFirst({
+      where: { aggregateType: "RoomIssue", aggregateId: payload.issue.id, status: "dispatched" },
+    });
+    expect(outboxRow).toBeTruthy();
+  });
+
+  it("persists committed audit and outbox rows for room actions and checklists", async () => {
+    const ctx = await bootstrapCore();
+
+    const dayStart = await app.inject({
+      method: "POST",
+      url: "/rooms/checklists/day-start",
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        clinicId: ctx.clinic.id,
+        completed: true,
+        items: [{ key: "visual-ready", label: "Room visually ready", completed: true }]
+      }
+    });
+    expect(dayStart.statusCode).toBe(200);
+
+    const markedReady = await app.inject({
+      method: "POST",
+      url: `/rooms/${ctx.clinicRoomA.id}/actions/mark-ready`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { clinicId: ctx.clinic.id, note: "Turnover complete" }
+    });
+    expect(markedReady.statusCode).toBe(200);
+
+    const placedHold = await app.inject({
+      method: "POST",
+      url: `/rooms/${ctx.clinicRoomA.id}/actions/place-hold`,
+      headers: authHeaders(ctx.officeManager.id, RoleName.OfficeManager),
+      payload: { clinicId: ctx.clinic.id, reason: "Manual", note: "Cleaning inspection" }
+    });
+    expect(placedHold.statusCode).toBe(200);
+
+    const clearedHold = await app.inject({
+      method: "POST",
+      url: `/rooms/${ctx.clinicRoomA.id}/actions/clear-hold`,
+      headers: authHeaders(ctx.officeManager.id, RoleName.OfficeManager),
+      payload: { clinicId: ctx.clinic.id, targetStatus: "Ready", note: "Inspection complete" }
+    });
+    expect(clearedHold.statusCode).toBe(200);
+
+    const checklistAudit = await prisma.auditLog.findFirst({
+      where: { route: "/rooms/checklists/day-start", entityType: "RoomChecklistRun", entityId: dayStart.json().id },
+    });
+    expect(checklistAudit).toBeTruthy();
+
+    const roomAudits = await prisma.auditLog.findMany({
+      where: {
+        entityType: "Room",
+        entityId: ctx.clinicRoomA.id,
+        route: { in: ["/rooms/:id/actions/mark-ready", "/rooms/:id/actions/place-hold", "/rooms/:id/actions/clear-hold"] },
+      },
+    });
+    expect(roomAudits).toHaveLength(3);
+
+    const checklistOutbox = await prisma.eventOutbox.findFirst({
+      where: { aggregateType: "RoomChecklistRun", aggregateId: dayStart.json().id, status: "dispatched" },
+    });
+    expect(checklistOutbox).toBeTruthy();
+
+    const roomOutboxRows = await prisma.eventOutbox.findMany({
+      where: {
+        aggregateType: "Room",
+        aggregateId: ctx.clinicRoomA.id,
+        status: "dispatched",
+        eventType: {
+          in: [
+            "post.api.rooms.id.actions.mark-ready",
+            "post.api.rooms.id.actions.place-hold",
+            "post.api.rooms.id.actions.clear-hold",
+          ],
+        },
+      },
+    });
+    expect(roomOutboxRows).toHaveLength(3);
   });
 
   it("returns revenue-cycle dashboard aggregates", async () => {
@@ -1774,9 +1907,9 @@ describe("Flow backend core relationships", () => {
           reimbursementRules: expect.any(Array),
         }),
         queueCounts: expect.any(Object),
-        cases: expect.any(Array)
       })
     );
+    expect(dashboard.json().cases).toBeUndefined();
   });
 
   it("allows admin to assign a facility room to another clinic", async () => {
@@ -1878,7 +2011,7 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(list.statusCode).toBe(200);
@@ -1905,7 +2038,7 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
 
@@ -2224,6 +2357,59 @@ describe("Flow backend core relationships", () => {
           (pending.validationErrors as string[]).some((entry) => entry.toLowerCase().includes("future")),
       ),
     ).toBe(true);
+  });
+
+  it("paginates pending review rows by default and preserves legacy array access", async () => {
+    const ctx = await bootstrapCore();
+    const created = await Promise.all(
+      Array.from({ length: 3 }).map((_, index) =>
+        prisma.incomingImportIssue.create({
+          data: {
+            batchId: ctx.incoming.importBatchId!,
+            facilityId: ctx.facility.id,
+            clinicId: ctx.clinic.id,
+            dateOfService: ctx.day,
+            rawPayloadJson: {
+              patientId: `PT-PENDING-${index + 1}`,
+            } as Prisma.InputJsonValue,
+            normalizedJson: {
+              patientId: `PT-PENDING-${index + 1}`,
+              clinicId: ctx.clinic.id,
+              dateOfService: ctx.day.toISOString().slice(0, 10),
+            } as Prisma.InputJsonValue,
+            validationErrors: ["Provider is required"],
+            status: "pending",
+          },
+        }),
+      ),
+    );
+
+    const firstPage = await app.inject({
+      method: "GET",
+      url: `/incoming/pending?facilityId=${ctx.facility.id}&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&pageSize=2`,
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+    });
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json().items).toHaveLength(2);
+    expect(firstPage.json().nextCursor).toEqual(expect.any(String));
+
+    const secondPage = await app.inject({
+      method: "GET",
+      url: `/incoming/pending?facilityId=${ctx.facility.id}&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&pageSize=2&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+    });
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json().items).toHaveLength(1);
+    expect(created.map((issue) => issue.id)).toContain(secondPage.json().items[0].id);
+
+    const legacy = await app.inject({
+      method: "GET",
+      url: `/incoming/pending?facilityId=${ctx.facility.id}&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&legacyArray=1`,
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+    });
+    expect(legacy.statusCode).toBe(200);
+    expect(Array.isArray(legacy.json())).toBe(true);
+    expect(legacy.json().length).toBeGreaterThanOrEqual(3);
   });
 
   it("rejects incoming imports with no data rows instead of reporting zero accepted rows", async () => {
@@ -2751,7 +2937,7 @@ describe("Flow backend core relationships", () => {
 
     const listPrimaryFacility = await app.inject({
       method: "GET",
-      url: `/encounters?date=${date}`,
+      url: `/encounters?legacyArray=1&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listPrimaryFacility.statusCode).toBe(200);
@@ -2859,7 +3045,7 @@ describe("Flow backend core relationships", () => {
 
     const listPrimaryFacility = await app.inject({
       method: "GET",
-      url: `/incoming?date=${date}`,
+      url: `/incoming?legacyArray=1&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listPrimaryFacility.statusCode).toBe(200);
@@ -3720,7 +3906,7 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(list.statusCode).toBe(200);
@@ -3781,7 +3967,7 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(list.statusCode).toBe(200);
@@ -3956,6 +4142,50 @@ describe("Flow backend core relationships", () => {
     expect(legacyTemplate).toBeTruthy();
     expect(legacyTemplate?.status).toBe("inactive");
     expect(legacyTemplate?.active).toBe(false);
+  });
+
+  it("surfaces integrity warnings for malformed template field definitions", async () => {
+    const ctx = await bootstrapCore();
+    const template = await prisma.template.findFirstOrThrow({
+      where: {
+        facilityId: ctx.facility.id,
+        type: TemplateType.rooming,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    await prisma.template.update({
+      where: { id: template.id },
+      data: {
+        fieldsJson: { broken: true } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/admin/templates?facilityId=${ctx.facility.id}&type=rooming`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const rows = response.json() as Array<{
+      id: string;
+      fields: unknown[];
+      integrityWarnings?: Array<{ field: string }>;
+    }>;
+    const malformed = rows.find((row) => row.id === template.id);
+    expect(malformed?.fields).toEqual([]);
+    expect(malformed?.integrityWarnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "fieldsJson" })]),
+    );
+
+    const alert = await prisma.userAlertInbox.findFirst({
+      where: {
+        facilityId: ctx.facility.id,
+        sourceId: `template:${template.id}:fieldsJson`,
+      },
+    });
+    expect(alert).toBeTruthy();
   });
 
   it("filters reasons and templates by includeInactive and includeArchived flags", async () => {
@@ -4236,7 +4466,7 @@ describe("Flow backend core relationships", () => {
 
     const listed = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listed.statusCode).toBe(200);
@@ -4312,7 +4542,7 @@ describe("Flow backend core relationships", () => {
 
     const listed = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listed.statusCode).toBe(200);
@@ -4375,7 +4605,7 @@ describe("Flow backend core relationships", () => {
 
     const trigger = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(trigger.statusCode).toBe(200);
@@ -4489,7 +4719,7 @@ describe("Flow backend core relationships", () => {
 
     const trigger = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: scopedHeaders
     });
     expect(trigger.statusCode).toBe(200);
@@ -4621,6 +4851,77 @@ describe("Flow backend core relationships", () => {
     expect(completed.json().completedAt).toBeTruthy();
     expect(completed.json().completedBy).toBe(ctx.ma.id);
     expect(completed.json().notes).toContain("Completed");
+  });
+
+  it("persists committed audit and outbox rows for safety and task mutations", async () => {
+    const ctx = await bootstrapCore();
+
+    const createdEncounter = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-OPS-AUDIT-1",
+        clinicId: ctx.clinic.id,
+        incomingId: ctx.incoming.id
+      }
+    });
+    expect(createdEncounter.statusCode).toBe(200);
+    const encounterId = createdEncounter.json().id as string;
+
+    const safetyWord = await app.inject({
+      method: "GET",
+      url: "/safety/word",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin)
+    });
+    const activated = await app.inject({
+      method: "POST",
+      url: `/safety/${encounterId}/activate`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        confirmationWord: safetyWord.json().word
+      }
+    });
+    expect(activated.statusCode).toBe(200);
+    const safetyEventId = activated.json().id as string;
+
+    const createdTask = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        encounterId,
+        taskType: "follow_up",
+        description: "Confirm discharge instructions",
+        assignedToRole: RoleName.MA
+      }
+    });
+    expect(createdTask.statusCode).toBe(200);
+    const taskId = createdTask.json().id as string;
+
+    const [safetyAudit, taskAudit, safetyOutbox, taskOutbox] = await Promise.all([
+      prisma.auditLog.findFirst({
+        where: { route: "/safety/:encounterId/activate", entityId: safetyEventId },
+        orderBy: { occurredAt: "desc" },
+      }),
+      prisma.auditLog.findFirst({
+        where: { route: "/tasks", entityId: taskId },
+        orderBy: { occurredAt: "desc" },
+      }),
+      prisma.eventOutbox.findFirst({
+        where: { aggregateType: "safety", aggregateId: safetyEventId },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.eventOutbox.findFirst({
+        where: { aggregateType: "tasks", aggregateId: taskId },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    expect(safetyAudit?.statusCode).toBe(200);
+    expect(taskAudit?.statusCode).toBe(200);
+    expect(safetyOutbox?.status).toBe("dispatched");
+    expect(taskOutbox?.status).toBe("dispatched");
   });
 
   it("archives tasks instead of hard deleting historical task records", async () => {
@@ -4929,7 +5230,7 @@ describe("Flow backend core relationships", () => {
 
     const scopedRevenueCase = await app.inject({
       method: "GET",
-      url: `/revenue-cases?encounterId=${finishedEncounter.id}`,
+      url: `/revenue-cases?legacyArray=1&encounterId=${finishedEncounter.id}`,
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
     });
     expect(scopedRevenueCase.statusCode).toBe(200);
@@ -5130,7 +5431,7 @@ describe("Flow backend core relationships", () => {
 
     const revenueList = await app.inject({
       method: "GET",
-      url: "/revenue-cases?dayBucket=Today&workQueue=CheckoutTracking",
+      url: "/revenue-cases?legacyArray=1&dayBucket=Today&workQueue=CheckoutTracking",
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
     });
     expect(revenueList.statusCode).toBe(200);
@@ -5351,7 +5652,15 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
     });
     expect(dashboardResponse.statusCode).toBe(200);
-    expect(dashboardResponse.json().cases).toEqual(
+    expect(dashboardResponse.json().cases).toBeUndefined();
+
+    const dashboardWithCases = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&from=${DateTime.now().toISODate()}&to=${DateTime.now().toISODate()}&includeCases=true`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(dashboardWithCases.statusCode).toBe(200);
+    expect(dashboardWithCases.json().cases).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           encounterId: finishedEncounter.id,
@@ -5841,5 +6150,64 @@ describe("Flow backend core relationships", () => {
         ]),
       }),
     );
+  });
+
+  it("surfaces integrity warnings for malformed revenue settings JSON", async () => {
+    const ctx = await bootstrapCore();
+
+    await prisma.revenueCycleSettings.upsert({
+      where: { facilityId: ctx.facility.id },
+      create: {
+        facilityId: ctx.facility.id,
+        missedCollectionReasonsJson: ["other"],
+        queueSlaJson: ["bad"] as unknown as Prisma.InputJsonValue,
+        dayCloseDefaultsJson: { defaultDueHours: 24, requireNextAction: true },
+        estimateDefaultsJson: ["bad"] as unknown as Prisma.InputJsonValue,
+        providerQueryTemplatesJson: ["Confirm diagnosis"],
+        athenaChecklistDefaultsJson: { bad: true } as unknown as Prisma.InputJsonValue,
+        checklistDefaultsJson: [] as unknown as Prisma.InputJsonValue,
+        serviceCatalogJson: { bad: true } as unknown as Prisma.InputJsonValue,
+        chargeScheduleJson: { bad: true } as unknown as Prisma.InputJsonValue,
+        reimbursementRulesJson: { bad: true } as unknown as Prisma.InputJsonValue,
+      },
+      update: {
+        queueSlaJson: ["bad"] as unknown as Prisma.InputJsonValue,
+        estimateDefaultsJson: ["bad"] as unknown as Prisma.InputJsonValue,
+        athenaChecklistDefaultsJson: { bad: true } as unknown as Prisma.InputJsonValue,
+        checklistDefaultsJson: [] as unknown as Prisma.InputJsonValue,
+        serviceCatalogJson: { bad: true } as unknown as Prisma.InputJsonValue,
+        chargeScheduleJson: { bad: true } as unknown as Prisma.InputJsonValue,
+        reimbursementRulesJson: { bad: true } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/admin/revenue-settings?facilityId=${ctx.facility.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        integrityWarnings: expect.arrayContaining([
+          expect.objectContaining({ field: "queueSlaJson" }),
+          expect.objectContaining({ field: "estimateDefaultsJson" }),
+          expect.objectContaining({ field: "athenaChecklistDefaultsJson" }),
+          expect.objectContaining({ field: "checklistDefaultsJson" }),
+          expect.objectContaining({ field: "serviceCatalogJson" }),
+          expect.objectContaining({ field: "chargeScheduleJson" }),
+          expect.objectContaining({ field: "reimbursementRulesJson" }),
+        ]),
+      }),
+    );
+
+    const alert = await prisma.userAlertInbox.findFirst({
+      where: {
+        facilityId: ctx.facility.id,
+        sourceId: `revenueCycleSettings:${ctx.facility.id}:serviceCatalogJson`,
+      },
+    });
+    expect(alert).toBeTruthy();
   });
 });

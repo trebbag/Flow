@@ -1,10 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { AlertInboxKind, RoleName, TaskSourceType } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
+import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
+
+type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const createTaskSchema = z.object({
   facilityId: z.string().uuid().optional(),
@@ -42,7 +46,7 @@ async function maybeCreateTaskAssignmentAlert(params: {
   clinicId: string | null | undefined;
   taskType: string;
   description: string;
-}) {
+}, db: DbClient = prisma) {
   if (!params.assignedToUserId && !params.assignedToRole) return;
 
   let scope: { facilityId: string | null; clinicId: string | null; label: string; payload: Record<string, unknown> } = {
@@ -56,7 +60,7 @@ async function maybeCreateTaskAssignmentAlert(params: {
   };
 
   if (params.encounterId) {
-    const encounter = await prisma.encounter.findUnique({
+    const encounter = await db.encounter.findUnique({
       where: { id: params.encounterId },
       include: {
         clinic: {
@@ -78,7 +82,7 @@ async function maybeCreateTaskAssignmentAlert(params: {
       };
     }
   } else if (params.roomId) {
-    const room = await prisma.clinicRoom.findUnique({
+    const room = await db.clinicRoom.findUnique({
       where: { id: params.roomId },
       include: {
         clinicLinks: {
@@ -120,7 +124,7 @@ async function maybeCreateTaskAssignmentAlert(params: {
     ...(params.assignedToUserId
       ? { userIds: [params.assignedToUserId] }
       : { roles: [params.assignedToRole!] })
-  });
+  }, db);
 }
 
 async function resolveTaskScope(dto: {
@@ -260,35 +264,45 @@ export async function registerTaskRoutes(app: FastifyInstance) {
 
     const scope = await resolveTaskScope(dto);
 
-    const created = await prisma.task.create({
-      data: {
-        facilityId: scope.facilityId,
-        clinicId: scope.clinicId,
-        encounterId: dto.encounterId || null,
-        roomId: dto.roomId || null,
-        sourceType: dto.sourceType,
-        sourceId: dto.sourceId || null,
-        taskType: dto.taskType,
-        description: dto.description,
-        assignedToRole: dto.assignedToRole,
-        assignedToUserId: dto.assignedToUserId,
-        status: dto.status ?? "open",
-        priority: dto.priority ?? 0,
-        blocking: dto.blocking ?? false,
-        createdBy: request.user!.id
-      }
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.task.create({
+        data: {
+          facilityId: scope.facilityId,
+          clinicId: scope.clinicId,
+          encounterId: dto.encounterId || null,
+          roomId: dto.roomId || null,
+          sourceType: dto.sourceType,
+          sourceId: dto.sourceId || null,
+          taskType: dto.taskType,
+          description: dto.description,
+          assignedToRole: dto.assignedToRole,
+          assignedToUserId: dto.assignedToUserId,
+          status: dto.status ?? "open",
+          priority: dto.priority ?? 0,
+          blocking: dto.blocking ?? false,
+          createdBy: request.user!.id
+        }
+      });
+      await maybeCreateTaskAssignmentAlert({
+        taskId: row.id,
+        assignedToUserId: row.assignedToUserId,
+        assignedToRole: row.assignedToRole,
+        encounterId: row.encounterId,
+        roomId: row.roomId,
+        facilityId: row.facilityId,
+        clinicId: row.clinicId,
+        taskType: row.taskType,
+        description: row.description
+      }, tx);
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "tasks",
+        entityId: row.id,
+      });
+      return row;
     });
-    await maybeCreateTaskAssignmentAlert({
-      taskId: created.id,
-      assignedToUserId: created.assignedToUserId,
-      assignedToRole: created.assignedToRole,
-      encounterId: created.encounterId,
-      roomId: created.roomId,
-      facilityId: created.facilityId,
-      clinicId: created.clinicId,
-      taskType: created.taskType,
-      description: created.description
-    });
+    await flushOperationalOutbox(prisma);
     return created;
   });
 
@@ -325,49 +339,59 @@ export async function registerTaskRoutes(app: FastifyInstance) {
       );
     }
 
-    const updated = await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        assignedToRole,
-        assignedToUserId,
-        acknowledgedAt: acknowledged ? new Date() : task.acknowledgedAt,
-        acknowledgedBy: acknowledged ? request.user!.id : task.acknowledgedBy,
-        completedAt: completed ? new Date() : task.completedAt,
-        completedBy: completed ? request.user!.id : task.completedBy,
-        notes: dto.notes !== undefined ? dto.notes : task.notes,
-        status: dto.status ?? (completed ? "completed" : task.status),
-        priority: dto.priority ?? task.priority
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          assignedToRole,
+          assignedToUserId,
+          acknowledgedAt: acknowledged ? new Date() : task.acknowledgedAt,
+          acknowledgedBy: acknowledged ? request.user!.id : task.acknowledgedBy,
+          completedAt: completed ? new Date() : task.completedAt,
+          completedBy: completed ? request.user!.id : task.completedBy,
+          notes: dto.notes !== undefined ? dto.notes : task.notes,
+          status: dto.status ?? (completed ? "completed" : task.status),
+          priority: dto.priority ?? task.priority
+        }
+      });
+      if (
+        assignedToUserId &&
+        assignedToUserId !== task.assignedToUserId
+      ) {
+        await maybeCreateTaskAssignmentAlert({
+          taskId: row.id,
+          assignedToUserId,
+          assignedToRole: row.assignedToRole,
+          encounterId: row.encounterId,
+          roomId: row.roomId,
+          facilityId: row.facilityId,
+          clinicId: row.clinicId,
+          taskType: row.taskType,
+          description: row.description
+        }, tx);
       }
+      if (!assignedToUserId && assignedToRole && assignedToRole !== task.assignedToRole) {
+        await maybeCreateTaskAssignmentAlert({
+          taskId: row.id,
+          assignedToUserId: null,
+          assignedToRole,
+          encounterId: row.encounterId,
+          roomId: row.roomId,
+          facilityId: row.facilityId,
+          clinicId: row.clinicId,
+          taskType: row.taskType,
+          description: row.description
+        }, tx);
+      }
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "tasks",
+        entityId: row.id,
+      });
+      return row;
     });
-    if (
-      assignedToUserId &&
-      assignedToUserId !== task.assignedToUserId
-    ) {
-      await maybeCreateTaskAssignmentAlert({
-        taskId: updated.id,
-        assignedToUserId,
-        assignedToRole: updated.assignedToRole,
-        encounterId: updated.encounterId,
-        roomId: updated.roomId,
-        facilityId: updated.facilityId,
-        clinicId: updated.clinicId,
-        taskType: updated.taskType,
-        description: updated.description
-      });
-    }
-    if (!assignedToUserId && assignedToRole && assignedToRole !== task.assignedToRole) {
-      await maybeCreateTaskAssignmentAlert({
-        taskId: updated.id,
-        assignedToUserId: null,
-        assignedToRole,
-        encounterId: updated.encounterId,
-        roomId: updated.roomId,
-        facilityId: updated.facilityId,
-        clinicId: updated.clinicId,
-        taskType: updated.taskType,
-        description: updated.description
-      });
-    }
+    await flushOperationalOutbox(prisma);
     return updated;
   });
 
@@ -384,14 +408,24 @@ export async function registerTaskRoutes(app: FastifyInstance) {
       return { status: "archived", taskId: task.id };
     }
 
-    const archived = await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        status: "archived",
-        archivedAt: new Date(),
-        archivedBy: request.user!.id,
-      },
+    const archived = await prisma.$transaction(async (tx) => {
+      const row = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          status: "archived",
+          archivedAt: new Date(),
+          archivedBy: request.user!.id,
+        },
+      });
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "tasks",
+        entityId: row.id,
+      });
+      return row;
     });
+    await flushOperationalOutbox(prisma);
     return { status: "archived", task: archived };
   });
 }

@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { asInputJson, parseGenericObjectJsonInput, parseStringArrayJsonInput } from "./persisted-json.js";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 type PatientIdentityReasonCode =
@@ -245,8 +246,12 @@ async function recordPatientIdentityReview(
     displayName: params.displayName || null,
     normalizedDisplayName: params.normalizedDisplayName || null,
     dateOfBirth: params.dateOfBirth || null,
-    matchedPatientIdsJson: params.matchedPatientIds ? (params.matchedPatientIds as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
-    contextJson: params.context ? (params.context as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+    matchedPatientIdsJson: params.matchedPatientIds
+      ? asInputJson(parseStringArrayJsonInput(params.matchedPatientIds, "patientIdentityReviewMatchedPatientIdsJson"))
+      : Prisma.JsonNull,
+    contextJson: params.context
+      ? asInputJson(parseGenericObjectJsonInput(params.context, "patientIdentityReviewContextJson"))
+      : Prisma.JsonNull,
   };
 
   if (existing) {

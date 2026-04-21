@@ -10,6 +10,52 @@ type LoggerLike = {
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 const jsonStringArraySchema = z.array(z.string());
 const diagnosisPointerSchema = z.array(z.number().int().min(1));
+const templateFieldTypeSchema = z.enum([
+  "text",
+  "textarea",
+  "number",
+  "checkbox",
+  "select",
+  "radio",
+  "date",
+  "time",
+  "bloodPressure",
+  "temperature",
+  "pulse",
+  "respirations",
+  "oxygenSaturation",
+  "height",
+  "weight",
+  "painScore",
+  "yesNo",
+]);
+const templateFieldDefinitionSchema = z.object({
+  id: z.string().trim().optional(),
+  key: z.string().trim().optional(),
+  label: z.string().trim().optional(),
+  type: templateFieldTypeSchema,
+  required: z.boolean().optional(),
+  options: z.array(z.string().trim().min(1)).optional(),
+  group: z.string().trim().optional(),
+  icon: z.string().trim().optional(),
+  color: z.string().trim().optional(),
+});
+const quietHoursSchema = z.object({
+  start: z.string().trim().min(1),
+  end: z.string().trim().min(1),
+  timezone: z.string().trim().min(1),
+});
+const roleNameArraySchema = z.array(z.nativeEnum(RoleName));
+const incomingIssueNormalizedSchema = z
+  .object({
+    clinicId: z.string().uuid().optional(),
+    dateOfService: z.string().nullable().optional(),
+    patientId: z.string().optional(),
+    appointmentTime: z.string().nullable().optional(),
+    providerLastName: z.string().nullable().optional(),
+    reasonText: z.string().nullable().optional(),
+  })
+  .passthrough();
 
 const revenueProcedureLineSchema = z.object({
   lineId: z.string().trim().min(1).optional(),
@@ -138,6 +184,136 @@ export function normalizeStringArrayJson(
 
 export function parseStringArrayJsonInput(value: unknown, label: string) {
   const parsed = jsonStringArraySchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError({
+      statusCode: 400,
+      code: `INVALID_${label.toUpperCase()}`,
+      message: `Invalid ${label} payload`,
+      details: issueMessages(parsed.error),
+    });
+  }
+  return parsed.data;
+}
+
+export function normalizeRoleNameArrayJson(
+  value: Prisma.JsonValue | null | undefined,
+  logger?: LoggerLike,
+  label = "roleNameArrayJson",
+) {
+  if (value === null || value === undefined) return [] as RoleName[];
+  const parsed = roleNameArraySchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  logSchemaDrift(logger, { label, issues: issueMessages(parsed.error) });
+  return [] as RoleName[];
+}
+
+export function parseRoleNameArrayJsonInput(value: unknown, label: string) {
+  const parsed = roleNameArraySchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError({
+      statusCode: 400,
+      code: `INVALID_${label.toUpperCase()}`,
+      message: `Invalid ${label} payload`,
+      details: issueMessages(parsed.error),
+    });
+  }
+  return parsed.data;
+}
+
+export function normalizeIncomingIssueNormalizedJson(
+  value: Prisma.JsonValue | null | undefined,
+  logger?: LoggerLike,
+  label = "incomingIssueNormalizedJson",
+) {
+  if (value === null || value === undefined) {
+    return {};
+  }
+  const parsed = incomingIssueNormalizedSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  logSchemaDrift(logger, { label, issues: issueMessages(parsed.error) });
+  return {};
+}
+
+export function parseIncomingIssueNormalizedJsonInput(
+  value: unknown,
+  label = "incomingIssueNormalizedJson",
+) {
+  const parsed = incomingIssueNormalizedSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError({
+      statusCode: 400,
+      code: `INVALID_${label.toUpperCase()}`,
+      message: `Invalid ${label} payload`,
+      details: issueMessages(parsed.error),
+    });
+  }
+  return parsed.data;
+}
+
+export function normalizeTemplateFieldsJson(
+  value: Prisma.JsonValue | null | undefined,
+  logger?: LoggerLike,
+  label = "templateFieldsJson",
+) {
+  if (value === null || value === undefined) return [] as Array<z.infer<typeof templateFieldDefinitionSchema>>;
+  const parsed = z.array(templateFieldDefinitionSchema).safeParse(value);
+  if (parsed.success) return parsed.data;
+  logSchemaDrift(logger, { label, issues: issueMessages(parsed.error) });
+  return [] as Array<z.infer<typeof templateFieldDefinitionSchema>>;
+}
+
+export function parseTemplateFieldsJsonInput(value: unknown, label = "templateFieldsJson") {
+  const parsed = z.array(templateFieldDefinitionSchema).safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError({
+      statusCode: 400,
+      code: `INVALID_${label.toUpperCase()}`,
+      message: `Invalid ${label} payload`,
+      details: issueMessages(parsed.error),
+    });
+  }
+  return parsed.data;
+}
+
+export function normalizeQuietHoursJson(
+  value: Prisma.JsonValue | null | undefined,
+  logger?: LoggerLike,
+  label = "quietHoursJson",
+) {
+  if (value === null || value === undefined) return null;
+  const parsed = quietHoursSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  logSchemaDrift(logger, { label, issues: issueMessages(parsed.error) });
+  return null;
+}
+
+export function parseQuietHoursJsonInput(value: unknown, label = "quietHoursJson") {
+  const parsed = quietHoursSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError({
+      statusCode: 400,
+      code: `INVALID_${label.toUpperCase()}`,
+      message: `Invalid ${label} payload`,
+      details: issueMessages(parsed.error),
+    });
+  }
+  return parsed.data;
+}
+
+export function normalizeGenericObjectJson(
+  value: Prisma.JsonValue | null | undefined,
+  logger?: LoggerLike,
+  label = "jsonObject",
+) {
+  if (value === null || value === undefined) return null;
+  const parsed = jsonObjectSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  logSchemaDrift(logger, { label, issues: issueMessages(parsed.error) });
+  return null;
+}
+
+export function parseGenericObjectJsonInput(value: unknown, label: string) {
+  const parsed = jsonObjectSchema.safeParse(value);
   if (!parsed.success) {
     throw new ApiError({
       statusCode: 400,
