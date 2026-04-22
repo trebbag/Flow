@@ -165,11 +165,70 @@ END
 $$;
 `;
 
+const TASK_STATUS_ENUM_SQL = `
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'TaskStatus'
+  ) THEN
+    CREATE TYPE "TaskStatus" AS ENUM ('open', 'completed', 'archived');
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'Task'
+      AND column_name = 'status'
+      AND udt_name <> 'TaskStatus'
+  ) THEN
+    ALTER TABLE "Task" ALTER COLUMN "status" DROP DEFAULT;
+
+    UPDATE "Task"
+    SET "status" = CASE
+      WHEN "status" IS NULL THEN 'open'
+      WHEN lower(trim("status")) IN ('open', 'completed', 'archived') THEN lower(trim("status"))
+      WHEN "archivedAt" IS NOT NULL THEN 'archived'
+      WHEN "completedAt" IS NOT NULL THEN 'completed'
+      ELSE 'open'
+    END
+    WHERE "status" IS NULL
+      OR lower(trim("status")) NOT IN ('open', 'completed', 'archived')
+      OR "status" <> lower(trim("status"));
+
+    ALTER TABLE "Task"
+      ALTER COLUMN "status" TYPE "TaskStatus"
+      USING (
+        CASE
+          WHEN "status" IS NULL THEN 'open'
+          WHEN lower(trim("status")) IN ('open', 'completed', 'archived') THEN lower(trim("status"))
+          WHEN "archivedAt" IS NOT NULL THEN 'archived'
+          WHEN "completedAt" IS NOT NULL THEN 'completed'
+          ELSE 'open'
+        END
+      )::"TaskStatus";
+
+    ALTER TABLE "Task" ALTER COLUMN "status" SET DEFAULT 'open';
+  END IF;
+END
+$$;
+`;
+
 async function installDataIntegrityChecks() {
   const client = new pg.Client({ connectionString: postgresUrl });
   await client.connect();
   try {
     await client.query(CHECK_CONSTRAINTS_SQL);
+  } finally {
+    await client.end();
+  }
+}
+
+async function migrateTaskStatusEnum() {
+  const client = new pg.Client({ connectionString: postgresUrl });
+  await client.connect();
+  try {
+    await client.query(TASK_STATUS_ENUM_SQL);
   } finally {
     await client.end();
   }
@@ -186,6 +245,7 @@ async function installClinicRoomPartialUnique() {
 }
 
 async function main() {
+  await migrateTaskStatusEnum();
   await runPrismaDbPush();
   await installEncounterVersionTrigger();
   await installDataIntegrityChecks();
