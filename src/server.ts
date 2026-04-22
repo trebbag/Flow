@@ -9,16 +9,29 @@ assertStartupInvariants();
 
 const app = buildApp();
 
-async function start() {
+async function startBackgroundTasks() {
   try {
-    await backfillCanonicalPatients(prisma);
     startRevenueSyncWorker({
       db: prisma,
       logger: {
         error: (error, message) => app.log.error(error as Error, message),
       },
     });
+  } catch (error) {
+    app.log.error(error, "Revenue sync worker failed to start after startup");
+  }
+
+  try {
+    await backfillCanonicalPatients(prisma);
+  } catch (error) {
+    app.log.error(error, "Canonical patient backfill failed after startup");
+  }
+}
+
+async function start() {
+  try {
     await app.listen({ port: env.PORT, host: env.HOST });
+    void startBackgroundTasks();
   } catch (error) {
     app.log.error(error);
     process.exit(1);
