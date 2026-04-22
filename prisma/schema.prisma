@@ -1171,7 +1171,7 @@ model RoomIssue {
   sourceModule     String?
   metadataJson     Json?
   version          Int             @default(0)
-  updatedAt        DateTime        @updatedAt
+  updatedAt        DateTime        @default(now()) @updatedAt
   createdAt        DateTime        @default(now())
   createdByUserId  String
   resolvedAt       DateTime?
