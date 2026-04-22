@@ -1,6 +1,34 @@
 import { DateTime } from "luxon";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { asInputJson, parseGenericObjectJsonInput, parseStringArrayJsonInput } from "./persisted-json.js";
+import { encryptPhi, encryptPhiDate, isPhiEncryptionEnabled } from "./phi-encryption.js";
+import { env } from "./env.js";
+
+function buildPhiCipherUpdates(params: {
+  displayName?: string | null;
+  dateOfBirth?: Date | null;
+}): {
+  displayNameCipher?: string | null;
+  dateOfBirthCipher?: string | null;
+  cipherKeyId?: string | null;
+} {
+  if (!isPhiEncryptionEnabled()) return {};
+  const result: {
+    displayNameCipher?: string | null;
+    dateOfBirthCipher?: string | null;
+    cipherKeyId?: string | null;
+  } = {};
+  if (params.displayName !== undefined) {
+    result.displayNameCipher = params.displayName ? encryptPhi(params.displayName) : null;
+  }
+  if (params.dateOfBirth !== undefined) {
+    result.dateOfBirthCipher = params.dateOfBirth ? encryptPhiDate(params.dateOfBirth) : null;
+  }
+  if (Object.keys(result).length > 0) {
+    result.cipherKeyId = env.PHI_ENCRYPTION_KEY_ID;
+  }
+  return result;
+}
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 type PatientIdentityReasonCode =
@@ -330,9 +358,13 @@ async function applyPatientIdentityUpdates(
   }
 
   if (Object.keys(updates).length > 0) {
+    const cipherUpdates = buildPhiCipherUpdates({
+      displayName: (updates.displayName as string | null | undefined) ?? undefined,
+      dateOfBirth: (updates.dateOfBirth as Date | null | undefined) ?? undefined,
+    });
     await db.patient.update({
       where: { id: params.patientId },
-      data: updates,
+      data: { ...updates, ...cipherUpdates },
     });
   }
 
@@ -363,6 +395,14 @@ async function createPatientRecord(
     dateOfBirth?: Date | null;
   },
 ) {
+  const createCipher = buildPhiCipherUpdates({
+    displayName: params.displayName ?? null,
+    dateOfBirth: params.dateOfBirth ?? null,
+  });
+  const updateCipher = buildPhiCipherUpdates({
+    displayName: params.displayName === undefined ? undefined : params.displayName,
+    dateOfBirth: params.dateOfBirth === undefined ? undefined : params.dateOfBirth,
+  });
   const created = await db.patient.upsert({
     where: {
       facilityId_normalizedSourcePatientId: {
@@ -376,11 +416,13 @@ async function createPatientRecord(
       normalizedSourcePatientId: params.normalizedSourcePatientId,
       displayName: params.displayName || null,
       dateOfBirth: params.dateOfBirth || null,
+      ...createCipher,
     },
     update: {
       sourcePatientId: params.sourcePatientId,
       displayName: params.displayName === undefined ? undefined : params.displayName,
       dateOfBirth: params.dateOfBirth === undefined ? undefined : params.dateOfBirth,
+      ...updateCipher,
     },
     select: {
       id: true,

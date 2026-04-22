@@ -2,6 +2,7 @@ import { RoleName } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { ApiError } from "./errors.js";
+import { recordSchemaDrift } from "./metrics.js";
 
 type LoggerLike = {
   warn?: (payload: unknown, message?: string) => void;
@@ -124,8 +125,11 @@ function issueMessages(error: z.ZodError) {
 }
 
 function logSchemaDrift(logger: LoggerLike | undefined, params: { label: string; issues: string[] }) {
+  recordSchemaDrift("persisted_json", params.label);
   logger?.warn?.(
     {
+      alert: "persisted_json_schema_drift",
+      metric: "flow_schema_drift_total",
       label: params.label,
       issues: params.issues,
     },

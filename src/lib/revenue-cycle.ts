@@ -27,6 +27,10 @@ import {
 } from "./clinic-time.js";
 import { ensurePatientRecord, extractPatientIdentityHints } from "./patients.js";
 import { createInboxAlert } from "./user-alert-inbox.js";
+import {
+  CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
+  assertSupportedSchemaVersionOnRead,
+} from "./json-schema-version.js";
 
 const TODAY_WINDOW_DAYS = 30;
 const REVENUE_SCOPE_SYNC_STALE_MS = 10 * 60 * 1000;
@@ -1552,9 +1556,12 @@ export async function getRevenueSettings(db: PrismaClient | Prisma.TransactionCl
         serviceCatalogJson: DEFAULT_REVENUE_SETTINGS.serviceCatalog as Prisma.InputJsonValue,
         chargeScheduleJson: DEFAULT_REVENUE_SETTINGS.chargeSchedule as Prisma.InputJsonValue,
         reimbursementRulesJson: DEFAULT_REVENUE_SETTINGS.reimbursementRules as Prisma.InputJsonValue,
+        schemaVersion: CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
       },
       update: {},
     }));
+
+    assertSupportedSchemaVersionOnRead("RevenueCycleSettings", settings.schemaVersion);
 
     const normalized = normalizeRevenueSettingsRecord(settings);
     revenueSettingsCache.set(cacheKey, {

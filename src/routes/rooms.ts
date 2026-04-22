@@ -8,7 +8,8 @@ import {
   RoomIssueStatus,
   RoomIssueType,
   RoomOperationalStatus,
-  TaskSourceType
+  TaskSourceType,
+  TaskStatus
 } from "@prisma/client";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -17,6 +18,7 @@ import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
+import { recordEntityEventTx } from "../lib/entity-events.js";
 import {
   getPreRoomingAvailability,
   getRoomDetail,
@@ -76,7 +78,8 @@ const updateIssueSchema = z.object({
   severity: z.number().int().min(0).max(5).optional(),
   title: z.string().trim().min(1).optional(),
   description: z.string().trim().max(5000).nullable().optional(),
-  resolutionNote: z.string().trim().max(5000).optional()
+  resolutionNote: z.string().trim().max(5000).optional(),
+  expectedVersion: z.number().int().nonnegative().optional()
 });
 
 const issueQuerySchema = z.object({
@@ -342,7 +345,7 @@ export async function registerRoomRoutes(app: FastifyInstance) {
           taskType: "RoomIssue",
           description: `${context.room.name}: ${dto.title}`,
           assignedToRole: RoleName.OfficeManager,
-          status: "open",
+          status: TaskStatus.open,
           priority: dto.severity,
           blocking: dto.placesRoomOnHold,
           createdBy: request.user!.id
@@ -402,6 +405,17 @@ export async function registerRoomRoutes(app: FastifyInstance) {
         entityId: linkedIssue.id,
       });
 
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "RoomIssue",
+        entityId: linkedIssue.id,
+        eventType: "room_issue.created",
+        after: linkedIssue,
+        facilityId: linkedIssue.facilityId,
+        clinicId: linkedIssue.clinicId,
+      });
+
       return { issue: linkedIssue, task };
     });
     await flushOperationalOutbox(prisma);
@@ -420,8 +434,10 @@ export async function registerRoomRoutes(app: FastifyInstance) {
 
     const resolved = dto.status === RoomIssueStatus.Resolved;
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.roomIssue.update({
-        where: { id: issueId },
+      const versionFilter: Prisma.RoomIssueWhereInput =
+        dto.expectedVersion !== undefined ? { version: dto.expectedVersion } : {};
+      const updateResult = await tx.roomIssue.updateMany({
+        where: { id: issueId, ...versionFilter },
         data: {
           status: dto.status,
           severity: dto.severity,
@@ -429,9 +445,14 @@ export async function registerRoomRoutes(app: FastifyInstance) {
           description: dto.description === undefined ? undefined : dto.description,
           resolutionNote: dto.resolutionNote,
           resolvedAt: resolved ? new Date() : undefined,
-          resolvedByUserId: resolved ? request.user!.id : undefined
+          resolvedByUserId: resolved ? request.user!.id : undefined,
+          version: { increment: 1 }
         }
       });
+      if (updateResult.count === 0) {
+        throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Room issue version mismatch" });
+      }
+      const row = await tx.roomIssue.findUniqueOrThrow({ where: { id: issueId } });
 
       if (resolved) {
         await tx.roomOperationalEvent.create({
@@ -453,6 +474,18 @@ export async function registerRoomRoutes(app: FastifyInstance) {
         request,
         entityType: "RoomIssue",
         entityId: issueId,
+      });
+
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "RoomIssue",
+        entityId: issueId,
+        eventType: resolved ? "room_issue.resolved" : "room_issue.updated",
+        before: issue,
+        after: row,
+        facilityId: row.facilityId,
+        clinicId: row.clinicId,
       });
 
       return row;

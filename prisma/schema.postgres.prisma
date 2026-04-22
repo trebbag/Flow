@@ -78,6 +78,12 @@ enum TaskSourceType {
   ProviderClarification
 }
 
+enum TaskStatus {
+  open
+  completed
+  archived
+}
+
 enum RevenueStatus {
   FinancialReadinessNeeded
   FinanciallyCleared
@@ -234,7 +240,7 @@ model User {
   lastDirectorySyncAt       DateTime?
   activeFacilityId          String?
   createdAt                 DateTime                            @default(now())
-  activeFacility            Facility?                           @relation("UserActiveFacility", fields: [activeFacilityId], references: [id])
+  activeFacility            Facility?                           @relation("UserActiveFacility", fields: [activeFacilityId], references: [id], onDelete: SetNull)
   roles                     UserRole[]
   providerAssignments       ClinicAssignment[]                  @relation("ClinicAssignmentProviderUser")
   maAssignments             ClinicAssignment[]                  @relation("ClinicAssignmentMaUser")
@@ -278,6 +284,7 @@ model Facility {
   patients                           Patient[]
   patientAliases                     PatientAlias[]
   patientIdentityReviews             PatientIdentityReview[]
+  patientConsents                    PatientConsent[]
   revenueCases                       RevenueCase[]
   revenueSettings                    RevenueCycleSettings?
   revenueCloseoutRuns                RevenueCloseoutRun[]
@@ -290,7 +297,13 @@ model Patient {
   sourcePatientId           String
   normalizedSourcePatientId String
   displayName               String?
+  displayNameCipher         String?
   dateOfBirth               DateTime?
+  dateOfBirthCipher         String?
+  cipherKeyId               String?
+  archivedAt                DateTime?
+  archivedByUserId          String?
+  archivedReason            String?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
@@ -300,6 +313,7 @@ model Patient {
   revenueCases     RevenueCase[]
   aliases          PatientAlias[]
   identityReviews  PatientIdentityReview[]
+  consents         PatientConsent[]
 
   @@unique([facilityId, normalizedSourcePatientId])
   @@index([facilityId, createdAt])
@@ -348,6 +362,28 @@ model PatientIdentityReview {
   @@index([patientId, status])
 }
 
+model PatientConsent {
+  id                 String    @id @default(uuid())
+  facilityId         String
+  patientId          String
+  consentType        String
+  grantedAt          DateTime?
+  revokedAt          DateTime?
+  grantedByUserId    String?
+  revokedByUserId    String?
+  source             String?
+  documentRef        String?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, consentType])
+  @@index([facilityId, consentType, revokedAt])
+}
+
 model Clinic {
   id               String  @id @default(uuid())
   facilityId       String?
@@ -382,6 +418,7 @@ model Clinic {
   revenueCycleDailyRollups     RevenueCycleDailyRollup[]
   alertInbox                   UserAlertInbox[]
   temporaryAssignmentOverrides TemporaryClinicAssignmentOverride[]
+  notificationPolicies         NotificationPolicy[]
 
   @@index([facilityId])
 }
@@ -563,6 +600,7 @@ model Template {
   jsonSchema       Json
   uiSchema         Json
   requiredFields   Json
+  schemaVersion    Int          @default(1)
 
   facility          Facility                   @relation(fields: [facilityId], references: [id])
   clinic            Clinic?                    @relation(fields: [clinicId], references: [id])
@@ -710,16 +748,19 @@ model Encounter {
   arrivalNotes       String?
   closureType        String?
   closureNotes       String?
+  archivedAt         DateTime?
+  archivedByUserId   String?
+  archivedReason     String?
   roomingData        Json?
   clinicianData      Json?
   checkoutData       Json?
   intakeData         Json?
 
-  clinic                 Clinic                 @relation(fields: [clinicId], references: [id])
-  patientRecord          Patient?               @relation(fields: [patientRecordId], references: [id])
-  provider               Provider?              @relation(fields: [providerId], references: [id])
-  reason                 ReasonForVisit?        @relation(fields: [reasonForVisitId], references: [id])
-  room                   ClinicRoom?            @relation(fields: [roomId], references: [id])
+  clinic                 Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientRecord          Patient?               @relation(fields: [patientRecordId], references: [id], onDelete: SetNull)
+  provider               Provider?              @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  reason                 ReasonForVisit?        @relation(fields: [reasonForVisitId], references: [id], onDelete: SetNull)
+  room                   ClinicRoom?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
   statusEvents           StatusChangeEvent[]
   alertState             AlertState?
   tasks                  Task[]
@@ -750,6 +791,25 @@ model StatusChangeEvent {
   @@index([encounterId, changedAt])
 }
 
+model EntityEvent {
+  id            String   @id @default(uuid())
+  entityType    String
+  entityId      String
+  eventType     String
+  actorUserId   String?
+  facilityId    String?
+  clinicId      String?
+  requestId     String?
+  beforeJson    Json?
+  afterJson     Json?
+  metadataJson  Json?
+  createdAt     DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([facilityId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
 model AlertState {
   encounterId           String     @id
   enteredStatusAt       DateTime
@@ -776,7 +836,7 @@ model Task {
   description      String
   assignedToRole   RoleName?
   assignedToUserId String?
-  status           String          @default("open")
+  status           TaskStatus      @default(open)
   priority         Int             @default(0)
   blocking         Boolean         @default(false)
   dueAt            DateTime?
@@ -789,14 +849,15 @@ model Task {
   archivedAt       DateTime?
   archivedBy       String?
   notes            String?
+  version          Int             @default(0)
   updatedAt        DateTime        @updatedAt
 
   encounter    Encounter?  @relation(fields: [encounterId], references: [id], onDelete: SetNull)
   room         ClinicRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
   revenueCase  RevenueCase? @relation(fields: [revenueCaseId], references: [id], onDelete: SetNull)
-  creator      User        @relation("TaskCreatedBy", fields: [createdBy], references: [id])
-  acknowledger User?       @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id])
-  completer    User?       @relation("TaskCompletedBy", fields: [completedBy], references: [id])
+  creator      User        @relation("TaskCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  acknowledger User?       @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id], onDelete: SetNull)
+  completer    User?       @relation("TaskCompletedBy", fields: [completedBy], references: [id], onDelete: SetNull)
   roomIssues   RoomIssue[]
 
   @@index([clinicId, status, createdAt])
@@ -841,6 +902,9 @@ model RevenueCase {
   athenaLastSyncAt         DateTime?
   closeoutState            RevenueCloseoutState @default(Open)
   closedAt                 DateTime?
+  archivedAt               DateTime?
+  archivedByUserId         String?
+  archivedReason           String?
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
 
@@ -1000,6 +1064,7 @@ model RevenueCycleSettings {
   serviceCatalogJson          Json
   chargeScheduleJson          Json
   reimbursementRulesJson      Json?
+  schemaVersion               Int      @default(1)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 
@@ -1106,6 +1171,8 @@ model RoomIssue {
   taskId           String?
   sourceModule     String?
   metadataJson     Json?
+  version          Int             @default(0)
+  updatedAt        DateTime        @updatedAt
   createdAt        DateTime        @default(now())
   createdByUserId  String
   resolvedAt       DateTime?
@@ -1211,6 +1278,10 @@ model NotificationPolicy {
   escalationAfterMin       Int?
   escalationRecipientsJson Json?
   quietHoursJson           Json?
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, status, severity])
 }
 
 model OfficeManagerDailyRollup {

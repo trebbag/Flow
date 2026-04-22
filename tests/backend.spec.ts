@@ -2948,7 +2948,7 @@ describe("Flow backend core relationships", () => {
       url: `/encounters/${secondEncounter.id}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
-    expect(readDenied.statusCode).toBe(403);
+    expect(readDenied.statusCode).toBe(404);
 
     const updateDenied = await app.inject({
       method: "PATCH",
@@ -6209,5 +6209,158 @@ describe("Flow backend core relationships", () => {
       },
     });
     expect(alert).toBeTruthy();
+  });
+
+  it("scopes task read/update/delete operations to the caller's facility", async () => {
+    const ctx = await bootstrapCore();
+
+    const otherFacility = await prisma.facility.create({
+      data: {
+        name: "Task Scope Facility",
+        shortCode: "TSF",
+        timezone: "America/New_York",
+      },
+    });
+    const otherClinic = await prisma.clinic.create({
+      data: {
+        facilityId: otherFacility.id,
+        name: "Task Scope Clinic",
+        shortCode: "TSC",
+        timezone: "America/New_York",
+        maRun: false,
+      },
+    });
+    const otherAdmin = await prisma.user.create({
+      data: {
+        email: "other-admin@test.local",
+        name: "Other Admin",
+        cognitoSub: "sub-other-admin",
+        activeFacilityId: otherFacility.id,
+      },
+    });
+    await prisma.userRole.create({
+      data: {
+        userId: otherAdmin.id,
+        role: RoleName.Admin,
+        facilityId: otherFacility.id,
+      },
+    });
+
+    const otherEncounter = await prisma.encounter.create({
+      data: {
+        patientId: "PT-TASK-SCOPE-OTHER-1",
+        clinicId: otherClinic.id,
+        currentStatus: "Lobby",
+        dateOfService: ctx.day,
+        checkInAt: new Date(),
+      },
+    });
+    const otherTask = await prisma.task.create({
+      data: {
+        facilityId: otherFacility.id,
+        clinicId: otherClinic.id,
+        encounterId: otherEncounter.id,
+        taskType: "rooming_follow_up",
+        description: "Other facility task",
+        createdBy: otherAdmin.id,
+      },
+    });
+
+    const listDenied = await app.inject({
+      method: "GET",
+      url: `/tasks?encounterId=${otherEncounter.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+    expect(listDenied.statusCode).toBe(200);
+    expect(
+      (listDenied.json() as Array<{ id: string }>).some((row) => row.id === otherTask.id),
+    ).toBe(false);
+
+    const createDenied = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        encounterId: otherEncounter.id,
+        taskType: "rooming_follow_up",
+        description: "Should be forbidden",
+      },
+    });
+    expect(createDenied.statusCode).toBe(403);
+
+    const patchDenied = await app.inject({
+      method: "PATCH",
+      url: `/tasks/${otherTask.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: { notes: "Should not succeed" },
+    });
+    expect(patchDenied.statusCode).toBe(404);
+
+    const deleteDenied = await app.inject({
+      method: "DELETE",
+      url: `/tasks/${otherTask.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+    });
+    expect(deleteDenied.statusCode).toBe(404);
+
+    const persistedTask = await prisma.task.findUnique({ where: { id: otherTask.id } });
+    expect(persistedTask?.archivedAt).toBeNull();
+  });
+
+  it("soft-archives a merged patient record on admin identity-review resolution", async () => {
+    const ctx = await bootstrapCore();
+    const dob = new Date(Date.UTC(1987, 4, 14, 0, 0, 0));
+
+    const canonical = await prisma.patient.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "MRN-ARCHIVE-1",
+        normalizedSourcePatientId: "mrnarchive1",
+        displayName: "Alex Patient",
+        dateOfBirth: dob,
+      },
+    });
+    const duplicate = await prisma.patient.create({
+      data: {
+        facilityId: ctx.facility.id,
+        sourcePatientId: "MRN-ARCHIVE-DUP",
+        normalizedSourcePatientId: "mrnarchivedup",
+        displayName: "Alex Patient",
+        dateOfBirth: dob,
+      },
+    });
+    const review = await prisma.patientIdentityReview.create({
+      data: {
+        facilityId: ctx.facility.id,
+        patientId: duplicate.id,
+        sourcePatientId: "MRN-ARCHIVE-DUP",
+        normalizedSourcePatientId: "mrnarchivedup",
+        displayName: "Alex Patient",
+        normalizedDisplayName: "alex patient",
+        dateOfBirth: dob,
+        reasonCode: "AMBIGUOUS_ALIAS_MATCH",
+        matchedPatientIdsJson: [canonical.id],
+      },
+    });
+
+    const resolved = await app.inject({
+      method: "POST",
+      url: `/admin/patient-identity-reviews/${review.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        status: "resolved",
+        patientId: canonical.id,
+      },
+    });
+    expect(resolved.statusCode).toBe(200);
+
+    const archivedPatient = await prisma.patient.findUnique({ where: { id: duplicate.id } });
+    expect(archivedPatient).not.toBeNull();
+    expect(archivedPatient?.archivedAt).toBeTruthy();
+    expect(archivedPatient?.archivedByUserId).toBe(ctx.admin.id);
+    expect(archivedPatient?.archivedReason).toBe(`identity_review_merge:${review.id}`);
+
+    const canonicalPersisted = await prisma.patient.findUnique({ where: { id: canonical.id } });
+    expect(canonicalPersisted?.archivedAt).toBeNull();
   });
 });

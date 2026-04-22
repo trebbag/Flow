@@ -42,6 +42,13 @@ function hasTable(table: string) {
   return Boolean(row?.name);
 }
 
+function tableSqlIncludes(table: string, substring: string) {
+  const row = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`)
+    .get(table) as { sql?: string } | undefined;
+  return typeof row?.sql === "string" && row.sql.includes(substring);
+}
+
 const requiresRebuild =
   hasTable("ClinicRoom") && (!hasColumn("ClinicRoom", "facilityId") || !hasColumn("ClinicRoom", "status")) ||
   hasTable("User") && !hasColumn("User", "activeFacilityId") ||
@@ -113,7 +120,25 @@ const requiresRebuild =
   !hasColumn("RevenueCycleDailyRollup", "expectedNetReimbursementCents") ||
   !hasColumn("RevenueCycleDailyRollup", "serviceCaptureCompletedVisitCount") ||
   !hasColumn("RevenueCycleDailyRollup", "clinicianCodingEnteredVisitCount") ||
-  !hasColumn("RevenueCycleDailyRollup", "chargeCaptureReadyVisitCount");
+  !hasColumn("RevenueCycleDailyRollup", "chargeCaptureReadyVisitCount") ||
+  (hasTable("Patient") && !hasColumn("Patient", "archivedAt")) ||
+  (hasTable("Encounter") && !hasColumn("Encounter", "archivedAt")) ||
+  (hasTable("RevenueCase") && !hasColumn("RevenueCase", "archivedAt")) ||
+  (hasTable("Task") && !hasColumn("Task", "version")) ||
+  (hasTable("RoomIssue") && !hasColumn("RoomIssue", "version")) ||
+  !hasTable("EntityEvent") ||
+  (hasTable("Encounter") && !tableSqlIncludes("Encounter", "providerStartAt <= providerEndAt")) ||
+  (hasTable("Task") && !tableSqlIncludes("Task", "length(trim(description))")) ||
+  (hasTable("RoomIssue") && !tableSqlIncludes("RoomIssue", "length(trim(title))")) ||
+  (hasTable("AlertThreshold") && !tableSqlIncludes("AlertThreshold", "redAtMin >= yellowAtMin")) ||
+  (hasTable("CheckoutCollectionTracking") &&
+    !tableSqlIncludes("CheckoutCollectionTracking", "amountCollectedCents <= amountDueCents")) ||
+  (hasTable("Template") && !hasColumn("Template", "schemaVersion")) ||
+  (hasTable("RevenueCycleSettings") && !hasColumn("RevenueCycleSettings", "schemaVersion")) ||
+  (hasTable("Patient") && !hasColumn("Patient", "displayNameCipher")) ||
+  (hasTable("Patient") && !hasColumn("Patient", "dateOfBirthCipher")) ||
+  (hasTable("Patient") && !hasColumn("Patient", "cipherKeyId")) ||
+  !hasTable("PatientConsent");
 
 if (requiresRebuild) {
   db.exec(`
@@ -145,6 +170,7 @@ DROP TABLE IF EXISTS RevenueCycleSettings;
 DROP TABLE IF EXISTS RevenueCase;
 DROP TABLE IF EXISTS AlertState;
 DROP TABLE IF EXISTS StatusChangeEvent;
+DROP TABLE IF EXISTS EntityEvent;
 DROP TABLE IF EXISTS Encounter;
 DROP TABLE IF EXISTS IncomingImportIssue;
 DROP TABLE IF EXISTS IncomingSchedule;
@@ -162,6 +188,7 @@ DROP TABLE IF EXISTS MaProviderMap;
 DROP TABLE IF EXISTS Provider;
 DROP TABLE IF EXISTS UserRole;
 DROP TABLE IF EXISTS User;
+DROP TABLE IF EXISTS PatientConsent;
 DROP TABLE IF EXISTS PatientIdentityReview;
 DROP TABLE IF EXISTS PatientAlias;
 DROP TABLE IF EXISTS Patient;
@@ -209,7 +236,13 @@ CREATE TABLE IF NOT EXISTS Patient (
   sourcePatientId TEXT NOT NULL,
   normalizedSourcePatientId TEXT NOT NULL,
   displayName TEXT,
+  displayNameCipher TEXT,
   dateOfBirth TEXT,
+  dateOfBirthCipher TEXT,
+  cipherKeyId TEXT,
+  archivedAt TEXT,
+  archivedByUserId TEXT,
+  archivedReason TEXT,
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -247,6 +280,25 @@ CREATE TABLE IF NOT EXISTS PatientIdentityReview (
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
   FOREIGN KEY (patientId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS PatientConsent (
+  id TEXT PRIMARY KEY NOT NULL,
+  facilityId TEXT NOT NULL,
+  patientId TEXT NOT NULL,
+  consentType TEXT NOT NULL,
+  grantedAt TEXT,
+  revokedAt TEXT,
+  grantedByUserId TEXT,
+  revokedByUserId TEXT,
+  source TEXT,
+  documentRef TEXT,
+  notes TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(patientId, consentType),
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  FOREIGN KEY (patientId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS Clinic (
@@ -395,6 +447,7 @@ CREATE TABLE IF NOT EXISTS Template (
   jsonSchema TEXT NOT NULL,
   uiSchema TEXT NOT NULL,
   requiredFields TEXT NOT NULL,
+  schemaVersion INTEGER NOT NULL DEFAULT 1,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (reasonForVisitId) REFERENCES ReasonForVisit(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -507,12 +560,17 @@ CREATE TABLE IF NOT EXISTS Encounter (
   clinicianData TEXT,
   checkoutData TEXT,
   intakeData TEXT,
+  archivedAt TEXT,
+  archivedByUserId TEXT,
+  archivedReason TEXT,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (patientRecordId) REFERENCES Patient(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (providerId) REFERENCES Provider(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (reasonForVisitId) REFERENCES ReasonForVisit(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE SET NULL,
-  UNIQUE (patientId, clinicId, dateOfService)
+  UNIQUE (patientId, clinicId, dateOfService),
+  CHECK (providerStartAt IS NULL OR providerEndAt IS NULL OR providerStartAt <= providerEndAt),
+  CHECK (closureNotes IS NULL OR length(trim(closureNotes)) > 0)
 );
 
 CREATE TABLE IF NOT EXISTS StatusChangeEvent (
@@ -524,6 +582,21 @@ CREATE TABLE IF NOT EXISTS StatusChangeEvent (
   changedByUserId TEXT NOT NULL,
   reasonCode TEXT,
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS EntityEvent (
+  id TEXT PRIMARY KEY NOT NULL,
+  entityType TEXT NOT NULL,
+  entityId TEXT NOT NULL,
+  eventType TEXT NOT NULL,
+  actorUserId TEXT,
+  facilityId TEXT,
+  clinicId TEXT,
+  requestId TEXT,
+  beforeJson TEXT,
+  afterJson TEXT,
+  metadataJson TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS AlertState (
@@ -564,13 +637,15 @@ CREATE TABLE IF NOT EXISTS Task (
   archivedAt TEXT,
   archivedBy TEXT,
   notes TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (createdBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (acknowledgedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
-  FOREIGN KEY (completedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL
+  FOREIGN KEY (completedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CHECK (length(trim(description)) > 0)
 );
 
 CREATE TABLE IF NOT EXISTS RoomOperationalState (
@@ -621,6 +696,8 @@ CREATE TABLE IF NOT EXISTS RoomIssue (
   taskId TEXT,
   sourceModule TEXT,
   metadataJson TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   createdByUserId TEXT NOT NULL,
   resolvedAt TEXT,
@@ -628,7 +705,8 @@ CREATE TABLE IF NOT EXISTS RoomIssue (
   resolutionNote TEXT,
   FOREIGN KEY (roomId) REFERENCES ClinicRoom(id) ON UPDATE CASCADE ON DELETE CASCADE,
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE SET NULL,
-  FOREIGN KEY (taskId) REFERENCES Task(id) ON UPDATE CASCADE ON DELETE SET NULL
+  FOREIGN KEY (taskId) REFERENCES Task(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CHECK (length(trim(title)) > 0)
 );
 
 CREATE TABLE IF NOT EXISTS RoomChecklistRun (
@@ -694,7 +772,9 @@ CREATE TABLE IF NOT EXISTS AlertThreshold (
   escalation2Min INTEGER,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
   FOREIGN KEY (clinicId) REFERENCES Clinic(id) ON UPDATE CASCADE ON DELETE SET NULL,
-  UNIQUE (facilityId, clinicId, metric, status)
+  UNIQUE (facilityId, clinicId, metric, status),
+  CHECK (redAtMin >= yellowAtMin),
+  CHECK (escalation2Min IS NULL OR escalation2Min >= redAtMin)
 );
 
 CREATE TABLE IF NOT EXISTS NotificationPolicy (
@@ -746,6 +826,9 @@ CREATE TABLE IF NOT EXISTS RevenueCase (
   athenaLastSyncAt TEXT,
   closeoutState TEXT NOT NULL DEFAULT 'Open',
   closedAt TEXT,
+  archivedAt TEXT,
+  archivedByUserId TEXT,
+  archivedReason TEXT,
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (encounterId) REFERENCES Encounter(id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -794,7 +877,10 @@ CREATE TABLE IF NOT EXISTS CheckoutCollectionTracking (
   trackedByUserId TEXT,
   trackedAt TEXT,
   sourceFieldJson TEXT,
-  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE
+  FOREIGN KEY (revenueCaseId) REFERENCES RevenueCase(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  CHECK (amountDueCents >= 0),
+  CHECK (amountCollectedCents >= 0),
+  CHECK (amountCollectedCents <= amountDueCents)
 );
 
 CREATE TABLE IF NOT EXISTS ChargeCaptureRecord (
@@ -874,6 +960,7 @@ CREATE TABLE IF NOT EXISTS RevenueCycleSettings (
   serviceCatalogJson TEXT NOT NULL DEFAULT '[]',
   chargeScheduleJson TEXT NOT NULL DEFAULT '[]',
   reimbursementRulesJson TEXT NOT NULL DEFAULT '[]',
+  schemaVersion INTEGER NOT NULL DEFAULT 1,
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE
@@ -1141,7 +1228,11 @@ CREATE INDEX IF NOT EXISTS PatientAlias_patientId_aliasType_idx ON PatientAlias(
 CREATE INDEX IF NOT EXISTS PatientIdentityReview_facilityId_status_createdAt_idx ON PatientIdentityReview(facilityId, status, createdAt);
 CREATE INDEX IF NOT EXISTS PatientIdentityReview_facilityId_normalizedSourcePatientId_idx ON PatientIdentityReview(facilityId, normalizedSourcePatientId);
 CREATE INDEX IF NOT EXISTS PatientIdentityReview_patientId_status_idx ON PatientIdentityReview(patientId, status);
+CREATE INDEX IF NOT EXISTS PatientConsent_facilityId_consentType_revokedAt_idx ON PatientConsent(facilityId, consentType, revokedAt);
 CREATE INDEX IF NOT EXISTS StatusChangeEvent_encounterId_changedAt_idx ON StatusChangeEvent(encounterId, changedAt);
+CREATE INDEX IF NOT EXISTS EntityEvent_entityType_entityId_createdAt_idx ON EntityEvent(entityType, entityId, createdAt);
+CREATE INDEX IF NOT EXISTS EntityEvent_facilityId_createdAt_idx ON EntityEvent(facilityId, createdAt);
+CREATE INDEX IF NOT EXISTS EntityEvent_actorUserId_createdAt_idx ON EntityEvent(actorUserId, createdAt);
 CREATE INDEX IF NOT EXISTS Task_encounterId_status_idx ON Task(encounterId, status);
 CREATE INDEX IF NOT EXISTS Task_clinicId_status_createdAt_idx ON Task(clinicId, status, createdAt);
 CREATE INDEX IF NOT EXISTS Task_roomId_status_createdAt_idx ON Task(roomId, status, createdAt);

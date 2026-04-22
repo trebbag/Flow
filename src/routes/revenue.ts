@@ -49,6 +49,7 @@ import {
 } from "../lib/persisted-json.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
+import { recordEntityEventTx } from "../lib/entity-events.js";
 
 const listRevenueCasesSchema = z
   .object({
@@ -748,13 +749,27 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
 
         await prisma.$transaction(async (tx) => {
           if (dto.financialReadiness) {
-            await tx.financialReadiness.upsert({
+            const beforeReadiness = await tx.financialReadiness.findUnique({
+              where: { revenueCaseId },
+            });
+            const afterReadiness = await tx.financialReadiness.upsert({
               where: { revenueCaseId },
               create: {
                 revenueCaseId,
                 ...dto.financialReadiness,
               },
               update: dto.financialReadiness,
+            });
+            await recordEntityEventTx({
+              db: tx,
+              request,
+              entityType: "FinancialReadiness",
+              entityId: revenueCaseId,
+              eventType: beforeReadiness ? "financial_readiness.updated" : "financial_readiness.created",
+              before: beforeReadiness,
+              after: afterReadiness,
+              facilityId: revenueCase.facilityId,
+              clinicId: revenueCase.clinicId,
             });
           }
           if (dto.checkoutTracking) {
@@ -768,8 +783,11 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
             });
           }
           if (dto.chargeCapture) {
+            const beforeCharge = await tx.chargeCaptureRecord.findUnique({
+              where: { revenueCaseId },
+            });
             const normalized = normalizeChargeCaptureInput(dto.chargeCapture);
-            await tx.chargeCaptureRecord.upsert({
+            const afterCharge = await tx.chargeCaptureRecord.upsert({
               where: { revenueCaseId },
               create: {
                 revenueCaseId,
@@ -794,6 +812,17 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
                 codingNote: normalized.codingNote,
                 readyForAthenaAt: dto.readyForAthena === undefined ? undefined : dto.readyForAthena ? new Date() : null,
               },
+            });
+            await recordEntityEventTx({
+              db: tx,
+              request,
+              entityType: "ChargeCaptureRecord",
+              entityId: revenueCaseId,
+              eventType: beforeCharge ? "charge_capture.updated" : "charge_capture.created",
+              before: beforeCharge,
+              after: afterCharge,
+              facilityId: revenueCase.facilityId,
+              clinicId: revenueCase.clinicId,
             });
           }
           if (dto.checklistUpdates?.length) {

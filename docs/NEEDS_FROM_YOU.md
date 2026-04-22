@@ -38,11 +38,12 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
    - until those values are configured, Athena connector test validation and revenue-monitoring preview/import cannot be proven in staging
 
 5. Governance and go-live inputs
-   - retention and audit expectations
-   - incident escalation contacts
+   - retention and audit expectations (baseline documented in [PILOT_DATA_GOVERNANCE.md](PILOT_DATA_GOVERNANCE.md); owner to confirm)
+   - incident escalation contacts (runbook in [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md); owner to populate on-call rotation)
    - pilot master data payload for facilities, clinics, providers, reasons, and templates
    - named owner for pilot go/no-go signoff
-   - backup / restore and incident runbook approver
+   - backup / restore and incident runbook approver (procedures in [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) and [ROLLBACK_PROCEDURE.md](ROLLBACK_PROCEDURE.md); owner to approve)
+   - named owner for PHI_ENCRYPTION_KEY custody and rotation per [SECRET_ROTATION.md](SECRET_ROTATION.md)
    - confirm the final approvers for the items listed in [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md)
 
 6. Time-of-service RCM pilot content

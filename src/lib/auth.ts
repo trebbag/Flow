@@ -5,6 +5,8 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from "jose"
 import { env } from "./env.js";
 import { ApiError } from "./errors.js";
 import { prisma } from "./prisma.js";
+import { verifyProofHeaderRequest } from "./proof-header-guard.js";
+import { recordAuthFailure, recordProofHeaderReject } from "./metrics.js";
 
 export type RequestUser = {
   id: string;
@@ -548,7 +550,17 @@ async function resolveUserFromDevHeaders(request: FastifyRequest): Promise<Reque
 async function resolveUserFromProofHeaders(request: FastifyRequest): Promise<RequestUser | null> {
   if (!env.AUTH_PROOF_HEADER_SECRET) return null;
   const proofSecret = (request.headers["x-proof-secret"] as string | undefined)?.trim() || null;
-  if (!matchesProofSecret(proofSecret)) return null;
+  if (!proofSecret) return null;
+
+  const guard = verifyProofHeaderRequest(request);
+  if (!guard.ok) {
+    return null;
+  }
+
+  if (!matchesProofSecret(proofSecret)) {
+    recordProofHeaderReject("secret_mismatch");
+    return null;
+  }
 
   const headerUserId = (request.headers["x-proof-user-id"] as string | undefined)?.trim() || null;
   const headerRole = asRole((request.headers["x-proof-role"] as string | undefined)?.trim());
@@ -595,6 +607,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     throw error;
   }
   if (!user) {
+    recordAuthFailure(env.AUTH_MODE, "no_identity");
     const message =
       env.AUTH_MODE === "jwt"
         ? "Unauthorized. Provide a valid Bearer token or proof headers."

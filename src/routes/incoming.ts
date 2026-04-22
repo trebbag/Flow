@@ -15,6 +15,7 @@ import {
   parseIncomingIssueNormalizedJsonInput,
 } from "../lib/persisted-json.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
+import { withIdempotentMutation } from "../lib/idempotency.js";
 import {
   formatClinicDisplayName,
   formatProviderDisplayName,
@@ -550,6 +551,7 @@ function dedupeIncomingRows(rows: Array<any>) {
 }
 
 async function importRows(
+  tx: Prisma.TransactionClient,
   facilityId: string,
   clinicId: string,
   dateOfService: string | undefined,
@@ -558,11 +560,11 @@ async function importRows(
   fileName?: string
 ) {
   const [clinic, facility] = await Promise.all([
-    prisma.clinic.findUnique({
+    tx.clinic.findUnique({
       where: { id: clinicId },
       select: { timezone: true, status: true }
     }),
-    prisma.facility.findUnique({
+    tx.facility.findUnique({
       where: { id: facilityId },
       select: { timezone: true }
     })
@@ -576,7 +578,7 @@ async function importRows(
     DateTime.now().setZone(facilityTimezone).startOf("day").toUTC().toJSDate();
   const maps = await getProviderReasonMaps(clinicId);
 
-  const batch = await prisma.incomingImportBatch.create({
+  const batch = await tx.incomingImportBatch.create({
     data: {
       facilityId,
       clinicId,
@@ -600,13 +602,13 @@ async function importRows(
 
       if (validated.isValid) {
       const identityHints = extractPatientIdentityHints(row.rawPayload || row, row.intakeData);
-      const patientRecord = await ensurePatientRecord(prisma, {
+      const patientRecord = await ensurePatientRecord(tx, {
         facilityId,
         sourcePatientId: validated.patientId,
         displayName: identityHints.displayName,
         dateOfBirth: identityHints.dateOfBirth,
       });
-      const entry = await prisma.incomingSchedule.create({
+      const entry = await tx.incomingSchedule.create({
         data: {
           clinicId,
           dateOfService: validated.dateOfService || normalizedDate,
@@ -631,7 +633,7 @@ async function importRows(
       continue;
     }
 
-    const issue = await prisma.incomingImportIssue.create({
+    const issue = await tx.incomingImportIssue.create({
       data: {
         batchId: batch.id,
         facilityId,
@@ -654,7 +656,7 @@ async function importRows(
     pendingIssues.push(issue);
   }
 
-  await prisma.incomingImportBatch.update({
+  await tx.incomingImportBatch.update({
     where: { id: batch.id },
     data: {
       rowCount: acceptedRows.length + pendingIssues.length,
@@ -896,7 +898,10 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         null,
       reasonForVisitId: (rawPayload.reasonForVisitId as string | null) ?? null,
       providerId: (rawPayload.providerId as string | null) ?? null,
-      intakeData: (rawPayload.intakeData as Record<string, unknown> | undefined) || {},
+      intakeData:
+        rawPayload.intakeData && typeof rawPayload.intakeData === "object" && !Array.isArray(rawPayload.intakeData)
+          ? (rawPayload.intakeData as Record<string, unknown>)
+          : {},
       rawPayload
     };
 
@@ -1150,68 +1155,91 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
       groupedRows.set(groupKey, currentGroup);
     });
 
-    const createdRows: Array<Record<string, unknown>> = [];
-    const pendingIssues: Array<Record<string, unknown>> = [];
     for (const group of groupedRows.values()) {
       await resolveScopedClinic(user, group.clinicId);
-      const created = await importRows(
-        facility.id,
-        group.clinicId,
-        group.dateOfService,
-        group.rows,
-        dto.source || ScheduleSource.csv,
-        dto.fileName
-      );
-      createdRows.push(...created.acceptedRows);
-      pendingIssues.push(...created.pendingIssues);
     }
 
-    if (unresolvedClinicRows.length > 0) {
-      const normalizedDate =
-        resolveDateOfServiceInput(undefined, dto.dateOfService, facilityTimezone).date ||
-        DateTime.now().setZone(facilityTimezone).startOf("day").toUTC().toJSDate();
-      const unresolvedBatch = await prisma.incomingImportBatch.create({
-        data: {
-          facilityId: facility.id,
-          clinicId: null,
-          date: normalizedDate,
-          source: dto.source || ScheduleSource.csv,
-          fileName: dto.fileName,
-          rowCount: unresolvedClinicRows.length,
-          acceptedRowCount: 0,
-          pendingRowCount: unresolvedClinicRows.length,
-          status: "pending_review"
-        }
-      });
-
-      for (const issue of unresolvedClinicRows) {
-        const createdIssue = await prisma.incomingImportIssue.create({
-          data: {
-            batchId: unresolvedBatch.id,
-            facilityId: facility.id,
-            clinicId: issue.clinicId || null,
-            dateOfService: issue.dateOfService || normalizedDate,
-            rawPayloadJson: issue.row as Prisma.InputJsonValue,
-            normalizedJson: parseIncomingIssueNormalizedJsonInput(issue.normalized) as Prisma.InputJsonValue,
-            validationErrors: [issue.message] as Prisma.InputJsonValue,
-            status: "pending",
-            retryCount: 0
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: {
+        facilityId: facility.id,
+        clinicId: dto.clinicId ?? null,
+        source: dto.source ?? null,
+        fileName: dto.fileName ?? null,
+        groupKeys: Array.from(groupedRows.keys()).sort(),
+        unresolvedCount: unresolvedClinicRows.length,
+        rowCount: records.length,
+      },
+      execute: async () => {
+        const { createdRows, pendingIssues } = await prisma.$transaction(async (tx) => {
+          const acceptedRows: Array<Record<string, unknown>> = [];
+          const pendingRows: Array<Record<string, unknown>> = [];
+          for (const group of groupedRows.values()) {
+            const created = await importRows(
+              tx,
+              facility.id,
+              group.clinicId,
+              group.dateOfService,
+              group.rows,
+              dto.source || ScheduleSource.csv,
+              dto.fileName
+            );
+            acceptedRows.push(...created.acceptedRows);
+            pendingRows.push(...created.pendingIssues);
           }
+
+          if (unresolvedClinicRows.length > 0) {
+            const normalizedDate =
+              resolveDateOfServiceInput(undefined, dto.dateOfService, facilityTimezone).date ||
+              DateTime.now().setZone(facilityTimezone).startOf("day").toUTC().toJSDate();
+            const unresolvedBatch = await tx.incomingImportBatch.create({
+              data: {
+                facilityId: facility.id,
+                clinicId: null,
+                date: normalizedDate,
+                source: dto.source || ScheduleSource.csv,
+                fileName: dto.fileName,
+                rowCount: unresolvedClinicRows.length,
+                acceptedRowCount: 0,
+                pendingRowCount: unresolvedClinicRows.length,
+                status: "pending_review"
+              }
+            });
+
+            for (const issue of unresolvedClinicRows) {
+              const createdIssue = await tx.incomingImportIssue.create({
+                data: {
+                  batchId: unresolvedBatch.id,
+                  facilityId: facility.id,
+                  clinicId: issue.clinicId || null,
+                  dateOfService: issue.dateOfService || normalizedDate,
+                  rawPayloadJson: issue.row as Prisma.InputJsonValue,
+                  normalizedJson: parseIncomingIssueNormalizedJsonInput(issue.normalized) as Prisma.InputJsonValue,
+                  validationErrors: [issue.message] as Prisma.InputJsonValue,
+                  status: "pending",
+                  retryCount: 0
+                }
+              });
+              pendingRows.push(createdIssue);
+            }
+          }
+
+          return { createdRows: acceptedRows, pendingIssues: pendingRows };
         });
-        pendingIssues.push(createdIssue);
-      }
-    }
 
-    if (createdRows.length === 0 && pendingIssues.length === 0) {
-      throw new ApiError(400, "No importable schedule rows were found. Check the expected column order and row values.");
-    }
+        if (createdRows.length === 0 && pendingIssues.length === 0) {
+          throw new ApiError(400, "No importable schedule rows were found. Check the expected column order and row values.");
+        }
 
-    return {
-      acceptedRows: createdRows,
-      pendingIssues,
-      acceptedCount: createdRows.length,
-      pendingCount: pendingIssues.length
-    };
+        return {
+          acceptedRows: createdRows,
+          pendingIssues,
+          acceptedCount: createdRows.length,
+          pendingCount: pendingIssues.length
+        };
+      },
+    });
   });
 
   app.post("/incoming/:id/intake", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.Admin) }, async (request) => {

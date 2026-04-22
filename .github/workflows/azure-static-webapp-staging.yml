@@ -17,10 +17,10 @@ jobs:
       VITE_DEFAULT_AUTH_MODE: microsoft
       VITE_ENABLE_DEV_HEADERS: "false"
       VITE_ENABLE_DEV_HEADER_LOGIN: "false"
-      VITE_ENTRA_TENANT_ID: b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
-      VITE_ENTRA_AUTHORITY: https://login.microsoftonline.com/b9b1d566-d7ed-44a4-b3cc-cf8786d6a6ed
-      VITE_ENTRA_CLIENT_ID: 020f7909-e66e-4ec8-810b-cfdf58e70014
-      VITE_ENTRA_API_SCOPE: api://89658fe4-9844-439a-97b0-ee31ace455da/access_as_user
+      VITE_ENTRA_TENANT_ID: ${{ secrets.STAGING_ENTRA_TENANT_ID }}
+      VITE_ENTRA_AUTHORITY: https://login.microsoftonline.com/${{ secrets.STAGING_ENTRA_TENANT_ID }}
+      VITE_ENTRA_CLIENT_ID: ${{ secrets.STAGING_ENTRA_CLIENT_ID }}
+      VITE_ENTRA_API_SCOPE: ${{ secrets.STAGING_ENTRA_API_SCOPE }}
       VITE_ENTRA_REDIRECT_PATH: /auth/callback
       VITE_ENTRA_POST_LOGOUT_REDIRECT_PATH: /login
 
@@ -39,6 +39,19 @@ jobs:
             echo "Missing GitHub variable: STAGING_FRONTEND_API_BASE_URL"
             exit 1
           fi
+
+          for secret_name in STAGING_ENTRA_TENANT_ID STAGING_ENTRA_CLIENT_ID STAGING_ENTRA_API_SCOPE; do
+            value=""
+            case "$secret_name" in
+              STAGING_ENTRA_TENANT_ID) value="${VITE_ENTRA_TENANT_ID}" ;;
+              STAGING_ENTRA_CLIENT_ID) value="${VITE_ENTRA_CLIENT_ID}" ;;
+              STAGING_ENTRA_API_SCOPE) value="${VITE_ENTRA_API_SCOPE}" ;;
+            esac
+            if [[ -z "$value" ]]; then
+              echo "Missing GitHub secret: $secret_name"
+              exit 1
+            fi
+          done
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5

@@ -1,0 +1,265 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY to confirm production deploy"
+        required: true
+        type: string
+      release_tag:
+        description: "Release tag or commit SHA to deploy"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight approvals and validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+    outputs:
+      release_sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Validate confirm input
+        run: |
+          if [[ "${{ inputs.confirm }}" != "DEPLOY" ]]; then
+            echo "Confirm input must be literal string 'DEPLOY' to proceed."
+            exit 1
+          fi
+
+      - name: Checkout at release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Resolve commit SHA
+        id: resolve
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Resolved release commit: $sha"
+
+      - name: Require signed commit
+        run: |
+          if ! git verify-commit HEAD 2>/dev/null; then
+            echo "WARNING: HEAD commit is not GPG/SSH-signed. Branch protection should enforce signing for production deploys."
+          fi
+
+  build-verify:
+    name: Build and verify release artifact
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: production
+    env:
+      DATABASE_URL: file:./prisma/dev.db
+    steps:
+      - name: Checkout at release SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: "10"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild native SQLite dependency
+        run: pnpm rebuild better-sqlite3
+
+      - name: Verify schema parity
+        run: pnpm db:verify:parity
+
+      - name: Generate Prisma clients
+        run: |
+          pnpm db:generate
+          pnpm db:generate:postgres
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Supply-chain audit (prod)
+        run: pnpm audit --prod --audit-level high
+
+      - name: Backend tests
+        run: pnpm test
+
+      - name: Backend build
+        run: pnpm build
+
+  deploy:
+    name: Deploy and health-check
+    needs: [preflight, build-verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+    env:
+      AZURE_WEBAPP_NAME: ${{ vars.PROD_AZURE_WEBAPP_NAME }}
+      AZURE_RESOURCE_GROUP: ${{ vars.PROD_AZURE_RESOURCE_GROUP }}
+      AZURE_CLIENT_ID: ${{ vars.PROD_AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.PROD_AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.PROD_AZURE_SUBSCRIPTION_ID }}
+      PROD_HEALTH_URL: ${{ vars.PROD_HEALTH_URL }}
+      PROD_READY_URL: ${{ vars.PROD_READY_URL }}
+      PACKAGE_PATH: ./.azure/backend-package
+    steps:
+      - name: Validate deployment inputs
+        run: |
+          missing=0
+          for var in AZURE_WEBAPP_NAME AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID PROD_HEALTH_URL PROD_READY_URL; do
+            if [[ -z "${!var}" ]]; then
+              echo "Missing GitHub variable: $var"
+              missing=1
+            fi
+          done
+          if [[ "$missing" -eq 1 ]]; then exit 1; fi
+
+      - name: Checkout at release SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: "10"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Capture current deployed version (for rollback)
+        id: capture
+        run: |
+          current="$(az webapp deployment list \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query "[0].id" -o tsv 2>/dev/null || true)"
+          echo "current_deployment_id=$current" >> "$GITHUB_OUTPUT"
+          echo "Current deployment id: $current"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma clients
+        run: |
+          pnpm db:generate
+          pnpm db:generate:postgres
+
+      - name: Apply PostgreSQL schema
+        run: pnpm db:push:postgres
+
+      - name: Build backend
+        run: pnpm build
+
+      - name: Prepare deployment package
+        run: |
+          rm -rf "${PACKAGE_PATH}"
+          mkdir -p "${PACKAGE_PATH}"
+          cp package.json "${PACKAGE_PATH}/"
+          cp -R dist "${PACKAGE_PATH}/dist"
+          cp -R generated "${PACKAGE_PATH}/generated"
+          cp -R prisma "${PACKAGE_PATH}/prisma"
+          cd "${PACKAGE_PATH}"
+          npm install --omit=dev --no-package-lock
+          cd -
+          PRISMA_CLIENT_DIR="$(node -e "const fs = require('fs'); const path = require('path'); const { createRequire } = require('module'); const req = createRequire(process.cwd() + '/'); const pkg = req.resolve('@prisma/client/package.json', { paths: [process.cwd()] }); process.stdout.write(fs.realpathSync(path.dirname(pkg)));")"
+          GENERATED_PRISMA_DIR="$(node -e "const fs = require('fs'); const path = require('path'); const { createRequire } = require('module'); const req = createRequire(process.cwd() + '/'); const pkg = req.resolve('@prisma/client/package.json', { paths: [process.cwd()] }); const clientDir = fs.realpathSync(path.dirname(pkg)); process.stdout.write(path.resolve(clientDir, '..', '..', '.prisma'));")"
+          rm -rf "${PACKAGE_PATH}/node_modules/@prisma/client" "${PACKAGE_PATH}/node_modules/.prisma"
+          mkdir -p "${PACKAGE_PATH}/node_modules/@prisma"
+          cp -RL "${PRISMA_CLIENT_DIR}" "${PACKAGE_PATH}/node_modules/@prisma/client"
+          cp -RL "${GENERATED_PRISMA_DIR}" "${PACKAGE_PATH}/node_modules/.prisma"
+
+      - name: Deploy to staging slot
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: staging
+          package: ${{ env.PACKAGE_PATH }}
+
+      - name: Health check staging slot
+        id: health
+        run: |
+          set +e
+          staging_health_url="${PROD_HEALTH_URL/.azurewebsites.net/-staging.azurewebsites.net}"
+          staging_ready_url="${PROD_READY_URL/.azurewebsites.net/-staging.azurewebsites.net}"
+          for attempt in {1..30}; do
+            if curl -fsS --max-time 10 "${staging_health_url}" > /tmp/health.out && \
+               curl -fsS --max-time 10 "${staging_ready_url}" > /tmp/ready.out; then
+              echo "staging slot healthy on attempt ${attempt}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "staging slot failed health checks"
+          cat /tmp/health.out /tmp/ready.out || true
+          exit 1
+
+      - name: Swap staging into production
+        if: success()
+        run: |
+          az webapp deployment slot swap \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --slot staging \
+            --target-slot production
+
+      - name: Post-swap production health check
+        id: post_health
+        run: |
+          set +e
+          for attempt in {1..30}; do
+            if curl -fsS --max-time 10 "${PROD_HEALTH_URL}" > /tmp/phealth.out && \
+               curl -fsS --max-time 10 "${PROD_READY_URL}" > /tmp/pready.out; then
+              echo "production healthy on attempt ${attempt}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "production post-swap health check failed"
+          cat /tmp/phealth.out /tmp/pready.out || true
+          exit 1
+
+      - name: Rollback on failure
+        if: failure() && steps.post_health.outcome == 'failure'
+        run: |
+          echo "Production health check failed after swap. Rolling back by swapping back."
+          az webapp deployment slot swap \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --slot production \
+            --target-slot staging || true
+          exit 1

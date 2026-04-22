@@ -46,6 +46,11 @@ import {
 } from "../lib/persisted-json.js";
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 import { persistMutationOperationalEventTx, flushOperationalOutbox } from "../lib/operational-events.js";
+import {
+  CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
+  CURRENT_TEMPLATE_SCHEMA_VERSION,
+  assertSupportedSchemaVersionOnRead,
+} from "../lib/json-schema-version.js";
 
 const facilitySchema = z.object({
   name: z.string().min(1),
@@ -1056,6 +1061,8 @@ async function migratePatientReferencesToCanonical(
     sourcePatientId: string;
     targetPatientId: string;
     facilityId: string;
+    archivedByUserId?: string | null;
+    archivedReason?: string | null;
   },
 ) {
   if (params.sourcePatientId === params.targetPatientId) {
@@ -1104,11 +1111,18 @@ async function migratePatientReferencesToCanonical(
     tx.revenueCase.count({ where: { patientRecordId: params.sourcePatientId } }),
   ]);
 
-  if (incomingCount === 0 && encounterCount === 0 && revenueCount === 0) {
-    await tx.patient.delete({
-      where: { id: params.sourcePatientId },
-    });
-  }
+  await tx.patient.update({
+    where: { id: params.sourcePatientId },
+    data: {
+      archivedAt: new Date(),
+      archivedByUserId: params.archivedByUserId || null,
+      archivedReason:
+        params.archivedReason ||
+        `merged_into:${params.targetPatientId}` + (incomingCount + encounterCount + revenueCount > 0
+          ? ` (refs_moved=${incomingCount + encounterCount + revenueCount})`
+          : ""),
+    },
+  });
 }
 
 function mapAthenaConnectorResponse(connector: {
@@ -2713,6 +2727,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
               jsonSchema: schema.jsonSchema,
               uiSchema: schema.uiSchema,
               requiredFields: schema.requiredFields as Prisma.InputJsonValue,
+              schemaVersion: CURRENT_TEMPLATE_SCHEMA_VERSION,
               updatedAt: new Date()
             }
           })
@@ -2728,7 +2743,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
               fieldsJson: asInputJson(parseTemplateFieldsJsonInput(normalizedFields)),
               jsonSchema: schema.jsonSchema,
               uiSchema: schema.uiSchema,
-              requiredFields: schema.requiredFields as Prisma.InputJsonValue
+              requiredFields: schema.requiredFields as Prisma.InputJsonValue,
+              schemaVersion: CURRENT_TEMPLATE_SCHEMA_VERSION
             }
           });
 
@@ -3514,6 +3530,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         serviceCatalogJson: asInputJson(dto.serviceCatalog || existing.serviceCatalog),
         chargeScheduleJson: asInputJson(dto.chargeSchedule || existing.chargeSchedule),
         reimbursementRulesJson: asInputJson(dto.reimbursementRules || existing.reimbursementRules),
+        schemaVersion: CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
       },
       update: {
         missedCollectionReasonsJson: dto.missedCollectionReasons
@@ -3545,6 +3562,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         reimbursementRulesJson: dto.reimbursementRules
           ? asInputJson(dto.reimbursementRules)
           : undefined,
+        schemaVersion: CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
       }
     });
 
@@ -3920,6 +3938,8 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             sourcePatientId: review.patientId,
             targetPatientId: targetPatient.id,
             facilityId: review.facilityId,
+            archivedByUserId: request.user!.id,
+            archivedReason: `identity_review_merge:${review.id}`,
           });
         }
 

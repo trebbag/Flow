@@ -1205,8 +1205,12 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       encounterIds: [encounterId]
     });
 
-    const encounter = await prisma.encounter.findUnique({
-      where: { id: encounterId },
+    const callerFacilityId = request.user!.facilityId;
+    const encounter = await prisma.encounter.findFirst({
+      where: {
+        id: encounterId,
+        ...(callerFacilityId ? { clinic: { facilityId: callerFacilityId } } : {})
+      },
       include: {
         clinic: {
           select: {

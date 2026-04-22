@@ -39,6 +39,9 @@ jobs:
       - name: Install Playwright browser
         run: pnpm -C "docs/Flow Frontend" exec playwright install --with-deps chromium
 
+      - name: Verify Prisma schema parity (SQLite vs Postgres)
+        run: pnpm db:verify:parity
+
       - name: Generate Prisma client
         run: pnpm db:generate
 
@@ -124,3 +127,23 @@ jobs:
           if [[ -f /tmp/flow-backend.pid ]]; then
             kill "$(cat /tmp/flow-backend.pid)" || true
           fi
+
+      - name: Supply-chain audit (prod dependencies must be clean)
+        run: pnpm audit --prod --audit-level high
+
+      - name: Generate SBOM (dependency list)
+        if: always()
+        run: |
+          mkdir -p dist-sbom
+          pnpm list --prod --depth Infinity --json > dist-sbom/backend-prod.json || true
+          pnpm list --depth Infinity --json > dist-sbom/backend-all.json || true
+          pnpm -C "docs/Flow Frontend" list --prod --depth Infinity --json > dist-sbom/frontend-prod.json || true
+          pnpm -C "docs/Flow Frontend" list --depth Infinity --json > dist-sbom/frontend-all.json || true
+
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: dist-sbom/
+          retention-days: 90

@@ -5,6 +5,8 @@ import rateLimit from "@fastify/rate-limit";
 import { ZodError } from "zod";
 import { env } from "./lib/env.js";
 import { ApiError } from "./lib/errors.js";
+import { buildLoggerOptions } from "./lib/logger-config.js";
+import { recordCrossTenantDenied, recordValidationFailure } from "./lib/metrics.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerAdminRoutes } from "./routes/admin.js";
@@ -20,7 +22,7 @@ import { registerRevenueRoutes } from "./routes/revenue.js";
 
 export function buildApp() {
   const app = Fastify({
-    logger: env.NODE_ENV !== "test",
+    logger: buildLoggerOptions(env.NODE_ENV),
     trustProxy: env.TRUST_PROXY
   });
 
@@ -55,7 +57,26 @@ export function buildApp() {
   });
 
   app.register(helmet, {
-    contentSecurityPolicy: false
+    contentSecurityPolicy: env.NODE_ENV === "test"
+      ? false
+      : {
+          directives: {
+            defaultSrc: ["'self'"],
+            baseUri: ["'self'"],
+            fontSrc: ["'self'", "https:", "data:"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
+            imgSrc: ["'self'", "data:"],
+            objectSrc: ["'none'"],
+            scriptSrc: ["'self'"],
+            scriptSrcAttr: ["'none'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            connectSrc: ["'self'", "https://login.microsoftonline.com", "https://graph.microsoft.com"],
+            upgradeInsecureRequests: env.NODE_ENV === "production" ? [] : null,
+          },
+        },
+    crossOriginResourcePolicy: { policy: "same-site" },
+    referrerPolicy: { policy: "no-referrer" },
   });
 
   app.register(rateLimit, {
@@ -97,11 +118,18 @@ export function buildApp() {
     };
 
     if (error instanceof ApiError) {
+      if (error.statusCode === 403 && /scope|facility|tenant/i.test(error.message)) {
+        recordCrossTenantDenied(
+          request.routeOptions?.url || request.url || "unknown",
+          request.user?.facilityId || "unknown",
+        );
+      }
       sendError(error.statusCode, error.code, error.message, error.details);
       return;
     }
 
     if (error instanceof ZodError) {
+      recordValidationFailure(request.routeOptions?.url || request.url || "unknown", "VALIDATION_ERROR");
       sendError(
         400,
         "VALIDATION_ERROR",

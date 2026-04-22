@@ -90,9 +90,106 @@ async function installEncounterVersionTrigger() {
   }
 }
 
+const CLINIC_ROOM_PARTIAL_UNIQUE_SQL = `
+CREATE UNIQUE INDEX IF NOT EXISTS "ClinicRoom_facilityId_roomNumber_live_unique"
+  ON "ClinicRoom" ("facilityId", "roomNumber")
+  WHERE "status" IN ('active', 'inactive');
+`;
+
+const CHECK_CONSTRAINTS_SQL = `
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'Encounter_provider_times_ordered'
+  ) THEN
+    ALTER TABLE "Encounter" ADD CONSTRAINT "Encounter_provider_times_ordered"
+      CHECK ("providerStartAt" IS NULL OR "providerEndAt" IS NULL OR "providerStartAt" <= "providerEndAt");
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'Encounter_closureNotes_nonempty'
+  ) THEN
+    ALTER TABLE "Encounter" ADD CONSTRAINT "Encounter_closureNotes_nonempty"
+      CHECK ("closureNotes" IS NULL OR length(trim("closureNotes")) > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'Task_description_nonempty'
+  ) THEN
+    ALTER TABLE "Task" ADD CONSTRAINT "Task_description_nonempty"
+      CHECK (length(trim("description")) > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'RoomIssue_title_nonempty'
+  ) THEN
+    ALTER TABLE "RoomIssue" ADD CONSTRAINT "RoomIssue_title_nonempty"
+      CHECK (length(trim("title")) > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'AlertThreshold_red_ge_yellow'
+  ) THEN
+    ALTER TABLE "AlertThreshold" ADD CONSTRAINT "AlertThreshold_red_ge_yellow"
+      CHECK ("redAtMin" >= "yellowAtMin");
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'AlertThreshold_escalation_ge_red'
+  ) THEN
+    ALTER TABLE "AlertThreshold" ADD CONSTRAINT "AlertThreshold_escalation_ge_red"
+      CHECK ("escalation2Min" IS NULL OR "escalation2Min" >= "redAtMin");
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'CheckoutCollectionTracking_amountDue_nonneg'
+  ) THEN
+    ALTER TABLE "CheckoutCollectionTracking" ADD CONSTRAINT "CheckoutCollectionTracking_amountDue_nonneg"
+      CHECK ("amountDueCents" >= 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'CheckoutCollectionTracking_amountCollected_nonneg'
+  ) THEN
+    ALTER TABLE "CheckoutCollectionTracking" ADD CONSTRAINT "CheckoutCollectionTracking_amountCollected_nonneg"
+      CHECK ("amountCollectedCents" >= 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'CheckoutCollectionTracking_collected_le_due'
+  ) THEN
+    ALTER TABLE "CheckoutCollectionTracking" ADD CONSTRAINT "CheckoutCollectionTracking_collected_le_due"
+      CHECK ("amountCollectedCents" <= "amountDueCents");
+  END IF;
+END
+$$;
+`;
+
+async function installDataIntegrityChecks() {
+  const client = new pg.Client({ connectionString: postgresUrl });
+  await client.connect();
+  try {
+    await client.query(CHECK_CONSTRAINTS_SQL);
+  } finally {
+    await client.end();
+  }
+}
+
+async function installClinicRoomPartialUnique() {
+  const client = new pg.Client({ connectionString: postgresUrl });
+  await client.connect();
+  try {
+    await client.query(CLINIC_ROOM_PARTIAL_UNIQUE_SQL);
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   await runPrismaDbPush();
   await installEncounterVersionTrigger();
+  await installDataIntegrityChecks();
+  await installClinicRoomPartialUnique();
 }
 
 main().catch((error) => {

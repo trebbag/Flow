@@ -1,10 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { getRevenueSyncWorkerStatus } from "../lib/revenue-sync-queue.js";
+import { renderMetrics } from "../lib/metrics.js";
 
 export async function registerHealthRoutes(app: FastifyInstance) {
   app.get("/health", async () => {
     return { status: "ok" };
+  });
+
+  app.get("/metrics", async (_request, reply) => {
+    reply.header("content-type", "text/plain; version=0.0.4; charset=utf-8");
+    return renderMetrics();
   });
 
   app.get("/ready", async (_request, reply) => {

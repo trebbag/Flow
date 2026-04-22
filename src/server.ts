@@ -3,6 +3,9 @@ import { env } from "./lib/env.js";
 import { backfillCanonicalPatients } from "./lib/patients.js";
 import { prisma } from "./lib/prisma.js";
 import { startRevenueSyncWorker, stopRevenueSyncWorker } from "./lib/revenue-sync-queue.js";
+import { assertStartupInvariants } from "./lib/startup-invariants.js";
+
+assertStartupInvariants();
 
 const app = buildApp();
 

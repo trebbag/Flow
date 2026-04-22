@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { AlertInboxKind, RoleName, TaskSourceType } from "@prisma/client";
+import { AlertInboxKind, RoleName, TaskSourceType, TaskStatus } from "@prisma/client";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -7,6 +7,8 @@ import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
+import { normalizeEncounterJsonRead } from "../lib/persisted-json.js";
+import { recordEntityEventTx } from "../lib/entity-events.js";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -21,7 +23,7 @@ const createTaskSchema = z.object({
   description: z.string().min(1),
   assignedToRole: z.nativeEnum(RoleName).optional(),
   assignedToUserId: z.string().uuid().optional(),
-  status: z.string().optional(),
+  status: z.nativeEnum(TaskStatus).optional(),
   priority: z.number().int().optional(),
   blocking: z.boolean().optional()
 });
@@ -31,9 +33,14 @@ const updateTaskSchema = z.object({
   assignedToUserId: z.string().uuid().optional(),
   acknowledged: z.boolean().optional(),
   notes: z.string().max(5000).optional(),
-  status: z.string().optional(),
+  status: z.nativeEnum(TaskStatus).optional(),
   priority: z.number().int().optional(),
-  completed: z.boolean().optional()
+  completed: z.boolean().optional(),
+  expectedVersion: z.number().int().nonnegative().optional()
+});
+
+const deleteTaskQuerySchema = z.object({
+  expectedVersion: z.coerce.number().int().nonnegative().optional()
 });
 
 async function maybeCreateTaskAssignmentAlert(params: {
@@ -197,23 +204,46 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     const includeCompleted = String(query.includeCompleted || "true").toLowerCase() !== "false";
     const includeArchived = String(query.includeArchived || "false").toLowerCase() === "true";
     const mine = String(query.mine || "false").toLowerCase() === "true";
-    const where = {
+    const callerFacilityId = request.user!.facilityId;
+    const facilityScope: Prisma.TaskWhereInput = callerFacilityId
+      ? {
+          OR: [
+            { facilityId: callerFacilityId },
+            {
+              AND: [
+                { facilityId: null },
+                {
+                  OR: [
+                    { encounter: { clinic: { facilityId: callerFacilityId } } },
+                    { room: { clinicLinks: { some: { clinic: { facilityId: callerFacilityId } } } } },
+                  ],
+                },
+              ],
+            },
+          ],
+        }
+      : { id: "__never__" };
+    const mineScope: Prisma.TaskWhereInput | null = mine
+      ? {
+          OR: [
+            { assignedToUserId: request.user!.id },
+            { assignedToRole: request.user!.role, assignedToUserId: null },
+          ],
+        }
+      : null;
+    const where: Prisma.TaskWhereInput = {
+      AND: [facilityScope, ...(mineScope ? [mineScope] : [])],
       encounterId: query.encounterId,
       roomId: query.roomId,
       ...(includeArchived ? {} : { archivedAt: null }),
       ...(mine
-        ? {
-            OR: [
-              { assignedToUserId: request.user!.id },
-              { assignedToRole: request.user!.role, assignedToUserId: null }
-            ]
-          }
+        ? {}
         : {
             assignedToUserId: query.assignedToUserId,
-            assignedToRole: query.assignedToRole
+            assignedToRole: query.assignedToRole,
           }),
-      ...(includeCompleted ? {} : { completedAt: null, status: { not: "completed" } })
-    } as const;
+      ...(includeCompleted ? {} : { completedAt: null, status: { not: TaskStatus.completed } }),
+    };
 
     const rows = await prisma.task.findMany({
       where,
@@ -264,6 +294,11 @@ export async function registerTaskRoutes(app: FastifyInstance) {
 
     const scope = await resolveTaskScope(dto);
 
+    const callerFacilityId = request.user!.facilityId;
+    if (callerFacilityId && scope.facilityId !== callerFacilityId) {
+      throw new ApiError(403, "Task is outside your facility scope");
+    }
+
     const created = await prisma.$transaction(async (tx) => {
       const row = await tx.task.create({
         data: {
@@ -277,7 +312,7 @@ export async function registerTaskRoutes(app: FastifyInstance) {
           description: dto.description,
           assignedToRole: dto.assignedToRole,
           assignedToUserId: dto.assignedToUserId,
-          status: dto.status ?? "open",
+          status: dto.status ?? TaskStatus.open,
           priority: dto.priority ?? 0,
           blocking: dto.blocking ?? false,
           createdBy: request.user!.id
@@ -300,6 +335,16 @@ export async function registerTaskRoutes(app: FastifyInstance) {
         entityType: "tasks",
         entityId: row.id,
       });
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "Task",
+        entityId: row.id,
+        eventType: "task.created",
+        after: row,
+        facilityId: row.facilityId,
+        clinicId: row.clinicId,
+      });
       return row;
     });
     await flushOperationalOutbox(prisma);
@@ -312,12 +357,16 @@ export async function registerTaskRoutes(app: FastifyInstance) {
 
     const task = await prisma.task.findUnique({ where: { id: taskId } });
     requireCondition(task, 404, "Task not found");
+    const callerFacilityId = request.user!.facilityId;
+    if (callerFacilityId && task.facilityId && task.facilityId !== callerFacilityId) {
+      throw new ApiError(404, "Task not found");
+    }
     requireCondition(!task.archivedAt, 400, "Archived tasks cannot be modified", "TASK_ARCHIVED");
 
     const assignedToUserId =
       dto.assignedToUserId !== undefined ? dto.assignedToUserId : task.assignedToUserId;
     const assignedToRole = dto.assignedToRole !== undefined ? dto.assignedToRole : task.assignedToRole;
-    const completed = dto.completed === true || dto.status?.toLowerCase() === "completed";
+    const completed = dto.completed === true || dto.status === TaskStatus.completed;
     const acknowledged = dto.acknowledged === true;
 
     if (completed && task.taskType === "service_capture" && task.encounterId) {
@@ -325,13 +374,9 @@ export async function registerTaskRoutes(app: FastifyInstance) {
         where: { id: task.encounterId },
         select: { roomingData: true },
       });
-      const roomingData =
-        encounter?.roomingData && typeof encounter.roomingData === "object" && !Array.isArray(encounter.roomingData)
-          ? (encounter.roomingData as Record<string, unknown>)
-          : {};
-      const serviceCaptureItems = Array.isArray(roomingData["service.capture_items"])
-        ? roomingData["service.capture_items"]
-        : [];
+      const roomingData = normalizeEncounterJsonRead("roomingData", encounter?.roomingData, request.log) || {};
+      const captureItems = roomingData["service.capture_items"];
+      const serviceCaptureItems = Array.isArray(captureItems) ? captureItems : [];
       requireCondition(
         serviceCaptureItems.length > 0,
         400,
@@ -340,20 +385,32 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.task.update({
-        where: { id: taskId },
-        data: {
-          assignedToRole,
-          assignedToUserId,
-          acknowledgedAt: acknowledged ? new Date() : task.acknowledgedAt,
-          acknowledgedBy: acknowledged ? request.user!.id : task.acknowledgedBy,
-          completedAt: completed ? new Date() : task.completedAt,
-          completedBy: completed ? request.user!.id : task.completedBy,
-          notes: dto.notes !== undefined ? dto.notes : task.notes,
-          status: dto.status ?? (completed ? "completed" : task.status),
-          priority: dto.priority ?? task.priority
-        }
+      const updateData: Prisma.TaskUncheckedUpdateManyInput = {
+        assignedToRole,
+        assignedToUserId,
+        acknowledgedAt: acknowledged ? new Date() : task.acknowledgedAt,
+        acknowledgedBy: acknowledged ? request.user!.id : task.acknowledgedBy,
+        completedAt: completed ? new Date() : task.completedAt,
+        completedBy: completed ? request.user!.id : task.completedBy,
+        notes: dto.notes !== undefined ? dto.notes : task.notes,
+        status: dto.status ?? (completed ? TaskStatus.completed : task.status),
+        priority: dto.priority ?? task.priority,
+        version: { increment: 1 },
+      };
+      const versionFilter: Prisma.TaskWhereInput =
+        dto.expectedVersion !== undefined ? { version: dto.expectedVersion } : {};
+      const updateResult = await tx.task.updateMany({
+        where: { id: taskId, ...versionFilter },
+        data: updateData,
       });
+      if (updateResult.count === 0) {
+        const latest = await tx.task.findUnique({ where: { id: taskId }, select: { id: true } });
+        if (!latest) {
+          throw new ApiError(404, "Task not found");
+        }
+        throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Task version mismatch" });
+      }
+      const row = await tx.task.findUniqueOrThrow({ where: { id: taskId } });
       if (
         assignedToUserId &&
         assignedToUserId !== task.assignedToUserId
@@ -389,6 +446,17 @@ export async function registerTaskRoutes(app: FastifyInstance) {
         entityType: "tasks",
         entityId: row.id,
       });
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "Task",
+        entityId: row.id,
+        eventType: "task.updated",
+        before: task,
+        after: row,
+        facilityId: row.facilityId,
+        clinicId: row.clinicId,
+      });
       return row;
     });
     await flushOperationalOutbox(prisma);
@@ -397,8 +465,13 @@ export async function registerTaskRoutes(app: FastifyInstance) {
 
   app.delete("/tasks/:id", { preHandler: guard }, async (request) => {
     const taskId = (request.params as { id: string }).id;
+    const query = deleteTaskQuerySchema.parse(request.query ?? {});
     const task = await prisma.task.findUnique({ where: { id: taskId } });
     requireCondition(task, 404, "Task not found");
+    const callerFacilityId = request.user!.facilityId;
+    if (callerFacilityId && task.facilityId && task.facilityId !== callerFacilityId) {
+      throw new ApiError(404, "Task not found");
+    }
 
     if (request.user!.role !== RoleName.Admin && task.createdBy !== request.user!.id) {
       throw new ApiError(403, "Only the task creator or an admin can delete this task.");
@@ -409,19 +482,37 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     }
 
     const archived = await prisma.$transaction(async (tx) => {
-      const row = await tx.task.update({
-        where: { id: taskId },
+      const versionFilter: Prisma.TaskWhereInput =
+        query.expectedVersion !== undefined ? { version: query.expectedVersion } : {};
+      const updateResult = await tx.task.updateMany({
+        where: { id: taskId, ...versionFilter },
         data: {
-          status: "archived",
+          status: TaskStatus.archived,
           archivedAt: new Date(),
           archivedBy: request.user!.id,
+          version: { increment: 1 },
         },
       });
+      if (updateResult.count === 0) {
+        throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Task version mismatch" });
+      }
+      const row = await tx.task.findUniqueOrThrow({ where: { id: taskId } });
       await persistMutationOperationalEventTx({
         db: tx,
         request,
         entityType: "tasks",
         entityId: row.id,
+      });
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "Task",
+        entityId: row.id,
+        eventType: "task.archived",
+        before: task,
+        after: row,
+        facilityId: row.facilityId,
+        clinicId: row.clinicId,
       });
       return row;
     });

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { ApiError } from "./errors.js";
+import { recordIdempotencyReplay } from "./metrics.js";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -53,6 +54,7 @@ export async function beginIdempotentMutation<T>(params: {
     routeKey,
     body: params.payload ?? null,
     actorUserId: params.request.user?.id || null,
+    facilityId: params.request.user?.facilityId || null,
   });
 
   const existing = await params.db.idempotencyRecord.findUnique({
@@ -78,6 +80,7 @@ export async function beginIdempotentMutation<T>(params: {
     });
   }
 
+  recordIdempotencyReplay(routeKey);
   return {
     kind: "replay",
     key,

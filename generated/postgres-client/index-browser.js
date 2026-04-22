@@ -156,7 +156,13 @@ exports.Prisma.PatientScalarFieldEnum = {
   sourcePatientId: 'sourcePatientId',
   normalizedSourcePatientId: 'normalizedSourcePatientId',
   displayName: 'displayName',
+  displayNameCipher: 'displayNameCipher',
   dateOfBirth: 'dateOfBirth',
+  dateOfBirthCipher: 'dateOfBirthCipher',
+  cipherKeyId: 'cipherKeyId',
+  archivedAt: 'archivedAt',
+  archivedByUserId: 'archivedByUserId',
+  archivedReason: 'archivedReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -185,6 +191,22 @@ exports.Prisma.PatientIdentityReviewScalarFieldEnum = {
   status: 'status',
   matchedPatientIdsJson: 'matchedPatientIdsJson',
   contextJson: 'contextJson',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PatientConsentScalarFieldEnum = {
+  id: 'id',
+  facilityId: 'facilityId',
+  patientId: 'patientId',
+  consentType: 'consentType',
+  grantedAt: 'grantedAt',
+  revokedAt: 'revokedAt',
+  grantedByUserId: 'grantedByUserId',
+  revokedByUserId: 'revokedByUserId',
+  source: 'source',
+  documentRef: 'documentRef',
+  notes: 'notes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -298,7 +320,8 @@ exports.Prisma.TemplateScalarFieldEnum = {
   type: 'type',
   jsonSchema: 'jsonSchema',
   uiSchema: 'uiSchema',
-  requiredFields: 'requiredFields'
+  requiredFields: 'requiredFields',
+  schemaVersion: 'schemaVersion'
 };
 
 exports.Prisma.ReasonClinicAssignmentScalarFieldEnum = {
@@ -397,6 +420,9 @@ exports.Prisma.EncounterScalarFieldEnum = {
   arrivalNotes: 'arrivalNotes',
   closureType: 'closureType',
   closureNotes: 'closureNotes',
+  archivedAt: 'archivedAt',
+  archivedByUserId: 'archivedByUserId',
+  archivedReason: 'archivedReason',
   roomingData: 'roomingData',
   clinicianData: 'clinicianData',
   checkoutData: 'checkoutData',
@@ -411,6 +437,21 @@ exports.Prisma.StatusChangeEventScalarFieldEnum = {
   changedAt: 'changedAt',
   changedByUserId: 'changedByUserId',
   reasonCode: 'reasonCode'
+};
+
+exports.Prisma.EntityEventScalarFieldEnum = {
+  id: 'id',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  eventType: 'eventType',
+  actorUserId: 'actorUserId',
+  facilityId: 'facilityId',
+  clinicId: 'clinicId',
+  requestId: 'requestId',
+  beforeJson: 'beforeJson',
+  afterJson: 'afterJson',
+  metadataJson: 'metadataJson',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.AlertStateScalarFieldEnum = {
@@ -450,6 +491,7 @@ exports.Prisma.TaskScalarFieldEnum = {
   archivedAt: 'archivedAt',
   archivedBy: 'archivedBy',
   notes: 'notes',
+  version: 'version',
   updatedAt: 'updatedAt'
 };
 
@@ -488,6 +530,9 @@ exports.Prisma.RevenueCaseScalarFieldEnum = {
   athenaLastSyncAt: 'athenaLastSyncAt',
   closeoutState: 'closeoutState',
   closedAt: 'closedAt',
+  archivedAt: 'archivedAt',
+  archivedByUserId: 'archivedByUserId',
+  archivedReason: 'archivedReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -603,6 +648,7 @@ exports.Prisma.RevenueCycleSettingsScalarFieldEnum = {
   serviceCatalogJson: 'serviceCatalogJson',
   chargeScheduleJson: 'chargeScheduleJson',
   reimbursementRulesJson: 'reimbursementRulesJson',
+  schemaVersion: 'schemaVersion',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -680,6 +726,8 @@ exports.Prisma.RoomIssueScalarFieldEnum = {
   taskId: 'taskId',
   sourceModule: 'sourceModule',
   metadataJson: 'metadataJson',
+  version: 'version',
+  updatedAt: 'updatedAt',
   createdAt: 'createdAt',
   createdByUserId: 'createdByUserId',
   resolvedAt: 'resolvedAt',
@@ -983,6 +1031,12 @@ exports.TaskSourceType = exports.$Enums.TaskSourceType = {
   ProviderClarification: 'ProviderClarification'
 };
 
+exports.TaskStatus = exports.$Enums.TaskStatus = {
+  open: 'open',
+  completed: 'completed',
+  archived: 'archived'
+};
+
 exports.RevenueStatus = exports.$Enums.RevenueStatus = {
   FinancialReadinessNeeded: 'FinancialReadinessNeeded',
   FinanciallyCleared: 'FinanciallyCleared',
@@ -1150,6 +1204,7 @@ exports.Prisma.ModelName = {
   Patient: 'Patient',
   PatientAlias: 'PatientAlias',
   PatientIdentityReview: 'PatientIdentityReview',
+  PatientConsent: 'PatientConsent',
   Clinic: 'Clinic',
   Provider: 'Provider',
   UserRole: 'UserRole',
@@ -1168,6 +1223,7 @@ exports.Prisma.ModelName = {
   IncomingImportIssue: 'IncomingImportIssue',
   Encounter: 'Encounter',
   StatusChangeEvent: 'StatusChangeEvent',
+  EntityEvent: 'EntityEvent',
   AlertState: 'AlertState',
   Task: 'Task',
   RevenueCase: 'RevenueCase',
