@@ -850,7 +850,7 @@ model Task {
   archivedBy       String?
   notes            String?
   version          Int             @default(0)
-  updatedAt        DateTime        @updatedAt
+  updatedAt        DateTime        @default(now()) @updatedAt
 
   encounter    Encounter?   @relation(fields: [encounterId], references: [id], onDelete: SetNull)
   room         ClinicRoom?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
