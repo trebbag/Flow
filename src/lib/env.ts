@@ -20,7 +20,7 @@ const envSchema = z.object({
   AUTH_PROOF_HEADER_SECRET: z.string().trim().optional(),
   AUTH_PROOF_HMAC_SECRET: z.string().trim().optional(),
   AUTH_PROOF_HMAC_MAX_SKEW_SECONDS: z.coerce.number().int().positive().default(300),
-  AUTH_PROOF_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  AUTH_PROOF_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   AUTH_PROOF_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   AUTH_ALLOW_IMPLICIT_ADMIN: booleanish.default(false),
   ENTRA_STRICT_MODE: booleanish.optional(),
