@@ -39,6 +39,12 @@ const targetClinicName =
   process.env.FRONTEND_TEST_CLINIC_NAME ||
   process.env.VITE_TEST_CLINIC_NAME ||
   "";
+const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
+const SAFE_RETRY_METHODS = new Set(["GET", "HEAD"]);
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function authHeaders({ userId, role, facilityId } = {}) {
   const headers = {};
@@ -71,30 +77,60 @@ function authHeaders({ userId, role, facilityId } = {}) {
 }
 
 async function request(path, { method = "GET", body, auth = null } = {}) {
-  const headers = auth ? authHeaders(auth === true ? undefined : auth) : {};
-  if (body) {
-    headers["content-type"] = "application/json";
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const maxAttempts = SAFE_RETRY_METHODS.has(normalizedMethod) ? 5 : 1;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const headers = auth ? authHeaders(auth === true ? undefined : auth) : {};
+    if (body) {
+      headers["content-type"] = "application/json";
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}${path}`, {
+        method: normalizedMethod,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const raw = await response.text();
+      let parsed = raw;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch {
+        // preserve raw body
+      }
+
+      if (response.ok) {
+        return parsed;
+      }
+
+      const error = new Error(`${response.status} ${response.statusText} for ${path}: ${raw}`);
+      const canRetry = attempt < maxAttempts && TRANSIENT_STATUS_CODES.has(response.status);
+      if (!canRetry) {
+        throw error;
+      }
+      lastError = error;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isNetworkError =
+        /fetch failed/i.test(message) ||
+        /ECONNRESET/i.test(message) ||
+        /ECONNREFUSED/i.test(message) ||
+        /ETIMEDOUT/i.test(message) ||
+        /socket hang up/i.test(message);
+      const canRetry = attempt < maxAttempts && SAFE_RETRY_METHODS.has(normalizedMethod) && isNetworkError;
+      if (!canRetry) {
+        throw error;
+      }
+      lastError = error;
+    }
+
+    await delay(attempt * 1_500);
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const raw = await response.text();
-  let parsed = raw;
-  try {
-    parsed = raw ? JSON.parse(raw) : null;
-  } catch {
-    // preserve raw body
-  }
-
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText} for ${path}: ${raw}`);
-  }
-
-  return parsed;
+  throw lastError;
 }
 
 function findRoleScopedUser(users, { role, facilityId, clinicId }) {

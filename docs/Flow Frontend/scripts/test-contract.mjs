@@ -31,6 +31,12 @@ const bearerToken =
   "";
 const hasProofAuth = proofUserId.trim().length > 0 && proofSecret.trim().length > 0;
 const hasBearerToken = bearerToken.trim().length > 0;
+const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
+const SAFE_RETRY_METHODS = new Set(["GET", "HEAD"]);
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function dateIso() {
   const now = new Date();
@@ -40,33 +46,64 @@ function dateIso() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-async function request(path, { auth = false } = {}) {
-  const headers = {};
-  if (auth) {
-    if (hasProofAuth) {
-      headers["x-proof-user-id"] = proofUserId.trim();
-      headers["x-proof-role"] = proofRole;
-      headers["x-proof-secret"] = proofSecret.trim();
-    } else if (hasBearerToken) {
-      headers.authorization = `Bearer ${bearerToken.trim()}`;
-    } else if (devUserId) {
-      headers["x-dev-user-id"] = devUserId;
-      headers["x-dev-role"] = devRole;
+async function request(path, { auth = false, method = "GET" } = {}) {
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const maxAttempts = SAFE_RETRY_METHODS.has(normalizedMethod) ? 5 : 1;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const headers = {};
+    if (auth) {
+      if (hasProofAuth) {
+        headers["x-proof-user-id"] = proofUserId.trim();
+        headers["x-proof-role"] = proofRole;
+        headers["x-proof-secret"] = proofSecret.trim();
+      } else if (hasBearerToken) {
+        headers.authorization = `Bearer ${bearerToken.trim()}`;
+      } else if (devUserId) {
+        headers["x-dev-user-id"] = devUserId;
+        headers["x-dev-role"] = devRole;
+      }
     }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}${path}`, { method: normalizedMethod, headers });
+      const raw = await response.text();
+      let parsed = raw;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch {
+        // keep raw body
+      }
+      if (response.ok) {
+        return parsed;
+      }
+
+      const error = new Error(`${response.status} ${response.statusText} for ${path}: ${raw}`);
+      const canRetry = attempt < maxAttempts && TRANSIENT_STATUS_CODES.has(response.status);
+      if (!canRetry) {
+        throw error;
+      }
+      lastError = error;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isNetworkError =
+        /fetch failed/i.test(message) ||
+        /ECONNRESET/i.test(message) ||
+        /ECONNREFUSED/i.test(message) ||
+        /ETIMEDOUT/i.test(message) ||
+        /socket hang up/i.test(message);
+      const canRetry = attempt < maxAttempts && SAFE_RETRY_METHODS.has(normalizedMethod) && isNetworkError;
+      if (!canRetry) {
+        throw error;
+      }
+      lastError = error;
+    }
+
+    await delay(attempt * 1_500);
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, { headers });
-  const raw = await response.text();
-  let parsed = raw;
-  try {
-    parsed = raw ? JSON.parse(raw) : null;
-  } catch {
-    // keep raw body
-  }
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText} for ${path}: ${raw}`);
-  }
-  return parsed;
+  throw lastError;
 }
 
 async function main() {
