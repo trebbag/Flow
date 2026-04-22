@@ -20,6 +20,7 @@ import { requireRoles } from "../lib/auth.js";
 import { clinicDateKeyNow } from "../lib/clinic-time.js";
 import { withIdempotentMutation } from "../lib/idempotency.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
+import { booleanish } from "../lib/zod-helpers.js";
 import {
   buildRevenueCaseList,
   buildRevenueExpectationSummary,
@@ -58,11 +59,11 @@ const listRevenueCasesSchema = z
     dayBucket: z.nativeEnum(RevenueDayBucket).optional(),
     workQueue: z.nativeEnum(RevenueWorkQueue).optional(),
     search: z.string().optional(),
-    mine: z.coerce.boolean().optional(),
+    mine: booleanish.optional(),
     from: z.string().optional(),
     to: z.string().optional(),
-    includeCases: z.coerce.boolean().optional(),
-    legacyArray: z.coerce.boolean().optional(),
+    includeCases: booleanish.optional(),
+    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 

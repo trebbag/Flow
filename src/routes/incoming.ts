@@ -8,6 +8,7 @@ import { ApiError, requireCondition } from "../lib/errors.js";
 import { normalizeDate, parseAppointmentAt, dateRangeForDay } from "../lib/dates.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
+import { booleanish } from "../lib/zod-helpers.js";
 import { ensurePatientRecord, extractPatientIdentityHints } from "../lib/patients.js";
 import {
   normalizeIncomingIssueNormalizedJson,
@@ -76,7 +77,7 @@ const listIncomingSchema = z
     date: z.string().optional(),
     includeCheckedIn: z.string().optional(),
     includeInvalid: z.string().optional(),
-    legacyArray: z.coerce.boolean().optional(),
+    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -85,7 +86,7 @@ const listIncomingPendingSchema = z
     facilityId: z.string().uuid().optional(),
     clinicId: z.string().uuid().optional(),
     date: z.string().optional(),
-    legacyArray: z.coerce.boolean().optional(),
+    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { booleanish } from "./zod-helpers.js";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -12,17 +13,17 @@ const envSchema = z.object({
   SAFETY_WORD: z.string().min(3).default("ANCHOR"),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_WINDOW: z.string().default("1 minute"),
-  TRUST_PROXY: z.coerce.boolean().default(false),
+  TRUST_PROXY: booleanish.default(false),
   LOG_LEVEL: z.string().trim().default("info"),
   AUTH_MODE: z.enum(["dev_header", "jwt", "hybrid"]).optional(),
-  AUTH_ALLOW_DEV_HEADERS: z.coerce.boolean().optional(),
+  AUTH_ALLOW_DEV_HEADERS: booleanish.optional(),
   AUTH_PROOF_HEADER_SECRET: z.string().trim().optional(),
   AUTH_PROOF_HMAC_SECRET: z.string().trim().optional(),
   AUTH_PROOF_HMAC_MAX_SKEW_SECONDS: z.coerce.number().int().positive().default(300),
   AUTH_PROOF_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
   AUTH_PROOF_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
-  AUTH_ALLOW_IMPLICIT_ADMIN: z.coerce.boolean().default(false),
-  ENTRA_STRICT_MODE: z.coerce.boolean().optional(),
+  AUTH_ALLOW_IMPLICIT_ADMIN: booleanish.default(false),
+  ENTRA_STRICT_MODE: booleanish.optional(),
   ENTRA_TENANT_ID: z.string().trim().optional(),
   ENTRA_GRAPH_API_BASE_URL: z.string().trim().default("https://graph.microsoft.com/v1.0"),
   ENTRA_GRAPH_SCOPE: z.string().trim().default("https://graph.microsoft.com/.default"),

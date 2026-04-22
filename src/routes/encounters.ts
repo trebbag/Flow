@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
 import { clinicNow } from "../lib/clinic-time.js";
+import { booleanish } from "../lib/zod-helpers.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { withIdempotentMutation } from "../lib/idempotency.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
@@ -123,7 +124,7 @@ const listEncountersSchema = z
     status: z.nativeEnum(EncounterStatus).optional(),
     assignedMaUserId: z.string().uuid().optional(),
     date: z.string().optional(),
-    legacyArray: z.coerce.boolean().optional(),
+    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 

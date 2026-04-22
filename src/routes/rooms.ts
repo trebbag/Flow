@@ -19,6 +19,7 @@ import { requireRoles } from "../lib/auth.js";
 import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { recordEntityEventTx } from "../lib/entity-events.js";
+import { booleanish } from "../lib/zod-helpers.js";
 import {
   getPreRoomingAvailability,
   getRoomDetail,
@@ -32,7 +33,7 @@ import {
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const roomsLiveQuerySchema = z.object({
-  mine: z.coerce.boolean().optional(),
+  mine: booleanish.optional(),
   clinicId: z.string().uuid().optional()
 });
 
@@ -86,7 +87,7 @@ const issueQuerySchema = z.object({
   roomId: z.string().uuid().optional(),
   clinicId: z.string().uuid().optional(),
   status: z.nativeEnum(RoomIssueStatus).optional(),
-  includeResolved: z.coerce.boolean().optional()
+  includeResolved: booleanish.optional()
 });
 
 const checklistRunSchema = z.object({

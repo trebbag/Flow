@@ -5672,6 +5672,14 @@ describe("Flow backend core relationships", () => {
         }),
       ]),
     );
+
+    const dashboardWithoutCasesFlag = await app.inject({
+      method: "GET",
+      url: `/dashboard/revenue-cycle?clinicId=${ctx.clinic.id}&from=${DateTime.now().toISODate()}&to=${DateTime.now().toISODate()}&includeCases=false`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+    });
+    expect(dashboardWithoutCasesFlag.statusCode).toBe(200);
+    expect(dashboardWithoutCasesFlag.json().cases).toBeUndefined();
   });
 
   it("normalizes checkout collection tracking into the revenue case", async () => {
