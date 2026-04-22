@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { buildSignedProofHeaders } from "./proof-header-signing.js";
 
 type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "OfficeManager" | "RevenueCycle";
 
@@ -14,6 +15,7 @@ type AuthActor =
       role: RoleName;
       userId: string;
       proofSecret: string;
+      proofHmacSecret?: string;
     }
   | {
       kind: "dev";
@@ -47,7 +49,15 @@ function roleTokenEnvKey(role: RoleName) {
   return `STAGING_ROLE_TOKEN_${role.toUpperCase()}`;
 }
 
-function headersFor(actor: AuthActor, facilityId?: string) {
+async function headersFor(
+  actor: AuthActor,
+  options: {
+    facilityId?: string;
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    path?: string;
+    body?: unknown;
+  } = {}
+) {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     accept: "application/json"
@@ -55,15 +65,25 @@ function headersFor(actor: AuthActor, facilityId?: string) {
   if (actor.kind === "bearer") {
     headers.authorization = `Bearer ${actor.token}`;
   } else if (actor.kind === "proof") {
-    headers["x-proof-user-id"] = actor.userId;
-    headers["x-proof-role"] = actor.role;
-    headers["x-proof-secret"] = actor.proofSecret;
+    Object.assign(
+      headers,
+      await buildSignedProofHeaders({
+        userId: actor.userId,
+        role: actor.role,
+        proofSecret: actor.proofSecret,
+        proofHmacSecret: actor.proofHmacSecret,
+        method: options.method,
+        path: options.path || "/",
+        body: options.body,
+        facilityId: options.facilityId
+      })
+    );
   } else {
     headers["x-dev-user-id"] = actor.userId;
     headers["x-dev-role"] = actor.role;
   }
-  if (facilityId) {
-    headers["x-facility-id"] = facilityId;
+  if (options.facilityId) {
+    headers["x-facility-id"] = options.facilityId;
   }
   return headers;
 }
@@ -81,7 +101,12 @@ async function requestJson<T>(
   const url = `${apiBaseUrl.replace(/\/$/, "")}${pathname}`;
   const response = await fetch(url, {
     method: options.method || "GET",
-    headers: headersFor(actor, options.facilityId),
+    headers: await headersFor(actor, {
+      facilityId: options.facilityId,
+      method: options.method,
+      path: pathname,
+      body: options.body
+    }),
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
@@ -302,6 +327,8 @@ async function main() {
     ((process.env.STAGING_PROOF_ROLE || process.env.STAGING_FRONTEND_PROOF_ROLE || "Admin").trim() || "Admin") as RoleName;
   const proofSecret =
     (process.env.STAGING_PROOF_SECRET || process.env.STAGING_FRONTEND_PROOF_SECRET || "").trim();
+  const proofHmacSecret =
+    (process.env.STAGING_PROOF_HMAC_SECRET || process.env.STAGING_FRONTEND_PROOF_HMAC_SECRET || "").trim();
 
   const missing: string[] = [];
   if (!apiBaseUrl) {
@@ -309,6 +336,9 @@ async function main() {
   }
   if (!adminBearer && !devUserId && !(proofUserId && proofSecret)) {
     missing.push("Provide STAGING_PROOF_USER_ID + STAGING_PROOF_SECRET, STAGING_FRONTEND_BEARER_TOKEN, or STAGING_VITE_DEV_USER_ID");
+  }
+  if (proofUserId && proofSecret && !proofHmacSecret) {
+    missing.push("Provide STAGING_PROOF_HMAC_SECRET (or STAGING_FRONTEND_PROOF_HMAC_SECRET) for signed proof-header requests");
   }
 
   const authMode = proofUserId && proofSecret
@@ -325,7 +355,7 @@ async function main() {
 
   if (missing.length === 0) {
     const adminActor: AuthActor = proofUserId && proofSecret
-      ? { kind: "proof", role: proofRole, userId: proofUserId, proofSecret }
+      ? { kind: "proof", role: proofRole, userId: proofUserId, proofSecret, proofHmacSecret }
       : adminBearer
         ? { kind: "bearer", role: "Admin", token: adminBearer }
         : { kind: "dev", role: devRole, userId: devUserId };
@@ -369,7 +399,7 @@ async function main() {
           results.push(
             await probeRoleFacilitySwitch({
               apiBaseUrl,
-              actor: { kind: "proof", role, userId, proofSecret }
+              actor: { kind: "proof", role, userId, proofSecret, proofHmacSecret }
             })
           );
         }

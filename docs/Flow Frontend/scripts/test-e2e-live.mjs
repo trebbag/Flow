@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { buildSignedProofHeaders } from "./proof-header-signing.mjs";
 
 const apiBaseUrl =
   process.env.VITE_API_BASE_URL ||
@@ -25,6 +26,10 @@ const proofSecret =
   process.env.VITE_PROOF_SECRET ||
   process.env.FRONTEND_PROOF_SECRET ||
   "";
+const proofHmacSecret =
+  process.env.VITE_PROOF_HMAC_SECRET ||
+  process.env.FRONTEND_PROOF_HMAC_SECRET ||
+  "";
 const bearerToken =
   process.env.VITE_BEARER_TOKEN ||
   process.env.FRONTEND_BEARER_TOKEN ||
@@ -46,16 +51,19 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function authHeaders({ userId, role, facilityId } = {}) {
+async function authHeaders({ userId, role, facilityId, method = "GET", path = "/", body } = {}) {
   const headers = {};
   if (hasProofAuth) {
-    headers["x-proof-user-id"] = proofUserId.trim();
-    headers["x-proof-role"] = role || proofRole;
-    headers["x-proof-secret"] = proofSecret.trim();
-    if (facilityId) {
-      headers["x-facility-id"] = facilityId;
-    }
-    return headers;
+    return buildSignedProofHeaders({
+      userId: proofUserId.trim(),
+      role: role || proofRole,
+      proofSecret: proofSecret.trim(),
+      proofHmacSecret,
+      method,
+      path,
+      body,
+      facilityId,
+    });
   }
   if (hasBearerToken) {
     headers.authorization = `Bearer ${bearerToken.trim()}`;
@@ -82,7 +90,14 @@ async function request(path, { method = "GET", body, auth = null } = {}) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const headers = auth ? authHeaders(auth === true ? undefined : auth) : {};
+    const headers = auth
+      ? await authHeaders({
+          ...(auth === true ? undefined : auth),
+          method: normalizedMethod,
+          path,
+          body,
+        })
+      : {};
     if (body) {
       headers["content-type"] = "application/json";
     }

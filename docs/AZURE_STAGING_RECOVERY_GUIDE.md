@@ -134,6 +134,14 @@ node dist/server.js
 
 Do not use `pnpm start` in Azure staging for this repo.
 
+The repo-managed staging deploy now sets the startup command to:
+
+```text
+bash /home/site/wwwroot/azure-startup.sh
+```
+
+That wrapper restores a usable local `node_modules` tree from `node_modules.tar.gz` before starting `node dist/server.js`.
+
 ## Step 5b: Match The Node Runtime Version
 
 If Azure `Log stream` shows an error like:
@@ -262,7 +270,7 @@ Fix:
 2. rerun `Azure App Service Staging Deploy`
 3. verify `/health` again after deploy
 
-The current backend workflow now builds a portable production dependency tree for Azure and then copies the generated Prisma client artifacts into the package.
+The current backend workflow now builds a portable production dependency tree for Azure, copies the generated Prisma client artifacts into the package, and uses `azure-startup.sh` to restore a local dependency tree if App Service leaves only `node_modules.tar.gz` available at boot.
 
 If this error is replaced by a different startup error after redeploy, that is progress: the package-resolution problem is gone and the next issue is in runtime config or app startup.
 

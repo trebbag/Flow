@@ -82,8 +82,19 @@ jobs:
             --query "[?name=='AUTH_PROOF_HEADER_SECRET'].value | [0]" \
             -o tsv)"
 
+          AUTH_PROOF_HMAC_SECRET="$(az webapp config appsettings list \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --query "[?name=='AUTH_PROOF_HMAC_SECRET'].value | [0]" \
+            -o tsv)"
+
           if [[ -z "${AUTH_PROOF_HEADER_SECRET}" ]]; then
             echo "AUTH_PROOF_HEADER_SECRET is not configured on ${AZURE_WEBAPP_NAME}"
+            exit 1
+          fi
+
+          if [[ -z "${AUTH_PROOF_HMAC_SECRET}" ]]; then
+            echo "AUTH_PROOF_HMAC_SECRET is not configured on ${AZURE_WEBAPP_NAME}"
             exit 1
           fi
 
@@ -133,6 +144,7 @@ jobs:
           fi
 
           echo "::add-mask::${AUTH_PROOF_HEADER_SECRET}"
+          echo "::add-mask::${AUTH_PROOF_HMAC_SECRET}"
           echo "::add-mask::${POSTGRES_DATABASE_URL}"
           {
             echo "VITE_PROOF_USER_ID=${STAGING_PROOF_USER_ID}"
@@ -141,6 +153,8 @@ jobs:
             echo "FRONTEND_PROOF_ROLE=${STAGING_PROOF_ROLE:-Admin}"
             echo "VITE_PROOF_SECRET=${AUTH_PROOF_HEADER_SECRET}"
             echo "FRONTEND_PROOF_SECRET=${AUTH_PROOF_HEADER_SECRET}"
+            echo "VITE_PROOF_HMAC_SECRET=${AUTH_PROOF_HMAC_SECRET}"
+            echo "FRONTEND_PROOF_HMAC_SECRET=${AUTH_PROOF_HMAC_SECRET}"
             echo "VITE_ENABLE_DEV_HEADERS=false"
             echo "VITE_ENABLE_DEV_HEADER_LOGIN=false"
           } >> "$GITHUB_ENV"

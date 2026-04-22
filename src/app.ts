@@ -50,6 +50,8 @@ export function buildApp() {
       "x-proof-user-id",
       "x-proof-role",
       "x-proof-secret",
+      "x-proof-timestamp",
+      "x-proof-signature",
       "x-facility-id",
       "x-correlation-id",
       "Idempotency-Key"

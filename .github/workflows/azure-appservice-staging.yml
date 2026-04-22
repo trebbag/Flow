@@ -118,6 +118,7 @@ jobs:
           mkdir -p "${PACKAGE_PATH}"
 
           cp package.json "${PACKAGE_PATH}/"
+          cp scripts/azure-startup.sh "${PACKAGE_PATH}/azure-startup.sh"
           cp -R dist "${PACKAGE_PATH}/dist"
           cp -R generated "${PACKAGE_PATH}/generated"
           cp -R prisma "${PACKAGE_PATH}/prisma"
@@ -149,3 +150,10 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: ${{ env.PACKAGE_PATH }}
+
+      - name: Configure startup command
+        run: |
+          az webapp config set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --startup-file "bash /home/site/wwwroot/azure-startup.sh"

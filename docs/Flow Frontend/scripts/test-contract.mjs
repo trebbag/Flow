@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { buildSignedProofHeaders } from "./proof-header-signing.mjs";
 
 const apiBaseUrl =
   process.env.VITE_API_BASE_URL ||
@@ -24,6 +25,10 @@ const proofRole =
 const proofSecret =
   process.env.VITE_PROOF_SECRET ||
   process.env.FRONTEND_PROOF_SECRET ||
+  "";
+const proofHmacSecret =
+  process.env.VITE_PROOF_HMAC_SECRET ||
+  process.env.FRONTEND_PROOF_HMAC_SECRET ||
   "";
 const bearerToken =
   process.env.VITE_BEARER_TOKEN ||
@@ -55,9 +60,17 @@ async function request(path, { auth = false, method = "GET" } = {}) {
     const headers = {};
     if (auth) {
       if (hasProofAuth) {
-        headers["x-proof-user-id"] = proofUserId.trim();
-        headers["x-proof-role"] = proofRole;
-        headers["x-proof-secret"] = proofSecret.trim();
+        Object.assign(
+          headers,
+          await buildSignedProofHeaders({
+            userId: proofUserId.trim(),
+            role: proofRole,
+            proofSecret: proofSecret.trim(),
+            proofHmacSecret,
+            method: normalizedMethod,
+            path,
+          }),
+        );
       } else if (hasBearerToken) {
         headers.authorization = `Bearer ${bearerToken.trim()}`;
       } else if (devUserId) {

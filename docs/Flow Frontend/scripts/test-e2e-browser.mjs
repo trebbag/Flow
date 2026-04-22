@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { buildSignedProofHeaders } from "./proof-header-signing.mjs";
 
 const apiBaseUrl =
   process.env.VITE_API_BASE_URL ||
@@ -26,6 +27,10 @@ const proofRole =
 const proofSecret =
   process.env.VITE_PROOF_SECRET ||
   process.env.FRONTEND_PROOF_SECRET ||
+  "";
+const proofHmacSecret =
+  process.env.VITE_PROOF_HMAC_SECRET ||
+  process.env.FRONTEND_PROOF_HMAC_SECRET ||
   "";
 const bearerToken =
   process.env.VITE_BEARER_TOKEN ||
@@ -76,13 +81,17 @@ function clinicFutureSlot(minutesAhead = 90, timeZone = "America/New_York") {
   };
 }
 
-function authHeaders() {
+async function authHeaders(method = "GET", path = "/", body) {
   if (hasProofAuth) {
-    return {
-      "x-proof-user-id": proofUserId.trim(),
-      "x-proof-role": proofRole,
-      "x-proof-secret": proofSecret.trim(),
-    };
+    return buildSignedProofHeaders({
+      userId: proofUserId.trim(),
+      role: proofRole,
+      proofSecret: proofSecret.trim(),
+      proofHmacSecret,
+      method,
+      path,
+      body,
+    });
   }
   if (hasBearerToken) {
     return {
@@ -242,7 +251,7 @@ async function request(path, { method = "GET", body, auth = false } = {}) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const headers = auth ? authHeaders() : {};
+    const headers = auth ? await authHeaders(normalizedMethod, path, body) : {};
     if (body) {
       headers["content-type"] = "application/json";
     }
@@ -548,6 +557,7 @@ async function main() {
           role: resolvedRole,
           userId: proofUserId.trim(),
           proofSecret: proofSecret.trim(),
+          proofHmacSecret: proofHmacSecret.trim(),
           facilityId: originalFacilityId,
         }
       : hasBearerToken

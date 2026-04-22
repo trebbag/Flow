@@ -60,6 +60,7 @@ import type {
 export type { AdminEncounterRecoveryRow } from "./types";
 import { buildHeaders, getCurrentSession } from "./auth-session";
 import { acquireMicrosoftAccessToken } from "./microsoft-auth";
+import { buildSignedProofHeaders } from "./proof-header-signing";
 import {
   ADMIN_REFRESH_EVENT,
   FACILITY_CONTEXT_CHANGED_EVENT,
@@ -101,6 +102,11 @@ const proofSecret =
   nodeEnv.VITE_PROOF_SECRET ||
   viteEnv.FRONTEND_PROOF_SECRET ||
   nodeEnv.FRONTEND_PROOF_SECRET;
+const proofHmacSecret =
+  viteEnv.VITE_PROOF_HMAC_SECRET ||
+  nodeEnv.VITE_PROOF_HMAC_SECRET ||
+  viteEnv.FRONTEND_PROOF_HMAC_SECRET ||
+  nodeEnv.FRONTEND_PROOF_HMAC_SECRET;
 const enableDevHeadersRaw = viteEnv.VITE_ENABLE_DEV_HEADERS ?? nodeEnv.VITE_ENABLE_DEV_HEADERS;
 const enableDevHeaders =
   String(enableDevHeadersRaw ?? (!isProductionRuntime || Boolean(devUserId) ? "true" : "false")).toLowerCase() === "true";
@@ -352,12 +358,28 @@ async function resolveAuthHeaders(extraHeaders?: Record<string, string>) {
 }
 
 async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const headers = await resolveAuthHeaders((options.headers as Record<string, string>) || {});
+  const method = String(options.method || "GET").toUpperCase();
+  const session = getCurrentSession();
+  let headers = await resolveAuthHeaders((options.headers as Record<string, string>) || {});
   const hasJsonBody = options.body !== undefined && options.body !== null && !(options.body instanceof FormData);
   if (hasJsonBody && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  const method = String(options.method || "GET").toUpperCase();
+  if (headers["x-proof-user-id"] && headers["x-proof-role"] && headers["x-proof-secret"]) {
+    headers = {
+      ...headers,
+      ...(await buildSignedProofHeaders({
+        userId: headers["x-proof-user-id"],
+        role: headers["x-proof-role"],
+        proofSecret: headers["x-proof-secret"],
+        proofHmacSecret: session?.proofHmacSecret || proofHmacSecret,
+        method,
+        path,
+        body: options.body,
+        facilityId: headers["x-facility-id"],
+      })),
+    };
+  }
   const idempotencyKey = resolveMutationIdempotencyKey(path, options);
   if (idempotencyKey && !headers["Idempotency-Key"]) {
     headers["Idempotency-Key"] = idempotencyKey;

@@ -353,8 +353,10 @@ Instead:
 4. Set it to:
 
 ```text
-node dist/server.js
+bash /home/site/wwwroot/azure-startup.sh
 ```
+
+The repo-managed Azure package includes `azure-startup.sh`, which restores a local `node_modules` tree from `node_modules.tar.gz` before running `node dist/server.js`.
 
 5. Save the change.
 

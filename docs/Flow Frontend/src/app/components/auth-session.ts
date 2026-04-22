@@ -9,6 +9,7 @@ export type AuthSession = {
   userId?: string;
   token?: string;
   proofSecret?: string;
+  proofHmacSecret?: string;
   facilityId?: string;
   accountHomeId?: string;
   username?: string;

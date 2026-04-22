@@ -190,6 +190,7 @@ jobs:
           rm -rf "${PACKAGE_PATH}"
           mkdir -p "${PACKAGE_PATH}"
           cp package.json "${PACKAGE_PATH}/"
+          cp scripts/azure-startup.sh "${PACKAGE_PATH}/azure-startup.sh"
           cp -R dist "${PACKAGE_PATH}/dist"
           cp -R generated "${PACKAGE_PATH}/generated"
           cp -R prisma "${PACKAGE_PATH}/prisma"
@@ -209,6 +210,14 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           slot-name: staging
           package: ${{ env.PACKAGE_PATH }}
+
+      - name: Configure startup command on staging slot
+        run: |
+          az webapp config set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --slot staging \
+            --startup-file "bash /home/site/wwwroot/azure-startup.sh"
 
       - name: Health check staging slot
         id: health

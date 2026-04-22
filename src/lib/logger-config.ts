@@ -2,6 +2,7 @@ export const PHI_REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["x-proof-secret"]',
+  'req.headers["x-proof-signature"]',
   'req.headers["x-dev-user-id"]',
   'req.headers["x-dev-role"]',
   'req.headers["x-proof-user-id"]',

@@ -134,6 +134,8 @@ async function main() {
     (process.env.STAGING_PROOF_ROLE || process.env.STAGING_FRONTEND_PROOF_ROLE || "Admin").trim() || "Admin";
   const stagingProofSecret =
     (process.env.STAGING_PROOF_SECRET || process.env.STAGING_FRONTEND_PROOF_SECRET || "").trim();
+  const stagingProofHmacSecret =
+    (process.env.STAGING_PROOF_HMAC_SECRET || process.env.STAGING_FRONTEND_PROOF_HMAC_SECRET || "").trim();
   const frontendRepoPath = (process.env.FRONTEND_REPO_PATH || "docs/Flow Frontend").trim() || "docs/Flow Frontend";
 
   const missing: string[] = [];
@@ -143,6 +145,11 @@ async function main() {
   if (!stagingBearerToken && !stagingDevUserId && !(stagingProofUserId && stagingProofSecret)) {
     missing.push(
       "Provide durable proof auth (STAGING_PROOF_USER_ID + STAGING_PROOF_SECRET), STAGING_FRONTEND_BEARER_TOKEN, or STAGING_VITE_DEV_USER_ID for authenticated frontend checks.",
+    );
+  }
+  if (stagingProofUserId && stagingProofSecret && !stagingProofHmacSecret) {
+    missing.push(
+      "Proof-header auth is configured, but STAGING_PROOF_HMAC_SECRET (or STAGING_FRONTEND_PROOF_HMAC_SECRET) is missing.",
     );
   }
 
@@ -183,6 +190,8 @@ async function main() {
           VITE_PROOF_ROLE: stagingProofRole,
           FRONTEND_PROOF_SECRET: stagingProofSecret || undefined,
           VITE_PROOF_SECRET: stagingProofSecret || undefined,
+          FRONTEND_PROOF_HMAC_SECRET: stagingProofHmacSecret || undefined,
+          VITE_PROOF_HMAC_SECRET: stagingProofHmacSecret || undefined,
           FRONTEND_BEARER_TOKEN: stagingBearerToken || undefined,
           VITE_BEARER_TOKEN: stagingBearerToken || undefined,
           FRONTEND_DEV_USER_ID: stagingDevUserId || undefined,
@@ -208,6 +217,8 @@ async function main() {
           STAGING_FRONTEND_PROOF_ROLE: stagingProofRole,
           STAGING_PROOF_SECRET: stagingProofSecret || undefined,
           STAGING_FRONTEND_PROOF_SECRET: stagingProofSecret || undefined,
+          STAGING_PROOF_HMAC_SECRET: stagingProofHmacSecret || undefined,
+          STAGING_FRONTEND_PROOF_HMAC_SECRET: stagingProofHmacSecret || undefined,
           STAGING_FRONTEND_BEARER_TOKEN: stagingBearerToken || undefined,
           STAGING_VITE_DEV_USER_ID: stagingDevUserId || undefined,
           STAGING_VITE_DEV_ROLE: stagingDevRole
