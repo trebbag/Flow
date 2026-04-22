@@ -16,7 +16,18 @@ try {
   }
 
   fs.mkdirSync(path.dirname(projectPrismaLink), { recursive: true });
-  fs.rmSync(projectPrismaLink, { recursive: true, force: true });
+  try {
+    const stats = fs.lstatSync(projectPrismaLink);
+    if (stats.isSymbolicLink()) {
+      fs.unlinkSync(projectPrismaLink);
+    } else {
+      fs.rmSync(projectPrismaLink, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
   fs.symlinkSync(generatedPrismaDir, projectPrismaLink, "dir");
   console.info(`[link-prisma-client] Linked ${projectPrismaLink} -> ${generatedPrismaDir}`);
 } catch (error) {

@@ -36,6 +36,12 @@ const hasBearerToken = bearerToken.trim().length > 0;
 
 const previewPort = Number(process.env.FRONTEND_E2E_PORT || 4173);
 const frontendBaseUrl = process.env.FRONTEND_BASE_URL || `http://localhost:${previewPort}`;
+const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
+const SAFE_RETRY_METHODS = new Set(["GET", "HEAD"]);
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function isoDateDaysFromNow(days) {
   const date = new Date();
@@ -231,26 +237,58 @@ function roomCardIsUsableForProof(row) {
 }
 
 async function request(path, { method = "GET", body, auth = false } = {}) {
-  const headers = auth ? authHeaders() : {};
-  if (body) {
-    headers["content-type"] = "application/json";
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const maxAttempts = SAFE_RETRY_METHODS.has(normalizedMethod) ? 5 : 1;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const headers = auth ? authHeaders() : {};
+    if (body) {
+      headers["content-type"] = "application/json";
+    }
+
+    try {
+      const response = await fetch(`${apiBaseUrl}${path}`, {
+        method: normalizedMethod,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const raw = await response.text();
+      let parsed = raw;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch {
+        // keep raw response
+      }
+      if (response.ok) {
+        return parsed;
+      }
+
+      const error = new Error(`${response.status} ${response.statusText} for ${path}: ${raw}`);
+      const canRetry = attempt < maxAttempts && TRANSIENT_STATUS_CODES.has(response.status);
+      if (!canRetry) {
+        throw error;
+      }
+      lastError = error;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isNetworkError =
+        /fetch failed/i.test(message) ||
+        /ECONNRESET/i.test(message) ||
+        /ECONNREFUSED/i.test(message) ||
+        /ETIMEDOUT/i.test(message) ||
+        /socket hang up/i.test(message);
+      const canRetry = attempt < maxAttempts && SAFE_RETRY_METHODS.has(normalizedMethod) && isNetworkError;
+      if (!canRetry) {
+        throw error;
+      }
+      lastError = error;
+    }
+
+    await delay(attempt * 1_500);
   }
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const raw = await response.text();
-  let parsed = raw;
-  try {
-    parsed = raw ? JSON.parse(raw) : null;
-  } catch {
-    // keep raw response
-  }
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText} for ${path}: ${raw}`);
-  }
-  return parsed;
+
+  throw lastError;
 }
 
 async function waitForHttp(url, timeoutMs = 30_000) {
