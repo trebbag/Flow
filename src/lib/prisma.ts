@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { PrismaClient, type Prisma } from "@prisma/client";
+import * as PrismaClientModule from "@prisma/client";
+import type { Prisma, PrismaClient as PrismaClientType } from "@prisma/client";
 import {
   getCurrentFacilityScopeId,
   getCurrentScopedTransaction,
@@ -9,6 +10,8 @@ import {
 
 const sqliteDatabaseUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
 const postgresDatabaseUrl = (process.env.POSTGRES_DATABASE_URL || "").trim();
+const { PrismaClient } = PrismaClientModule;
+type PrismaClient = PrismaClientType;
 type PrismaClientOptions = ConstructorParameters<typeof PrismaClient>[0];
 type PrismaLogConfig = PrismaClientOptions extends { log?: infer T } ? T : never;
 
