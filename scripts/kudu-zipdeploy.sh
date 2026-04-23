@@ -30,25 +30,41 @@ if [[ -z "${publishing_user}" || -z "${publishing_password}" || -z "${scm_uri}" 
   exit 1
 fi
 
-headers_file="$(mktemp)"
-body_file="$(mktemp)"
-trap 'rm -f "${headers_file}" "${body_file}"' EXIT
-
 zipdeploy_url="${scm_uri%/}/api/zipdeploy?isAsync=true&clean=true"
-http_code="$(curl -sS \
-  -D "${headers_file}" \
-  -o "${body_file}" \
-  -w "%{http_code}" \
-  -u "${publishing_user}:${publishing_password}" \
-  -H "Content-Type: application/zip" \
-  --data-binary @"${PACKAGE_ZIP_PATH}" \
-  "${zipdeploy_url}")"
 
-if [[ "${http_code}" != "200" && "${http_code}" != "202" ]]; then
+headers_file=""
+body_file=""
+http_code=""
+for attempt in {1..12}; do
+  rm -f "${headers_file:-}" "${body_file:-}"
+  headers_file="$(mktemp)"
+  body_file="$(mktemp)"
+
+  http_code="$(curl -sS \
+    -D "${headers_file}" \
+    -o "${body_file}" \
+    -w "%{http_code}" \
+    -u "${publishing_user}:${publishing_password}" \
+    -H "Content-Type: application/zip" \
+    --data-binary @"${PACKAGE_ZIP_PATH}" \
+    "${zipdeploy_url}")"
+
+  if [[ "${http_code}" == "200" || "${http_code}" == "202" ]]; then
+    break
+  fi
+
+  if [[ "${http_code}" == "409" && "${attempt}" != "12" ]]; then
+    echo "Kudu deployment is already in progress; retrying ZipDeploy submission (${attempt}/12)."
+    sleep 30
+    continue
+  fi
+
   echo "Kudu ZipDeploy submission failed with HTTP ${http_code}" >&2
   cat "${body_file}" >&2
   exit 1
-fi
+done
+
+trap 'rm -f "${headers_file:-}" "${body_file:-}"' EXIT
 
 deployment_status_url="$(awk 'BEGIN { IGNORECASE=1 } /^Location:/ { sub(/^[^:]+:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit }' "${headers_file}")"
 

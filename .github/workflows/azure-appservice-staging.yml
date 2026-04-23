@@ -145,10 +145,22 @@ jobs:
           mkdir -p "${PACKAGE_PATH}/node_modules/@prisma"
           cp -RL "${PRISMA_CLIENT_DIR}" "${PACKAGE_PATH}/node_modules/@prisma/client"
           cp -RL "${GENERATED_PRISMA_DIR}" "${PACKAGE_PATH}/node_modules/.prisma"
+          tar -C "${PACKAGE_PATH}" -czf "${PACKAGE_PATH}/node_modules.tar.gz" node_modules
+          rm -rf "${PACKAGE_PATH}/node_modules"
+          cat > "${PACKAGE_PATH}/package.json" <<'JSON'
+          {"name":"flow-backend-runtime","private":true,"type":"module"}
+          JSON
 
       - name: Create clean deployment zip
         run: |
           python3 scripts/create-clean-zip.py "${PACKAGE_PATH}" "${PACKAGE_ZIP_PATH}"
+
+      - name: Disable Kudu build automation
+        run: |
+          az webapp config appsettings set \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false
 
       - name: Submit Kudu ZipDeploy
         timeout-minutes: 10
