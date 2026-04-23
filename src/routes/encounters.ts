@@ -268,7 +268,11 @@ async function getClinicianProviderIds(userId: string) {
   return providers.map((provider) => provider.id);
 }
 
-type ScopedRequestUser = Pick<RequestUser, "id" | "role" | "clinicId" | "facilityId">;
+type ScopedRequestUser = Pick<RequestUser, "id" | "role" | "clinicId" | "facilityId" | "activeFacilityId">;
+
+function reenterUserFacilityScope(user: Pick<RequestUser, "facilityId" | "activeFacilityId"> | null | undefined) {
+  enterFacilityScope(user?.activeFacilityId || user?.facilityId || null);
+}
 
 async function assertClinicInUserScope(user: ScopedRequestUser, clinic: { id: string; facilityId: string | null }) {
   if (user.clinicId && clinic.id !== user.clinicId) {
@@ -288,9 +292,7 @@ async function assertClinicInUserScope(user: ScopedRequestUser, clinic: { id: st
 }
 
 async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
-  if (user.facilityId) {
-    enterFacilityScope(user.facilityId);
-  }
+  reenterUserFacilityScope(user);
 
   const clinic = await prisma.clinic.findUnique({
     where: { id: clinicId },
@@ -302,9 +304,7 @@ async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
 }
 
 async function assertEncounterInScope(encounter: { clinicId: string }, user: ScopedRequestUser) {
-  if (user.facilityId) {
-    enterFacilityScope(user.facilityId);
-  }
+  reenterUserFacilityScope(user);
 
   const clinic = await prisma.clinic.findUnique({
     where: { id: encounter.clinicId },
@@ -883,6 +883,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const clinic = await resolveScopedClinic(request.user!, dto.clinicId);
         requireCondition(clinic.status === "active", 400, "Clinic is inactive and cannot be associated with new encounters");
 
@@ -1170,6 +1171,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
   app.get("/encounters", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
     const query = listEncountersSchema.parse(request.query);
     const user = request.user!;
+    reenterUserFacilityScope(user);
     const requestedClinicId = query.clinicId?.trim() || undefined;
     const scopedClinicId =
       requestedClinicId ||
@@ -1212,6 +1214,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
 
   app.get("/encounters/:id", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.MA, RoleName.Clinician, RoleName.FrontDeskCheckOut, RoleName.OfficeManager, RoleName.Admin, RoleName.RevenueCycle) }, async (request) => {
     const encounterId = (request.params as { id: string }).id;
+    reenterUserFacilityScope(request.user!);
 
     await refreshEncounterAlertStates(prisma, {
       encounterIds: [encounterId]
@@ -1320,6 +1323,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
         requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
         await assertEncounterInScope(encounter, request.user!);
@@ -1406,6 +1410,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
         requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
         await assertEncounterInScope(encounter, request.user!);
@@ -1475,6 +1480,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
         requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
         await assertEncounterInScope(encounter, request.user!);
@@ -1606,6 +1612,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
         requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
         await assertEncounterInScope(encounter, request.user!);
@@ -1659,6 +1666,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
         requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
         await assertEncounterInScope(encounter, request.user!);
@@ -1788,6 +1796,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         if (!cancelReasons.includes(dto.reason)) {
           throw new ApiError({ statusCode: 400, code: "INVALID_CANCELLATION_REASON", message: "Invalid cancellation reason" });
         }
