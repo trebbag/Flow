@@ -866,6 +866,10 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
     const dto = incomingRetrySchema.parse(request.body);
     const user = request.user!;
 
+    if (user.facilityId) {
+      enterFacilityScope(user.facilityId);
+    }
+
     const issue = await prisma.incomingImportIssue.findUnique({
       where: { id: issueId },
       include: {
