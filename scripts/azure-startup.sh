@@ -67,6 +67,8 @@ log "node=$(node -v 2>/dev/null || echo missing)"
 log "NODE_ENV=${NODE_ENV:-} AUTH_MODE=${AUTH_MODE:-} AUTH_ALLOW_DEV_HEADERS=${AUTH_ALLOW_DEV_HEADERS:-} AUTH_ALLOW_IMPLICIT_ADMIN=${AUTH_ALLOW_IMPLICIT_ADMIN:-} ENTRA_STRICT_MODE=${ENTRA_STRICT_MODE:-} PORT=${PORT:-}"
 log "node_modules=$(ls -ld "${MODULES_DIR}" 2>/dev/null || echo missing)"
 log "root_node_modules=$(ls -ld /node_modules 2>/dev/null || echo missing)"
+extract_node_modules_if_needed
+
 node --input-type=module <<'EOF'
 import { env } from "./dist/lib/env.js";
 
@@ -80,7 +82,6 @@ console.log(
   `[flow-azure-startup] parsed ENTRA_STRICT_MODE raw=${JSON.stringify(process.env.ENTRA_STRICT_MODE ?? null)} value=${String(env.ENTRA_STRICT_MODE)}`,
 );
 EOF
-extract_node_modules_if_needed
 
 log "Starting Flow backend."
 exec node dist/server.js
