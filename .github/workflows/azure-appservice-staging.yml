@@ -159,6 +159,7 @@ jobs:
             --type zip \
             --clean true \
             --restart true \
+            --async true \
             --track-status false
 
       - name: Configure startup command
