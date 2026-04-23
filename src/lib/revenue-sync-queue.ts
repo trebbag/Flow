@@ -5,6 +5,7 @@ import { prisma } from "./prisma.js";
 import { syncRevenueCaseForEncounter, syncRevenueCasesForScope } from "./revenue-cycle.js";
 import { getRevenueDailyHistoryRollups, listDateKeys } from "./revenue-rollups.js";
 import { clinicDateKeyFromDate, clinicDateKeyNow } from "./clinic-time.js";
+import { runWithFacilityScope } from "./facility-scope.js";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -327,7 +328,7 @@ export async function flushRevenueSyncQueue(db: PrismaClient = prisma) {
       }
 
       try {
-        await processSyncJob(db, job);
+        await runWithFacilityScope(job.facilityId, () => processSyncJob(db, job));
         await db.eventOutbox.updateMany({
           where: { id: { in: job.outboxIds } },
           data: {

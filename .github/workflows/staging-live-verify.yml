@@ -109,33 +109,14 @@ jobs:
             exit 1
           fi
 
-          STAGING_PROOF_USER_ID="$(POSTGRES_DATABASE_URL="${POSTGRES_DATABASE_URL}" node --input-type=module <<'NODE'
-          import pg from "pg";
+          STAGING_PROOF_FIXTURE_JSON="$(POSTGRES_DATABASE_URL="${POSTGRES_DATABASE_URL}" pnpm -s staging:ensure-proof-fixture)"
 
-          const client = new pg.Client({ connectionString: process.env.POSTGRES_DATABASE_URL });
-          await client.connect();
-          const result = await client.query(`
-            select u.id
-            from "User" u
-            join "UserRole" ur on ur."userId" = u.id
-            where ur.role = 'Admin'
-              and lower(u.status) = 'active'
-            order by u."createdAt" desc
-            limit 1
-          `);
-          await client.end();
+          STAGING_PROOF_USER_ID="$(printf '%s' "${STAGING_PROOF_FIXTURE_JSON}" | node -e "const data = JSON.parse(require('fs').readFileSync(0, 'utf8')); process.stdout.write(data.proofUserId || '')")"
+          STAGING_PROOF_CLINIC_ID="$(printf '%s' "${STAGING_PROOF_FIXTURE_JSON}" | node -e "const data = JSON.parse(require('fs').readFileSync(0, 'utf8')); process.stdout.write(data.clinicId || '')")"
+          STAGING_PROOF_CLINIC_NAME="$(printf '%s' "${STAGING_PROOF_FIXTURE_JSON}" | node -e "const data = JSON.parse(require('fs').readFileSync(0, 'utf8')); process.stdout.write(data.clinicName || '')")"
 
-          const row = result.rows[0];
-          if (!row?.id) {
-            process.exit(1);
-          }
-
-          process.stdout.write(row.id);
-          NODE
-          )"
-
-          if [[ -z "${STAGING_PROOF_USER_ID}" ]]; then
-            echo "Unable to resolve an active Admin proof identity from staging data."
+          if [[ -z "${STAGING_PROOF_USER_ID}" || -z "${STAGING_PROOF_CLINIC_ID}" ]]; then
+            echo "Unable to resolve a viable staging proof fixture."
             exit 1
           fi
 
@@ -157,6 +138,10 @@ jobs:
             echo "FRONTEND_PROOF_HMAC_SECRET=${AUTH_PROOF_HMAC_SECRET}"
             echo "VITE_ENABLE_DEV_HEADERS=false"
             echo "VITE_ENABLE_DEV_HEADER_LOGIN=false"
+            echo "FRONTEND_TEST_CLINIC_ID=${STAGING_PROOF_CLINIC_ID}"
+            echo "VITE_TEST_CLINIC_ID=${STAGING_PROOF_CLINIC_ID}"
+            echo "FRONTEND_TEST_CLINIC_NAME=${STAGING_PROOF_CLINIC_NAME}"
+            echo "VITE_TEST_CLINIC_NAME=${STAGING_PROOF_CLINIC_NAME}"
           } >> "$GITHUB_ENV"
 
       - name: Frontend live verification (staging API)

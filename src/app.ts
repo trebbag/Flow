@@ -179,9 +179,7 @@ export function buildApp() {
 
     const rawCode = String((error as { code?: unknown })?.code || "");
     const rawMessage = String((error as { message?: unknown })?.message || "").toLowerCase();
-    if (
-      rawMessage.includes("encounter_version_required")
-    ) {
+    if (/_version_required/.test(rawMessage)) {
       sendError(409, "VERSION_MISMATCH", "Version mismatch");
       return;
     }

@@ -9,6 +9,7 @@ import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { normalizeEncounterJsonRead } from "../lib/persisted-json.js";
 import { recordEntityEventTx } from "../lib/entity-events.js";
+import { applyVersionedUpdateTx } from "../lib/versioned-updates.js";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -399,18 +400,18 @@ export async function registerTaskRoutes(app: FastifyInstance) {
       };
       const versionFilter: Prisma.TaskWhereInput =
         dto.expectedVersion !== undefined ? { version: dto.expectedVersion } : {};
-      const updateResult = await tx.task.updateMany({
-        where: { id: taskId, ...versionFilter },
-        data: updateData,
+      const row = await applyVersionedUpdateTx({
+        update: () =>
+          tx.task.updateMany({
+            where: { id: taskId, ...versionFilter },
+            data: updateData,
+          }),
+        findLatest: () => tx.task.findUnique({ where: { id: taskId }, select: { id: true } }),
+        read: () => tx.task.findUniqueOrThrow({ where: { id: taskId } }),
+        notFoundCode: "TASK_NOT_FOUND",
+        notFoundMessage: "Task not found",
+        conflictMessage: "Task version mismatch",
       });
-      if (updateResult.count === 0) {
-        const latest = await tx.task.findUnique({ where: { id: taskId }, select: { id: true } });
-        if (!latest) {
-          throw new ApiError(404, "Task not found");
-        }
-        throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Task version mismatch" });
-      }
-      const row = await tx.task.findUniqueOrThrow({ where: { id: taskId } });
       if (
         assignedToUserId &&
         assignedToUserId !== task.assignedToUserId
@@ -484,19 +485,23 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     const archived = await prisma.$transaction(async (tx) => {
       const versionFilter: Prisma.TaskWhereInput =
         query.expectedVersion !== undefined ? { version: query.expectedVersion } : {};
-      const updateResult = await tx.task.updateMany({
-        where: { id: taskId, ...versionFilter },
-        data: {
-          status: TaskStatus.archived,
-          archivedAt: new Date(),
-          archivedBy: request.user!.id,
-          version: { increment: 1 },
-        },
+      const row = await applyVersionedUpdateTx({
+        update: () =>
+          tx.task.updateMany({
+            where: { id: taskId, ...versionFilter },
+            data: {
+              status: TaskStatus.archived,
+              archivedAt: new Date(),
+              archivedByUserId: request.user!.id,
+              version: { increment: 1 },
+            },
+          }),
+        findLatest: () => tx.task.findUnique({ where: { id: taskId }, select: { id: true } }),
+        read: () => tx.task.findUniqueOrThrow({ where: { id: taskId } }),
+        notFoundCode: "TASK_NOT_FOUND",
+        notFoundMessage: "Task not found",
+        conflictMessage: "Task version mismatch",
       });
-      if (updateResult.count === 0) {
-        throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Task version mismatch" });
-      }
-      const row = await tx.task.findUniqueOrThrow({ where: { id: taskId } });
       await persistMutationOperationalEventTx({
         db: tx,
         request,

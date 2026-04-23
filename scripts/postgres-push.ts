@@ -8,7 +8,7 @@ if (!postgresUrl) {
   process.exit(1);
 }
 
-const ENCOUNTER_VERSION_TRIGGER_SQL = `
+const VERSION_TRIGGER_SQL = `
 CREATE OR REPLACE FUNCTION flow_require_encounter_version_bump()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -52,6 +52,202 @@ CREATE TRIGGER "Encounter_require_version_bump_on_business_update"
 BEFORE UPDATE ON "Encounter"
 FOR EACH ROW
 EXECUTE FUNCTION flow_require_encounter_version_bump();
+
+CREATE OR REPLACE FUNCTION flow_require_task_version_bump()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.version <= OLD.version
+    AND (
+      NEW."assignedToRole" IS DISTINCT FROM OLD."assignedToRole" OR
+      NEW."assignedToUserId" IS DISTINCT FROM OLD."assignedToUserId" OR
+      NEW."status" IS DISTINCT FROM OLD."status" OR
+      NEW."priority" IS DISTINCT FROM OLD."priority" OR
+      NEW."blocking" IS DISTINCT FROM OLD."blocking" OR
+      NEW."dueAt" IS DISTINCT FROM OLD."dueAt" OR
+      NEW."acknowledgedAt" IS DISTINCT FROM OLD."acknowledgedAt" OR
+      NEW."acknowledgedBy" IS DISTINCT FROM OLD."acknowledgedBy" OR
+      NEW."completedAt" IS DISTINCT FROM OLD."completedAt" OR
+      NEW."completedBy" IS DISTINCT FROM OLD."completedBy" OR
+      NEW."archivedAt" IS DISTINCT FROM OLD."archivedAt" OR
+      NEW."archivedBy" IS DISTINCT FROM OLD."archivedBy" OR
+      NEW."notes" IS DISTINCT FROM OLD."notes"
+    )
+  THEN
+    RAISE EXCEPTION 'TASK_VERSION_REQUIRED';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "Task_require_version_bump_on_business_update" ON "Task";
+CREATE TRIGGER "Task_require_version_bump_on_business_update"
+BEFORE UPDATE ON "Task"
+FOR EACH ROW
+EXECUTE FUNCTION flow_require_task_version_bump();
+
+CREATE OR REPLACE FUNCTION flow_require_room_issue_version_bump()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.version <= OLD.version
+    AND (
+      NEW."status" IS DISTINCT FROM OLD."status" OR
+      NEW."severity" IS DISTINCT FROM OLD."severity" OR
+      NEW."title" IS DISTINCT FROM OLD."title" OR
+      NEW."description" IS DISTINCT FROM OLD."description" OR
+      NEW."placesRoomOnHold" IS DISTINCT FROM OLD."placesRoomOnHold" OR
+      NEW."taskId" IS DISTINCT FROM OLD."taskId" OR
+      NEW."sourceModule" IS DISTINCT FROM OLD."sourceModule" OR
+      NEW."metadataJson" IS DISTINCT FROM OLD."metadataJson" OR
+      NEW."resolvedAt" IS DISTINCT FROM OLD."resolvedAt" OR
+      NEW."resolvedByUserId" IS DISTINCT FROM OLD."resolvedByUserId" OR
+      NEW."resolutionNote" IS DISTINCT FROM OLD."resolutionNote"
+    )
+  THEN
+    RAISE EXCEPTION 'ROOM_ISSUE_VERSION_REQUIRED';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "RoomIssue_require_version_bump_on_business_update" ON "RoomIssue";
+CREATE TRIGGER "RoomIssue_require_version_bump_on_business_update"
+BEFORE UPDATE ON "RoomIssue"
+FOR EACH ROW
+EXECUTE FUNCTION flow_require_room_issue_version_bump();
+`;
+
+const RLS_SQL = `
+CREATE OR REPLACE FUNCTION flow_current_facility_id()
+RETURNS text
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NULLIF(current_setting('app.current_facility_id', true), '')::text
+$$;
+
+CREATE OR REPLACE FUNCTION flow_clinic_in_scope(clinic_id text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM "Clinic" c
+    WHERE c.id = clinic_id
+      AND c."facilityId" = flow_current_facility_id()
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION flow_room_in_scope(room_id text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM "ClinicRoom" r
+    WHERE r.id = room_id
+      AND r."facilityId" = flow_current_facility_id()
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION flow_encounter_in_scope(encounter_id text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM "Encounter" e
+    JOIN "Clinic" c ON c.id = e."clinicId"
+    WHERE e.id = encounter_id
+      AND c."facilityId" = flow_current_facility_id()
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION flow_revenue_case_in_scope(revenue_case_id text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM "RevenueCase" rc
+    WHERE rc.id = revenue_case_id
+      AND rc."facilityId" = flow_current_facility_id()
+  )
+$$;
+
+CREATE OR REPLACE FUNCTION flow_apply_rls(table_name text, policy_name text, using_expr text, with_check_expr text DEFAULT NULL)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', table_name);
+  EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS %I ON %s', policy_name, table_name);
+  EXECUTE format(
+    'CREATE POLICY %I ON %s USING (%s)%s',
+    policy_name,
+    table_name,
+    using_expr,
+    CASE
+      WHEN with_check_expr IS NULL THEN ''
+      ELSE format(' WITH CHECK (%s)', with_check_expr)
+    END
+  );
+END;
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'flow_admin') THEN
+    CREATE ROLE flow_admin NOLOGIN BYPASSRLS;
+  END IF;
+END
+$$;
+
+SELECT flow_apply_rls('"Clinic"', 'clinic_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"ClinicRoom"', 'clinic_room_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"Provider"', 'provider_facility_scope', 'flow_clinic_in_scope("clinicId")', 'flow_clinic_in_scope("clinicId")');
+SELECT flow_apply_rls('"ReasonForVisit"', 'reason_facility_scope', '("facilityId" = flow_current_facility_id()) OR ("facilityId" IS NULL AND "clinicId" IS NOT NULL AND flow_clinic_in_scope("clinicId"))', '("facilityId" = flow_current_facility_id()) OR ("facilityId" IS NULL AND "clinicId" IS NOT NULL AND flow_clinic_in_scope("clinicId"))');
+SELECT flow_apply_rls('"Template"', 'template_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"Patient"', 'patient_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"PatientAlias"', 'patient_alias_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"PatientIdentityReview"', 'patient_identity_review_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"PatientConsent"', 'patient_consent_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"Encounter"', 'encounter_facility_scope', 'flow_clinic_in_scope("clinicId")', 'flow_clinic_in_scope("clinicId")');
+SELECT flow_apply_rls('"StatusChangeEvent"', 'status_change_event_scope', 'flow_encounter_in_scope("encounterId")', 'flow_encounter_in_scope("encounterId")');
+SELECT flow_apply_rls('"AlertState"', 'alert_state_scope', 'flow_encounter_in_scope("encounterId")', 'flow_encounter_in_scope("encounterId")');
+SELECT flow_apply_rls('"SafetyEvent"', 'safety_event_scope', 'flow_encounter_in_scope("encounterId")', 'flow_encounter_in_scope("encounterId")');
+SELECT flow_apply_rls('"IncomingImportBatch"', 'incoming_import_batch_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"IncomingImportIssue"', 'incoming_import_issue_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"IncomingSchedule"', 'incoming_schedule_scope', 'flow_clinic_in_scope("clinicId")', 'flow_clinic_in_scope("clinicId")');
+SELECT flow_apply_rls('"Task"', 'task_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"RoomIssue"', 'room_issue_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"RoomOperationalState"', 'room_operational_state_scope', 'flow_room_in_scope("roomId")', 'flow_room_in_scope("roomId")');
+SELECT flow_apply_rls('"RoomOperationalEvent"', 'room_operational_event_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"RoomChecklistRun"', 'room_checklist_run_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"RevenueCase"', 'revenue_case_facility_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"FinancialReadiness"', 'financial_readiness_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"CheckoutCollectionTracking"', 'checkout_collection_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"ChargeCaptureRecord"', 'charge_capture_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"ProviderClarification"', 'provider_clarification_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"RevenueChecklistItem"', 'revenue_checklist_item_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"RevenueCaseEvent"', 'revenue_case_event_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"RevenueCloseoutRun"', 'revenue_closeout_run_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"RevenueCloseoutItem"', 'revenue_closeout_item_scope', 'flow_revenue_case_in_scope("revenueCaseId")', 'flow_revenue_case_in_scope("revenueCaseId")');
+SELECT flow_apply_rls('"RevenueCycleSettings"', 'revenue_cycle_settings_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"AlertThreshold"', 'alert_threshold_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
+SELECT flow_apply_rls('"NotificationPolicy"', 'notification_policy_scope', 'flow_clinic_in_scope("clinicId")', 'flow_clinic_in_scope("clinicId")');
+SELECT flow_apply_rls('"UserAlertInbox"', 'user_alert_inbox_scope', '"facilityId" = flow_current_facility_id() OR ("facilityId" IS NULL AND "clinicId" IS NOT NULL AND flow_clinic_in_scope("clinicId"))', '"facilityId" = flow_current_facility_id() OR ("facilityId" IS NULL AND "clinicId" IS NOT NULL AND flow_clinic_in_scope("clinicId"))');
+SELECT flow_apply_rls('"AuditLog"', 'audit_log_scope', '"facilityId" = flow_current_facility_id()', '"facilityId" = flow_current_facility_id()');
 `;
 
 function runPrismaDbPush() {
@@ -80,11 +276,11 @@ function runPrismaDbPush() {
   });
 }
 
-async function installEncounterVersionTrigger() {
+async function installVersionTriggers() {
   const client = new pg.Client({ connectionString: postgresUrl });
   await client.connect();
   try {
-    await client.query(ENCOUNTER_VERSION_TRIGGER_SQL);
+    await client.query(VERSION_TRIGGER_SQL);
   } finally {
     await client.end();
   }
@@ -244,12 +440,23 @@ async function installClinicRoomPartialUnique() {
   }
 }
 
+async function installRowLevelSecurity() {
+  const client = new pg.Client({ connectionString: postgresUrl });
+  await client.connect();
+  try {
+    await client.query(RLS_SQL);
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   await migrateTaskStatusEnum();
   await runPrismaDbPush();
-  await installEncounterVersionTrigger();
+  await installVersionTriggers();
   await installDataIntegrityChecks();
   await installClinicRoomPartialUnique();
+  await installRowLevelSecurity();
 }
 
 main().catch((error) => {

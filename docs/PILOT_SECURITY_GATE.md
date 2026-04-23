@@ -1,6 +1,6 @@
 # Pilot Security Gate
 
-Updated: April 19, 2026
+Updated: April 23, 2026
 
 This is the PHI-facing gate for pilot activation. It separates what Flow now enforces in code from the tenant-admin and operator approvals that still need to be named explicitly before pilot go-live.
 
@@ -10,24 +10,36 @@ This is the PHI-facing gate for pilot activation. It separates what Flow now enf
    - Microsoft Entra is the primary pilot-facing auth model.
    - API routes are role-gated and facility-scoped.
    - Facility context switching is explicit and persisted.
+   - Postgres runtime facility scoping now sets `app.current_facility_id`
+     inside tenant-scoped transactions.
 
-2. Minimum-necessary operational data handling
+2. Database isolation and integrity backstops
+   - Postgres rollout now installs row-level security policies for
+     app-facing tenant tables.
+   - optimistic concurrency version-bump triggers now protect Encounter,
+     Task, and RoomIssue at the persistence layer
+   - callback-form scoped transactions are used where the facility GUC must be
+     present for RLS to enforce correctly
+
+3. Minimum-necessary operational data handling
    - audit logs store request metadata rather than full request bodies
    - event payloads are metadata-oriented to reduce PHI duplication
    - dashboards and analytics aggregate counts, durations, and operational states rather than requiring patient-level detail for top-line reporting
 
-3. Athena independence for core workflow execution
+4. Athena independence for core workflow execution
    - pre-service guidance and time-of-service workflow run in Flow without Athena access
    - Athena remains optional and observational for later comparison/import work
 
-4. Live-update transport
+5. Live-update transport
    - the old unauthenticated browser `EventSource` path is no longer the default behavior
    - the frontend now uses the current session auth context when opening `/events/stream`
    - if the stream is unavailable, Flow falls back to polling without breaking core workflow execution
 
-5. Room and encounter operational protection
+6. Room and encounter operational protection
    - room assignment, turnover, and mark-ready actions remain backend-enforced
    - encounter step transitions remain backend-enforced and sync revenue state on write
+   - write-time JSON validation now rejects malformed structured business JSON
+     instead of persisting unreadable rows silently
 
 ## External Approvals Still Required Before PHI Pilot
 
@@ -53,8 +65,8 @@ This is the PHI-facing gate for pilot activation. It separates what Flow now enf
 
 ## Gate Status
 
-1. Implemented in code: authentication, authorization, audit posture, Athena-independent workflow execution, authenticated live update transport
-2. Ready for operator validation: staging proof, room operations validation, role-by-role pilot walkthrough
+1. Implemented in code: authentication, scoped authorization, Postgres RLS rollout path, DB-level version guards, audit posture, Athena-independent workflow execution, authenticated live update transport
+2. Ready for operator validation: live Postgres facility-isolation proof, staging proof, room operations validation, role-by-role pilot walkthrough
 3. Still blocked on named external approvals:
    - MFA enforcement decision and owner
    - access review owner and cadence

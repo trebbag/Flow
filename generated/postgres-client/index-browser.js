@@ -489,7 +489,7 @@ exports.Prisma.TaskScalarFieldEnum = {
   completedAt: 'completedAt',
   completedBy: 'completedBy',
   archivedAt: 'archivedAt',
-  archivedBy: 'archivedBy',
+  archivedByUserId: 'archivedByUserId',
   notes: 'notes',
   version: 'version',
   updatedAt: 'updatedAt'

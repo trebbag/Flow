@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { normalizeDate, parseAppointmentAt, dateRangeForDay } from "../lib/dates.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
+import { enterFacilityScope } from "../lib/facility-scope.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
 import { booleanish } from "../lib/zod-helpers.js";
 import { ensurePatientRecord, extractPatientIdentityHints } from "../lib/patients.js";
@@ -300,6 +301,7 @@ async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
   });
   requireCondition(clinic, 404, "Clinic not found");
   assertClinicInUserScope(user, clinic);
+  enterFacilityScope(clinic.facilityId || user.facilityId || null);
   return clinic;
 }
 
@@ -314,6 +316,7 @@ async function resolveScopedFacility(user: ScopedRequestUser, requestedFacilityI
     if (user.facilityId && facility.id !== user.facilityId) {
       throw new ApiError(403, "Facility is outside your assigned scope");
     }
+    enterFacilityScope(facility.id);
     return facility;
   }
 
@@ -326,6 +329,7 @@ async function resolveScopedFacility(user: ScopedRequestUser, requestedFacilityI
   if (user.facilityId && facility.id !== user.facilityId) {
     throw new ApiError(403, "Facility is outside your assigned scope");
   }
+  enterFacilityScope(facility.id);
   return facility;
 }
 
@@ -666,9 +670,11 @@ async function importRows(
       status: pendingIssues.length > 0 ? "pending_review" : "processed"
     }
   });
+  const batchStatus = pendingIssues.length > 0 ? "pending_review" : "processed";
 
   return {
     batch,
+    batchStatus,
     acceptedRows,
     pendingIssues
   };
@@ -1173,9 +1179,11 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         rowCount: records.length,
       },
       execute: async () => {
-        const { createdRows, pendingIssues } = await prisma.$transaction(async (tx) => {
+        const { createdRows, pendingIssues, batchIds, batchStatus } = await prisma.$transaction(async (tx) => {
           const acceptedRows: Array<Record<string, unknown>> = [];
           const pendingRows: Array<Record<string, unknown>> = [];
+          const batchIds = new Set<string>();
+          let batchStatus: "processed" | "pending_review" = "processed";
           for (const group of groupedRows.values()) {
             const created = await importRows(
               tx,
@@ -1188,6 +1196,10 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
             );
             acceptedRows.push(...created.acceptedRows);
             pendingRows.push(...created.pendingIssues);
+            batchIds.add(created.batch.id);
+            if (created.batchStatus === "pending_review") {
+              batchStatus = "pending_review";
+            }
           }
 
           if (unresolvedClinicRows.length > 0) {
@@ -1224,9 +1236,11 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
               });
               pendingRows.push(createdIssue);
             }
+            batchIds.add(unresolvedBatch.id);
+            batchStatus = "pending_review";
           }
 
-          return { createdRows: acceptedRows, pendingIssues: pendingRows };
+          return { createdRows: acceptedRows, pendingIssues: pendingRows, batchIds: Array.from(batchIds.values()), batchStatus };
         });
 
         if (createdRows.length === 0 && pendingIssues.length === 0) {
@@ -1237,7 +1251,10 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
           acceptedRows: createdRows,
           pendingIssues,
           acceptedCount: createdRows.length,
-          pendingCount: pendingIssues.length
+          pendingCount: pendingIssues.length,
+          batchId: batchIds.length === 1 ? batchIds[0] : null,
+          batchIds,
+          batchStatus,
         };
       },
     });

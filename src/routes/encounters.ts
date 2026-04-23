@@ -37,6 +37,7 @@ import {
 } from "../lib/persisted-json.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
+import { applyVersionedUpdateTx } from "../lib/versioned-updates.js";
 
 const defaultAllowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   Incoming: ["Lobby"],
@@ -807,27 +808,28 @@ async function updateEncounterWithVersionTx(params: {
   };
   resetAlertStateAt?: Date;
 }) {
-  const updateResult = await params.tx.encounter.updateMany({
-    where: {
-      id: params.encounterId,
-      version: params.expectedVersion,
-    },
-    data: {
-      ...params.data,
-      version: { increment: 1 },
-    },
+  await applyVersionedUpdateTx({
+    update: () =>
+      params.tx.encounter.updateMany({
+        where: {
+          id: params.encounterId,
+          version: params.expectedVersion,
+        },
+        data: {
+          ...params.data,
+          version: { increment: 1 },
+        },
+      }),
+    findLatest: () =>
+      params.tx.encounter.findUnique({
+        where: { id: params.encounterId },
+        select: { id: true },
+      }),
+    read: () => Promise.resolve(null),
+    notFoundCode: "ENCOUNTER_NOT_FOUND",
+    notFoundMessage: "Encounter not found",
+    conflictMessage: "Version mismatch",
   });
-
-  if (updateResult.count === 0) {
-    const latest = await params.tx.encounter.findUnique({
-      where: { id: params.encounterId },
-      select: { id: true, version: true },
-    });
-    if (!latest) {
-      throw new ApiError({ statusCode: 404, code: "ENCOUNTER_NOT_FOUND", message: "Encounter not found" });
-    }
-    throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Version mismatch" });
-  }
 
   if (params.statusEvent) {
     await params.tx.statusChangeEvent.create({

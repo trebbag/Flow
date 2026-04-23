@@ -11,6 +11,7 @@ import { DateTime } from "luxon";
 import { prisma } from "./prisma.js";
 import { ApiError, requireCondition } from "./errors.js";
 import type { RequestUser } from "./auth.js";
+import { enterFacilityScope } from "./facility-scope.js";
 import { listActiveTemporaryClinicOverrideIds } from "./assignment-overrides.js";
 
 type RoomOpsTx = Prisma.TransactionClient;
@@ -82,18 +83,20 @@ export async function backfillRoomOperationalStates() {
     select: { id: true }
   });
   if (activeRooms.length === 0) return 0;
-  const results = await prisma.$transaction(
-    activeRooms.map((room) =>
-      prisma.roomOperationalState.upsert({
-        where: { roomId: room.id },
-        create: {
-          roomId: room.id,
-          currentStatus: RoomOperationalStatus.Ready,
-          lastReadyAt: new Date()
-        },
-        update: {}
-      })
-    )
+  const results = await prisma.$transaction(async (tx) =>
+    Promise.all(
+      activeRooms.map((room) =>
+        tx.roomOperationalState.upsert({
+          where: { roomId: room.id },
+          create: {
+            roomId: room.id,
+            currentStatus: RoomOperationalStatus.Ready,
+            lastReadyAt: new Date()
+          },
+          update: {}
+        }),
+      ),
+    ),
   );
   return results.length;
 }
@@ -121,6 +124,7 @@ export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId
         message: "Clinic is outside your facility scope",
       });
     }
+    enterFacilityScope(clinic.facilityId || user.facilityId || null);
   }
 
   if (user.role === RoleName.Admin || user.role === RoleName.OfficeManager) {
@@ -131,6 +135,7 @@ export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId
       },
       select: { id: true }
     });
+    enterFacilityScope(user.facilityId || null);
     return clinics.map((clinic) => clinic.id);
   }
 
@@ -489,18 +494,20 @@ export async function listRoomCards(params: {
     .filter((assignment) => !assignment.room.operationalState)
     .map((assignment) => assignment.roomId);
   if (missingStateRoomIds.length > 0) {
-    await prisma.$transaction(
-      unique(missingStateRoomIds).map((roomId) =>
-        prisma.roomOperationalState.upsert({
-          where: { roomId },
-          create: {
-            roomId,
-            currentStatus: RoomOperationalStatus.Ready,
-            lastReadyAt: new Date()
-          },
-          update: {}
-        })
-      )
+    await prisma.$transaction(async (tx) =>
+      Promise.all(
+        unique(missingStateRoomIds).map((roomId) =>
+          tx.roomOperationalState.upsert({
+            where: { roomId },
+            create: {
+              roomId,
+              currentStatus: RoomOperationalStatus.Ready,
+              lastReadyAt: new Date()
+            },
+            update: {}
+          }),
+        ),
+      ),
     );
   }
 

@@ -37,82 +37,65 @@ is enforced by RLS + disk encryption.
 
 ## Row-level security (Postgres)
 
-RLS is **recommended** and **not yet enabled by default** — enabling it requires
-an application-side session GUC set per transaction, which is a wider refactor.
-Below is the migration SQL to apply when ready; it is additive and idempotent.
+Flow now includes Postgres RLS wiring in both the application runtime and the
+Postgres rollout script. The application enters a facility scope when the user
+is authenticated or a facility is resolved, and the Prisma runtime opens a
+scoped transaction that sets `app.current_facility_id` before tenant-scoped
+queries execute against Postgres.
 
 ### Design
 - The app sets a session GUC `app.current_facility_id` at the start of each
-  transaction (via `SET LOCAL app.current_facility_id = '<uuid>'`).
-- Each tenant-scoped table has a policy that requires `facility_id = current_setting('app.current_facility_id')::uuid`.
+  Postgres transaction (via `SELECT set_config('app.current_facility_id', '<uuid>', true)`).
+- Authenticated request flows establish facility scope before issuing
+  tenant-scoped reads or writes.
+- Worker flows that operate by facility, such as revenue sync, enter an
+  explicit facility scope before processing queued work.
+- Each tenant-scoped table has a policy that requires either a direct
+  `facilityId` match or a join path back to the scoped facility.
 - A privileged role (`flow_admin`) bypasses RLS for migrations and maintenance.
 
-### Migration SQL (apply after wiring the session GUC)
+### Rollout status
+- Postgres version-bump triggers and RLS policies are installed by
+  [`scripts/postgres-push.ts`](../scripts/postgres-push.ts).
+- The runtime facility-scope transaction wiring is implemented in
+  [`src/lib/prisma.ts`](../src/lib/prisma.ts) and
+  [`src/lib/facility-scope.ts`](../src/lib/facility-scope.ts).
+- Request-scoped facility selection is entered during auth and facility/clinic
+  resolution paths before tenant-scoped Prisma access.
+
+### Policy shape
 ```sql
--- Enable RLS on core tenant-scoped tables.
-ALTER TABLE "Patient"                         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Encounter"                       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "RevenueCase"                     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "IncomingSchedule"                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Task"                            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "RoomIssue"                       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "AuditLog"                        ENABLE ROW LEVEL SECURITY;
+-- Direct facility scope.
+"facilityId" = current_setting('app.current_facility_id', true)
 
--- Policies: facility scope.
-CREATE POLICY patient_facility_scope ON "Patient"
-  USING ("facilityId" = current_setting('app.current_facility_id', true)::text);
+-- Clinic descendant scope.
+EXISTS (
+  SELECT 1 FROM "Clinic" c
+  WHERE c.id = <table>."clinicId"
+    AND c."facilityId" = current_setting('app.current_facility_id', true)
+)
 
-CREATE POLICY encounter_facility_scope ON "Encounter"
-  USING (
-    EXISTS (
-      SELECT 1 FROM "Clinic" c
-      WHERE c.id = "Encounter"."clinicId"
-        AND c."facilityId" = current_setting('app.current_facility_id', true)::text
-    )
-  );
-
-CREATE POLICY revenue_case_facility_scope ON "RevenueCase"
-  USING ("facilityId" = current_setting('app.current_facility_id', true)::text);
-
-CREATE POLICY incoming_facility_scope ON "IncomingSchedule"
-  USING ("facilityId" = current_setting('app.current_facility_id', true)::text);
-
-CREATE POLICY task_facility_scope ON "Task"
-  USING ("facilityId" = current_setting('app.current_facility_id', true)::text);
-
-CREATE POLICY room_issue_facility_scope ON "RoomIssue"
-  USING (
-    EXISTS (
-      SELECT 1 FROM "ClinicRoom" r
-      WHERE r.id = "RoomIssue"."roomId"
-        AND r."facilityId" = current_setting('app.current_facility_id', true)::text
-    )
-  );
-
-CREATE POLICY audit_facility_scope ON "AuditLog"
-  USING ("facilityId" = current_setting('app.current_facility_id', true)::text);
-
--- Bypass role for migrations/maintenance.
-CREATE ROLE flow_admin NOLOGIN BYPASSRLS;
-GRANT flow_admin TO <migration-login>;
+-- Room descendant scope.
+EXISTS (
+  SELECT 1
+  FROM "ClinicRoom" r
+  JOIN "Clinic" c ON c.id = r."clinicId"
+  WHERE r.id = <table>."roomId"
+    AND c."facilityId" = current_setting('app.current_facility_id', true)
+)
 ```
 
-### Application wiring (deferred)
-Wrap every request's Prisma work in a transaction that first runs
-`SET LOCAL app.current_facility_id = <uuid>`. Pseudocode:
-
-```ts
-async function withFacilityScope<T>(facilityId: string, work: (tx: Prisma.TransactionClient) => Promise<T>) {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.current_facility_id', ${facilityId}, true)`;
-    return work(tx);
-  });
-}
-```
-
-This is a meaningful surgery because many routes use `prisma.*` directly
-without an outer transaction. Track enabling RLS as a follow-up after the
-P3 milestone.
+### Operational caveats
+- RLS is enforced in the Postgres runtime path. Local SQLite development still
+  relies on application scope checks plus the existing test harness.
+- Array-form Prisma transactions are intentionally rejected in scoped Postgres
+  request paths; callback-form transactions are required so the facility GUC can
+  be set in-band.
+- Migrations, maintenance scripts, and administrative repair work must use the
+  privileged bypass role or explicit maintenance clients rather than the normal
+  request-scoped runtime path.
+- Pilot hardening should still include a live Postgres verification pass that
+  proves cross-facility reads fail under the active app role.
 
 ## Frontend considerations
 

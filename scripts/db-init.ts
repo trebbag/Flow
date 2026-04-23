@@ -645,6 +645,7 @@ CREATE TABLE IF NOT EXISTS Task (
   FOREIGN KEY (createdBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   FOREIGN KEY (acknowledgedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
   FOREIGN KEY (completedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  FOREIGN KEY (archivedBy) REFERENCES User(id) ON UPDATE CASCADE ON DELETE SET NULL,
   CHECK (length(trim(description)) > 0)
 );
 
@@ -1313,6 +1314,50 @@ WHEN (
 ) AND NEW.version <= OLD.version
 BEGIN
   SELECT RAISE(ABORT, 'ENCOUNTER_VERSION_REQUIRED');
+END;
+
+DROP TRIGGER IF EXISTS Task_require_version_bump_on_business_update;
+CREATE TRIGGER Task_require_version_bump_on_business_update
+BEFORE UPDATE ON Task
+FOR EACH ROW
+WHEN (
+  NEW.assignedToRole IS NOT OLD.assignedToRole OR
+  NEW.assignedToUserId IS NOT OLD.assignedToUserId OR
+  NEW.status IS NOT OLD.status OR
+  NEW.priority IS NOT OLD.priority OR
+  NEW.blocking IS NOT OLD.blocking OR
+  NEW.dueAt IS NOT OLD.dueAt OR
+  NEW.acknowledgedAt IS NOT OLD.acknowledgedAt OR
+  NEW.acknowledgedBy IS NOT OLD.acknowledgedBy OR
+  NEW.completedAt IS NOT OLD.completedAt OR
+  NEW.completedBy IS NOT OLD.completedBy OR
+  NEW.archivedAt IS NOT OLD.archivedAt OR
+  NEW.archivedBy IS NOT OLD.archivedBy OR
+  NEW.notes IS NOT OLD.notes
+) AND NEW.version <= OLD.version
+BEGIN
+  SELECT RAISE(ABORT, 'TASK_VERSION_REQUIRED');
+END;
+
+DROP TRIGGER IF EXISTS RoomIssue_require_version_bump_on_business_update;
+CREATE TRIGGER RoomIssue_require_version_bump_on_business_update
+BEFORE UPDATE ON RoomIssue
+FOR EACH ROW
+WHEN (
+  NEW.status IS NOT OLD.status OR
+  NEW.severity IS NOT OLD.severity OR
+  NEW.title IS NOT OLD.title OR
+  NEW.description IS NOT OLD.description OR
+  NEW.placesRoomOnHold IS NOT OLD.placesRoomOnHold OR
+  NEW.taskId IS NOT OLD.taskId OR
+  NEW.sourceModule IS NOT OLD.sourceModule OR
+  NEW.metadataJson IS NOT OLD.metadataJson OR
+  NEW.resolvedAt IS NOT OLD.resolvedAt OR
+  NEW.resolvedByUserId IS NOT OLD.resolvedByUserId OR
+  NEW.resolutionNote IS NOT OLD.resolutionNote
+) AND NEW.version <= OLD.version
+BEGIN
+  SELECT RAISE(ABORT, 'ROOM_ISSUE_VERSION_REQUIRED');
 END;
 `);
 

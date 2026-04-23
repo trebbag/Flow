@@ -17,6 +17,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { requireRoles } from "../lib/auth.js";
+import { enterFacilityScope } from "../lib/facility-scope.js";
 import { clinicDateKeyNow } from "../lib/clinic-time.js";
 import { withIdempotentMutation } from "../lib/idempotency.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
@@ -267,6 +268,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
     if (!clinic) throw new ApiError(404, "Clinic not found");
     if (user.clinicId && clinic.id !== user.clinicId) throw new ApiError(403, "Clinic is outside your assigned scope");
     if (user.facilityId && clinic.facilityId !== user.facilityId) throw new ApiError(403, "Clinic is outside your facility scope");
+    enterFacilityScope(clinic.facilityId || user.facilityId || null);
     return [clinic] as ScopedClinic[];
   }
 
@@ -276,6 +278,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
       select: { id: true, name: true, shortCode: true, timezone: true, facilityId: true },
     });
     if (!clinic) throw new ApiError(404, "Assigned clinic not found");
+    enterFacilityScope(clinic.facilityId || user.facilityId || null);
     return [clinic] as ScopedClinic[];
   }
 
@@ -285,6 +288,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
     orderBy: { id: "asc" },
   });
   if (clinics.length === 0) throw new ApiError(404, "No clinics are available in scope");
+  enterFacilityScope(clinics[0]?.facilityId || user.facilityId || null);
   return clinics;
 }
 

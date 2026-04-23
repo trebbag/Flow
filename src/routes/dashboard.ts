@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { ApiError } from "../lib/errors.js";
 import { normalizeDate } from "../lib/dates.js";
 import { requireRoles } from "../lib/auth.js";
+import { enterFacilityScope } from "../lib/facility-scope.js";
 import { getDailyHistoryRollups, listDateKeys } from "../lib/office-manager-rollups.js";
 import { getRoomDailyHistoryRollups } from "../lib/room-rollups.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
@@ -44,6 +45,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
       throw new ApiError(403, "Clinic is outside your facility scope");
     }
 
+    enterFacilityScope(clinic.facilityId || user.facilityId || null);
     return [clinic] as ScopedClinic[];
   }
 
@@ -55,6 +57,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
     if (!clinic) {
       throw new ApiError(404, "Assigned clinic not found");
     }
+    enterFacilityScope(clinic.facilityId || user.facilityId || null);
     return [clinic] as ScopedClinic[];
   }
 
@@ -69,6 +72,7 @@ async function resolveClinicsInScope(user: { clinicId: string | null; facilityId
   if (clinics.length === 0) {
     throw new ApiError(404, "No clinics are available in scope");
   }
+  enterFacilityScope(clinics[0]?.facilityId || user.facilityId || null);
 
   return clinics;
 }

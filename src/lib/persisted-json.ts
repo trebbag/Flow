@@ -102,8 +102,59 @@ const clinicianDataSchema = jsonObjectSchema;
 const checkoutDataSchema = jsonObjectSchema;
 const intakeDataSchema = jsonObjectSchema;
 const documentationSummarySchema = jsonObjectSchema.nullable();
+const revenueEstimateDefaultsSchema = z.object({
+  defaultPatientEstimateCents: z.number().int().min(0).optional(),
+  defaultPosCollectionPercent: z.number().int().min(0).max(100).optional(),
+  explainEstimateByDefault: z.boolean().optional(),
+});
+const revenueChecklistDefaultItemSchema = z.object({
+  label: z.string().trim().min(1),
+  sortOrder: z.number().int().nonnegative().optional(),
+});
+const revenueChecklistDefaultsItemSchema = revenueChecklistDefaultItemSchema.extend({
+  required: z.boolean().optional(),
+});
+const revenueServiceCatalogItemSchema = z.object({
+  id: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  suggestedProcedureCode: z.string().trim().nullable().optional(),
+  expectedChargeCents: z.number().int().nullable().optional(),
+  detailSchemaKey: z.string().trim().nullable().optional(),
+  active: z.boolean().optional(),
+  allowCustomNote: z.boolean().optional(),
+});
+const revenueChargeScheduleItemSchema = z.object({
+  code: z.string().trim().min(1),
+  amountCents: z.number().int().nonnegative(),
+  description: z.string().trim().nullable().optional(),
+  active: z.boolean().optional(),
+});
+const revenueReimbursementRuleItemSchema = z.object({
+  id: z.string().trim().min(1),
+  payerName: z.string().trim().nullable().optional(),
+  financialClass: z.string().trim().nullable().optional(),
+  expectedPercent: z.number().int().min(0).max(100),
+  active: z.boolean().optional(),
+  note: z.string().trim().nullable().optional(),
+});
+const revenueSettingsSchemas = {
+  missedCollectionReasons: jsonStringArraySchema,
+  queueSla: z.record(z.string(), z.number().int().positive()),
+  dayCloseDefaults: z.object({
+    defaultDueHours: z.number().int().positive().optional(),
+    requireNextAction: z.boolean().optional(),
+  }),
+  estimateDefaults: revenueEstimateDefaultsSchema,
+  providerQueryTemplates: jsonStringArraySchema,
+  athenaChecklistDefaults: z.array(revenueChecklistDefaultItemSchema),
+  checklistDefaults: z.record(z.string(), z.array(revenueChecklistDefaultsItemSchema)),
+  serviceCatalog: z.array(revenueServiceCatalogItemSchema),
+  chargeSchedule: z.array(revenueChargeScheduleItemSchema),
+  reimbursementRules: z.array(revenueReimbursementRuleItemSchema),
+} as const;
 
 export type EncounterJsonKind = "roomingData" | "clinicianData" | "checkoutData" | "intakeData";
+export type RevenueSettingsJsonKind = keyof typeof revenueSettingsSchemas;
 
 function schemaForEncounterJson(kind: EncounterJsonKind) {
   switch (kind) {
@@ -118,6 +169,10 @@ function schemaForEncounterJson(kind: EncounterJsonKind) {
     default:
       return jsonObjectSchema;
   }
+}
+
+function schemaForRevenueSettingsJson(kind: RevenueSettingsJsonKind) {
+  return revenueSettingsSchemas[kind];
 }
 
 function issueMessages(error: z.ZodError) {
@@ -386,6 +441,19 @@ export function parseDocumentationSummaryJsonInput(value: unknown) {
       statusCode: 400,
       code: "INVALID_DOCUMENTATION_SUMMARY_JSON",
       message: "Invalid documentation summary payload",
+      details: issueMessages(parsed.error),
+    });
+  }
+  return parsed.data;
+}
+
+export function parseRevenueSettingsJsonInput(kind: RevenueSettingsJsonKind, value: unknown) {
+  const parsed = schemaForRevenueSettingsJson(kind).safeParse(value);
+  if (!parsed.success) {
+    throw new ApiError({
+      statusCode: 400,
+      code: `INVALID_${kind.toUpperCase()}`,
+      message: `Invalid ${kind} payload`,
       details: issueMessages(parsed.error),
     });
   }

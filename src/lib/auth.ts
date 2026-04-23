@@ -4,6 +4,7 @@ import { RoleName } from "@prisma/client";
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from "jose";
 import { env } from "./env.js";
 import { ApiError } from "./errors.js";
+import { enterFacilityScope } from "./facility-scope.js";
 import { prisma } from "./prisma.js";
 import { verifyProofHeaderRequest } from "./proof-header-guard.js";
 import { recordAuthFailure, recordProofHeaderReject } from "./metrics.js";
@@ -616,6 +617,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     return;
   }
   request.user = user;
+  enterFacilityScope(user.activeFacilityId || user.facilityId || null);
 }
 
 export function requireRoles(...allowed: RoleName[]) {

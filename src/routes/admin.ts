@@ -41,10 +41,12 @@ import {
   parseGenericObjectJsonInput,
   parseQuietHoursJsonInput,
   parseRoleNameArrayJsonInput,
+  parseRevenueSettingsJsonInput,
   parseStringArrayJsonInput,
   parseTemplateFieldsJsonInput,
 } from "../lib/persisted-json.js";
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
+import { enterFacilityScope } from "../lib/facility-scope.js";
 import { persistMutationOperationalEventTx, flushOperationalOutbox } from "../lib/operational-events.js";
 import {
   CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
@@ -534,6 +536,7 @@ async function resolveFacilityForRequest(request: FastifyRequest, requestedFacil
     if (scopedIds && !scopedIds.includes(facility.id)) {
       throw new ApiError(403, "Facility is outside your assigned scope");
     }
+    enterFacilityScope(facility.id);
     return facility;
   }
 
@@ -543,11 +546,13 @@ async function resolveFacilityForRequest(request: FastifyRequest, requestedFacil
       orderBy: { createdAt: "asc" }
     });
     requireCondition(facility, 404, "No facilities available in your scope");
+    enterFacilityScope(facility.id);
     return facility;
   }
 
   const facility = await getFirstActiveFacility();
   requireCondition(facility, 404, "No facility found");
+  enterFacilityScope(facility.id);
   return facility;
 }
 
@@ -3510,57 +3515,94 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const dto = revenueSettingsSchema.parse(request.body);
     const facility = await resolveFacilityForRequest(request, dto.facilityId);
     const existing = await getRevenueSettings(prisma, facility.id);
+    const createMissedCollectionReasons = parseRevenueSettingsJsonInput(
+      "missedCollectionReasons",
+      dto.missedCollectionReasons || existing.missedCollectionReasons,
+    );
+    const createQueueSla = parseRevenueSettingsJsonInput("queueSla", dto.queueSla || existing.queueSla);
+    const createDayCloseDefaults = parseRevenueSettingsJsonInput(
+      "dayCloseDefaults",
+      dto.dayCloseDefaults ? { ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } : existing.dayCloseDefaults,
+    );
+    const createEstimateDefaults = parseRevenueSettingsJsonInput(
+      "estimateDefaults",
+      dto.estimateDefaults ? { ...existing.estimateDefaults, ...dto.estimateDefaults } : existing.estimateDefaults,
+    );
+    const createProviderQueryTemplates = parseRevenueSettingsJsonInput(
+      "providerQueryTemplates",
+      dto.providerQueryTemplates || existing.providerQueryTemplates,
+    );
+    const createAthenaChecklistDefaults = parseRevenueSettingsJsonInput(
+      "athenaChecklistDefaults",
+      dto.athenaChecklistDefaults || existing.athenaChecklistDefaults,
+    );
+    const createChecklistDefaults = parseRevenueSettingsJsonInput(
+      "checklistDefaults",
+      dto.checklistDefaults || existing.checklistDefaults,
+    );
+    const createServiceCatalog = parseRevenueSettingsJsonInput("serviceCatalog", dto.serviceCatalog || existing.serviceCatalog);
+    const createChargeSchedule = parseRevenueSettingsJsonInput("chargeSchedule", dto.chargeSchedule || existing.chargeSchedule);
+    const createReimbursementRules = parseRevenueSettingsJsonInput(
+      "reimbursementRules",
+      dto.reimbursementRules || existing.reimbursementRules,
+    );
 
     await prisma.revenueCycleSettings.upsert({
       where: { facilityId: facility.id },
       create: {
         facilityId: facility.id,
-        missedCollectionReasonsJson: asInputJson(dto.missedCollectionReasons || existing.missedCollectionReasons),
-        queueSlaJson: asInputJson(dto.queueSla || existing.queueSla),
-        dayCloseDefaultsJson: asInputJson(
-          dto.dayCloseDefaults ? { ...existing.dayCloseDefaults, ...dto.dayCloseDefaults } : existing.dayCloseDefaults,
-        ),
-        estimateDefaultsJson: asInputJson(
-          dto.estimateDefaults ? { ...existing.estimateDefaults, ...dto.estimateDefaults } : existing.estimateDefaults,
-        ),
-        providerQueryTemplatesJson: asInputJson(dto.providerQueryTemplates || existing.providerQueryTemplates),
+        missedCollectionReasonsJson: asInputJson(createMissedCollectionReasons),
+        queueSlaJson: asInputJson(createQueueSla),
+        dayCloseDefaultsJson: asInputJson(createDayCloseDefaults),
+        estimateDefaultsJson: asInputJson(createEstimateDefaults),
+        providerQueryTemplatesJson: asInputJson(createProviderQueryTemplates),
         athenaLinkTemplate: dto.athenaLinkTemplate ?? existing.athenaLinkTemplate,
-        athenaChecklistDefaultsJson: asInputJson(dto.athenaChecklistDefaults || existing.athenaChecklistDefaults),
-        checklistDefaultsJson: asInputJson(dto.checklistDefaults || existing.checklistDefaults),
-        serviceCatalogJson: asInputJson(dto.serviceCatalog || existing.serviceCatalog),
-        chargeScheduleJson: asInputJson(dto.chargeSchedule || existing.chargeSchedule),
-        reimbursementRulesJson: asInputJson(dto.reimbursementRules || existing.reimbursementRules),
+        athenaChecklistDefaultsJson: asInputJson(createAthenaChecklistDefaults),
+        checklistDefaultsJson: asInputJson(createChecklistDefaults),
+        serviceCatalogJson: asInputJson(createServiceCatalog),
+        chargeScheduleJson: asInputJson(createChargeSchedule),
+        reimbursementRulesJson: asInputJson(createReimbursementRules),
         schemaVersion: CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
       },
       update: {
         missedCollectionReasonsJson: dto.missedCollectionReasons
-          ? asInputJson(dto.missedCollectionReasons)
+          ? asInputJson(parseRevenueSettingsJsonInput("missedCollectionReasons", dto.missedCollectionReasons))
           : undefined,
-        queueSlaJson: dto.queueSla ? asInputJson(dto.queueSla) : undefined,
+        queueSlaJson: dto.queueSla ? asInputJson(parseRevenueSettingsJsonInput("queueSla", dto.queueSla)) : undefined,
         dayCloseDefaultsJson: dto.dayCloseDefaults
-          ? asInputJson({ ...existing.dayCloseDefaults, ...dto.dayCloseDefaults })
+          ? asInputJson(
+              parseRevenueSettingsJsonInput("dayCloseDefaults", {
+                ...existing.dayCloseDefaults,
+                ...dto.dayCloseDefaults,
+              }),
+            )
           : undefined,
         estimateDefaultsJson: dto.estimateDefaults
-          ? asInputJson({ ...existing.estimateDefaults, ...dto.estimateDefaults })
+          ? asInputJson(
+              parseRevenueSettingsJsonInput("estimateDefaults", {
+                ...existing.estimateDefaults,
+                ...dto.estimateDefaults,
+              }),
+            )
           : undefined,
         providerQueryTemplatesJson: dto.providerQueryTemplates
-          ? asInputJson(dto.providerQueryTemplates)
+          ? asInputJson(parseRevenueSettingsJsonInput("providerQueryTemplates", dto.providerQueryTemplates))
           : undefined,
         athenaLinkTemplate: dto.athenaLinkTemplate === undefined ? undefined : dto.athenaLinkTemplate,
         athenaChecklistDefaultsJson: dto.athenaChecklistDefaults
-          ? asInputJson(dto.athenaChecklistDefaults)
+          ? asInputJson(parseRevenueSettingsJsonInput("athenaChecklistDefaults", dto.athenaChecklistDefaults))
           : undefined,
         checklistDefaultsJson: dto.checklistDefaults
-          ? asInputJson(dto.checklistDefaults)
+          ? asInputJson(parseRevenueSettingsJsonInput("checklistDefaults", dto.checklistDefaults))
           : undefined,
         serviceCatalogJson: dto.serviceCatalog
-          ? asInputJson(dto.serviceCatalog)
+          ? asInputJson(parseRevenueSettingsJsonInput("serviceCatalog", dto.serviceCatalog))
           : undefined,
         chargeScheduleJson: dto.chargeSchedule
-          ? asInputJson(dto.chargeSchedule)
+          ? asInputJson(parseRevenueSettingsJsonInput("chargeSchedule", dto.chargeSchedule))
           : undefined,
         reimbursementRulesJson: dto.reimbursementRules
-          ? asInputJson(dto.reimbursementRules)
+          ? asInputJson(parseRevenueSettingsJsonInput("reimbursementRules", dto.reimbursementRules))
           : undefined,
         schemaVersion: CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
       }

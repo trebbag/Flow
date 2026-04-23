@@ -3,6 +3,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { asInputJson, parseGenericObjectJsonInput, parseStringArrayJsonInput } from "./persisted-json.js";
 import { encryptPhi, encryptPhiDate, isPhiEncryptionEnabled } from "./phi-encryption.js";
 import { env } from "./env.js";
+import { runWithFacilityScope } from "./facility-scope.js";
 
 function buildPhiCipherUpdates(params: {
   displayName?: string | null;
@@ -720,111 +721,128 @@ export async function ensurePatientRecord(
 }
 
 export async function backfillCanonicalPatients(db: DbClient) {
-  const facilitiesByClinicId = new Map<string, string>();
-  const clinics = await db.clinic.findMany({ select: { id: true, facilityId: true } });
-  clinics.forEach((clinic) => {
-    if (clinic.facilityId) {
-      facilitiesByClinicId.set(clinic.id, clinic.facilityId);
-    }
-  });
+  const facilities = await db.facility.findMany({ select: { id: true } });
+  for (const facility of facilities) {
+    await runWithFacilityScope(facility.id, async () => {
+      const clinics = await db.clinic.findMany({
+        where: { facilityId: facility.id },
+        select: { id: true, facilityId: true },
+      });
+      const facilitiesByClinicId = new Map<string, string>();
+      clinics.forEach((clinic) => {
+        if (clinic.facilityId) {
+          facilitiesByClinicId.set(clinic.id, clinic.facilityId);
+        }
+      });
 
-  const incomingRows = await db.incomingSchedule.findMany({
-    where: { patientId: { not: "" } },
-    select: { id: true, clinicId: true, patientId: true, patientRecordId: true, rawPayloadJson: true, intakeData: true },
-  });
-  for (const row of incomingRows) {
-    const facilityId = facilitiesByClinicId.get(row.clinicId);
-    if (!facilityId || !row.patientId?.trim()) continue;
-    const hints = extractPatientIdentityHints(row.rawPayloadJson, row.intakeData);
-    const normalizedSourcePatientId = normalizeSourcePatientId(row.patientId);
-    const normalizedDisplayName = hints.displayName ? normalizeDisplayName(hints.displayName) : null;
-    const patient =
-      (row.patientRecordId
-        ? await reconcileExistingPatientRecord(db, {
-            patientId: row.patientRecordId,
+      const incomingRows = await db.incomingSchedule.findMany({
+        where: {
+          patientId: { not: "" },
+          clinic: { facilityId: facility.id },
+        },
+        select: { id: true, clinicId: true, patientId: true, patientRecordId: true, rawPayloadJson: true, intakeData: true },
+      });
+      for (const row of incomingRows) {
+        const facilityId = facilitiesByClinicId.get(row.clinicId);
+        if (!facilityId || !row.patientId?.trim()) continue;
+        const hints = extractPatientIdentityHints(row.rawPayloadJson, row.intakeData);
+        const normalizedSourcePatientId = normalizeSourcePatientId(row.patientId);
+        const normalizedDisplayName = hints.displayName ? normalizeDisplayName(hints.displayName) : null;
+        const patient =
+          (row.patientRecordId
+            ? await reconcileExistingPatientRecord(db, {
+                patientId: row.patientRecordId,
+                facilityId,
+                sourcePatientId: row.patientId,
+                normalizedSourcePatientId,
+                displayName: hints.displayName,
+                normalizedDisplayName,
+                dateOfBirth: hints.dateOfBirth,
+              })
+            : null) ||
+          (await ensurePatientRecord(db, {
             facilityId,
             sourcePatientId: row.patientId,
-            normalizedSourcePatientId,
             displayName: hints.displayName,
-            normalizedDisplayName,
             dateOfBirth: hints.dateOfBirth,
-          })
-        : null) ||
-      (await ensurePatientRecord(db, {
-        facilityId,
-        sourcePatientId: row.patientId,
-        displayName: hints.displayName,
-        dateOfBirth: hints.dateOfBirth,
-      }));
-    if (row.patientRecordId !== patient.id) {
-      await db.incomingSchedule.update({
-        where: { id: row.id },
-        data: { patientRecordId: patient.id },
-      });
-    }
-  }
+          }));
+        if (row.patientRecordId !== patient.id) {
+          await db.incomingSchedule.update({
+            where: { id: row.id },
+            data: { patientRecordId: patient.id },
+          });
+        }
+      }
 
-  const encounters = await db.encounter.findMany({
-    where: { patientId: { not: "" } },
-    select: { id: true, clinicId: true, patientId: true, patientRecordId: true, intakeData: true },
-  });
-  for (const encounter of encounters) {
-    const facilityId = facilitiesByClinicId.get(encounter.clinicId);
-    if (!facilityId || !encounter.patientId?.trim()) continue;
-    const hints = extractPatientIdentityHints(encounter.intakeData);
-    const normalizedSourcePatientId = normalizeSourcePatientId(encounter.patientId);
-    const normalizedDisplayName = hints.displayName ? normalizeDisplayName(hints.displayName) : null;
-    const patient =
-      (encounter.patientRecordId
-        ? await reconcileExistingPatientRecord(db, {
-            patientId: encounter.patientRecordId,
+      const encounters = await db.encounter.findMany({
+        where: {
+          patientId: { not: "" },
+          clinic: { facilityId: facility.id },
+        },
+        select: { id: true, clinicId: true, patientId: true, patientRecordId: true, intakeData: true },
+      });
+      for (const encounter of encounters) {
+        const facilityId = facilitiesByClinicId.get(encounter.clinicId);
+        if (!facilityId || !encounter.patientId?.trim()) continue;
+        const hints = extractPatientIdentityHints(encounter.intakeData);
+        const normalizedSourcePatientId = normalizeSourcePatientId(encounter.patientId);
+        const normalizedDisplayName = hints.displayName ? normalizeDisplayName(hints.displayName) : null;
+        const patient =
+          (encounter.patientRecordId
+            ? await reconcileExistingPatientRecord(db, {
+                patientId: encounter.patientRecordId,
+                facilityId,
+                sourcePatientId: encounter.patientId,
+                normalizedSourcePatientId,
+                displayName: hints.displayName,
+                normalizedDisplayName,
+                dateOfBirth: hints.dateOfBirth,
+              })
+            : null) ||
+          (await ensurePatientRecord(db, {
             facilityId,
             sourcePatientId: encounter.patientId,
-            normalizedSourcePatientId,
             displayName: hints.displayName,
-            normalizedDisplayName,
             dateOfBirth: hints.dateOfBirth,
-          })
-        : null) ||
-      (await ensurePatientRecord(db, {
-        facilityId,
-        sourcePatientId: encounter.patientId,
-        displayName: hints.displayName,
-        dateOfBirth: hints.dateOfBirth,
-      }));
-    if (encounter.patientRecordId !== patient.id) {
-      await db.encounter.update({
-        where: { id: encounter.id },
-        data: { patientRecordId: patient.id },
-      });
-    }
-  }
+          }));
+        if (encounter.patientRecordId !== patient.id) {
+          await db.encounter.update({
+            where: { id: encounter.id },
+            data: { patientRecordId: patient.id },
+          });
+        }
+      }
 
-  const revenueCases = await db.revenueCase.findMany({
-    where: { patientId: { not: "" } },
-    select: { id: true, facilityId: true, patientId: true, patientRecordId: true },
-  });
-  for (const revenueCase of revenueCases) {
-    if (!revenueCase.facilityId || !revenueCase.patientId?.trim()) continue;
-    const normalizedSourcePatientId = normalizeSourcePatientId(revenueCase.patientId);
-    const patient =
-      (revenueCase.patientRecordId
-        ? await reconcileExistingPatientRecord(db, {
-            patientId: revenueCase.patientRecordId,
+      const revenueCases = await db.revenueCase.findMany({
+        where: {
+          patientId: { not: "" },
+          facilityId: facility.id,
+        },
+        select: { id: true, facilityId: true, patientId: true, patientRecordId: true },
+      });
+      for (const revenueCase of revenueCases) {
+        if (!revenueCase.facilityId || !revenueCase.patientId?.trim()) continue;
+        const normalizedSourcePatientId = normalizeSourcePatientId(revenueCase.patientId);
+        const patient =
+          (revenueCase.patientRecordId
+            ? await reconcileExistingPatientRecord(db, {
+                patientId: revenueCase.patientRecordId,
+                facilityId: revenueCase.facilityId,
+                sourcePatientId: revenueCase.patientId,
+                normalizedSourcePatientId,
+              })
+            : null) ||
+          (await ensurePatientRecord(db, {
             facilityId: revenueCase.facilityId,
             sourcePatientId: revenueCase.patientId,
-            normalizedSourcePatientId,
-          })
-        : null) ||
-      (await ensurePatientRecord(db, {
-        facilityId: revenueCase.facilityId,
-        sourcePatientId: revenueCase.patientId,
-      }));
-    if (revenueCase.patientRecordId !== patient.id) {
-      await db.revenueCase.update({
-        where: { id: revenueCase.id },
-        data: { patientRecordId: patient.id },
-      });
-    }
+          }));
+        if (revenueCase.patientRecordId !== patient.id) {
+          await db.revenueCase.update({
+            where: { id: revenueCase.id },
+            data: { patientRecordId: patient.id },
+          });
+        }
+      }
+    });
   }
 }

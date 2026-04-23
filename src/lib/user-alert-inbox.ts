@@ -134,22 +134,23 @@ export async function listUserInboxAlerts(params: {
   limit: number;
 }) {
   const status = params.tab === "archived" ? AlertInboxStatus.archived : AlertInboxStatus.active;
-  const [rows, total] = await prisma.$transaction([
-    prisma.userAlertInbox.findMany({
+  const [rows, total] = await prisma.$transaction(async (tx) => {
+    const alerts = await tx.userAlertInbox.findMany({
       where: {
         userId: params.userId,
         status
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: params.limit
-    }),
-    prisma.userAlertInbox.count({
+    });
+    const count = await tx.userAlertInbox.count({
       where: {
         userId: params.userId,
         status
       }
-    })
-  ]);
+    });
+    return [alerts, count] as const;
+  });
 
   return { rows, total };
 }

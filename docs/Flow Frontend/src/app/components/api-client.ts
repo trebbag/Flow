@@ -784,6 +784,9 @@ export type IncomingImportResult = {
   pendingIssues: IncomingImportIssue[];
   acceptedCount: number;
   pendingCount: number;
+  batchId: string | null;
+  batchIds: string[];
+  batchStatus: "processed" | "pending_review" | string;
 };
 
 export const incoming = {

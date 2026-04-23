@@ -247,6 +247,7 @@ model User {
   tasksCreated              Task[]                              @relation("TaskCreatedBy")
   tasksCompleted            Task[]                              @relation("TaskCompletedBy")
   tasksAcknowledged         Task[]                              @relation("TaskAcknowledgedBy")
+  tasksArchived             Task[]                              @relation("TaskArchivedBy")
   alertInbox                UserAlertInbox[]
   temporaryClinicOverrides  TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentUser")
   temporaryOverridesCreated TemporaryClinicAssignmentOverride[] @relation("TemporaryClinicAssignmentCreatedBy")
@@ -847,7 +848,7 @@ model Task {
   completedAt      DateTime?
   completedBy      String?
   archivedAt       DateTime?
-  archivedBy       String?
+  archivedByUserId String?         @map("archivedBy")
   notes            String?
   version          Int             @default(0)
   updatedAt        DateTime        @default(now()) @updatedAt
@@ -858,6 +859,7 @@ model Task {
   creator      User        @relation("TaskCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
   acknowledger User?       @relation("TaskAcknowledgedBy", fields: [acknowledgedBy], references: [id], onDelete: SetNull)
   completer    User?       @relation("TaskCompletedBy", fields: [completedBy], references: [id], onDelete: SetNull)
+  archiver     User?       @relation("TaskArchivedBy", fields: [archivedByUserId], references: [id], onDelete: SetNull)
   roomIssues   RoomIssue[]
 
   @@index([clinicId, status, createdAt])

@@ -20,6 +20,7 @@ import { createInboxAlert } from "../lib/user-alert-inbox.js";
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { recordEntityEventTx } from "../lib/entity-events.js";
 import { booleanish } from "../lib/zod-helpers.js";
+import { applyVersionedUpdateTx } from "../lib/versioned-updates.js";
 import {
   getPreRoomingAvailability,
   getRoomDetail,
@@ -355,7 +356,10 @@ export async function registerRoomRoutes(app: FastifyInstance) {
 
       const linkedIssue = await tx.roomIssue.update({
         where: { id: issue.id },
-        data: { taskId: task.id }
+        data: {
+          taskId: task.id,
+          version: { increment: 1 }
+        }
       });
 
       if (dto.placesRoomOnHold) {
@@ -437,23 +441,27 @@ export async function registerRoomRoutes(app: FastifyInstance) {
     const updated = await prisma.$transaction(async (tx) => {
       const versionFilter: Prisma.RoomIssueWhereInput =
         dto.expectedVersion !== undefined ? { version: dto.expectedVersion } : {};
-      const updateResult = await tx.roomIssue.updateMany({
-        where: { id: issueId, ...versionFilter },
-        data: {
-          status: dto.status,
-          severity: dto.severity,
-          title: dto.title,
-          description: dto.description === undefined ? undefined : dto.description,
-          resolutionNote: dto.resolutionNote,
-          resolvedAt: resolved ? new Date() : undefined,
-          resolvedByUserId: resolved ? request.user!.id : undefined,
-          version: { increment: 1 }
-        }
+      const row = await applyVersionedUpdateTx({
+        update: () =>
+          tx.roomIssue.updateMany({
+            where: { id: issueId, ...versionFilter },
+            data: {
+              status: dto.status,
+              severity: dto.severity,
+              title: dto.title,
+              description: dto.description === undefined ? undefined : dto.description,
+              resolutionNote: dto.resolutionNote,
+              resolvedAt: resolved ? new Date() : undefined,
+              resolvedByUserId: resolved ? request.user!.id : undefined,
+              version: { increment: 1 }
+            }
+          }),
+        findLatest: () => tx.roomIssue.findUnique({ where: { id: issueId }, select: { id: true } }),
+        read: () => tx.roomIssue.findUniqueOrThrow({ where: { id: issueId } }),
+        notFoundCode: "ROOM_ISSUE_NOT_FOUND",
+        notFoundMessage: "Room issue not found",
+        conflictMessage: "Room issue version mismatch",
       });
-      if (updateResult.count === 0) {
-        throw new ApiError({ statusCode: 409, code: "VERSION_MISMATCH", message: "Room issue version mismatch" });
-      }
-      const row = await tx.roomIssue.findUniqueOrThrow({ where: { id: issueId } });
 
       if (resolved) {
         await tx.roomOperationalEvent.create({

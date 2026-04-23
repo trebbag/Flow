@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus, ScheduleSource, TemplateType } from "@prisma/client";
+import { EncounterStatus, RoleName, RoomEventType, RoomIssueStatus, RoomIssueType, RoomOperationalStatus, ScheduleSource, TemplateType } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
@@ -578,6 +578,188 @@ describe("Flow backend core relationships", () => {
     expect(staleSave.json()).toEqual(
       expect.objectContaining({
         code: "VERSION_MISMATCH",
+      }),
+    );
+  });
+
+  it("rejects malformed encounter JSON payloads on every persisted write boundary", async () => {
+    const ctx = await bootstrapCore();
+
+    const invalidCreate = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-BAD-INTAKE-1",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+        intakeData: [],
+      },
+    });
+    expect(invalidCreate.statusCode).toBe(400);
+    expect(invalidCreate.json()).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+      }),
+    );
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-BAD-JSON-2",
+        clinicId: ctx.clinic.id,
+        providerId: ctx.provider.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    let encounter = created.json();
+
+    const toRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "Rooming",
+        version: encounter.version,
+      },
+    });
+    expect(toRooming.statusCode).toBe(200);
+    encounter = toRooming.json();
+
+    const invalidRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        version: encounter.version,
+        data: {
+          "service.capture_items": [{ id: "svc-bad-rooming" }],
+        },
+      },
+    });
+    expect(invalidRooming.statusCode).toBe(400);
+    expect(invalidRooming.json()).toEqual(
+      expect.objectContaining({
+        code: "INVALID_ROOMINGDATA",
+      }),
+    );
+
+    const validRooming = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        version: encounter.version,
+        data: {
+          vitals: "120/80",
+          allergiesChanged: "No",
+          medicationReconciliationChanged: "No",
+          labChanged: "No",
+          pharmacyChanged: "No",
+          "service.capture_items": [
+            {
+              id: "svc-test-valid-rooming",
+              catalogItemId: "svc-venipuncture",
+              label: "Venipuncture",
+              sourceRole: "MA",
+              quantity: 1,
+              suggestedProcedureCode: "36415",
+              expectedChargeCents: 1800,
+              detailSchemaKey: "specimen_collection",
+              detailJson: {
+                specimenType: "Blood",
+                collectionMethod: "Venipuncture",
+                sentToLab: "Yes",
+              },
+              detailComplete: true,
+            },
+          ],
+        },
+      },
+    });
+    expect(validRooming.statusCode).toBe(200);
+    encounter = validRooming.json();
+
+    const toReady = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/status`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        toStatus: "ReadyForProvider",
+        version: encounter.version,
+      },
+    });
+    expect(toReady.statusCode).toBe(200);
+    encounter = toReady.json();
+
+    const startVisit = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/start`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        version: encounter.version,
+      },
+    });
+    expect(startVisit.statusCode).toBe(200);
+    encounter = startVisit.json();
+
+    const invalidClinician = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/end`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        version: encounter.version,
+        data: [],
+      },
+    });
+    expect(invalidClinician.statusCode).toBe(400);
+    expect(invalidClinician.json()).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+      }),
+    );
+
+    const validClinician = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/visit/end`,
+      headers: authHeaders(ctx.clinician.id, RoleName.Clinician),
+      payload: {
+        version: encounter.version,
+        data: {
+          assessment: "Visit complete",
+          "coding.working_diagnosis_codes_text": "J01.90",
+          "coding.working_procedure_codes_text": "99213",
+          "documentation.chief_concern_summary": "Follow-up visit review",
+          "documentation.assessment_summary": "Assessment documented for revenue handoff.",
+          "documentation.plan_follow_up": "Plan documented and follow-up instructions provided.",
+          "documentation.orders_or_procedures": "Orders and performed procedures documented.",
+        },
+      },
+    });
+    expect(validClinician.statusCode).toBe(200);
+    encounter = validClinician.json();
+
+    const invalidCheckout = await app.inject({
+      method: "POST",
+      url: `/encounters/${encounter.id}/checkout/complete`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        version: encounter.version,
+        checkoutData: [],
+      },
+    });
+    expect(invalidCheckout.statusCode).toBe(400);
+    expect(invalidCheckout.json()).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
       }),
     );
   });
@@ -1786,6 +1968,59 @@ describe("Flow backend core relationships", () => {
     expect(outboxRow).toBeTruthy();
   });
 
+  it("rejects stale room issue updates after the version has advanced", async () => {
+    const ctx = await bootstrapCore();
+
+    const created = await app.inject({
+      method: "POST",
+      url: `/rooms/${ctx.clinicRoomA.id}/issues`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: {
+        clinicId: ctx.clinic.id,
+        issueType: "Equipment",
+        severity: 2,
+        title: "BP cuff missing",
+        description: "Need replacement cuff",
+        placesRoomOnHold: false,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    const issue = created.json().issue as { id: string; version: number };
+
+    const firstUpdate = await app.inject({
+      method: "PATCH",
+      url: `/rooms/issues/${issue.id}`,
+      headers: authHeaders(ctx.officeManager.id, RoleName.OfficeManager),
+      payload: {
+        expectedVersion: issue.version,
+        status: "Open",
+        severity: 3,
+        title: "BP cuff missing urgently",
+        description: "Escalated replacement request",
+      },
+    });
+    expect(firstUpdate.statusCode).toBe(200);
+
+    const staleUpdate = await app.inject({
+      method: "PATCH",
+      url: `/rooms/issues/${issue.id}`,
+      headers: authHeaders(ctx.officeManager.id, RoleName.OfficeManager),
+      payload: {
+        expectedVersion: issue.version,
+        status: "Resolved",
+        severity: 1,
+        title: "Should fail",
+        resolutionNote: "stale write",
+      },
+    });
+    expect(staleUpdate.statusCode).toBe(409);
+    expect(staleUpdate.json()).toEqual(
+      expect.objectContaining({
+        code: "VERSION_MISMATCH",
+      }),
+    );
+  });
+
   it("persists committed audit and outbox rows for room actions and checklists", async () => {
     const ctx = await bootstrapCore();
 
@@ -2228,6 +2463,9 @@ describe("Flow backend core relationships", () => {
       expect(imported.statusCode).toBe(200);
       expect(imported.json().acceptedCount).toBe(rowCount);
       expect(imported.json().pendingCount).toBe(0);
+      expect(imported.json().batchStatus).toBe("processed");
+      expect(imported.json().batchId).toBeTruthy();
+      expect(imported.json().batchIds).toHaveLength(1);
 
       const totalRows = await prisma.incomingSchedule.count({
         where: { clinicId: ctx.clinic.id, patientId: { startsWith: "HV-" } }
@@ -2264,6 +2502,9 @@ describe("Flow backend core relationships", () => {
     expect(imported.statusCode).toBe(200);
     expect(imported.json().acceptedCount).toBe(1);
     expect(imported.json().pendingCount).toBe(2);
+    expect(imported.json().batchStatus).toBe("pending_review");
+    expect(imported.json().batchIds).toHaveLength(1);
+    expect(imported.json().batchId).toBeTruthy();
 
     const accepted = await prisma.incomingSchedule.findMany({
       where: {
@@ -2337,6 +2578,7 @@ describe("Flow backend core relationships", () => {
     expect(imported.statusCode).toBe(200);
     expect(imported.json().acceptedCount).toBe(1);
     expect(imported.json().pendingCount).toBe(2);
+    expect(imported.json().batchStatus).toBe("pending_review");
 
     const accepted = await prisma.incomingSchedule.findFirst({
       where: { patientId: "PT-FUTURE-1" }
@@ -3074,6 +3316,21 @@ describe("Flow backend core relationships", () => {
       }
     });
     expect(outOfScopeImport.statusCode).toBe(403);
+
+    const facilityOverrideImport = await app.inject({
+      method: "POST",
+      url: "/incoming/import",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        facilityId: secondFacility.id,
+        clinicId: ctx.clinic.id,
+        dateOfService: date,
+        csvText: "patientId,appointmentTime,providerLastName,reasonForVisit\nPT-OVERRIDE,09:00,A,Follow-up",
+        source: "csv",
+        fileName: "facility-override.csv"
+      }
+    });
+    expect(facilityOverrideImport.statusCode).toBe(403);
 
     await prisma.clinic.update({
       where: { id: ctx.clinic.id },
@@ -4853,6 +5110,51 @@ describe("Flow backend core relationships", () => {
     expect(completed.json().notes).toContain("Completed");
   });
 
+  it("rejects stale task updates after the version has advanced", async () => {
+    const ctx = await bootstrapCore();
+
+    const createdTask = await app.inject({
+      method: "POST",
+      url: "/tasks",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        roomId: ctx.clinicRoomA.id,
+        taskType: "follow_up",
+        description: "Concurrency test",
+        assignedToRole: RoleName.MA,
+      },
+    });
+    expect(createdTask.statusCode).toBe(200);
+    const task = createdTask.json() as { id: string; version: number };
+
+    const firstUpdate = await app.inject({
+      method: "PATCH",
+      url: `/tasks/${task.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        expectedVersion: task.version,
+        notes: "fresh write",
+      },
+    });
+    expect(firstUpdate.statusCode).toBe(200);
+
+    const staleUpdate = await app.inject({
+      method: "PATCH",
+      url: `/tasks/${task.id}`,
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        expectedVersion: task.version,
+        notes: "stale write",
+      },
+    });
+    expect(staleUpdate.statusCode).toBe(409);
+    expect(staleUpdate.json()).toEqual(
+      expect.objectContaining({
+        code: "VERSION_MISMATCH",
+      }),
+    );
+  });
+
   it("persists committed audit and outbox rows for safety and task mutations", async () => {
     const ctx = await bootstrapCore();
 
@@ -6160,6 +6462,30 @@ describe("Flow backend core relationships", () => {
     );
   });
 
+  it("rejects malformed revenue settings writes with a structured 400 response", async () => {
+    const ctx = await bootstrapCore();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/revenue-settings",
+      headers: authHeaders(ctx.admin.id, RoleName.Admin),
+      payload: {
+        facilityId: ctx.facility.id,
+        queueSla: {
+          financial_readiness: 0,
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        correlationId: expect.any(String),
+      }),
+    );
+  });
+
   it("surfaces integrity warnings for malformed revenue settings JSON", async () => {
     const ctx = await bootstrapCore();
 
@@ -6371,4 +6697,162 @@ describe("Flow backend core relationships", () => {
     const canonicalPersisted = await prisma.patient.findUnique({ where: { id: canonical.id } });
     expect(canonicalPersisted?.archivedAt).toBeNull();
   });
+
+  it.skipIf(!process.env.POSTGRES_DATABASE_URL)(
+    "enforces Postgres RLS isolation on representative facility-scoped tables",
+    async () => {
+      const postgresUrl = process.env.POSTGRES_DATABASE_URL;
+      expect(postgresUrl).toBeTruthy();
+
+      const [{ PrismaPg }, { PrismaClient: PostgresPrismaClient }] = await Promise.all([
+        import("@prisma/adapter-pg"),
+        import("../generated/postgres-client/index.js"),
+      ]);
+
+      const postgresPrisma = new PostgresPrismaClient({
+        adapter: new PrismaPg({ connectionString: postgresUrl! }),
+      });
+
+      const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      const today = DateTime.now().startOf("day").toJSDate();
+
+      const facilityA = await postgresPrisma.facility.create({
+        data: {
+          name: `RLS Facility A ${suffix}`,
+          shortCode: `RLA${suffix.slice(-4)}`,
+          timezone: "America/New_York",
+        },
+      });
+      const facilityB = await postgresPrisma.facility.create({
+        data: {
+          name: `RLS Facility B ${suffix}`,
+          shortCode: `RLB${suffix.slice(-4)}`,
+          timezone: "America/New_York",
+        },
+      });
+
+      const createFacilityFixture = async (facilityId: string, label: "A" | "B") =>
+        postgresPrisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.current_facility_id', ${facilityId}, true)`;
+
+          const clinic = await tx.clinic.create({
+            data: {
+              facilityId,
+              name: `RLS Clinic ${label} ${suffix}`,
+              shortCode: `RL${label}${suffix.slice(-3)}`,
+              timezone: "America/New_York",
+              maRun: false,
+            },
+          });
+
+          const patient = await tx.patient.create({
+            data: {
+              facilityId,
+              sourcePatientId: `RLS-PAT-${label}-${suffix}`,
+              normalizedSourcePatientId: `rls-pat-${label.toLowerCase()}-${suffix}`,
+              displayName: `RLS Patient ${label}`,
+              dateOfBirth: new Date("1990-01-01T00:00:00.000Z"),
+            },
+          });
+
+          const encounter = await tx.encounter.create({
+            data: {
+              patientId: `RLS-PAT-${label}-${suffix}`,
+              patientRecordId: patient.id,
+              clinicId: clinic.id,
+              currentStatus: EncounterStatus.Lobby,
+              dateOfService: today,
+              walkIn: true,
+            },
+          });
+
+          const revenueCase = await tx.revenueCase.create({
+            data: {
+              encounterId: encounter.id,
+              facilityId,
+              clinicId: clinic.id,
+              patientId: `RLS-PAT-${label}-${suffix}`,
+              patientRecordId: patient.id,
+              dateOfService: today,
+            },
+          });
+
+          return { clinic, patient, encounter, revenueCase };
+        });
+
+      const facilityAFixture = await createFacilityFixture(facilityA.id, "A");
+      const facilityBFixture = await createFacilityFixture(facilityB.id, "B");
+
+      const readScopedIds = async (facilityId: string) =>
+        postgresPrisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.current_facility_id', ${facilityId}, true)`;
+
+          const [patients, encounters, revenueCases] = await Promise.all([
+            tx.patient.findMany({
+              where: {
+                id: { in: [facilityAFixture.patient.id, facilityBFixture.patient.id] },
+              },
+              select: { id: true },
+              orderBy: { id: "asc" },
+            }),
+            tx.encounter.findMany({
+              where: {
+                id: { in: [facilityAFixture.encounter.id, facilityBFixture.encounter.id] },
+              },
+              select: { id: true },
+              orderBy: { id: "asc" },
+            }),
+            tx.revenueCase.findMany({
+              where: {
+                id: { in: [facilityAFixture.revenueCase.id, facilityBFixture.revenueCase.id] },
+              },
+              select: { id: true },
+              orderBy: { id: "asc" },
+            }),
+          ]);
+
+          return {
+            patientIds: patients.map((row) => row.id),
+            encounterIds: encounters.map((row) => row.id),
+            revenueCaseIds: revenueCases.map((row) => row.id),
+          };
+        });
+
+      try {
+        const scopeA = await readScopedIds(facilityA.id);
+        expect(scopeA.patientIds).toEqual([facilityAFixture.patient.id]);
+        expect(scopeA.encounterIds).toEqual([facilityAFixture.encounter.id]);
+        expect(scopeA.revenueCaseIds).toEqual([facilityAFixture.revenueCase.id]);
+
+        const scopeB = await readScopedIds(facilityB.id);
+        expect(scopeB.patientIds).toEqual([facilityBFixture.patient.id]);
+        expect(scopeB.encounterIds).toEqual([facilityBFixture.encounter.id]);
+        expect(scopeB.revenueCaseIds).toEqual([facilityBFixture.revenueCase.id]);
+      } finally {
+        await postgresPrisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.current_facility_id', ${facilityA.id}, true)`;
+          await tx.revenueCase.deleteMany({ where: { id: facilityAFixture.revenueCase.id } });
+          await tx.encounter.deleteMany({ where: { id: facilityAFixture.encounter.id } });
+          await tx.patient.deleteMany({ where: { id: facilityAFixture.patient.id } });
+          await tx.clinic.deleteMany({ where: { id: facilityAFixture.clinic.id } });
+        });
+
+        await postgresPrisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.current_facility_id', ${facilityB.id}, true)`;
+          await tx.revenueCase.deleteMany({ where: { id: facilityBFixture.revenueCase.id } });
+          await tx.encounter.deleteMany({ where: { id: facilityBFixture.encounter.id } });
+          await tx.patient.deleteMany({ where: { id: facilityBFixture.patient.id } });
+          await tx.clinic.deleteMany({ where: { id: facilityBFixture.clinic.id } });
+        });
+
+        await postgresPrisma.facility.deleteMany({
+          where: {
+            id: { in: [facilityA.id, facilityB.id] },
+          },
+        });
+
+        await postgresPrisma.$disconnect();
+      }
+    },
+  );
 });
