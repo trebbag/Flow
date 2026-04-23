@@ -705,44 +705,45 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
       ...(query.clinicId ? { id: query.clinicId } : {})
     };
 
-    const [clinics, providers, assignments, reasons] = await Promise.all([
-      prisma.clinic.findMany({
-        where: clinicWhere,
-        select: { id: true, name: true, shortCode: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.provider.findMany({
-        where: {
-          active: true,
-          clinic: clinicWhere
-        },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" }
-      }),
-      prisma.clinicAssignment.findMany({
-        where: {
-          clinic: clinicWhere,
-          providerUser: { status: "active" }
-        },
-        select: {
-          clinicId: true,
-          providerUser: { select: { name: true } }
-        }
-      }),
-      prisma.reasonForVisit.findMany({
-        where: {
-          facilityId: facility.id,
-          status: "active",
-          ...(query.clinicId
-            ? {
-                OR: [{ clinicAssignments: { some: { clinicId: query.clinicId } } }, { clinicId: query.clinicId }]
-              }
-            : {})
-        },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" }
-      })
-    ]);
+    const clinics = await prisma.clinic.findMany({
+      where: clinicWhere,
+      select: { id: true, name: true, shortCode: true },
+      orderBy: { name: "asc" }
+    });
+
+    const providers = await prisma.provider.findMany({
+      where: {
+        active: true,
+        clinic: clinicWhere
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    });
+
+    const assignments = await prisma.clinicAssignment.findMany({
+      where: {
+        clinic: clinicWhere,
+        providerUser: { status: "active" }
+      },
+      select: {
+        clinicId: true,
+        providerUser: { select: { name: true } }
+      }
+    });
+
+    const reasons = await prisma.reasonForVisit.findMany({
+      where: {
+        facilityId: facility.id,
+        status: "active",
+        ...(query.clinicId
+          ? {
+              OR: [{ clinicAssignments: { some: { clinicId: query.clinicId } } }, { clinicId: query.clinicId }]
+            }
+          : {})
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    });
 
     const providerLastNames = Array.from(
       new Set(
