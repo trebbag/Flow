@@ -15,9 +15,40 @@ log() {
   printf '[flow-azure-startup] %s\n' "$*"
 }
 
+promote_extracted_node_modules_if_available() {
+  local source_dir=""
+
+  if [[ -d "${EXTRACT_DIR}/package/node_modules" ]]; then
+    source_dir="${EXTRACT_DIR}/package/node_modules"
+  elif [[ -d "${EXTRACT_DIR}/node_modules" ]]; then
+    source_dir="${EXTRACT_DIR}/node_modules"
+  fi
+
+  if [[ -z "${source_dir}" ]]; then
+    return 1
+  fi
+
+  if [[ ! -f "${source_dir}/fastify/package.json" ]]; then
+    return 1
+  fi
+
+  if [[ ! -f "${source_dir}/dotenv/package.json" ]]; then
+    return 1
+  fi
+
+  rm -rf "${MODULES_DIR}"
+  ln -s "${source_dir}" "${MODULES_DIR}"
+  log "Reused extracted runtime dependencies: ${MODULES_DIR} -> ${source_dir}"
+  return 0
+}
+
 extract_node_modules_if_needed() {
   if [[ -f "${MODULES_DIR}/fastify/package.json" ]]; then
     log "Runtime dependencies already available."
+    return 0
+  fi
+
+  if promote_extracted_node_modules_if_available; then
     return 0
   fi
 
