@@ -23,6 +23,7 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       PACKAGE_PATH: ./.azure/backend-package
+      PACKAGE_ZIP_PATH: ./.azure/backend-package.zip
       DATABASE_URL: file:./prisma/dev.db
 
     steps:
@@ -145,11 +146,20 @@ jobs:
           cp -RL "${PRISMA_CLIENT_DIR}" "${PACKAGE_PATH}/node_modules/@prisma/client"
           cp -RL "${GENERATED_PRISMA_DIR}" "${PACKAGE_PATH}/node_modules/.prisma"
 
+      - name: Create clean deployment zip
+        run: |
+          python3 scripts/create-clean-zip.py "${PACKAGE_PATH}" "${PACKAGE_ZIP_PATH}"
+
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: ${{ env.PACKAGE_PATH }}
+        run: |
+          az webapp deploy \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --src-path "${PACKAGE_ZIP_PATH}" \
+            --type zip \
+            --clean true \
+            --restart true \
+            --track-status false
 
       - name: Configure startup command
         run: |

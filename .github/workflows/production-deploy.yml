@@ -127,6 +127,7 @@ jobs:
       PROD_HEALTH_URL: ${{ vars.PROD_HEALTH_URL }}
       PROD_READY_URL: ${{ vars.PROD_READY_URL }}
       PACKAGE_PATH: ./.azure/backend-package
+      PACKAGE_ZIP_PATH: ./.azure/backend-package.zip
     steps:
       - name: Validate deployment inputs
         run: |
@@ -204,12 +205,21 @@ jobs:
           cp -RL "${PRISMA_CLIENT_DIR}" "${PACKAGE_PATH}/node_modules/@prisma/client"
           cp -RL "${GENERATED_PRISMA_DIR}" "${PACKAGE_PATH}/node_modules/.prisma"
 
+      - name: Create clean deployment zip
+        run: |
+          python3 scripts/create-clean-zip.py "${PACKAGE_PATH}" "${PACKAGE_ZIP_PATH}"
+
       - name: Deploy to staging slot
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          slot-name: staging
-          package: ${{ env.PACKAGE_PATH }}
+        run: |
+          az webapp deploy \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --slot staging \
+            --src-path "${PACKAGE_ZIP_PATH}" \
+            --type zip \
+            --clean true \
+            --restart true \
+            --track-status false
 
       - name: Configure startup command on staging slot
         run: |
