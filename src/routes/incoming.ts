@@ -295,6 +295,10 @@ function assertClinicInUserScope(user: ScopedRequestUser, clinic: { id: string; 
 }
 
 async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
+  if (user.facilityId) {
+    enterFacilityScope(user.facilityId);
+  }
+
   const clinic = await prisma.clinic.findUnique({
     where: { id: clinicId },
     select: { id: true, facilityId: true, timezone: true, status: true, maRun: true }
@@ -307,6 +311,10 @@ async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
 
 async function resolveScopedFacility(user: ScopedRequestUser, requestedFacilityId?: string | null) {
   const requested = requestedFacilityId?.trim() || user.facilityId || null;
+  if (requested) {
+    enterFacilityScope(requested);
+  }
+
   if (requested) {
     const facility = await prisma.facility.findUnique({
       where: { id: requested },

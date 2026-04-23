@@ -260,6 +260,10 @@ type ScopedClinic = {
 };
 
 async function resolveClinicsInScope(user: { clinicId: string | null; facilityId: string | null }, requestedClinicId?: string) {
+  if (user.facilityId) {
+    enterFacilityScope(user.facilityId);
+  }
+
   if (requestedClinicId) {
     const clinic = await prisma.clinic.findUnique({
       where: { id: requestedClinicId },

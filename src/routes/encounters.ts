@@ -38,6 +38,7 @@ import {
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 import { applyVersionedUpdateTx } from "../lib/versioned-updates.js";
+import { enterFacilityScope } from "../lib/facility-scope.js";
 
 const defaultAllowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   Incoming: ["Lobby"],
@@ -287,6 +288,10 @@ async function assertClinicInUserScope(user: ScopedRequestUser, clinic: { id: st
 }
 
 async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
+  if (user.facilityId) {
+    enterFacilityScope(user.facilityId);
+  }
+
   const clinic = await prisma.clinic.findUnique({
     where: { id: clinicId },
     select: { id: true, facilityId: true, timezone: true, status: true, maRun: true }
@@ -297,6 +302,10 @@ async function resolveScopedClinic(user: ScopedRequestUser, clinicId: string) {
 }
 
 async function assertEncounterInScope(encounter: { clinicId: string }, user: ScopedRequestUser) {
+  if (user.facilityId) {
+    enterFacilityScope(user.facilityId);
+  }
+
   const clinic = await prisma.clinic.findUnique({
     where: { id: encounter.clinicId },
     select: { id: true, facilityId: true }

@@ -103,6 +103,9 @@ export async function backfillRoomOperationalStates() {
 
 export async function getRoomScopeClinicIds(user: RequestUser, requestedClinicId?: string | null) {
   const requested = requestedClinicId?.trim() || null;
+  if (user.facilityId) {
+    enterFacilityScope(user.facilityId);
+  }
   const clinicWhere: Prisma.ClinicWhereInput = {
     status: { not: "archived" },
     ...(user.facilityId ? { facilityId: user.facilityId } : {})

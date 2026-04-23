@@ -531,6 +531,7 @@ async function resolveFacilityForRequest(request: FastifyRequest, requestedFacil
   const requested = requestedFacilityId?.trim() || user.activeFacilityId || user.facilityId || undefined;
 
   if (requested) {
+    enterFacilityScope(requested);
     const facility = await prisma.facility.findUnique({ where: { id: requested } });
     requireCondition(facility, 404, "Facility not found");
     if (scopedIds && !scopedIds.includes(facility.id)) {
@@ -578,6 +579,7 @@ function parseFacilityDateBoundary(
 }
 
 async function resolveClinicForFacility(clinicId: string, facilityId: string) {
+  enterFacilityScope(facilityId);
   const clinic = await prisma.clinic.findUnique({
     where: { id: clinicId },
     select: { id: true, facilityId: true }
