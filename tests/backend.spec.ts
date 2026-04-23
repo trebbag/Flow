@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { buildApp } from "../src/app.js";
 import { ensurePatientRecord } from "../src/lib/patients.js";
+import { flushRevenueSyncQueue, getRevenueSyncWorkerStatus, queueRevenueScopeSync } from "../src/lib/revenue-sync-queue.js";
 import { authHeaders, bootstrapCore, jwtHeaders, prisma, resetDb } from "./helpers.js";
 
 const app = buildApp();
@@ -783,6 +784,29 @@ describe("Flow backend core relationships", () => {
         }),
       }),
     );
+  });
+
+  it("does not report completed revenue sync leases as stale", async () => {
+    const ctx = await bootstrapCore();
+
+    await queueRevenueScopeSync(prisma, {
+      facilityId: ctx.facility.id,
+      clinicIds: [ctx.clinic.id],
+      fromDateKey: "2026-04-23",
+      toDateKey: "2026-04-23",
+      timezone: ctx.clinic.timezone,
+    });
+
+    await flushRevenueSyncQueue(prisma);
+
+    const status = await getRevenueSyncWorkerStatus(prisma);
+    expect(status.pendingCount).toBe(0);
+    expect(status.staleLeaseCount).toBe(0);
+    await expect(
+      prisma.workerLease.count({
+        where: { leaseKey: { startsWith: "revenue-sync:" } },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("accepts required intake yes/no fields when the value is explicitly No", async () => {

@@ -126,6 +126,16 @@ async function heartbeatFacilityLease(db: PrismaClient, facilityId: string, last
 }
 
 async function releaseFacilityLease(db: PrismaClient, facilityId: string, leaseError?: string | null) {
+  if (!leaseError) {
+    await db.workerLease.deleteMany({
+      where: {
+        leaseKey: leaseKeyForFacility(facilityId),
+        ownerId: WORKER_OWNER_ID,
+      },
+    });
+    return;
+  }
+
   await db.workerLease.updateMany({
     where: {
       leaseKey: leaseKeyForFacility(facilityId),
