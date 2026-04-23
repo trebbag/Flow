@@ -145,8 +145,8 @@ jobs:
           mkdir -p "${PACKAGE_PATH}/node_modules/@prisma"
           cp -RL "${PRISMA_CLIENT_DIR}" "${PACKAGE_PATH}/node_modules/@prisma/client"
           cp -RL "${GENERATED_PRISMA_DIR}" "${PACKAGE_PATH}/node_modules/.prisma"
-          tar -C "${PACKAGE_PATH}" -czf "${PACKAGE_PATH}/node_modules.tar.gz" node_modules
-          rm -rf "${PACKAGE_PATH}/node_modules"
+          rm -rf "${PACKAGE_PATH}/.runtime_node_modules"
+          mv "${PACKAGE_PATH}/node_modules" "${PACKAGE_PATH}/.runtime_node_modules"
           cat > "${PACKAGE_PATH}/package.json" <<'JSON'
           {"name":"flow-backend-runtime","private":true,"type":"module"}
           JSON

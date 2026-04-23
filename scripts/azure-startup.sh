@@ -5,6 +5,7 @@ APP_DIR="${FLOW_AZURE_APP_DIR:-/home/site/wwwroot}"
 EXTRACT_ROOT="${APP_DIR}/.node_modules_extracts"
 LOCK_DIR="${APP_DIR}/.node_modules_lock"
 MODULES_DIR="${APP_DIR}/node_modules"
+PACKAGED_MODULES_DIR="${APP_DIR}/.runtime_node_modules"
 MODULES_TARBALL="${APP_DIR}/node_modules.tar.gz"
 LOG_DIR="${FLOW_AZURE_LOG_DIR:-/home/LogFiles}"
 LOG_FILE="${LOG_DIR}/flow-azure-startup.log"
@@ -70,11 +71,31 @@ promote_extracted_node_modules_if_available() {
   return 1
 }
 
+promote_packaged_node_modules_if_available() {
+  if [[ ! -d "${PACKAGED_MODULES_DIR}" ]]; then
+    return 1
+  fi
+
+  if ! is_runtime_dependency_tree_ready "${PACKAGED_MODULES_DIR}"; then
+    log "Packaged runtime dependency tree is present but incomplete."
+    return 1
+  fi
+
+  promote_dependency_tree "${PACKAGED_MODULES_DIR}"
+  log "Using packaged runtime dependencies from ${PACKAGED_MODULES_DIR}."
+  return 0
+}
+
 with_dependency_lock() {
   local attempt=0
 
   while ! mkdir "${LOCK_DIR}" 2>/dev/null; do
     attempt=$((attempt + 1))
+    if [[ -d "${LOCK_DIR}" ]] && [[ -n "$(find "${LOCK_DIR}" -maxdepth 0 -mmin +5 -print -quit 2>/dev/null)" ]]; then
+      log "Removing stale dependency extraction lock."
+      rm -rf "${LOCK_DIR}"
+      continue
+    fi
     if (( attempt > 60 )); then
       log "Timed out waiting for dependency extraction lock."
       return 1
@@ -115,6 +136,10 @@ extract_node_modules_under_lock() {
     return 0
   fi
 
+  if promote_packaged_node_modules_if_available; then
+    return 0
+  fi
+
   if promote_extracted_node_modules_if_available; then
     return 0
   fi
@@ -125,6 +150,10 @@ extract_node_modules_under_lock() {
 extract_node_modules_if_needed() {
   if [[ -f "${MODULES_DIR}/fastify/package.json" ]]; then
     log "Runtime dependencies already available."
+    return 0
+  fi
+
+  if promote_packaged_node_modules_if_available; then
     return 0
   fi
 
