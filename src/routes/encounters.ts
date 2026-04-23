@@ -1730,6 +1730,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       request,
       payload: dto,
       execute: async () => {
+        reenterUserFacilityScope(request.user!);
         const encounter = await prisma.encounter.findUnique({ where: { id: encounterId } });
         requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
         await assertEncounterInScope(encounter, request.user!);
