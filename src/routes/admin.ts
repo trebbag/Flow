@@ -1336,24 +1336,22 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       });
 
       const clinicIds = clinics.map((row) => row.id);
-      const [providers, roomAssignments, clinicAssignments] = await Promise.all([
-        prisma.provider.groupBy({
-          by: ["clinicId"],
-          where: { clinicId: { in: clinicIds }, active: true },
-          _count: { _all: true }
-        }),
-        prisma.clinicRoomAssignment.findMany({
-          where: { clinicId: { in: clinicIds }, active: true },
-          include: { room: true }
-        }),
-        prisma.clinicAssignment.findMany({
-          where: { clinicId: { in: clinicIds } },
-          include: {
-            providerUser: { select: { id: true, name: true, status: true } },
-            maUser: { select: { id: true, name: true, status: true } }
-          }
-        })
-      ]);
+      const providers = await prisma.provider.groupBy({
+        by: ["clinicId"],
+        where: { clinicId: { in: clinicIds }, active: true },
+        _count: { _all: true }
+      });
+      const roomAssignments = await prisma.clinicRoomAssignment.findMany({
+        where: { clinicId: { in: clinicIds }, active: true },
+        include: { room: true }
+      });
+      const clinicAssignments = await prisma.clinicAssignment.findMany({
+        where: { clinicId: { in: clinicIds } },
+        include: {
+          providerUser: { select: { id: true, name: true, status: true } },
+          maUser: { select: { id: true, name: true, status: true } }
+        }
+      });
 
       const providerCountByClinic = new Map(providers.map((row) => [row.clinicId, row._count._all]));
       const clinicAssignmentByClinic = new Map(clinicAssignments.map((row) => [row.clinicId, row]));
@@ -2099,24 +2097,22 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     }
 
     const clinicIds = clinics.map((clinic) => clinic.id);
-    const [assignments, activeRoomCounts] = await Promise.all([
-      prisma.clinicAssignment.findMany({
-        where: { clinicId: { in: clinicIds } },
-        include: {
-          providerUser: { select: { id: true, name: true, status: true } },
-          maUser: { select: { id: true, name: true, status: true } }
-        }
-      }),
-      prisma.clinicRoomAssignment.groupBy({
-        by: ["clinicId"],
-        where: {
-          clinicId: { in: clinicIds },
-          active: true,
-          room: { status: "active" }
-        },
-        _count: { _all: true }
-      })
-    ]);
+    const assignments = await prisma.clinicAssignment.findMany({
+      where: { clinicId: { in: clinicIds } },
+      include: {
+        providerUser: { select: { id: true, name: true, status: true } },
+        maUser: { select: { id: true, name: true, status: true } }
+      }
+    });
+    const activeRoomCounts = await prisma.clinicRoomAssignment.groupBy({
+      by: ["clinicId"],
+      where: {
+        clinicId: { in: clinicIds },
+        active: true,
+        room: { status: "active" }
+      },
+      _count: { _all: true }
+    });
 
     const assignmentByClinicId = new Map(assignments.map((assignment) => [assignment.clinicId, assignment]));
     const roomCountByClinicId = new Map(activeRoomCounts.map((row) => [row.clinicId, row._count._all]));
