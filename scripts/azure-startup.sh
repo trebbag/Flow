@@ -36,7 +36,11 @@ extract_node_modules_if_needed() {
   mkdir -p "${EXTRACT_DIR}"
 
   log "Extracting runtime dependencies from node_modules.tar.gz."
-  tar -xzf "${MODULES_TARBALL}" -C "${EXTRACT_DIR}"
+  if tar --warning=no-unknown-keyword --help >/dev/null 2>&1; then
+    tar --warning=no-unknown-keyword -xzf "${MODULES_TARBALL}" -C "${EXTRACT_DIR}"
+  else
+    tar -xzf "${MODULES_TARBALL}" -C "${EXTRACT_DIR}"
+  fi
 
   local source_dir="${EXTRACT_DIR}"
   if [[ -d "${EXTRACT_DIR}/package/node_modules" ]]; then
