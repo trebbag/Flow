@@ -33,7 +33,7 @@ extract_node_modules_if_needed() {
   fi
 
   rm -rf "${MODULES_DIR}" "${EXTRACT_DIR}"
-  mkdir -p "${MODULES_DIR}" "${EXTRACT_DIR}"
+  mkdir -p "${EXTRACT_DIR}"
 
   log "Extracting runtime dependencies from node_modules.tar.gz."
   tar -xzf "${MODULES_TARBALL}" -C "${EXTRACT_DIR}"
@@ -50,9 +50,8 @@ extract_node_modules_if_needed() {
     return 1
   fi
 
-  cp -a "${source_dir}/." "${MODULES_DIR}/"
-
-  rm -rf "${EXTRACT_DIR}"
+  ln -s "${source_dir}" "${MODULES_DIR}"
+  log "Promoted runtime dependencies via symlink: ${MODULES_DIR} -> ${source_dir}"
 
   if [[ ! -f "${MODULES_DIR}/fastify/package.json" ]]; then
     log "fastify is still missing after extracting node_modules.tar.gz."
