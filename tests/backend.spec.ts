@@ -9,6 +9,11 @@ import { authHeaders, bootstrapCore, jwtHeaders, prisma, resetDb } from "./helpe
 
 const app = buildApp();
 
+function paginatedItems<T = any>(response: { json: () => unknown }): T[] {
+  const body = response.json() as { items?: T[] } | T[];
+  return Array.isArray(body) ? body : Array.isArray(body.items) ? body.items : [];
+}
+
 async function createRevenueWorkflowEncounter(params: {
   clinicId: string;
   providerId: string;
@@ -1663,11 +1668,11 @@ describe("Flow backend core relationships", () => {
 
     const visible = await app.inject({
       method: "GET",
-      url: "/encounters?legacyArray=1",
+      url: "/encounters?pageSize=200",
       headers: authHeaders(ctx.ma.id, RoleName.MA)
     });
     expect(visible.statusCode).toBe(200);
-    expect(visible.json().some((row: { id: string }) => row.id === encounter.id)).toBe(true);
+    expect(paginatedItems<{ id: string }>(visible).some((row) => row.id === encounter.id)).toBe(true);
 
     const allowedAfter = await app.inject({
       method: "GET",
@@ -2270,11 +2275,13 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(list.statusCode).toBe(200);
-    const row = list.json().find((encounter: { id: string }) => encounter.id === created.json().id);
+    const row = paginatedItems<{ id: string; providerName: string }>(list).find(
+      (encounter) => encounter.id === created.json().id,
+    );
     expect(row.providerName).toContain("(Archived)");
   });
 
@@ -2297,12 +2304,12 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
 
     expect(list.statusCode).toBe(200);
-    const first = list.json()[0];
+    const first = paginatedItems<any>(list)[0];
     expect(first.status).toBe(first.currentStatus);
     expect(first.providerName).toBeTruthy();
     expect(first.reasonForVisit).toBeTruthy();
@@ -2625,7 +2632,7 @@ describe("Flow backend core relationships", () => {
     ).toBe(true);
   });
 
-  it("paginates pending review rows by default and preserves legacy array access", async () => {
+  it("paginates pending review rows by default", async () => {
     const ctx = await bootstrapCore();
     const created = await Promise.all(
       Array.from({ length: 3 }).map((_, index) =>
@@ -2668,14 +2675,13 @@ describe("Flow backend core relationships", () => {
     expect(secondPage.json().items).toHaveLength(1);
     expect(created.map((issue) => issue.id)).toContain(secondPage.json().items[0].id);
 
-    const legacy = await app.inject({
+    const allPending = await app.inject({
       method: "GET",
-      url: `/incoming/pending?facilityId=${ctx.facility.id}&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&legacyArray=1`,
+      url: `/incoming/pending?facilityId=${ctx.facility.id}&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&pageSize=200`,
       headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
     });
-    expect(legacy.statusCode).toBe(200);
-    expect(Array.isArray(legacy.json())).toBe(true);
-    expect(legacy.json().length).toBeGreaterThanOrEqual(3);
+    expect(allPending.statusCode).toBe(200);
+    expect(paginatedItems(allPending).length).toBeGreaterThanOrEqual(3);
   });
 
   it("rejects incoming imports with no data rows instead of reporting zero accepted rows", async () => {
@@ -3203,11 +3209,11 @@ describe("Flow backend core relationships", () => {
 
     const listPrimaryFacility = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&date=${date}`,
+      url: `/encounters?date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listPrimaryFacility.statusCode).toBe(200);
-    expect(listPrimaryFacility.json().some((row: { id: string }) => row.id === secondEncounter.id)).toBe(false);
+    expect(paginatedItems<{ id: string }>(listPrimaryFacility).some((row) => row.id === secondEncounter.id)).toBe(false);
 
     const readDenied = await app.inject({
       method: "GET",
@@ -3311,11 +3317,11 @@ describe("Flow backend core relationships", () => {
 
     const listPrimaryFacility = await app.inject({
       method: "GET",
-      url: `/incoming?legacyArray=1&date=${date}`,
+      url: `/incoming?date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listPrimaryFacility.statusCode).toBe(200);
-    expect(listPrimaryFacility.json().some((row: { id: string }) => row.id === secondIncoming.id)).toBe(false);
+    expect(paginatedItems<{ id: string }>(listPrimaryFacility).some((row) => row.id === secondIncoming.id)).toBe(false);
 
     const intakeDenied = await app.inject({
       method: "POST",
@@ -4187,11 +4193,15 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(list.statusCode).toBe(200);
-    expect(list.json().some((row: { id: string; assignedMaUserId?: string }) => row.id === encounter.id && row.assignedMaUserId === ctx.ma.id)).toBe(true);
+    expect(
+      paginatedItems<{ id: string; assignedMaUserId?: string }>(list).some(
+        (row) => row.id === encounter.id && row.assignedMaUserId === ctx.ma.id,
+      ),
+    ).toBe(true);
   });
 
   it("adds archived labels to encounter-facing clinic/provider/room names", async () => {
@@ -4248,11 +4258,11 @@ describe("Flow backend core relationships", () => {
 
     const list = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${date}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${date}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(list.statusCode).toBe(200);
-    const row = (list.json() as Array<any>).find((entry) => entry.id === encounterId);
+    const row = paginatedItems<any>(list).find((entry) => entry.id === encounterId);
     expect(row).toBeTruthy();
     expect(row.clinicName).toContain("(Archived)");
     expect(row.providerName).toContain("(Archived)");
@@ -4747,11 +4757,11 @@ describe("Flow backend core relationships", () => {
 
     const listed = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listed.statusCode).toBe(200);
-    const row = (listed.json() as Array<{ id: string; alertState?: { currentAlertLevel?: string } }>).find(
+    const row = paginatedItems<{ id: string; alertState?: { currentAlertLevel?: string } }>(listed).find(
       (entry) => entry.id === encounterId
     );
     expect(row?.alertState?.currentAlertLevel).toBe("Red");
@@ -4823,11 +4833,11 @@ describe("Flow backend core relationships", () => {
 
     const listed = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listed.statusCode).toBe(200);
-    const row = (listed.json() as Array<{ id: string; alertState?: { currentAlertLevel?: string } }>).find(
+    const row = paginatedItems<{ id: string; alertState?: { currentAlertLevel?: string } }>(listed).find(
       (entry) => entry.id === encounterId
     );
     expect(row?.alertState?.currentAlertLevel).toBe("Red");
@@ -4886,7 +4896,7 @@ describe("Flow backend core relationships", () => {
 
     const trigger = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(trigger.statusCode).toBe(200);
@@ -5000,7 +5010,7 @@ describe("Flow backend core relationships", () => {
 
     const trigger = await app.inject({
       method: "GET",
-      url: `/encounters?legacyArray=1&clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
       headers: scopedHeaders
     });
     expect(trigger.statusCode).toBe(200);
@@ -5556,11 +5566,11 @@ describe("Flow backend core relationships", () => {
 
     const scopedRevenueCase = await app.inject({
       method: "GET",
-      url: `/revenue-cases?legacyArray=1&encounterId=${finishedEncounter.id}`,
+      url: `/revenue-cases?encounterId=${finishedEncounter.id}`,
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
     });
     expect(scopedRevenueCase.statusCode).toBe(200);
-    expect(scopedRevenueCase.json()).toHaveLength(1);
+    expect(paginatedItems(scopedRevenueCase)).toHaveLength(1);
 
     const refreshedCase = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
     expect(refreshedCase?.athenaDaysToSubmit).toBe(2);
@@ -5757,11 +5767,11 @@ describe("Flow backend core relationships", () => {
 
     const revenueList = await app.inject({
       method: "GET",
-      url: "/revenue-cases?legacyArray=1&dayBucket=Today&workQueue=CheckoutTracking",
+      url: "/revenue-cases?dayBucket=Today&workQueue=CheckoutTracking",
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
     });
     expect(revenueList.statusCode).toBe(200);
-    expect(revenueList.json()).toEqual(
+    expect(paginatedItems(revenueList)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           encounterId: finishedEncounter.id,

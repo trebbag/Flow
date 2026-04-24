@@ -356,7 +356,7 @@ Instead:
 bash /home/site/wwwroot/azure-startup.sh
 ```
 
-The repo-managed Azure package includes `azure-startup.sh`, which restores a local `node_modules` tree from `node_modules.tar.gz` before running `node dist/server.js`.
+The repo-managed Azure package includes `azure-startup.sh`, which runs `node dist/server.js` from the mounted run-from-package ZIP.
 
 5. Save the change.
 
@@ -372,9 +372,9 @@ What it does:
 
 1. installs backend dependencies with `pnpm`
 2. runs `pnpm build`
-3. prunes to production dependencies
-4. packages `dist`, `node_modules`, `prisma`, `package.json`, and `pnpm-lock.yaml`
-5. deploys that package to Azure App Service using `azure/webapps-deploy`
+3. builds a trimmed Azure runtime dependency tree
+4. packages `dist`, runtime `node_modules`, generated Prisma artifacts, `prisma`, and `azure-startup.sh`
+5. enables `WEBSITE_RUN_FROM_PACKAGE=1` and submits the ZIP through direct Kudu ZipDeploy
 
 What you need to configure in GitHub before running it:
 

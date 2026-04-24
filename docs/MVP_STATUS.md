@@ -56,9 +56,8 @@ Updated: April 23, 2026
 6. Finish the remaining pilot-scope modules if they are still required:
    - Supplies
    - Audits / fluorescent marker workflows
-7. Remove temporary compatibility seams such as `legacyArray=1` once all internal callers and scripts are off them.
-8. Finish the last keyboard-only and screen-reader sweep for remaining custom controls and modal/drawer flows.
-9. Optionally complete Athena comparison/import wiring if actual-vs-projected reconciliation remains in pilot scope.
+7. Continue periodic keyboard-only and screen-reader spot checks during role-by-role UAT.
+8. Optionally complete Athena comparison/import wiring if actual-vs-projected reconciliation remains in pilot scope.
 
 ## Owner Inputs Still Required
 

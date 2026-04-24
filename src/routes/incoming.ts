@@ -9,7 +9,6 @@ import { normalizeDate, parseAppointmentAt, dateRangeForDay } from "../lib/dates
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { enterFacilityScope } from "../lib/facility-scope.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
-import { booleanish } from "../lib/zod-helpers.js";
 import { ensurePatientRecord, extractPatientIdentityHints } from "../lib/patients.js";
 import {
   normalizeIncomingIssueNormalizedJson,
@@ -78,7 +77,6 @@ const listIncomingSchema = z
     date: z.string().optional(),
     includeCheckedIn: z.string().optional(),
     includeInvalid: z.string().optional(),
-    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -87,7 +85,6 @@ const listIncomingPendingSchema = z
     facilityId: z.string().uuid().optional(),
     clinicId: z.string().uuid().optional(),
     date: z.string().optional(),
-    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -817,15 +814,13 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
     const query = listIncomingPendingSchema.parse(request.query);
     const user = request.user!;
     const facility = await resolveScopedFacility(user, query.facilityId);
-    const pagination = query.legacyArray
-      ? null
-      : resolveOptionalPagination(
-          {
-            cursor: query.cursor,
-            pageSize: query.pageSize ?? 50,
-          },
-          { pageSize: 50 },
-        );
+    const pagination = resolveOptionalPagination(
+      {
+        cursor: query.cursor,
+        pageSize: query.pageSize ?? 50,
+      },
+      { pageSize: 50 },
+    )!;
 
     if (query.clinicId) {
       const scopedClinic = await resolveScopedClinic(user, query.clinicId);
@@ -847,19 +842,11 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         batch: { select: { id: true, source: true, fileName: true, createdAt: true, status: true } }
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      ...(pagination
-        ? {
-            take: pagination.pageSize + 1,
-            skip: pagination.offset,
-          }
-        : {})
+      take: pagination.pageSize + 1,
+      skip: pagination.offset,
     });
 
-    if (query.legacyArray) {
-      return issues;
-    }
-
-    return paginateItems(issues, pagination!);
+    return paginateItems(issues, pagination);
   });
 
   app.post("/incoming/pending/:id/retry", { preHandler: requireRoles(RoleName.FrontDeskCheckIn, RoleName.Admin) }, async (request) => {
@@ -1499,15 +1486,13 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
     const query = listIncomingSchema.parse(request.query);
     const user = request.user!;
     const requestedClinicId = query.clinicId?.trim() || undefined;
-    const pagination = query.legacyArray
-      ? null
-      : resolveOptionalPagination(
-          {
-            cursor: query.cursor,
-            pageSize: query.pageSize ?? 100,
-          },
-          { pageSize: 100 },
-        );
+    const pagination = resolveOptionalPagination(
+      {
+        cursor: query.cursor,
+        pageSize: query.pageSize ?? 100,
+      },
+      { pageSize: 100 },
+    )!;
     if (user.clinicId && requestedClinicId && requestedClinicId !== user.clinicId) {
       throw new ApiError(403, "Clinic is outside your assigned scope");
     }
@@ -1572,15 +1557,6 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
     ];
 
     const projectedRows = await (async () => {
-      if (!pagination) {
-        const rows = await prisma.incomingSchedule.findMany({
-          where: incomingWhere,
-          include: incomingInclude,
-          orderBy: incomingOrderBy,
-        });
-        return projectIncomingRows(includeCheckedIn || includeInvalid ? rows : dedupeIncomingRows(rows));
-      }
-
       if (includeCheckedIn || includeInvalid) {
         const rows = await prisma.incomingSchedule.findMany({
           where: incomingWhere,
@@ -1628,10 +1604,6 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
         Array.from(deduped.values()).slice(pagination.offset, pagination.offset + pagination.pageSize + 1),
       );
     })();
-
-    if (query.legacyArray) {
-      return projectedRows;
-    }
 
     return paginateItems(projectedRows, pagination);
   });

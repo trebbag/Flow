@@ -164,7 +164,7 @@ function KpiCard({ icon: Icon, label, value, subtext, trend, trendDir, color }: 
 }) {
   return (
     <Card className="relative overflow-hidden border-0 shadow-sm bg-white">
-      <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: color }} />
+      <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: color }} aria-hidden="true" />
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -172,13 +172,14 @@ function KpiCard({ icon: Icon, label, value, subtext, trend, trendDir, color }: 
             <p className="text-[28px] tracking-tight" style={{ fontWeight: 700, lineHeight: 1.1 }}>{value}</p>
             <p className="text-[12px] text-muted-foreground mt-1">{subtext}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}15` }} aria-hidden="true">
             <Icon className="w-5 h-5" style={{ color }} />
           </div>
         </div>
         {trend && (
           <div className="flex items-center gap-1 mt-3 text-[12px]" style={{ color: trendDir === "up" ? "#10b981" : trendDir === "down" ? "#ef4444" : "#94a3b8" }}>
-            {trendDir === "up" ? <ArrowUpRight className="w-3.5 h-3.5" /> : trendDir === "down" ? <ArrowDownRight className="w-3.5 h-3.5" /> : null}
+            {trendDir === "up" ? <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" /> : trendDir === "down" ? <ArrowDownRight className="w-3.5 h-3.5" aria-hidden="true" /> : null}
+            <span className="sr-only">Trend direction: {trendDir || "flat"}.</span>
             <span style={{ fontWeight: 500 }}>{trend}</span>
           </div>
         )}
@@ -378,7 +379,7 @@ function StagePerformance({ stageMetrics }: { stageMetrics: StageMetricRow[] }) 
               <div key={m.stage}>
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} />
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} aria-hidden="true" />
                     <span className="text-[13px]" style={{ fontWeight: 500 }}>{m.stage}</span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -447,11 +448,11 @@ function HourlyVolumeChart({ hourlyVolume }: { hourlyVolume: HourlyVolumePoint[]
         </div>
         <div className="flex items-center justify-center gap-6 mt-3">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-1.5 rounded-full bg-indigo-500" />
+            <div className="w-3 h-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
             <span className="text-[11px] text-muted-foreground">Check-ins</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-1.5 rounded-full bg-emerald-500" />
+            <div className="w-3 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
             <span className="text-[11px] text-muted-foreground">Completed</span>
           </div>
         </div>
@@ -489,9 +490,16 @@ function RoomCensus({ rooms }: { rooms: RoomCensusRow[] }) {
               <div key={room.id} className={`rounded-lg border p-2.5 ${bg} transition-all`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[12px]" style={{ fontWeight: 600 }}>{room.name}</span>
-                  {room.safetyActive && <ShieldAlert className="w-3 h-3 text-red-600" />}
+                  {room.safetyActive && (
+                    <span aria-label="Safety alert active">
+                      <ShieldAlert className="w-3 h-3 text-red-600" aria-hidden="true" />
+                    </span>
+                  )}
                   {room.occupied && room.status && !room.safetyActive && (
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColors[room.status] }} />
+                    <>
+                      <span className="sr-only">Occupied status: {statusLabels[room.status]}</span>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColors[room.status] }} aria-hidden="true" />
+                    </>
                   )}
                 </div>
                 {room.occupied ? (
@@ -582,11 +590,11 @@ function AlertsPanel({ alerts }: { alerts: AlertRow[] }) {
             >
               <div className="flex items-start gap-2">
                 {a.type === "safety" ? (
-                  <ShieldAlert className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <ShieldAlert className="w-4 h-4 text-red-600 mt-0.5 shrink-0" aria-label="Safety alert" />
                 ) : a.type === "Red" ? (
-                  <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
+                  <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" aria-label="Red alert" />
                 ) : (
-                  <Clock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <Clock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" aria-label="Yellow alert" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px]" style={{ fontWeight: 500 }}>{a.message}</p>
@@ -1246,10 +1254,11 @@ function DataField({ label, value, ok }: { label: string; value: string; ok?: bo
       <div className="flex items-center gap-1.5 mt-0.5">
         {ok !== undefined && (
           <div className={`w-3 h-3 rounded-full flex items-center justify-center shrink-0 ${ok ? "bg-emerald-100" : "bg-amber-100"}`}>
+            <span className="sr-only">{ok ? "Complete" : "Pending"}</span>
             {ok ? (
-              <CheckCircle2 className="w-2 h-2 text-emerald-600" />
+              <CheckCircle2 className="w-2 h-2 text-emerald-600" aria-hidden="true" />
             ) : (
-              <Clock className="w-2 h-2 text-amber-500" />
+              <Clock className="w-2 h-2 text-amber-500" aria-hidden="true" />
             )}
           </div>
         )}
@@ -1306,7 +1315,7 @@ function SlaDonut({ stageMetrics }: { stageMetrics: StageMetricRow[] }) {
           {stageMetrics.map((m) => (
             <div key={m.stage} className="flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} />
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} aria-hidden="true" />
                 <span className="text-muted-foreground">{m.stage}</span>
               </div>
               <span style={{ fontWeight: 500, color: m.slaCompliance >= 90 ? "#10b981" : m.slaCompliance >= 80 ? "#f59e0b" : "#ef4444" }}>
@@ -1749,8 +1758,8 @@ export function OfficeManagerDashboard() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200" role="status" aria-live="polite">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
             <span className="text-[12px] text-emerald-700" style={{ fontWeight: 500 }}>Live</span>
           </div>
         </div>
@@ -1778,9 +1787,9 @@ export function OfficeManagerDashboard() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => { window.location.href = "/rooms"; }} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-[11px]">Rooms Live</button>
-              <button onClick={() => { window.location.href = "/rooms?tab=open-close"; }} className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700">Open / Close</button>
-              <button onClick={() => { window.location.href = "/rooms?tab=issues"; }} className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700">Issues</button>
+              <button onClick={() => { window.location.href = "/rooms"; }} aria-label="Open rooms live view" className="h-8 px-3 rounded-lg bg-slate-900 text-white text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">Rooms Live</button>
+              <button onClick={() => { window.location.href = "/rooms?tab=open-close"; }} aria-label="Open room open and close checklist view" className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">Open / Close</button>
+              <button onClick={() => { window.location.href = "/rooms?tab=issues"; }} aria-label="Open room issues view" className="h-8 px-3 rounded-lg border border-gray-200 text-[11px] text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">Issues</button>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-4">

@@ -284,6 +284,10 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function pageItems(payload) {
+  return payload && Array.isArray(payload.items) ? payload.items : [];
+}
+
 async function waitForEncounterOnBoard({
   clinicId,
   date,
@@ -294,9 +298,10 @@ async function waitForEncounterOnBoard({
   delayMs = 500,
 }) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const rows = await request(`/encounters?legacyArray=1&clinicId=${clinicId}&date=${date}`, {
+    const page = await request(`/encounters?clinicId=${clinicId}&date=${date}`, {
       auth,
     });
+    const rows = pageItems(page);
     if (rows.some((row) => row.id === encounterId)) {
       return rows;
     }
@@ -305,9 +310,10 @@ async function waitForEncounterOnBoard({
     }
   }
 
-  const clinicRows = await request(`/encounters?legacyArray=1&clinicId=${clinicId}`, {
+  const clinicPage = await request(`/encounters?clinicId=${clinicId}`, {
     auth,
   });
+  const clinicRows = pageItems(clinicPage);
   if (clinicRows.some((row) => row.id === encounterId)) {
     return clinicRows;
   }

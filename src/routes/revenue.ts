@@ -64,7 +64,6 @@ const listRevenueCasesSchema = z
     from: z.string().optional(),
     to: z.string().optional(),
     includeCases: booleanish.optional(),
-    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -652,15 +651,13 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
     const toDate = query.to || clinicDateKeyNow(clinics[0]?.timezone);
     const fromDate = query.from || DateTime.fromISO(toDate).minus({ days: 14 }).toISODate()!;
-    const pagination = query.legacyArray
-      ? null
-      : resolveOptionalPagination(
-          {
-            cursor: query.cursor,
-            pageSize: query.pageSize ?? 100,
-          },
-          { pageSize: 100 },
-        );
+    const pagination = resolveOptionalPagination(
+      {
+        cursor: query.cursor,
+        pageSize: query.pageSize ?? 100,
+      },
+      { pageSize: 100 },
+    )!;
 
     const rows = await buildRevenueCaseList(prisma, {
       clinicIds: clinics.map((clinic) => clinic.id),
@@ -679,10 +676,6 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
     });
 
     const mappedRows = rows.map(mapRevenueCaseRow);
-    if (query.legacyArray) {
-      return mappedRows;
-    }
-
     return paginateItems(mappedRows, pagination);
   });
 

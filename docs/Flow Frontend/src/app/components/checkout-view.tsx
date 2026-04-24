@@ -473,7 +473,7 @@ export function CheckOutView() {
                           aria-pressed={selectedCompletedId === e.id}
                           onClick={() => setSelectedCompletedId(e.id)}
                           onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") setSelectedCompletedId(e.id); }}
-                          className="w-full text-left rounded-lg border border-gray-100 p-3 flex items-center gap-3 transition-colors cursor-pointer hover:bg-gray-50 hover:border-gray-200"
+                          className="w-full text-left rounded-lg border border-gray-100 p-3 flex items-center gap-3 transition-colors cursor-pointer hover:bg-gray-50 hover:border-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
                         >
                           <div
                             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] shrink-0"
@@ -577,7 +577,7 @@ function CheckoutCard({
         tabIndex={0}
         aria-label={`${isExpanded ? "Collapse" : "Expand"} checkout card for ${e.patientId}`}
         aria-expanded={isExpanded}
-        className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+        className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-gray-50/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
         onClick={onToggle}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {

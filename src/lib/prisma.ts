@@ -1,5 +1,3 @@
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import * as PrismaClientModule from "@prisma/client";
 import type { Prisma, PrismaClient as PrismaClientType } from "@prisma/client";
 import {
@@ -22,6 +20,7 @@ async function createPrismaClient(): Promise<PrismaClient> {
   if (postgresDatabaseUrl) {
     const postgresClientModulePath = "../../generated/postgres-client/index.js";
     let PostgresPrismaClient: typeof PrismaClient;
+    const { PrismaPg } = await import("@prisma/adapter-pg");
 
     try {
       ({ PrismaClient: PostgresPrismaClient } = (await import(postgresClientModulePath)) as {
@@ -42,6 +41,7 @@ async function createPrismaClient(): Promise<PrismaClient> {
     });
   }
 
+  const { PrismaBetterSqlite3 } = await import("@prisma/adapter-better-sqlite3");
   const adapter = new PrismaBetterSqlite3({
     url: sqliteDatabaseUrl,
   });

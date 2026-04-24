@@ -7,7 +7,6 @@ import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
 import { clinicNow } from "../lib/clinic-time.js";
-import { booleanish } from "../lib/zod-helpers.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { withIdempotentMutation } from "../lib/idempotency.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
@@ -126,7 +125,6 @@ const listEncountersSchema = z
     status: z.nativeEnum(EncounterStatus).optional(),
     assignedMaUserId: z.string().uuid().optional(),
     date: z.string().optional(),
-    legacyArray: booleanish.optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -1176,15 +1174,13 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
     const scopedClinicId =
       requestedClinicId ||
       (user.role === RoleName.MA || user.role === RoleName.Clinician ? undefined : user.clinicId || undefined);
-    const pagination = query.legacyArray
-      ? null
-      : resolveOptionalPagination(
-          {
-            cursor: query.cursor,
-            pageSize: query.pageSize ?? 100,
-          },
-          { pageSize: 100 },
-        );
+    const pagination = resolveOptionalPagination(
+      {
+        cursor: query.cursor,
+        pageSize: query.pageSize ?? 100,
+      },
+      { pageSize: 100 },
+    )!;
     if (scopedClinicId) {
       await resolveScopedClinic(user, scopedClinicId);
     }
@@ -1204,10 +1200,6 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       role: user.role,
       pagination,
     });
-
-    if (query.legacyArray) {
-      return rows;
-    }
 
     return paginateItems(rows, pagination);
   });

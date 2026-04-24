@@ -51,6 +51,10 @@ function dateIso() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function pageItems(payload) {
+  return payload && Array.isArray(payload.items) ? payload.items : [];
+}
+
 async function request(path, { auth = false, method = "GET" } = {}) {
   const normalizedMethod = String(method || "GET").toUpperCase();
   const maxAttempts = SAFE_RETRY_METHODS.has(normalizedMethod) ? 5 : 1;
@@ -156,11 +160,11 @@ async function main() {
   const users = await request(`/admin/users?facilityId=${facilityId}`, { auth: true });
   assert.ok(Array.isArray(users), "/admin/users should return an array");
 
-  const encounters = await request(`/encounters?legacyArray=1&date=${today}&facilityId=${facilityId}`, { auth: true });
-  assert.ok(Array.isArray(encounters), "/encounters should return an array");
+  const encounters = await request(`/encounters?date=${today}&facilityId=${facilityId}`, { auth: true });
+  assert.ok(Array.isArray(pageItems(encounters)), "/encounters should return a paginated items array");
 
-  const incoming = await request(`/incoming?legacyArray=1&date=${today}&facilityId=${facilityId}`, { auth: true });
-  assert.ok(Array.isArray(incoming), "/incoming should return an array");
+  const incoming = await request(`/incoming?date=${today}&facilityId=${facilityId}`, { auth: true });
+  assert.ok(Array.isArray(pageItems(incoming)), "/incoming should return a paginated items array");
 
   const tasks = await request("/tasks", { auth: true });
   assert.ok(Array.isArray(tasks), "/tasks should return an array");

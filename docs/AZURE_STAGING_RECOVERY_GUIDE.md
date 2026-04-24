@@ -140,7 +140,7 @@ The repo-managed staging deploy now sets the startup command to:
 bash /home/site/wwwroot/azure-startup.sh
 ```
 
-That wrapper restores a usable local `node_modules` tree from `node_modules.tar.gz` before starting `node dist/server.js`.
+That wrapper starts `node dist/server.js` from the repo-managed Azure package. Current deployments run with `WEBSITE_RUN_FROM_PACKAGE=1`, so App Service mounts the completed ZIP instead of asking Kudu to extract and optimize the `node_modules` tree.
 
 ## Step 5b: Match The Node Runtime Version
 
@@ -270,7 +270,7 @@ Fix:
 2. rerun `Azure App Service Staging Deploy`
 3. verify `/health` again after deploy
 
-The current backend workflow now builds a portable production dependency tree for Azure, copies the generated Prisma client artifacts into the package, and uses `azure-startup.sh` to restore a local dependency tree if App Service leaves only `node_modules.tar.gz` available at boot.
+The current backend workflow now builds a trimmed Azure production dependency tree, copies the generated Prisma client artifacts into the package, enables `WEBSITE_RUN_FROM_PACKAGE=1`, and uses `azure-startup.sh` only as the runtime entrypoint. This avoids the slow Kudu `node_modules` extraction/rsync path.
 
 If this error is replaced by a different startup error after redeploy, that is progress: the package-resolution problem is gone and the next issue is in runtime config or app startup.
 

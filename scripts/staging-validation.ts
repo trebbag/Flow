@@ -241,6 +241,8 @@ async function main() {
           STAGING_FRONTEND_PROOF_ROLE: stagingProofRole,
           STAGING_PROOF_SECRET: stagingProofSecret || undefined,
           STAGING_FRONTEND_PROOF_SECRET: stagingProofSecret || undefined,
+          STAGING_PROOF_HMAC_SECRET: stagingProofHmacSecret || undefined,
+          STAGING_FRONTEND_PROOF_HMAC_SECRET: stagingProofHmacSecret || undefined,
           STAGING_FRONTEND_BEARER_TOKEN: stagingBearerToken || undefined,
           STAGING_VITE_DEV_USER_ID: stagingDevUserId || undefined,
           STAGING_VITE_DEV_ROLE: stagingDevRole

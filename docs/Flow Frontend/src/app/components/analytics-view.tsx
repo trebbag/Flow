@@ -98,7 +98,7 @@ function MetricCard({
           </div>
           {subvalue ? <div className="mt-1 text-[12px] text-slate-500">{subvalue}</div> : null}
         </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`} aria-hidden="true">
           <Icon className="h-5 w-5 text-white" />
         </div>
       </div>
@@ -222,7 +222,7 @@ export function AnalyticsView() {
         <div className="text-[20px] text-slate-900" style={{ fontWeight: 700 }}>
           Analytics
         </div>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-[13px] text-rose-700 shadow-sm">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-[13px] text-rose-700 shadow-sm" role="alert">
           {error || "Analytics could not be loaded."}
         </div>
       </div>
@@ -258,7 +258,7 @@ export function AnalyticsView() {
       </div>
 
       {error ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 shadow-sm">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 shadow-sm" role="status" aria-live="polite">
           Analytics refresh hit a problem, but the last good dataset is still on screen. {error}
         </div>
       ) : null}

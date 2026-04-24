@@ -1157,7 +1157,7 @@ function ClinicsTab({ onAddClinic, onEditClinic }: { onAddClinic: () => void; on
                 return (
                   <div key={clinic.id}>
                   <div
-                    className="rounded-lg border border-gray-100 p-4 flex items-center gap-4 hover:border-emerald-200 transition-colors cursor-pointer"
+                    className="rounded-lg border border-gray-100 p-4 flex items-center gap-4 hover:border-emerald-200 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
                     onClick={() => setExpandedClinic(expandedClinic === clinic.id ? null : clinic.id)}
                     role="button"
                     tabIndex={0}
@@ -1403,7 +1403,7 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
         {Object.entries(roleStats).map(([role, count]) => (
           <div
             key={role}
-            className={`rounded-lg border p-2.5 cursor-pointer transition-colors ${roleFilter === role ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}
+            className={`rounded-lg border p-2.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${roleFilter === role ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-white hover:border-gray-200"}`}
             onClick={() => setRoleFilter(roleFilter === role ? "all" : role)}
             role="button"
             tabIndex={0}
@@ -1474,7 +1474,7 @@ function UsersRolesTab({ onAddUser, onOpenAssignments }: { onAddUser: () => void
               {filtered.map((u) => (
                 <div key={u.id}>
                   <div
-                    className={`rounded-lg border p-3 flex items-center gap-3 transition-colors cursor-pointer ${u.status === "suspended" ? "border-red-100 bg-red-50/30" : "border-gray-100 hover:border-gray-200"}`}
+                    className={`rounded-lg border p-3 flex items-center gap-3 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${u.status === "suspended" ? "border-red-100 bg-red-50/30" : "border-gray-100 hover:border-gray-200"}`}
                     onClick={() => setExpandedUser(expandedUser === u.id ? null : u.id)}
                     role="button"
                     tabIndex={0}

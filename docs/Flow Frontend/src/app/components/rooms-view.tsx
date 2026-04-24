@@ -66,7 +66,14 @@ function checklistTitle(kind: RoomChecklistKind) {
 
 function statusBadge(status: RoomOperationalStatus) {
   const style = statusStyles[status];
-  return <Badge className={`border ${style.border} ${style.bg} ${style.color} text-[10px] h-5`}>{style.label}</Badge>;
+  return (
+    <Badge
+      className={`border ${style.border} ${style.bg} ${style.color} text-[10px] h-5`}
+      aria-label={`Room status: ${style.label}`}
+    >
+      {style.label}
+    </Badge>
+  );
 }
 
 function formatDateTime(value?: string | null) {
@@ -129,8 +136,8 @@ function RoomCard({
         </div>
 
         <div className="min-h-6 flex flex-wrap gap-1.5">
-          {room.hasOpenIssue && <Badge className="border-0 bg-amber-100 text-amber-700 text-[10px] h-5">{room.issueCount} issue{room.issueCount === 1 ? "" : "s"}</Badge>}
-          {room.operationalStatus === "Hold" && <Badge className="border-0 bg-rose-100 text-rose-700 text-[10px] h-5">Hold</Badge>}
+          {room.hasOpenIssue && <Badge className="border-0 bg-amber-100 text-amber-700 text-[10px] h-5" aria-label={`${room.issueCount} open room issue${room.issueCount === 1 ? "" : "s"}`}>{room.issueCount} issue{room.issueCount === 1 ? "" : "s"}</Badge>}
+          {room.operationalStatus === "Hold" && <Badge className="border-0 bg-rose-100 text-rose-700 text-[10px] h-5" aria-label="Room is on hold">Hold</Badge>}
           {!room.assignable && room.readinessBlockedReason && <Badge className="border-0 bg-slate-100 text-slate-600 text-[10px] h-5">{room.readinessBlockedReason}</Badge>}
           <Badge className="border border-dashed border-gray-200 bg-white text-gray-400 text-[10px] h-5">Supply slot</Badge>
           <Badge className="border border-dashed border-gray-200 bg-white text-gray-400 text-[10px] h-5">Audit slot</Badge>
@@ -139,16 +146,16 @@ function RoomCard({
         {room.holdNote && <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{room.holdNote}</p>}
 
         <div className="grid grid-cols-2 gap-2 pt-1">
-          <button onClick={onAction} className="h-9 px-3 rounded-lg bg-slate-900 text-white text-[12px] hover:bg-slate-800 transition-colors" style={{ fontWeight: 600 }}>
+          <button onClick={onAction} aria-label={`${actionLabel(room)} for room ${room.name}`} className="h-9 px-3 rounded-lg bg-slate-900 text-white text-[12px] hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2" style={{ fontWeight: 600 }}>
             {actionLabel(room)}
           </button>
-          <button onClick={onOpen} className="h-9 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors">
+          <button onClick={onOpen} aria-label={`Open room detail for ${room.name}`} className="h-9 px-3 rounded-lg border border-gray-200 text-[12px] text-gray-700 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">
             Room detail
           </button>
-          <button onClick={() => onChecklist("DayStart")} className="h-8 px-3 rounded-lg border border-emerald-100 bg-emerald-50 text-[11px] text-emerald-700 hover:bg-emerald-100 transition-colors">
+          <button onClick={() => onChecklist("DayStart")} aria-label={`Open Day Start checklist for room ${room.name}`} className="h-8 px-3 rounded-lg border border-emerald-100 bg-emerald-50 text-[11px] text-emerald-700 hover:bg-emerald-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
             Day Start
           </button>
-          <button onClick={() => onChecklist("DayEnd")} className="h-8 px-3 rounded-lg border border-slate-200 bg-slate-50 text-[11px] text-slate-700 hover:bg-slate-100 transition-colors">
+          <button onClick={() => onChecklist("DayEnd")} aria-label={`Open Day End checklist for room ${room.name}`} className="h-8 px-3 rounded-lg border border-slate-200 bg-slate-50 text-[11px] text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2">
             Day End
           </button>
         </div>

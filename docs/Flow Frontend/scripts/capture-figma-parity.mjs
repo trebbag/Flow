@@ -87,6 +87,10 @@ async function request(pathname, { method = "GET", body, auth = null } = {}) {
   throw new Error(`Unexpected request retry exhaustion for ${pathname}`);
 }
 
+function pageItems(payload) {
+  return payload && Array.isArray(payload.items) ? payload.items : [];
+}
+
 async function waitForHttp(url, timeoutMs = 30000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -171,12 +175,13 @@ async function createRoomingToCheckoutEncounter(adminAuth, facilityId) {
 }
 
 async function findEncounterByStatus(adminAuth, facilityId, status) {
-  const rows = await request(
-    `/encounters?legacyArray=1&status=${encodeURIComponent(status)}`,
+  const page = await request(
+    `/encounters?status=${encodeURIComponent(status)}`,
     {
       auth: { ...adminAuth, facilityId },
     },
   );
+  const rows = pageItems(page);
   if (!Array.isArray(rows) || rows.length === 0) return null;
   return rows[0] || null;
 }
