@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { AlertLevel, EncounterStatus, RoleName, TaskStatus } from "@prisma/client";
+import { AlertLevel, EncounterStatus, ProviderClarificationStatus, RoleName, TaskStatus } from "@prisma/client";
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -335,10 +335,13 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
       throw new ApiError(400, error instanceof Error ? error.message : "Invalid date range");
     }
 
-    const todayMatchers = await resolveEncounterMatchers(request.user!, query.clinicId, clinicDateKeyNow(clinics[0]?.timezone));
+    const clinicIds = clinics.map((clinic) => clinic.id);
+    const todayMatchers = clinics.map((clinic) => ({
+      clinicId: clinic.id,
+      dateOfService: normalizeDate(clinicDateKeyNow(clinic.timezone), clinic.timezone),
+    }));
     const { start, end } = dateRangeBounds(effectiveFrom, effectiveTo, clinics[0]?.timezone || "America/New_York");
     const facilityId = request.user!.facilityId || clinics[0]?.facilityId || null;
-    const settings = facilityId ? await getRevenueSettings(prisma, facilityId) : null;
 
     const useCachedRollupsOnly = !forceRecompute;
     const warnings: Array<{ section: string; message: string }> = [];
@@ -347,78 +350,109 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
       try {
         return await work();
       } catch (error) {
-      warnings.push({
-        section: name,
-          message: error instanceof Error ? error.message : `${name} could not be loaded`,
-      });
-      request.log.warn(
-        {
-          correlationId: request.correlationId || request.id,
+        warnings.push({
           section: name,
+          message: error instanceof Error ? error.message : `${name} could not be loaded`,
+        });
+        request.log.warn(
+          {
+            correlationId: request.correlationId || request.id,
+            section: name,
             error: error instanceof Error ? error.message : String(error),
-        },
-        "Owner analytics section failed",
-      );
-      return fallback;
+          },
+          "Owner analytics section failed",
+        );
+        return fallback;
       }
     };
 
-    const officeDaily = await readSection("officeDaily", () => getDailyHistoryRollups(prisma, clinics, dateKeys, {
-      persist: forceRecompute,
-      forceRecompute,
-      cacheOnly: useCachedRollupsOnly,
-    }), []);
-    const roomDaily = await readSection("roomDaily", () => getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
-      persist: forceRecompute,
-      forceRecompute,
-      cacheOnly: useCachedRollupsOnly,
-    }), []);
-    const revenueDaily = await readSection("revenueDaily", () => getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, {
-      persist: forceRecompute,
-      forceRecompute,
-      cacheOnly: useCachedRollupsOnly,
-    }), []);
-    const currentEncounters = await readSection("currentEncounters", () => prisma.encounter.findMany({
-      where: { OR: todayMatchers },
-      select: {
-        id: true,
-        currentStatus: true,
-        checkInAt: true,
-        providerStartAt: true,
-        providerEndAt: true,
-        checkoutCompleteAt: true,
-        assignedMaUserId: true,
-        provider: { select: { name: true } },
-      },
-    }), []);
-    const rangeRevenueCases = await readSection("rangeRevenueCases", () => prisma.revenueCase.findMany({
-      where: {
-        clinicId: { in: clinics.map((clinic) => clinic.id) },
-        dateOfService: { gte: start, lt: end },
-      },
-      include: {
-        financialReadiness: true,
-        checkoutCollectionTracking: true,
-        chargeCaptureRecord: true,
-        providerClarifications: {
-          where: { status: { not: "Resolved" as any } },
-          select: { id: true },
+    const [
+      officeDaily,
+      roomDaily,
+      revenueDaily,
+      currentEncounters,
+      rangeRevenueCases,
+      activeSafetyCount,
+      blockingTaskCount,
+      settings,
+    ] = await Promise.all([
+      readSection("officeDaily", () => getDailyHistoryRollups(prisma, clinics, dateKeys, {
+        persist: forceRecompute,
+        forceRecompute,
+        cacheOnly: useCachedRollupsOnly,
+      }), []),
+      readSection("roomDaily", () => getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
+        persist: forceRecompute,
+        forceRecompute,
+        cacheOnly: useCachedRollupsOnly,
+      }), []),
+      readSection("revenueDaily", () => getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, {
+        persist: forceRecompute,
+        forceRecompute,
+        cacheOnly: useCachedRollupsOnly,
+      }), []),
+      readSection("currentEncounters", () => prisma.encounter.findMany({
+        where: { OR: todayMatchers },
+        select: {
+          id: true,
+          currentStatus: true,
+          checkInAt: true,
+          providerStartAt: true,
+          providerEndAt: true,
+          checkoutCompleteAt: true,
+          assignedMaUserId: true,
+          provider: { select: { name: true } },
         },
-      },
-    }), []);
-    const activeSafetyCount = await readSection("activeSafetyCount", () => prisma.safetyEvent.count({
-      where: {
-        resolvedAt: null,
-        encounter: { OR: todayMatchers },
-      },
-    }), 0);
-    const blockingTaskCount = await readSection("blockingTaskCount", () => prisma.task.count({
-      where: {
-        blocking: true,
-        status: { not: "completed" },
-        encounter: { OR: todayMatchers },
-      },
-    }), 0);
+      }), []),
+      readSection("rangeRevenueCases", () => prisma.revenueCase.findMany({
+        where: {
+          clinicId: { in: clinicIds },
+          dateOfService: { gte: start, lt: end },
+        },
+        select: {
+          currentBlockerCategory: true,
+          currentBlockerText: true,
+          dueAt: true,
+          financialReadiness: {
+            select: {
+              primaryPayerName: true,
+              financialClass: true,
+            },
+          },
+          checkoutCollectionTracking: {
+            select: {
+              collectionOutcome: true,
+            },
+          },
+          chargeCaptureRecord: {
+            select: {
+              documentationComplete: true,
+              icd10CodesJson: true,
+              procedureLinesJson: true,
+              serviceCaptureItemsJson: true,
+            },
+          },
+          providerClarifications: {
+            where: { status: { not: ProviderClarificationStatus.Resolved } },
+            select: { id: true },
+          },
+        },
+      }), []),
+      readSection("activeSafetyCount", () => prisma.safetyEvent.count({
+        where: {
+          resolvedAt: null,
+          encounter: { OR: todayMatchers },
+        },
+      }), 0),
+      readSection("blockingTaskCount", () => prisma.task.count({
+        where: {
+          blocking: true,
+          status: { not: TaskStatus.completed },
+          encounter: { OR: todayMatchers },
+        },
+      }), 0),
+      facilityId ? readSection("revenueSettings", () => getRevenueSettings(prisma, facilityId), null) : Promise.resolve(null),
+    ]);
 
     const latestOffice = officeDaily[officeDaily.length - 1] || null;
     const latestRoom = roomDaily[roomDaily.length - 1] || null;
