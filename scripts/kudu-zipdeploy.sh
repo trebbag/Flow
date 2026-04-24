@@ -71,4 +71,32 @@ deployment_status_url="$(awk 'BEGIN { IGNORECASE=1 } /^Location:/ { sub(/^[^:]+:
 echo "Kudu ZipDeploy accepted with HTTP ${http_code}."
 if [[ -n "${deployment_status_url}" ]]; then
   echo "Deployment status URL: ${deployment_status_url}"
+
+  poll_interval_seconds="${KUDU_ZIPDEPLOY_POLL_INTERVAL_SECONDS:-30}"
+  max_polls="${KUDU_ZIPDEPLOY_MAX_POLLS:-60}"
+  for ((poll = 1; poll <= max_polls; poll += 1)); do
+    status_json="$(curl -sS \
+      -u "${publishing_user}:${publishing_password}" \
+      "${deployment_status_url}")"
+    complete="$(jq -r '.complete // false' <<<"${status_json}")"
+    status="$(jq -r '.status // empty' <<<"${status_json}")"
+    status_text="$(jq -r '.status_text // empty' <<<"${status_json}")"
+
+    echo "Kudu deployment poll ${poll}/${max_polls}: status=${status} complete=${complete} ${status_text}"
+
+    if [[ "${complete}" == "true" ]]; then
+      if [[ "${status}" == "4" ]]; then
+        echo "Kudu deployment completed successfully."
+        exit 0
+      fi
+
+      echo "Kudu deployment completed unsuccessfully: ${status_text}" >&2
+      exit 1
+    fi
+
+    sleep "${poll_interval_seconds}"
+  done
+
+  echo "Timed out waiting for Kudu deployment to complete." >&2
+  exit 1
 fi

@@ -5,7 +5,8 @@ APP_DIR="${FLOW_AZURE_APP_DIR:-/home/site/wwwroot}"
 EXTRACT_ROOT="${APP_DIR}/.node_modules_extracts"
 LOCK_DIR="${APP_DIR}/.node_modules_lock"
 MODULES_DIR="${APP_DIR}/node_modules"
-PACKAGED_MODULES_DIR="${APP_DIR}/.runtime_node_modules"
+PACKAGED_MODULES_DIR="${FLOW_AZURE_PACKAGED_MODULES_DIR:-/home/site/flow-runtime-deps/node_modules}"
+APP_PACKAGED_MODULES_DIR="${APP_DIR}/.runtime_node_modules"
 MODULES_TARBALL="${APP_DIR}/node_modules.tar.gz"
 LOG_DIR="${FLOW_AZURE_LOG_DIR:-/home/LogFiles}"
 LOG_FILE="${LOG_DIR}/flow-azure-startup.log"
@@ -72,18 +73,23 @@ promote_extracted_node_modules_if_available() {
 }
 
 promote_packaged_node_modules_if_available() {
-  if [[ ! -d "${PACKAGED_MODULES_DIR}" ]]; then
-    return 1
-  fi
+  local source_dir
+  for source_dir in "${PACKAGED_MODULES_DIR}" "${APP_PACKAGED_MODULES_DIR}"; do
+    if [[ ! -d "${source_dir}" ]]; then
+      continue
+    fi
 
-  if ! is_runtime_dependency_tree_ready "${PACKAGED_MODULES_DIR}"; then
-    log "Packaged runtime dependency tree is present but incomplete."
-    return 1
-  fi
+    if ! is_runtime_dependency_tree_ready "${source_dir}"; then
+      log "Packaged runtime dependency tree is present but incomplete: ${source_dir}."
+      continue
+    fi
 
-  promote_dependency_tree "${PACKAGED_MODULES_DIR}"
-  log "Using packaged runtime dependencies from ${PACKAGED_MODULES_DIR}."
-  return 0
+    promote_dependency_tree "${source_dir}"
+    log "Using packaged runtime dependencies from ${source_dir}."
+    return 0
+  done
+
+  return 1
 }
 
 with_dependency_lock() {
