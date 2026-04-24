@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { buildSignedProofHeaders } from "./proof-header-signing.js";
+import { archiveStagingProofUsers, createStagingProofRoleUser, hasStagingProofDatabaseAccess } from "./staging-proof-db.js";
 
 type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "OfficeManager" | "RevenueCycle";
 
@@ -174,19 +175,33 @@ async function createRoleProbeUser(params: {
   facilityIds: string[];
 }) {
   const timestamp = Date.now();
-  const created = await requestJson<any>(params.apiBaseUrl, "/admin/users", params.adminActor, {
-    method: "POST",
-    body: {
-      firstName: "Switch",
-      lastName: `Probe-${params.role}`,
-      email: `switch-probe-${params.role.toLowerCase()}-${timestamp}@flow.local`,
+  try {
+    const created = await requestJson<any>(params.apiBaseUrl, "/admin/users", params.adminActor, {
+      method: "POST",
+      body: {
+        firstName: "Switch",
+        lastName: `Probe-${params.role}`,
+        email: `switch-probe-${params.role.toLowerCase()}-${timestamp}@flow.local`,
+        role: params.role,
+        facilityIds: params.facilityIds,
+        status: "active"
+      }
+    });
+
+    return String(created?.id || "");
+  } catch (error) {
+    const message = (error as Error).message || "";
+    const canSeedViaDb =
+      hasStagingProofDatabaseAccess() &&
+      (message.includes("Local user creation is disabled") || message.includes("405 Method Not Allowed"));
+    if (!canSeedViaDb) throw error;
+
+    return createStagingProofRoleUser({
       role: params.role,
       facilityIds: params.facilityIds,
-      status: "active"
-    }
-  });
-
-  return String(created?.id || "");
+      namePrefix: "Switch Probe",
+    });
+  }
 }
 
 async function cleanupRoleProbeUsers(params: {
@@ -467,6 +482,10 @@ async function main() {
     } finally {
       if (createdProbeUserIds.length > 0) {
         await cleanupRoleProbeUsers({ apiBaseUrl, adminActor, userIds: createdProbeUserIds });
+        await archiveStagingProofUsers({
+          userIds: createdProbeUserIds,
+          facilityId: facilityIds[0] || "",
+        });
       }
       if (createdFacilityId) {
         try {

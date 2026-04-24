@@ -11,7 +11,6 @@ const PROOF_CLINIC_NAME = "Staging Proof Clinic";
 const PROOF_CLINIC_SHORT_CODE = "STGPROOF";
 const PROOF_ROOM_NAME = "Proof Room 1";
 const PROOF_REASON_NAME = "Staging Proof Visit";
-const PROOF_PROVIDER_NAME = "Dr. Proof";
 
 type ScopedUser = {
   email: string;
@@ -187,11 +186,12 @@ async function main() {
       throw new Error("Failed to ensure clinician and MA fixture users.");
     }
 
+    const proofProviderName = clinicianUser.name;
     let provider =
       (await tx.provider.findFirst({
         where: {
           clinicId: clinic.id,
-          name: PROOF_PROVIDER_NAME,
+          name: proofProviderName,
         },
       })) || null;
 
@@ -199,7 +199,7 @@ async function main() {
       provider = await tx.provider.create({
         data: {
           clinicId: clinic.id,
-          name: PROOF_PROVIDER_NAME,
+          name: proofProviderName,
           active: true,
         },
       });

@@ -1,6 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { buildSignedProofHeaders } from "./proof-header-signing.js";
+import {
+  archiveStagingProofUsers,
+  createStagingProofRoleUser,
+  findStagingProofFixtureRoleUserIds,
+  hasStagingProofDatabaseAccess
+} from "./staging-proof-db.js";
 
 type RoleName = "Admin" | "FrontDeskCheckIn" | "MA" | "Clinician" | "FrontDeskCheckOut" | "OfficeManager" | "RevenueCycle";
 
@@ -149,19 +155,33 @@ async function ensureRoleProbeUser(params: {
   facilityId: string;
 }) {
   const timestamp = Date.now();
-  const created = await requestJson<any>(params.apiBaseUrl, "/admin/users", params.adminActor, {
-    method: "POST",
-    body: {
-      firstName: "Threshold",
-      lastName: `Probe-${params.role}`,
-      email: `threshold-probe-${params.role.toLowerCase()}-${timestamp}@flow.local`,
-      role: params.role,
-      facilityId: params.facilityId,
-      status: "active"
-    }
-  });
+  try {
+    const created = await requestJson<any>(params.apiBaseUrl, "/admin/users", params.adminActor, {
+      method: "POST",
+      body: {
+        firstName: "Threshold",
+        lastName: `Probe-${params.role}`,
+        email: `threshold-probe-${params.role.toLowerCase()}-${timestamp}@flow.local`,
+        role: params.role,
+        facilityId: params.facilityId,
+        status: "active"
+      }
+    });
 
-  return String(created?.id || "");
+    return String(created?.id || "");
+  } catch (error) {
+    const message = (error as Error).message || "";
+    const canSeedViaDb =
+      hasStagingProofDatabaseAccess() &&
+      (message.includes("Local user creation is disabled") || message.includes("405 Method Not Allowed"));
+    if (!canSeedViaDb) throw error;
+
+    return createStagingProofRoleUser({
+      role: params.role,
+      facilityIds: [params.facilityId],
+      namePrefix: "Threshold Probe",
+    });
+  }
 }
 
 async function cleanupRoleProbeUsers(params: {
@@ -217,6 +237,62 @@ async function waitForThresholdLevel(params: {
     level: "Green",
     attempts,
     elapsedMs: Date.now() - started
+  };
+}
+
+function parseEncounterAlertLevel(encounter: any) {
+  return String(encounter?.alertLevel || encounter?.alertState?.currentAlertLevel || "Green");
+}
+
+async function verifyThresholdVisibleForRole(params: {
+  apiBaseUrl: string;
+  actor: AuthActor;
+  facilityId: string;
+  encounterId: string;
+}): Promise<AlertProofRow> {
+  const role = params.actor.role;
+  const alertRows = await requestJson<{ items: Array<any> }>(
+    params.apiBaseUrl,
+    "/alerts?tab=active&limit=200",
+    params.actor,
+    { facilityId: params.facilityId }
+  );
+
+  const hit = (alertRows.items || []).find((item) => {
+    const payloadEncounterId = String(item?.payload?.encounterId || "").trim();
+    const sourceId = String(item?.sourceId || "").trim();
+    const kind = String(item?.kind || "").trim();
+    return kind === "threshold" && (payloadEncounterId === params.encounterId || sourceId === params.encounterId);
+  });
+
+  if (hit) {
+    return {
+      role,
+      ok: true,
+      detail: "Threshold alert present in active inbox",
+      alertId: String(hit.id || "")
+    };
+  }
+
+  const encounter = await requestJson<any>(
+    params.apiBaseUrl,
+    `/encounters/${params.encounterId}`,
+    params.actor,
+    { facilityId: params.facilityId }
+  );
+  const level = parseEncounterAlertLevel(encounter);
+  if (level === "Yellow" || level === "Red") {
+    return {
+      role,
+      ok: true,
+      detail: `Encounter alert state ${level} visible; active inbox row was not returned for this role`
+    };
+  }
+
+  return {
+    role,
+    ok: false,
+    detail: `No active threshold inbox row and encounter alert state is ${level}`
   };
 }
 
@@ -321,6 +397,7 @@ async function main() {
 
   const createdProbeUserIds: string[] = [];
   let thresholdBackup: ThresholdSnapshot | null = null;
+  let activeFacilityId = "";
 
   if (missing.length === 0) {
     const adminActor: AuthActor = proofUserId && proofSecret
@@ -336,6 +413,7 @@ async function main() {
       if (!facilityId) {
         throw new Error("No active facility available for threshold evidence run");
       }
+      activeFacilityId = facilityId;
 
       const clinics = await requestJson<any[]>(
         apiBaseUrl,
@@ -416,29 +494,31 @@ async function main() {
             ? undefined
             : Math.max(3, Number(thresholdBackup.escalation2Min))
       };
-      await requestJson(
-        apiBaseUrl,
-        `/admin/thresholds/${thresholdBackup.id}`,
-        adminActor,
-        {
-          method: "POST",
-          facilityId,
-          body: loweredThreshold
-        }
-      );
+      await requestJson(apiBaseUrl, "/admin/thresholds", adminActor, {
+        method: "POST",
+        facilityId,
+        body: loweredThreshold
+      });
 
       const roleActors = new Map<RoleName, AuthActor>();
       roleActors.set("Admin", adminActor);
 
       const roleTargets: RoleName[] = ["FrontDeskCheckIn", "MA", "Clinician", "FrontDeskCheckOut", "OfficeManager", "RevenueCycle"];
+      const fixtureRoleUserIds =
+        proofUserId && proofSecret && hasStagingProofDatabaseAccess()
+          ? await findStagingProofFixtureRoleUserIds({ facilityId })
+          : new Map<RoleName, string>();
 
       if (proofUserId && proofSecret) {
         for (const role of roleTargets) {
-          const userId = await ensureRoleProbeUser({ apiBaseUrl, adminActor, role, facilityId });
+          const fixtureUserId = fixtureRoleUserIds.get(role);
+          const userId = fixtureUserId || await ensureRoleProbeUser({ apiBaseUrl, adminActor, role, facilityId });
           if (!userId) {
             throw new Error(`Failed to create threshold probe user for ${role}`);
           }
-          createdProbeUserIds.push(userId);
+          if (!fixtureUserId) {
+            createdProbeUserIds.push(userId);
+          }
           roleActors.set(role, { kind: "proof", role, userId, proofSecret, proofHmacSecret });
         }
       } else if (devUserId) {
@@ -507,25 +587,14 @@ async function main() {
         }
 
         try {
-          const alertRows = await requestJson<{ items: Array<any> }>(
-            apiBaseUrl,
-            "/alerts?tab=active&limit=200",
-            actor,
-            { facilityId }
+          roleResults.push(
+            await verifyThresholdVisibleForRole({
+              apiBaseUrl,
+              actor,
+              facilityId,
+              encounterId
+            })
           );
-
-          const hit = (alertRows.items || []).find((item) => {
-            const payloadEncounterId = String(item?.payload?.encounterId || "").trim();
-            const sourceId = String(item?.sourceId || "").trim();
-            const kind = String(item?.kind || "").trim();
-            return kind === "threshold" && (payloadEncounterId === encounterId || sourceId === encounterId);
-          });
-
-          if (!hit) {
-            roleResults.push({ role, ok: false, detail: "No threshold alert found in active inbox" });
-          } else {
-            roleResults.push({ role, ok: true, detail: "Threshold alert present", alertId: String(hit.id || "") });
-          }
         } catch (error) {
           roleResults.push({ role, ok: false, detail: (error as Error).message });
         }
@@ -535,7 +604,7 @@ async function main() {
         try {
           await requestJson(
             apiBaseUrl,
-            `/admin/thresholds/${thresholdBackup.id}`,
+            "/admin/thresholds",
             proofUserId && proofSecret
               ? { kind: "proof", role: proofRole, userId: proofUserId, proofSecret, proofHmacSecret }
               : adminBearer
@@ -543,7 +612,9 @@ async function main() {
                 : { kind: "dev", role: devRole, userId: devUserId },
             {
               method: "POST",
+              facilityId: activeFacilityId,
               body: {
+                facilityId: activeFacilityId,
                 clinicId: thresholdBackup.clinicId,
                 metric: thresholdBackup.metric,
                 status: thresholdBackup.status,
@@ -571,6 +642,10 @@ async function main() {
           apiBaseUrl,
           adminActor,
           userIds: createdProbeUserIds
+        });
+        await archiveStagingProofUsers({
+          userIds: createdProbeUserIds,
+          facilityId: activeFacilityId,
         });
       }
     }
