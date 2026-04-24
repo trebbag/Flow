@@ -292,6 +292,45 @@ describe("Flow backend core relationships", () => {
     );
   });
 
+  it("requires idempotency keys for authenticated mutations", async () => {
+    const ctx = await bootstrapCore();
+    const headers = {
+      "x-dev-user-id": ctx.admin.id,
+      "x-dev-role": RoleName.Admin,
+    };
+
+    const missingPost = await app.inject({
+      method: "POST",
+      url: "/admin/clinics",
+      headers,
+      payload: {
+        facilityId: ctx.facility.id,
+        name: "Missing Idempotency Clinic",
+        timezone: ctx.clinic.timezone,
+        maRun: false,
+      },
+    });
+    expect(missingPost.statusCode).toBe(428);
+    expect(missingPost.json().code).toBe("IDEMPOTENCY_KEY_REQUIRED");
+
+    const missingPatch = await app.inject({
+      method: "PATCH",
+      url: "/revenue-cases/00000000-0000-0000-0000-000000000000",
+      headers,
+      payload: { version: 0 },
+    });
+    expect(missingPatch.statusCode).toBe(428);
+    expect(missingPatch.json().code).toBe("IDEMPOTENCY_KEY_REQUIRED");
+
+    const missingDelete = await app.inject({
+      method: "DELETE",
+      url: `/admin/clinics/${ctx.clinic.id}`,
+      headers,
+    });
+    expect(missingDelete.statusCode).toBe(428);
+    expect(missingDelete.json().code).toBe("IDEMPOTENCY_KEY_REQUIRED");
+  });
+
   it("reuses a canonical patient record when source identifiers differ but DOB-backed identity matches", async () => {
     const ctx = await bootstrapCore();
     const dob = new Date(Date.UTC(1990, 0, 2, 0, 0, 0));
@@ -312,6 +351,24 @@ describe("Flow backend core relationships", () => {
 
     expect(alias.id).toBe(primary.id);
     expect(await prisma.patient.count()).toBe(1);
+  });
+
+  it("rejects patient plaintext/cipher drift when encryption key metadata is present", async () => {
+    const ctx = await bootstrapCore();
+
+    await expect(
+      prisma.patient.create({
+        data: {
+          facilityId: ctx.facility.id,
+          sourcePatientId: "PT-CIPHER-DRIFT",
+          normalizedSourcePatientId: "ptcipherdrift",
+          displayName: "Cipher Drift",
+          cipherKeyId: "v1",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: expect.stringMatching(/^(P2003|SQLITE_CONSTRAINT_CHECK)$/),
+    });
   });
 
   it("normalizes patient name aliases before DOB-backed matching", async () => {
@@ -3716,6 +3773,12 @@ describe("Flow backend core relationships", () => {
     });
     expect(archivedLinks.length).toBeGreaterThan(0);
     expect(archivedLinks.every((row) => row.active === false)).toBe(true);
+    const archiveEvent = await prisma.entityEvent.findFirst({
+      where: { entityType: "Clinic", entityId: ctx.clinic.id, eventType: "clinic.archived" }
+    });
+    expect(archiveEvent).toBeTruthy();
+    expect(archiveEvent?.beforeJson).toBeTruthy();
+    expect(archiveEvent?.afterJson).toBeTruthy();
 
     const restored = await app.inject({
       method: "POST",
@@ -3729,9 +3792,13 @@ describe("Flow backend core relationships", () => {
       where: { clinicId: ctx.clinic.id }
     });
     expect(restoredLinks.every((row) => row.active === true)).toBe(true);
+    const restoreEvent = await prisma.entityEvent.findFirst({
+      where: { entityType: "Clinic", entityId: ctx.clinic.id, eventType: "clinic.restored" }
+    });
+    expect(restoreEvent).toBeTruthy();
   });
 
-  it("hard deletes clinics with no encounter history and removes room assignments", async () => {
+  it("archives clinics with no encounter history and disables room assignments", async () => {
     const ctx = await bootstrapCore();
     const deletableClinic = await prisma.clinic.create({
       data: {
@@ -3768,19 +3835,20 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(deleted.statusCode).toBe(200);
-    expect(deleted.json().status).toBe("deleted");
+    expect(deleted.json().status).toBe("archived");
 
     const clinicAfter = await prisma.clinic.findUnique({
       where: { id: deletableClinic.id }
     });
-    expect(clinicAfter).toBeNull();
+    expect(clinicAfter?.status).toBe("archived");
     const assignmentAfter = await prisma.clinicRoomAssignment.findMany({
       where: { clinicId: deletableClinic.id }
     });
-    expect(assignmentAfter).toHaveLength(0);
+    expect(assignmentAfter).toHaveLength(1);
+    expect(assignmentAfter[0]?.active).toBe(false);
   });
 
-  it("hard deletes clinics with legacy MA mapping rows", async () => {
+  it("archives clinics with legacy MA mapping rows without cascading history", async () => {
     const ctx = await bootstrapCore();
     const deletableClinic = await prisma.clinic.create({
       data: {
@@ -3818,12 +3886,14 @@ describe("Flow backend core relationships", () => {
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(deleted.statusCode).toBe(200);
-    expect(deleted.json().status).toBe("deleted");
+    expect(deleted.json().status).toBe("archived");
 
     const clinicAfter = await prisma.clinic.findUnique({
       where: { id: deletableClinic.id }
     });
-    expect(clinicAfter).toBeNull();
+    expect(clinicAfter?.status).toBe("archived");
+    expect(await prisma.maProviderMap.count({ where: { clinicId: deletableClinic.id } })).toBe(1);
+    expect(await prisma.maClinicMap.count({ where: { clinicId: deletableClinic.id } })).toBe(1);
   });
 
   it("requires explicit clinic run model on clinic create", async () => {
@@ -5807,6 +5877,60 @@ describe("Flow backend core relationships", () => {
     expect(mutateEncounter.statusCode).toBe(403);
   });
 
+  it("rejects stale revenue case mutations with VERSION_MISMATCH", async () => {
+    const ctx = await bootstrapCore();
+    const finishedEncounter = await createRevenueWorkflowEncounter({
+      clinicId: ctx.clinic.id,
+      providerId: ctx.provider.id,
+      reasonForVisitId: ctx.reason.id,
+      checkinUserId: ctx.checkin.id,
+      checkoutUserId: ctx.admin.id,
+      maUserId: ctx.ma.id,
+      clinicianUserId: ctx.clinician.id,
+      patientId: "PT-REV-VERSION",
+    });
+    const revenueCase = await prisma.revenueCase.findUniqueOrThrow({
+      where: { encounterId: finishedEncounter.id },
+    });
+
+    await expect(
+      prisma.revenueCase.update({
+        where: { id: revenueCase.id },
+        data: { priority: revenueCase.priority + 1 },
+      }),
+    ).rejects.toMatchObject({
+      code: "P2003",
+    });
+    const latestRevenueCase = await prisma.revenueCase.findUniqueOrThrow({
+      where: { id: revenueCase.id },
+    });
+
+    const first = await app.inject({
+      method: "PATCH",
+      url: `/revenue-cases/${revenueCase.id}/assign`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        version: latestRevenueCase.version,
+        assignedToUserId: ctx.revenue.id,
+        assignedToRole: RoleName.RevenueCycle,
+      },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const stale = await app.inject({
+      method: "PATCH",
+      url: `/revenue-cases/${revenueCase.id}/assign`,
+      headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
+      payload: {
+        version: latestRevenueCase.version,
+        assignedToUserId: null,
+        assignedToRole: RoleName.RevenueCycle,
+      },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().code).toBe("VERSION_MISMATCH");
+  });
+
   it("returns paginated revenue case envelopes when requested", async () => {
     const ctx = await bootstrapCore();
     const date = ctx.day.toISOString().slice(0, 10);
@@ -6272,12 +6396,14 @@ describe("Flow backend core relationships", () => {
       },
     });
     expect(respond.statusCode).toBe(200);
+    const afterResponse = await prisma.revenueCase.findUnique({ where: { id: revenueCase!.id } });
 
     const confirmHandoff = await app.inject({
       method: "POST",
       url: `/revenue-cases/${revenueCase!.id}/athena-handoff-confirm`,
       headers: authHeaders(ctx.revenue.id, RoleName.RevenueCycle),
       payload: {
+        version: afterResponse!.version,
         athenaHandoffNote: "Confirmed manually in Athena for test coverage.",
       },
     });

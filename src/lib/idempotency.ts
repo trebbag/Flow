@@ -30,6 +30,22 @@ function resolveIdempotencyKey(request: FastifyRequest) {
   return value.length > 0 ? value : null;
 }
 
+export function requireMutationIdempotencyKey(request: FastifyRequest) {
+  const method = request.method.toUpperCase();
+  if (method !== "POST" && method !== "PATCH" && method !== "DELETE") return;
+  if (resolveIdempotencyKey(request)) return;
+
+  throw new ApiError({
+    statusCode: 428,
+    code: "IDEMPOTENCY_KEY_REQUIRED",
+    message: "Mutating requests must include an Idempotency-Key header.",
+    details: {
+      header: "Idempotency-Key",
+      method
+    }
+  });
+}
+
 function resolveRouteKey(request: FastifyRequest, explicitRouteKey?: string) {
   return explicitRouteKey || request.routeOptions.url || request.url.split("?")[0] || "/";
 }

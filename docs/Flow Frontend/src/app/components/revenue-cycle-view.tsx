@@ -989,6 +989,7 @@ export function RevenueCycleView() {
     setSaving(true);
     try {
       await revenueCases.assign(selectedCase.id, {
+        version: selectedCase.version,
         assignedToUserId: session.userId,
         assignedToRole: "RevenueCycle",
       });
@@ -1010,6 +1011,7 @@ export function RevenueCycleView() {
     setSaving(true);
     try {
       await revenueCases.update(selectedCase.id, {
+        version: selectedCase.version,
         financialReadiness: {
           eligibilityStatus: financialDraft.eligibilityStatus as any,
           registrationVerified: financialDraft.registrationVerified,
@@ -1053,6 +1055,7 @@ export function RevenueCycleView() {
     setSaving(true);
     try {
       await revenueCases.update(selectedCase.id, {
+        version: selectedCase.version,
         checkoutTracking: {
           collectionExpected: checkoutDraft.collectionExpected,
           amountDueCents: parseCurrencyInputToCents(checkoutDraft.amountDueCents || "0"),
@@ -1091,6 +1094,7 @@ export function RevenueCycleView() {
     setSaving(true);
     try {
       await revenueCases.update(selectedCase.id, {
+        version: selectedCase.version,
         readyForAthena: markReadyForAthena,
         chargeCapture: {
           documentationComplete: codingDraft.documentationComplete,
@@ -1132,6 +1136,7 @@ export function RevenueCycleView() {
     setSaving(true);
     try {
       await revenueCases.confirmAthenaHandoff(selectedCase.id, {
+        version: selectedCase.version,
         athenaHandoffNote: athenaReference || null,
         checklistUpdates: selectedCase.checklistItems
           .filter((item) => item.group === "athena_handoff_attestation" && item.status !== "completed")

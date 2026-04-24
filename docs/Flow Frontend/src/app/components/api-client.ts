@@ -1414,7 +1414,7 @@ export const admin = {
     });
   },
   deleteClinic(id: string) {
-    return apiFetch<{ status: "deleted" | "archived"; clinicId?: string; clinic?: Clinic }>(`/admin/clinics/${id}`, {
+    return apiFetch<{ status: "archived"; clinic: Clinic }>(`/admin/clinics/${id}`, {
       method: "DELETE",
     });
   },
@@ -2333,6 +2333,7 @@ export const revenueCases = {
   update(
     id: string,
     dto: {
+      version: number;
       assignedToUserId?: string | null;
       assignedToRole?: Role | null;
       priority?: number;
@@ -2390,7 +2391,7 @@ export const revenueCases = {
       body: JSON.stringify(dto),
     });
   },
-  assign(id: string, dto: { assignedToUserId?: string | null; assignedToRole: Role }) {
+  assign(id: string, dto: { version: number; assignedToUserId?: string | null; assignedToRole: Role }) {
     return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}/assign`, {
       method: "PATCH",
       body: JSON.stringify(dto),
@@ -2420,13 +2421,13 @@ export const revenueCases = {
       body: JSON.stringify(dto),
     });
   },
-  roll(id: string, dto: { rollReason: string; assignedToUserId?: string | null; assignedToRole?: Role | null; dueAt?: string }) {
+  roll(id: string, dto: { version: number; rollReason: string; assignedToUserId?: string | null; assignedToRole?: Role | null; dueAt?: string }) {
     return apiFetch<unknown>(`/revenue-cases/${id}/roll`, {
       method: "POST",
       body: JSON.stringify(dto),
     });
   },
-  confirmAthenaHandoff(id: string, dto: { athenaHandoffNote?: string | null; checklistUpdates?: Array<{ id: string; status: string; evidenceText?: string | null }> }) {
+  confirmAthenaHandoff(id: string, dto: { version: number; athenaHandoffNote?: string | null; checklistUpdates?: Array<{ id: string; status: string; evidenceText?: string | null }> }) {
     return apiFetch<RevenueCaseDetail>(`/revenue-cases/${id}/athena-handoff-confirm`, {
       method: "POST",
       body: JSON.stringify(dto),

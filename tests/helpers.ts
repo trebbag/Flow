@@ -368,10 +368,14 @@ export async function bootstrapCore() {
   };
 }
 
+let idempotencyHeaderCounter = 0;
+
 export function authHeaders(userId: string, role: RoleName) {
+  idempotencyHeaderCounter += 1;
   return {
     "x-dev-user-id": userId,
-    "x-dev-role": role
+    "x-dev-role": role,
+    "Idempotency-Key": `test-${userId}-${role}-${idempotencyHeaderCounter}`
   };
 }
 

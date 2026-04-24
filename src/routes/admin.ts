@@ -48,6 +48,7 @@ import {
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 import { enterFacilityScope } from "../lib/facility-scope.js";
 import { persistMutationOperationalEventTx, flushOperationalOutbox } from "../lib/operational-events.js";
+import { recordEntityEventTx } from "../lib/entity-events.js";
 import {
   CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
   CURRENT_TEMPLATE_SCHEMA_VERSION,
@@ -967,46 +968,6 @@ async function ignoreMissingSchema<T>(operation: () => Promise<T>) {
   }
 }
 
-// Historically referenced operational entities should archive rather than hard-delete.
-async function clinicRequiresArchival(clinicId: string) {
-  const [
-    encounterCount,
-    officeRollupCount,
-    roomRollupCount,
-    revenueRollupCount,
-    roomIssueCount,
-    checklistCount,
-    roomEventCount,
-    safetyEventCount,
-    taskCount,
-    alertInboxCount,
-  ] = await Promise.all([
-    prisma.encounter.count({ where: { clinicId } }),
-    ignoreMissingSchema(() => prisma.officeManagerDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
-    ignoreMissingSchema(() => prisma.roomDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
-    ignoreMissingSchema(() => prisma.revenueCycleDailyRollup.count({ where: { clinicId } })).then((value) => value || 0),
-    ignoreMissingSchema(() => prisma.roomIssue.count({ where: { clinicId } })).then((value) => value || 0),
-    ignoreMissingSchema(() => prisma.roomChecklistRun.count({ where: { clinicId } })).then((value) => value || 0),
-    ignoreMissingSchema(() => prisma.roomOperationalEvent.count({ where: { clinicId } })).then((value) => value || 0),
-    ignoreMissingSchema(() => prisma.safetyEvent.count({ where: { encounter: { clinicId } } })).then((value) => value || 0),
-    prisma.task.count({ where: { clinicId } }),
-    ignoreMissingSchema(() => prisma.userAlertInbox.count({ where: { clinicId } })).then((value) => value || 0),
-  ]);
-
-  return (
-    encounterCount > 0 ||
-    officeRollupCount > 0 ||
-    roomRollupCount > 0 ||
-    revenueRollupCount > 0 ||
-    roomIssueCount > 0 ||
-    checklistCount > 0 ||
-    roomEventCount > 0 ||
-    safetyEventCount > 0 ||
-    taskCount > 0 ||
-    alertInboxCount > 0
-  );
-}
-
 async function roomRequiresArchival(roomId: string) {
   const [encounterCount, issueCount, checklistCount, eventCount, occupancyCount, taskCount] = await Promise.all([
     prisma.encounter.count({ where: { roomId } }),
@@ -1095,7 +1056,7 @@ async function migratePatientReferencesToCanonical(
   });
   await tx.revenueCase.updateMany({
     where: { patientRecordId: params.sourcePatientId },
-    data: { patientRecordId: params.targetPatientId },
+    data: { patientRecordId: params.targetPatientId, version: { increment: 1 } },
   });
 
   for (const alias of aliases) {
@@ -1587,71 +1548,73 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     requireCondition(clinic, 404, "Clinic not found");
     await resolveFacilityForRequest(request, clinic.facilityId || undefined);
 
-    const shouldArchive = await clinicRequiresArchival(clinicId);
-    if (shouldArchive) {
-      const archived = await prisma.$transaction(async (tx) => {
-        await tx.clinicRoomAssignment.updateMany({
-          where: { clinicId },
-          data: { active: false }
-        });
-        return tx.clinic.update({
-          where: { id: clinicId },
-          data: { status: "archived" }
-        });
+    const archived = await prisma.$transaction(async (tx) => {
+      await tx.clinicRoomAssignment.updateMany({
+        where: { clinicId },
+        data: { active: false }
       });
-      return { status: "archived", clinic: archived };
-    }
-
-    await prisma.$transaction(async (tx) => {
-      // Remove schedule/import rows first so dependent provider/reason rows can be removed safely.
-      await ignoreMissingSchema(() => tx.incomingImportIssue.updateMany({
-        where: { clinicId },
-        data: { clinicId: null }
-      }));
-      await ignoreMissingSchema(() => tx.incomingSchedule.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.incomingImportBatch.deleteMany({ where: { clinicId } }));
-
-      await ignoreMissingSchema(() => tx.maProviderMap.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.maClinicMap.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.clinicAssignment.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.provider.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.officeManagerDailyRollup.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.templateReasonAssignment.deleteMany({
-        where: {
-          template: {
-            clinicId
-          }
-        }
-      }));
-      await ignoreMissingSchema(() => tx.template.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.reasonClinicAssignment.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.reasonForVisit.updateMany({ where: { clinicId }, data: { clinicId: null } }));
-      await ignoreMissingSchema(() => tx.alertThreshold.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.notificationPolicy.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.clinicRoomAssignment.deleteMany({ where: { clinicId } }));
-      await ignoreMissingSchema(() => tx.userRole.updateMany({
-        where: { clinicId },
-        data: { clinicId: null }
-      }));
-
-      await tx.clinic.delete({ where: { id: clinicId } });
+      const updated = await tx.clinic.update({
+        where: { id: clinicId },
+        data: { status: "archived" }
+      });
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "Clinic",
+        entityId: clinicId,
+        eventType: "clinic.archived",
+        before: clinic,
+        after: updated,
+        facilityId: clinic.facilityId,
+        clinicId
+      });
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "Clinic",
+        entityId: clinicId,
+      });
+      return updated;
     });
 
-    return { status: "deleted", clinicId };
+    await flushOperationalOutbox(prisma);
+    return { status: "archived", clinic: archived };
   });
 
   app.post("/admin/clinics/:id/restore", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
     const clinicId = (request.params as { id: string }).id;
     const clinic = await prisma.clinic.findUnique({ where: { id: clinicId } });
     requireCondition(clinic, 404, "Clinic not found");
-    const restored = await prisma.clinic.update({
-      where: { id: clinicId },
-      data: { status: "active" }
+    await resolveFacilityForRequest(request, clinic.facilityId || undefined);
+    const restored = await prisma.$transaction(async (tx) => {
+      const updated = await tx.clinic.update({
+        where: { id: clinicId },
+        data: { status: "active" }
+      });
+      await tx.clinicRoomAssignment.updateMany({
+        where: { clinicId },
+        data: { active: true }
+      });
+      await recordEntityEventTx({
+        db: tx,
+        request,
+        entityType: "Clinic",
+        entityId: clinicId,
+        eventType: "clinic.restored",
+        before: clinic,
+        after: updated,
+        facilityId: clinic.facilityId,
+        clinicId
+      });
+      await persistMutationOperationalEventTx({
+        db: tx,
+        request,
+        entityType: "Clinic",
+        entityId: clinicId,
+      });
+      return updated;
     });
-    await prisma.clinicRoomAssignment.updateMany({
-      where: { clinicId },
-      data: { active: true }
-    });
+    await flushOperationalOutbox(prisma);
     return restored;
   });
 
@@ -3369,6 +3332,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             athenaClaimStatus: row.claimStatus || null,
             athenaPatientBalanceCents: row.patientBalanceCents,
             athenaLastSyncAt: new Date(),
+            version: { increment: 1 },
           },
         });
         await tx.revenueCaseEvent.create({

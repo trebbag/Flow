@@ -99,6 +99,7 @@ const requiresRebuild =
   !hasColumn("RevenueCase", "athenaHandoffConfirmedByUserId") ||
   !hasColumn("RevenueCase", "athenaHandoffNote") ||
   !hasColumn("RevenueCase", "closeoutState") ||
+  !hasColumn("RevenueCase", "version") ||
   !hasColumn("ChargeCaptureRecord", "procedureLinesJson") ||
   !hasColumn("ChargeCaptureRecord", "serviceCaptureItemsJson") ||
   !hasColumn("ChargeCaptureRecord", "documentationSummaryJson") ||
@@ -127,6 +128,9 @@ const requiresRebuild =
   (hasTable("Task") && !hasColumn("Task", "version")) ||
   (hasTable("RoomIssue") && !hasColumn("RoomIssue", "version")) ||
   !hasTable("EntityEvent") ||
+  (hasTable("Clinic") && !tableSqlIncludes("Clinic", "facilityId TEXT NOT NULL")) ||
+  (hasTable("Task") && !tableSqlIncludes("Task", "facilityId TEXT NOT NULL")) ||
+  (hasTable("Task") && !tableSqlIncludes("Task", "clinicId TEXT NOT NULL")) ||
   (hasTable("Encounter") && !tableSqlIncludes("Encounter", "providerStartAt <= providerEndAt")) ||
   (hasTable("Task") && !tableSqlIncludes("Task", "length(trim(description))")) ||
   (hasTable("RoomIssue") && !tableSqlIncludes("RoomIssue", "length(trim(title))")) ||
@@ -138,6 +142,7 @@ const requiresRebuild =
   (hasTable("Patient") && !hasColumn("Patient", "displayNameCipher")) ||
   (hasTable("Patient") && !hasColumn("Patient", "dateOfBirthCipher")) ||
   (hasTable("Patient") && !hasColumn("Patient", "cipherKeyId")) ||
+  (hasTable("Patient") && !tableSqlIncludes("Patient", "patient_cipher_pairing")) ||
   !hasTable("PatientConsent");
 
 if (requiresRebuild) {
@@ -246,7 +251,11 @@ CREATE TABLE IF NOT EXISTS Patient (
   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE CASCADE,
-  UNIQUE (facilityId, normalizedSourcePatientId)
+  UNIQUE (facilityId, normalizedSourcePatientId),
+  CONSTRAINT patient_cipher_pairing CHECK (
+    (displayName IS NULL OR displayNameCipher IS NOT NULL OR cipherKeyId IS NULL)
+    AND (dateOfBirth IS NULL OR dateOfBirthCipher IS NOT NULL OR cipherKeyId IS NULL)
+  )
 );
 
 CREATE TABLE IF NOT EXISTS PatientAlias (
@@ -303,7 +312,7 @@ CREATE TABLE IF NOT EXISTS PatientConsent (
 
 CREATE TABLE IF NOT EXISTS Clinic (
   id TEXT PRIMARY KEY NOT NULL,
-  facilityId TEXT,
+  facilityId TEXT NOT NULL,
   name TEXT NOT NULL,
   shortCode TEXT,
   timezone TEXT NOT NULL,
@@ -313,7 +322,7 @@ CREATE TABLE IF NOT EXISTS Clinic (
   autoCloseTime TEXT,
   cardColor TEXT,
   cardTags TEXT,
-  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE SET NULL
+  FOREIGN KEY (facilityId) REFERENCES Facility(id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS Provider (
@@ -612,8 +621,8 @@ CREATE TABLE IF NOT EXISTS AlertState (
 
 CREATE TABLE IF NOT EXISTS Task (
   id TEXT PRIMARY KEY NOT NULL,
-  facilityId TEXT,
-  clinicId TEXT,
+  facilityId TEXT NOT NULL,
+  clinicId TEXT NOT NULL,
   encounterId TEXT,
   revenueCaseId TEXT,
   roomId TEXT,
@@ -805,6 +814,7 @@ CREATE TABLE IF NOT EXISTS RevenueCase (
   currentWorkQueue TEXT NOT NULL,
   currentDayBucket TEXT NOT NULL DEFAULT 'Today',
   priority INTEGER NOT NULL DEFAULT 2,
+  version INTEGER NOT NULL DEFAULT 0,
   assignedToUserId TEXT,
   assignedToRole TEXT,
   currentBlockerCategory TEXT,
@@ -1311,7 +1321,7 @@ WHEN (
   NEW.clinicianData IS NOT OLD.clinicianData OR
   NEW.checkoutData IS NOT OLD.checkoutData OR
   NEW.intakeData IS NOT OLD.intakeData
-) AND NEW.version <= OLD.version
+) AND NEW.version != OLD.version + 1
 BEGIN
   SELECT RAISE(ABORT, 'ENCOUNTER_VERSION_REQUIRED');
 END;
@@ -1334,7 +1344,7 @@ WHEN (
   NEW.archivedAt IS NOT OLD.archivedAt OR
   NEW.archivedBy IS NOT OLD.archivedBy OR
   NEW.notes IS NOT OLD.notes
-) AND NEW.version <= OLD.version
+) AND NEW.version != OLD.version + 1
 BEGIN
   SELECT RAISE(ABORT, 'TASK_VERSION_REQUIRED');
 END;
@@ -1355,9 +1365,50 @@ WHEN (
   NEW.resolvedAt IS NOT OLD.resolvedAt OR
   NEW.resolvedByUserId IS NOT OLD.resolvedByUserId OR
   NEW.resolutionNote IS NOT OLD.resolutionNote
-) AND NEW.version <= OLD.version
+) AND NEW.version != OLD.version + 1
 BEGIN
   SELECT RAISE(ABORT, 'ROOM_ISSUE_VERSION_REQUIRED');
+END;
+
+DROP TRIGGER IF EXISTS RevenueCase_require_version_bump_on_business_update;
+CREATE TRIGGER RevenueCase_require_version_bump_on_business_update
+BEFORE UPDATE ON RevenueCase
+FOR EACH ROW
+WHEN (
+  NEW.patientRecordId IS NOT OLD.patientRecordId OR
+  NEW.providerId IS NOT OLD.providerId OR
+  NEW.currentRevenueStatus IS NOT OLD.currentRevenueStatus OR
+  NEW.currentWorkQueue IS NOT OLD.currentWorkQueue OR
+  NEW.currentDayBucket IS NOT OLD.currentDayBucket OR
+  NEW.priority IS NOT OLD.priority OR
+  NEW.assignedToUserId IS NOT OLD.assignedToUserId OR
+  NEW.assignedToRole IS NOT OLD.assignedToRole OR
+  NEW.currentBlockerCategory IS NOT OLD.currentBlockerCategory OR
+  NEW.currentBlockerText IS NOT OLD.currentBlockerText OR
+  NEW.dueAt IS NOT OLD.dueAt OR
+  NEW.rolledFromDateKey IS NOT OLD.rolledFromDateKey OR
+  NEW.rollReason IS NOT OLD.rollReason OR
+  NEW.readyForAthenaAt IS NOT OLD.readyForAthenaAt OR
+  NEW.athenaHandoffOwnerUserId IS NOT OLD.athenaHandoffOwnerUserId OR
+  NEW.athenaHandoffStartedAt IS NOT OLD.athenaHandoffStartedAt OR
+  NEW.athenaHandoffConfirmedAt IS NOT OLD.athenaHandoffConfirmedAt OR
+  NEW.athenaHandoffConfirmedByUserId IS NOT OLD.athenaHandoffConfirmedByUserId OR
+  NEW.athenaHandoffNote IS NOT OLD.athenaHandoffNote OR
+  NEW.athenaChargeEnteredAt IS NOT OLD.athenaChargeEnteredAt OR
+  NEW.athenaClaimSubmittedAt IS NOT OLD.athenaClaimSubmittedAt OR
+  NEW.athenaDaysToSubmit IS NOT OLD.athenaDaysToSubmit OR
+  NEW.athenaDaysInAR IS NOT OLD.athenaDaysInAR OR
+  NEW.athenaClaimStatus IS NOT OLD.athenaClaimStatus OR
+  NEW.athenaPatientBalanceCents IS NOT OLD.athenaPatientBalanceCents OR
+  NEW.athenaLastSyncAt IS NOT OLD.athenaLastSyncAt OR
+  NEW.closeoutState IS NOT OLD.closeoutState OR
+  NEW.closedAt IS NOT OLD.closedAt OR
+  NEW.archivedAt IS NOT OLD.archivedAt OR
+  NEW.archivedByUserId IS NOT OLD.archivedByUserId OR
+  NEW.archivedReason IS NOT OLD.archivedReason
+) AND NEW.version != OLD.version + 1
+BEGIN
+  SELECT RAISE(ABORT, 'REVENUE_CASE_VERSION_REQUIRED');
 END;
 `);
 

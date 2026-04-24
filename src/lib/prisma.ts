@@ -7,7 +7,9 @@ import {
 } from "./facility-scope.js";
 
 const sqliteDatabaseUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
-const postgresDatabaseUrl = (process.env.POSTGRES_DATABASE_URL || "").trim();
+const postgresRuntimeDatabaseUrl = (process.env.POSTGRES_RUNTIME_DATABASE_URL || "").trim();
+const postgresDatabaseUrl = (postgresRuntimeDatabaseUrl || process.env.POSTGRES_DATABASE_URL || "").trim();
+const postgresDatabaseUrlSource = postgresRuntimeDatabaseUrl ? "POSTGRES_RUNTIME_DATABASE_URL" : "POSTGRES_DATABASE_URL";
 const { PrismaClient } = PrismaClientModule;
 type PrismaClient = PrismaClientType;
 type PrismaClientOptions = ConstructorParameters<typeof PrismaClient>[0];
@@ -29,7 +31,7 @@ async function createPrismaClient(): Promise<PrismaClient> {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `POSTGRES_DATABASE_URL is configured, but the generated PostgreSQL Prisma client is unavailable. ` +
+        `${postgresDatabaseUrlSource} is configured, but the generated PostgreSQL Prisma client is unavailable. ` +
           `Run "pnpm db:generate:postgres" before starting the server. Underlying error: ${message}`,
       );
     }

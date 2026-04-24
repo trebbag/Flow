@@ -52,6 +52,7 @@ import {
 import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../lib/operational-events.js";
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 import { recordEntityEventTx } from "../lib/entity-events.js";
+import { applyVersionedUpdateTx } from "../lib/versioned-updates.js";
 
 const listRevenueCasesSchema = z
   .object({
@@ -119,6 +120,7 @@ function readServiceCaptureItems(value: Prisma.JsonValue | null | undefined): Re
 }
 
 const updateRevenueCaseSchema = z.object({
+  version: z.number().int().nonnegative(),
   assignedToUserId: z.string().uuid().nullable().optional(),
   assignedToRole: z.nativeEnum(RoleName).nullable().optional(),
   priority: z.number().int().min(0).max(4).optional(),
@@ -207,11 +209,13 @@ const providerClarificationPatchSchema = z.object({
 });
 
 const assignRevenueCaseSchema = z.object({
+  version: z.number().int().nonnegative(),
   assignedToUserId: z.string().uuid().nullable().optional(),
   assignedToRole: z.nativeEnum(RoleName),
 });
 
 const rollRevenueCaseSchema = z.object({
+  version: z.number().int().nonnegative(),
   rollReason: z.string().min(1),
   assignedToUserId: z.string().uuid().nullable().optional(),
   assignedToRole: z.nativeEnum(RoleName).nullable().optional(),
@@ -238,6 +242,7 @@ const revenueCloseoutSchema = z.object({
 });
 
 const athenaHandoffConfirmSchema = z.object({
+  version: z.number().int().nonnegative(),
   athenaHandoffNote: z.string().nullable().optional(),
   checklistUpdates: z
     .array(
@@ -308,6 +313,7 @@ function mapRevenueCaseRow(row: Awaited<ReturnType<typeof buildRevenueCaseList>>
     currentWorkQueue: row.currentWorkQueue,
     currentDayBucket: row.currentDayBucket,
     priority: row.priority,
+    version: row.version,
     assignedToUserId: row.assignedToUserId,
     assignedToUserName: formatUserDisplayName(row.assignedToUser),
     assignedToRole: row.assignedToRole,
@@ -387,6 +393,29 @@ async function assertRevenueCaseReadable(revenueCaseId: string, user: { clinicId
   if (user.clinicId && revenueCase.clinicId !== user.clinicId) throw new ApiError(403, "Revenue case is outside your assigned scope");
   if (user.facilityId && revenueCase.facilityId !== user.facilityId) throw new ApiError(403, "Revenue case is outside your facility scope");
   return revenueCase;
+}
+
+async function applyRevenueCaseVersionedUpdateTx(params: {
+  tx: Prisma.TransactionClient;
+  revenueCaseId: string;
+  expectedVersion: number;
+  data: Prisma.RevenueCaseUncheckedUpdateManyInput;
+}) {
+  return applyVersionedUpdateTx({
+    update: () =>
+      params.tx.revenueCase.updateMany({
+        where: { id: params.revenueCaseId, version: params.expectedVersion },
+        data: {
+          ...params.data,
+          version: { increment: 1 },
+        },
+      }),
+    findLatest: () => params.tx.revenueCase.findUnique({ where: { id: params.revenueCaseId }, select: { id: true } }),
+    read: () => params.tx.revenueCase.findUniqueOrThrow({ where: { id: params.revenueCaseId } }),
+    notFoundMessage: "Revenue case not found",
+    notFoundCode: "REVENUE_CASE_NOT_FOUND",
+    conflictMessage: "Revenue case version mismatch",
+  });
 }
 
 function assertAthenaHandoffRole(role: RoleName | null | undefined) {
@@ -841,8 +870,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
             }
           }
 
-          await tx.revenueCase.update({
-            where: { id: revenueCaseId },
+          await applyRevenueCaseVersionedUpdateTx({
+            tx,
+            revenueCaseId,
+            expectedVersion: dto.version,
             data: {
               assignedToUserId: dto.assignedToUserId,
               assignedToRole: dto.assignedToRole,
@@ -912,8 +943,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         assertAthenaHandoffRole(dto.assignedToRole);
 
         const updated = await prisma.$transaction(async (tx) => {
-          const row = await tx.revenueCase.update({
-            where: { id: revenueCaseId },
+          const row = await applyRevenueCaseVersionedUpdateTx({
+            tx,
+            revenueCaseId,
+            expectedVersion: dto.version,
             data: {
               assignedToUserId: dto.assignedToUserId,
               assignedToRole: dto.assignedToRole,
@@ -1101,8 +1134,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
           const revenueCase = await tx.revenueCase.findUnique({ where: { id: revenueCaseId } });
           requireCondition(revenueCase, 404, "Revenue case not found", "REVENUE_CASE_NOT_FOUND");
 
-          await tx.revenueCase.update({
-            where: { id: revenueCaseId },
+          await applyRevenueCaseVersionedUpdateTx({
+            tx,
+            revenueCaseId,
+            expectedVersion: dto.version,
             data: {
               athenaHandoffOwnerUserId: revenueCase.athenaHandoffOwnerUserId || request.user!.id,
               athenaHandoffStartedAt: revenueCase.athenaHandoffStartedAt || new Date(),
@@ -1161,8 +1196,10 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
         const rolledFromDateKey = clinicDateKeyNow(revenueCase.clinic.timezone) || null;
 
         const updated = await prisma.$transaction(async (tx) => {
-          const updated = await tx.revenueCase.update({
-            where: { id: revenueCaseId },
+          const updated = await applyRevenueCaseVersionedUpdateTx({
+            tx,
+            revenueCaseId,
+            expectedVersion: dto.version,
             data: {
               rolledFromDateKey,
               rollReason: dto.rollReason,
@@ -1291,6 +1328,7 @@ export async function registerRevenueRoutes(app: FastifyInstance) {
                 rollReason: item.rollover ? item.reasonNotCompleted : null,
                 closeoutState: item.rollover ? RevenueCloseoutState.RolledOver : RevenueCloseoutState.ClosedUnresolved,
                 currentDayBucket: item.rollover ? RevenueDayBucket.Rolled : RevenueDayBucket.Yesterday,
+                version: { increment: 1 },
               },
             });
 

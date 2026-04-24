@@ -207,22 +207,7 @@ export async function registerTaskRoutes(app: FastifyInstance) {
     const mine = String(query.mine || "false").toLowerCase() === "true";
     const callerFacilityId = request.user!.facilityId;
     const facilityScope: Prisma.TaskWhereInput = callerFacilityId
-      ? {
-          OR: [
-            { facilityId: callerFacilityId },
-            {
-              AND: [
-                { facilityId: null },
-                {
-                  OR: [
-                    { encounter: { clinic: { facilityId: callerFacilityId } } },
-                    { room: { clinicLinks: { some: { clinic: { facilityId: callerFacilityId } } } } },
-                  ],
-                },
-              ],
-            },
-          ],
-        }
+      ? { facilityId: callerFacilityId }
       : { id: "__never__" };
     const mineScope: Prisma.TaskWhereInput | null = mine
       ? {

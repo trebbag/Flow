@@ -6,6 +6,11 @@ Flow layers three defenses on PHI at rest:
 2. **Row-level security (RLS)** — Postgres policies that refuse cross-tenant `SELECT`/`UPDATE` at the database layer.
 3. **Disk-level encryption** — Azure-managed encryption-at-rest on the PostgreSQL Flexible Server tier (see [COMPLIANCE.md](COMPLIANCE.md)).
 
+The Postgres rollout also installs a `Patient_cipher_pairing` check constraint:
+once `cipherKeyId` is populated, patient plaintext fields must have their
+matching cipher columns populated. This makes plaintext/cipher drift fail loud
+instead of persisting a partially encrypted patient row.
+
 ## Column-level encryption
 
 ### Shape
@@ -52,16 +57,29 @@ queries execute against Postgres.
   explicit facility scope before processing queued work.
 - Each tenant-scoped table has a policy that requires either a direct
   `facilityId` match or a join path back to the scoped facility.
-- A privileged role (`flow_admin`) bypasses RLS for migrations and maintenance.
+- A privileged maintenance role (`flow_admin`) exists for RLS-bypass designs.
+  Staging Azure currently does not allow the active server-admin login to assume
+  a separate bypass login, so `scripts/postgres-push.ts` temporarily suspends
+  forced RLS only around Prisma schema push when the migration connection lacks
+  `BYPASSRLS`, then reinstalls forced RLS before the command exits.
 
 ### Rollout status
 - Postgres version-bump triggers and RLS policies are installed by
   [`scripts/postgres-push.ts`](../scripts/postgres-push.ts).
+- Version triggers require business-field writes to increment `version` by
+  exactly `1` for `Encounter`, `Task`, `RoomIssue`, and `RevenueCase`.
+- Append-only event tables are protected by runtime-role grants: the app role
+  keeps `SELECT`/`INSERT`, while `UPDATE`/`DELETE` are revoked for
+  `EntityEvent`, `StatusChangeEvent`, `AuditLog`, `RevenueCaseEvent`, and
+  `RoomOperationalEvent`.
 - The runtime facility-scope transaction wiring is implemented in
   [`src/lib/prisma.ts`](../src/lib/prisma.ts) and
   [`src/lib/facility-scope.ts`](../src/lib/facility-scope.ts).
 - Request-scoped facility selection is entered during auth and facility/clinic
   resolution paths before tenant-scoped Prisma access.
+- Runtime deployments can set `POSTGRES_RUNTIME_DATABASE_URL` to the non-owner
+  app-role connection while keeping `POSTGRES_DATABASE_URL` reserved for
+  migration/admin scripts.
 
 ### Policy shape
 ```sql
@@ -91,11 +109,20 @@ EXISTS (
 - Array-form Prisma transactions are intentionally rejected in scoped Postgres
   request paths; callback-form transactions are required so the facility GUC can
   be set in-band.
-- Migrations, maintenance scripts, and administrative repair work must use the
-  privileged bypass role or explicit maintenance clients rather than the normal
-  request-scoped runtime path.
-- Pilot hardening should still include a live Postgres verification pass that
-  proves cross-facility reads fail under the active app role.
+- Migrations, maintenance scripts, and administrative repair work must use a
+  migration/admin connection rather than the normal request-scoped runtime path.
+  Where the host supports a dedicated `BYPASSRLS` migration login, prefer it; in
+  staging, the rollout script uses the owner/admin connection with a narrow
+  schema-push RLS suspension and forced-policy reinstall.
+- `POSTGRES_APP_ROLE` must name the non-owner runtime role during rollout so
+  append-only grant verification can prove the app role cannot update or delete
+  historical event rows. If staging/prod still use one owner role for both
+  migrations and runtime, split the roles before running `db:push:postgres`.
+  In App Service, pair this with `POSTGRES_RUNTIME_DATABASE_URL` so the API
+  process uses the non-owner role after deployment.
+- The live staging verification pass on April 24, 2026 proved cross-facility
+  reads and append-only event rewrites fail under `flow_app_user`; see
+  [postgres-rls-append-only-20260424.md](verification/postgres-rls-append-only-20260424.md).
 
 ## Frontend considerations
 

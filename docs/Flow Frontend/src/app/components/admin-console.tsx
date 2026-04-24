@@ -1326,11 +1326,7 @@ function ClinicsTab({ onAddClinic, onEditClinic }: { onAddClinic: () => void; on
               try {
                 const result = await admin.deleteClinic(target.id);
                 await reloadAdminData();
-                if (result.status === "archived") {
-                  toast.success(`${target.name} archived`);
-                } else {
-                  toast.success(`${target.name} deleted`);
-                }
+                toast.success(`${result.clinic.name || target.name} archived`);
                 requestAdminRefresh();
               } catch (error) {
                 toast.error("Archive failed", {

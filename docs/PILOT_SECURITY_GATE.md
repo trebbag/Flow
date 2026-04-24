@@ -1,6 +1,6 @@
 # Pilot Security Gate
 
-Updated: April 23, 2026
+Updated: April 24, 2026
 
 This is the PHI-facing gate for pilot activation. It separates what Flow now enforces in code from the tenant-admin and operator approvals that still need to be named explicitly before pilot go-live.
 
@@ -17,7 +17,14 @@ This is the PHI-facing gate for pilot activation. It separates what Flow now enf
    - Postgres rollout now installs row-level security policies for
      app-facing tenant tables.
    - optimistic concurrency version-bump triggers now protect Encounter,
-     Task, and RoomIssue at the persistence layer
+     Task, RoomIssue, and RevenueCase at the persistence layer with exact
+     `+1` version increments
+   - append-only event/audit tables are protected by runtime-role privileges
+     so the API role cannot update or delete historical records
+   - clinic deletion is archive-only in user-facing routes and records
+     before/after `EntityEvent` rows for archive/restore
+   - authenticated mutating API calls require `Idempotency-Key` and return
+     `428 IDEMPOTENCY_KEY_REQUIRED` when omitted
    - callback-form scoped transactions are used where the facility GUC must be
      present for RLS to enforce correctly
 
@@ -44,41 +51,51 @@ This is the PHI-facing gate for pilot activation. It separates what Flow now enf
 ## External Approvals Still Required Before PHI Pilot
 
 1. MFA enforcement path
-   - confirm whether pilot enforcement is via Conditional Access or an approved fallback
-   - name the tenant admin responsible for enabling and validating that policy
+   - Conditional Access is not available in the current Entra edition
+   - required fallback before PHI go-live: Security Defaults if compatible with the tenant, otherwise per-user MFA for every pilot user
+   - owner: Gregory Gabbert
+   - status: fallback path still needs to be enabled and validated for pilot users
 
 2. Access review ownership
-   - name the pilot access-review owner
-   - confirm the review cadence for pilot users and scoped roles
+   - owner: Gregory Gabbert
+   - approval scope: Gregory Gabbert approves adding and removing pilot users
+   - cadence: monthly pilot-user and scoped-role review
 
 3. Backup and restore approval
-   - confirm backup target, retention, restore testing owner, and approver
+   - production PostgreSQL PITR retention is approved
+   - restore drill cadence: quarterly
+   - restore owner and approver: Gregory Gabbert
 
 4. Incident runbook approval
-   - confirm incident escalation contacts, severity path, and approver for the pilot runbook
+   - technical owner: Gregory Gabbert
+   - business owner: Allison Gabbert
+   - privacy/compliance owner: Gregory Gabbert
 
 5. Go / no-go ownership
-   - name the final signoff owner for PHI-facing pilot activation
+   - final go/no-go owner: Gregory Gabbert
+   - PHI-facing pilot activation requires both technical and business approval
 
 6. Data residency confirmation
-   - confirm PostgreSQL region, backup region, and any residency constraints that apply to pilot data
+   - approved Azure region: Central US
+   - approved backup region: Central US / same-region backup posture
+   - residency constraints: no additional constraints identified beyond keeping pilot data in the approved Azure region
+   - BAA status: not yet in place; must be executed before PHI-facing go-live
 
 ## Gate Status
 
-1. Implemented in code: authentication, scoped authorization, Postgres RLS rollout path, DB-level version guards, audit posture, Athena-independent workflow execution, authenticated live update transport
-2. Ready for operator validation: live Postgres facility-isolation proof, staging proof, room operations validation, role-by-role pilot walkthrough
-3. Still blocked on named external approvals:
-   - MFA enforcement decision and owner
-   - access review owner and cadence
-   - backup / restore approver
-   - incident runbook approver
-   - go / no-go owner
-   - residency confirmation
+1. Implemented in code: authentication, scoped authorization, Postgres RLS rollout path, DB-level version guards, append-only event protections, strict mutation idempotency, audit posture, Athena-independent workflow execution, authenticated live update transport
+2. Ready for operator validation: broader authenticated staging proof, room operations validation, role-by-role pilot walkthrough
+3. Still blocked before PHI-facing go-live:
+   - enable and validate MFA fallback because Conditional Access is unavailable
+   - execute BAA before PHI is entered
+   - complete broader authenticated role-by-role staging proof
 
 ## Supporting Evidence
 
 - [PILOT_DATA_GOVERNANCE.md](PILOT_DATA_GOVERNANCE.md)
 - [AZURE_STAGING_SETUP.md](AZURE_STAGING_SETUP.md)
 - [STAGING_VALIDATION_CHECKLIST.md](verification/STAGING_VALIDATION_CHECKLIST.md)
+- [postgres-rls-append-only-20260424.md](verification/postgres-rls-append-only-20260424.md)
+- [DR_DRILL_2026-04-24.md](verification/DR_DRILL_2026-04-24.md)
 - [NEEDS_FROM_YOU.md](NEEDS_FROM_YOU.md)
 - [MVP_STATUS.md](MVP_STATUS.md)

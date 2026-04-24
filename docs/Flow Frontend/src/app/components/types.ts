@@ -700,6 +700,7 @@ export interface RevenueCaseDetail {
   currentWorkQueue: RevenueWorkQueue;
   currentDayBucket: RevenueDayBucket;
   priority: number;
+  version: number;
   assignedToUserId: string | null;
   assignedToUserName: string | null;
   assignedToRole: Role | null;

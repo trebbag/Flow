@@ -1726,6 +1726,7 @@ export async function syncRevenueCaseForEncounter(
       patientRecordId,
       providerId: encounter.providerId,
       dateOfService: encounter.dateOfService,
+      version: { increment: 1 },
     },
   });
 
@@ -2026,6 +2027,7 @@ export async function syncRevenueCaseForEncounter(
               ? RevenueCloseoutState.ClosedUnresolved
               : RevenueCloseoutState.Open,
       closedAt: state.currentRevenueStatus === RevenueStatus.Closed ? encounter.closedAt || new Date() : null,
+      version: { increment: 1 },
     },
   });
 

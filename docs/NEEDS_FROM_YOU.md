@@ -5,17 +5,25 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 ## Required Before Pilot
 
 1. Final production or pilot PostgreSQL target
-   - confirm final `POSTGRES_DATABASE_URL`
+   - confirm final migration/admin `POSTGRES_DATABASE_URL`
+   - confirm final non-owner runtime `POSTGRES_RUNTIME_DATABASE_URL`
    - confirm Azure region and data residency requirements
    - confirm where production secrets will be stored
+   - create or confirm a non-owner runtime database role for the API and set `POSTGRES_APP_ROLE` for rollout verification
+   - provide the matching runtime database connection secret separately from the migration/admin connection secret
+   - `pnpm db:push:postgres` now fails closed if append-only protections cannot be installed for a runtime role distinct from the migration/admin role
+   - staging now has `POSTGRES_APP_ROLE=flow_app_user`; repeat this same role separation for production before production rollout
 
 2. Final Entra security posture
-   - choose the pilot MFA enforcement path:
-     - preferred: Conditional Access
-     - fallback: Security Defaults or per-user MFA
-   - confirm tenant-member-only access for pilot users
+   - Conditional Access is unavailable in the current Entra edition
+   - enable and validate one MFA fallback before PHI go-live:
+     - preferred fallback: Security Defaults
+     - acceptable fallback: per-user MFA for every pilot user
+   - confirm tenant-member-only access for pilot users if external/guest accounts would otherwise be eligible
    - confirm the final pilot user group membership
-   - name the final pilot access-review owner and review cadence for pilot users
+   - pilot access-review owner: Gregory Gabbert
+   - pilot user add/remove approver: Gregory Gabbert
+   - review cadence: monthly
    - see [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md) for the exact PHI-facing approval gate that is still external to the repo
 
 3. Staging proof credentials and environment inputs
@@ -39,12 +47,22 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
 
 5. Governance and go-live inputs
    - retention and audit expectations (baseline documented in [PILOT_DATA_GOVERNANCE.md](PILOT_DATA_GOVERNANCE.md); owner to confirm)
-   - incident escalation contacts (runbook in [INCIDENT_RESPONSE.md](INCIDENT_RESPONSE.md); owner to populate on-call rotation)
+   - incident escalation contacts:
+     - technical owner: Gregory Gabbert
+     - business owner: Allison Gabbert
+     - privacy/compliance owner: Gregory Gabbert
    - pilot master data payload for facilities, clinics, providers, reasons, and templates
-   - named owner for pilot go/no-go signoff
-   - backup / restore and incident runbook approver (procedures in [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) and [ROLLBACK_PROCEDURE.md](ROLLBACK_PROCEDURE.md); owner to approve)
+   - final go/no-go owner: Gregory Gabbert
+   - go/no-go approval requirement: technical and business approval
+   - backup / restore approval:
+     - production PostgreSQL PITR retention approved
+     - quarterly restore drill approved
+     - restore owner and approver: Gregory Gabbert
+   - incident runbook owner/approver: Gregory Gabbert
    - named owner for PHI_ENCRYPTION_KEY custody and rotation per [SECRET_ROTATION.md](SECRET_ROTATION.md)
-   - confirm the final approvers for the items listed in [PILOT_SECURITY_GATE.md](PILOT_SECURITY_GATE.md)
+   - BAA is not yet in place and must be executed before PHI-facing go-live
+   - approved Azure region: Central US
+   - approved backup region: Central US / same-region backup posture
 
 6. Time-of-service RCM pilot content
    - finalize the facility-level service catalog that MAs should capture in Flow

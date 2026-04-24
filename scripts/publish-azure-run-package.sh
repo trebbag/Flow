@@ -32,7 +32,7 @@ sanitize_storage_name() {
 webapp_json="$(az webapp show \
   --name "${AZURE_WEBAPP_NAME}" \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
-  "${slot_args[@]}" \
+  ${slot_args[@]+"${slot_args[@]}"} \
   -o json)"
 
 subscription_id="$(az account show --query id -o tsv)"
@@ -134,7 +134,7 @@ package_url="https://${storage_account}.blob.core.windows.net/${container_name}/
 az webapp config appsettings set \
   --name "${AZURE_WEBAPP_NAME}" \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
-  "${slot_args[@]}" \
+  ${slot_args[@]+"${slot_args[@]}"} \
   --settings \
     WEBSITE_RUN_FROM_PACKAGE="${package_url}" \
     SCM_DO_BUILD_DURING_DEPLOYMENT=false \
@@ -146,7 +146,7 @@ az webapp config appsettings set \
 az webapp config set \
   --name "${AZURE_WEBAPP_NAME}" \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
-  "${slot_args[@]}" \
+  ${slot_args[@]+"${slot_args[@]}"} \
   --startup-file "bash /home/site/wwwroot/azure-startup.sh" \
   --only-show-errors \
   -o none
@@ -154,7 +154,7 @@ az webapp config set \
 az webapp restart \
   --name "${AZURE_WEBAPP_NAME}" \
   --resource-group "${AZURE_RESOURCE_GROUP}" \
-  "${slot_args[@]}" \
+  ${slot_args[@]+"${slot_args[@]}"} \
   --only-show-errors \
   -o none
 

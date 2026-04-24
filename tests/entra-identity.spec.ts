@@ -24,6 +24,8 @@ async function buildStrictApp() {
   return buildApp();
 }
 
+let strictJwtIdempotencyCounter = 0;
+
 async function strictJwtHeaders(params: {
   oid: string;
   role?: RoleName;
@@ -31,7 +33,9 @@ async function strictJwtHeaders(params: {
   email?: string;
   userType?: string;
 }) {
-  return jwtHeaders({
+  strictJwtIdempotencyCounter += 1;
+  return {
+    ...(await jwtHeaders({
     email: params.email,
     role: params.role,
     facilityId: params.facilityId || undefined,
@@ -40,7 +44,9 @@ async function strictJwtHeaders(params: {
       tid: "test-entra-tenant",
       userType: params.userType || "Member",
     },
-  });
+    })),
+    "Idempotency-Key": `strict-jwt-${params.oid}-${strictJwtIdempotencyCounter}`,
+  };
 }
 
 async function linkUserToStrictEntra(userId: string, objectId: string, email: string) {

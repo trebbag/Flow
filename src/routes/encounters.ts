@@ -38,6 +38,7 @@ import { flushOperationalOutbox, persistMutationOperationalEventTx } from "../li
 import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persisted-json-alerts.js";
 import { applyVersionedUpdateTx } from "../lib/versioned-updates.js";
 import { enterFacilityScope } from "../lib/facility-scope.js";
+import { recordEntityEventTx } from "../lib/entity-events.js";
 
 const defaultAllowedTransitions: Record<EncounterStatus, EncounterStatus[]> = {
   Incoming: ["Lobby"],
@@ -118,6 +119,32 @@ const completeCheckoutSchema = z.object({
   version: z.number().int().nonnegative(),
   checkoutData: z.record(z.string(), z.unknown()).optional()
 });
+
+type EncounterJsonField = "intakeData" | "roomingData" | "clinicianData" | "checkoutData";
+
+function parseEncounterJsonWrite(field: EncounterJsonField, value: unknown) {
+  return parseEncounterJsonInput(field, value);
+}
+
+async function recordEncounterJsonSnapshotTx(params: {
+  tx: Prisma.TransactionClient;
+  request: FastifyRequest;
+  encounter: { id: string; clinicId: string; [key: string]: unknown };
+  field: EncounterJsonField;
+  before: unknown;
+  after: unknown;
+}) {
+  await recordEntityEventTx({
+    db: params.tx,
+    request: params.request,
+    entityType: "Encounter",
+    entityId: params.encounter.id,
+    eventType: `encounter.${params.field}.updated`,
+    before: { field: params.field, value: params.before },
+    after: { field: params.field, value: params.after },
+    clinicId: params.encounter.clinicId,
+  });
+}
 
 const listEncountersSchema = z
   .object({
@@ -1045,9 +1072,13 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
         }
 
         const assignedMaUserId: string | undefined = clinicAssignment?.maUserId || undefined;
-        const intakeDataValue =
-          incomingRecord?.intakeData ??
-          (dto.intakeData !== undefined ? asInputJson(parseEncounterJsonInput("intakeData", dto.intakeData)) : null);
+        const parsedIntakeData =
+          incomingRecord?.intakeData !== undefined && incomingRecord.intakeData !== null
+            ? parseEncounterJsonWrite("intakeData", incomingRecord.intakeData)
+            : dto.intakeData !== undefined
+              ? parseEncounterJsonWrite("intakeData", dto.intakeData)
+              : null;
+        const intakeDataValue = parsedIntakeData !== null ? asInputJson(parsedIntakeData) : null;
 
         if (reasonForVisitId && intakeDataValue && typeof intakeDataValue === "object") {
           const intakeTemplate = await findActiveTemplateForReason({
@@ -1148,6 +1179,17 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
                 checkedInEncounterId: created.id,
                 patientRecordId,
               },
+            });
+          }
+
+          if (parsedIntakeData !== null) {
+            await recordEncounterJsonSnapshotTx({
+              tx,
+              request,
+              encounter: created,
+              field: "intakeData",
+              before: null,
+              after: parsedIntakeData,
             });
           }
 
@@ -1421,12 +1463,13 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             })
           : null;
 
+        const parsedRoomingData = dto.data !== undefined ? parseEncounterJsonWrite("roomingData", dto.data) : undefined;
         const data: Prisma.EncounterUncheckedUpdateManyInput = {
           roomId: nextRoomId,
         };
 
-        if (dto.data !== undefined) {
-          data.roomingData = asInputJson(parseEncounterJsonInput("roomingData", dto.data));
+        if (parsedRoomingData !== undefined) {
+          data.roomingData = asInputJson(parsedRoomingData);
         }
 
         const updated = await prisma.$transaction(async (tx) => {
@@ -1448,6 +1491,16 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
               roomId: dto.roomId,
               userId: request.user!.id,
               facilityId: roomContext.facilityId,
+            });
+          }
+          if (parsedRoomingData !== undefined) {
+            await recordEncounterJsonSnapshotTx({
+              tx,
+              request,
+              encounter,
+              field: "roomingData",
+              before: normalizeEncounterJsonRead("roomingData", encounter.roomingData),
+              after: parsedRoomingData,
             });
           }
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
@@ -1669,7 +1722,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
           throw new ApiError({ statusCode: 400, code: "VISIT_END_INVALID_STATUS", message: "Visit must be started before ending" });
         }
 
-        const clinicianData = dto.data !== undefined ? parseEncounterJsonInput("clinicianData", dto.data) : undefined;
+        const clinicianData = dto.data !== undefined ? parseEncounterJsonWrite("clinicianData", dto.data) : undefined;
         await ensureRequiredFields(encounter, "CheckOut", clinicianData);
         ensureClinicianCheckoutRequirements(encounter, clinicianData);
 
@@ -1700,6 +1753,16 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             encounter: { id: row.id, clinicId: row.clinicId, roomId: row.roomId },
             userId: request.user!.id,
           });
+          if (clinicianData !== undefined) {
+            await recordEncounterJsonSnapshotTx({
+              tx,
+              request,
+              encounter,
+              field: "clinicianData",
+              before: normalizeEncounterJsonRead("clinicianData", encounter.clinicianData),
+              after: clinicianData,
+            });
+          }
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
           await recordEncounterMutationTx({
             tx,
@@ -1741,7 +1804,7 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
           throw new ApiError({ statusCode: 400, code: "BLOCKING_TASKS_INCOMPLETE", message: "Blocking tasks must be completed" });
         }
 
-        const checkoutData = dto.checkoutData !== undefined ? parseEncounterJsonInput("checkoutData", dto.checkoutData) : undefined;
+        const checkoutData = dto.checkoutData !== undefined ? parseEncounterJsonWrite("checkoutData", dto.checkoutData) : undefined;
         await ensureRequiredFields(encounter, "Optimized", checkoutData);
 
         const updated = await prisma.$transaction(async (tx) => {
@@ -1767,6 +1830,16 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
             },
             resetAlertStateAt: statusChangedAt,
           });
+          if (checkoutData !== undefined) {
+            await recordEncounterJsonSnapshotTx({
+              tx,
+              request,
+              encounter,
+              field: "checkoutData",
+              before: normalizeEncounterJsonRead("checkoutData", encounter.checkoutData),
+              after: checkoutData,
+            });
+          }
           await queueRevenueEncounterSync(tx, row.id, request.correlationId || request.id);
           await recordEncounterMutationTx({
             tx,

@@ -839,7 +839,7 @@ export async function backfillCanonicalPatients(db: DbClient) {
         if (revenueCase.patientRecordId !== patient.id) {
           await db.revenueCase.update({
             where: { id: revenueCase.id },
-            data: { patientRecordId: patient.id },
+            data: { patientRecordId: patient.id, version: { increment: 1 } },
           });
         }
       }

@@ -387,7 +387,7 @@ model PatientConsent {
 
 model Clinic {
   id               String  @id @default(uuid())
-  facilityId       String?
+  facilityId       String
   name             String
   shortCode        String?
   timezone         String
@@ -398,7 +398,7 @@ model Clinic {
   cardColor        String?
   cardTags         Json?
 
-  facility                     Facility?                           @relation(fields: [facilityId], references: [id])
+  facility                     Facility                            @relation(fields: [facilityId], references: [id])
   providers                    Provider[]
   roles                        UserRole[]
   reasons                      ReasonForVisit[]
@@ -825,8 +825,8 @@ model AlertState {
 
 model Task {
   id               String          @id @default(uuid())
-  facilityId       String?
-  clinicId         String?
+  facilityId       String
+  clinicId         String
   encounterId      String?
   roomId           String?
   revenueCaseId    String?
@@ -882,6 +882,7 @@ model RevenueCase {
   currentWorkQueue         RevenueWorkQueue  @default(FinancialReadiness)
   currentDayBucket         RevenueDayBucket  @default(Today)
   priority                 Int               @default(0)
+  version                  Int               @default(0)
   assignedToUserId         String?
   assignedToRole           RoleName?
   currentBlockerCategory   String?

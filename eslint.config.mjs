@@ -5,7 +5,7 @@ import prettier from "eslint-config-prettier";
 export default [
   {
     files: ["**/*.ts"],
-    ignores: ["dist/**", "node_modules/**"],
+    ignores: ["dist/**", ".azure/**", "generated/**", "node_modules/**"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

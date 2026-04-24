@@ -508,6 +508,7 @@ exports.Prisma.RevenueCaseScalarFieldEnum = {
   currentWorkQueue: 'currentWorkQueue',
   currentDayBucket: 'currentDayBucket',
   priority: 'priority',
+  version: 'version',
   assignedToUserId: 'assignedToUserId',
   assignedToRole: 'assignedToRole',
   currentBlockerCategory: 'currentBlockerCategory',
