@@ -9,6 +9,7 @@ import {
   Stethoscope,
   TrendingUp,
   Users,
+  RefreshCw,
 } from "lucide-react";
 import {
   Bar,
@@ -26,12 +27,6 @@ import { dashboards } from "./api-client";
 import type { OwnerAnalyticsSnapshot } from "./types";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-
-function isoDateDaysAgo(daysAgo: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().slice(0, 10);
-}
 
 function formatCurrency(cents: number | null | undefined) {
   return new Intl.NumberFormat(undefined, {
@@ -116,7 +111,7 @@ export function AnalyticsView() {
   useEffect(() => {
     let mounted = true;
 
-    const load = async (background = false) => {
+    const load = async (background = false, recompute = false) => {
       if (background) {
         setRefreshing(true);
       } else {
@@ -124,10 +119,7 @@ export function AnalyticsView() {
       }
       setError(null);
       try {
-        const data = await dashboards.ownerAnalytics({
-          from: isoDateDaysAgo(6),
-          to: isoDateDaysAgo(0),
-        });
+        const data = await dashboards.ownerAnalytics({ recompute });
         if (!mounted) return;
         setSnapshot(data);
         setLastGoodSnapshot(data);
@@ -254,12 +246,39 @@ export function AnalyticsView() {
             {data.scope.from} to {data.scope.to}
           </Badge>
           {refreshing ? <Badge className="border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-50">Refreshing</Badge> : null}
+          <button
+            type="button"
+            onClick={() => {
+              setRefreshing(true);
+              dashboards.ownerAnalytics({ recompute: true })
+                .then((next) => {
+                  setSnapshot(next);
+                  setLastGoodSnapshot(next);
+                  setError(null);
+                })
+                .catch((refreshError) => {
+                  setError((refreshError as Error).message || "Unable to refresh analytics.");
+                })
+                .finally(() => setRefreshing(false));
+            }}
+            disabled={refreshing}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[11px] text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            Recompute
+          </button>
         </div>
       </div>
 
       {error ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 shadow-sm" role="status" aria-live="polite">
           Analytics refresh hit a problem, but the last good dataset is still on screen. {error}
+        </div>
+      ) : null}
+
+      {data.warnings?.length ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800 shadow-sm" role="status" aria-live="polite">
+          Some analytics sections were loaded from safe fallbacks: {data.warnings.map((warning) => `${warning.section}: ${warning.message}`).join(" · ")}
         </div>
       ) : null}
 

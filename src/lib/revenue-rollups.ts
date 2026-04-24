@@ -6,6 +6,7 @@ import {
   RevenueWorkQueue,
   type Prisma,
   type PrismaClient,
+  type RevenueCycleDailyRollup,
 } from "@prisma/client";
 import { DateTime } from "luxon";
 import { listDateKeys, type ScopedClinic } from "./office-manager-rollups.js";
@@ -63,6 +64,40 @@ export type RevenueDailyHistoryPoint = {
 
 function emptyQueueCounts() {
   return Object.fromEntries(Object.values(RevenueWorkQueue).map((queue) => [queue, 0])) as Record<string, number>;
+}
+
+function emptyRevenueDailyPoint(clinic: ScopedClinic, dateKey: string): RevenueDailyHistoryPoint {
+  const facilityId = (clinic as { facilityId?: string | null }).facilityId || null;
+  return {
+    clinicId: clinic.id,
+    facilityId,
+    date: dateKey,
+    sameDayCollectionExpectedVisitCount: 0,
+    sameDayCollectionCapturedVisitCount: 0,
+    sameDayCollectionExpectedCents: 0,
+    sameDayCollectionTrackedCents: 0,
+    sameDayCollectionVisitRate: 0,
+    sameDayCollectionDollarRate: 0,
+    expectedGrossChargeCents: 0,
+    expectedNetReimbursementCents: 0,
+    serviceCaptureCompletedVisitCount: 0,
+    clinicianCodingEnteredVisitCount: 0,
+    chargeCaptureReadyVisitCount: 0,
+    financiallyClearedCount: 0,
+    chargeCaptureCompletedCount: 0,
+    athenaHandoffConfirmedCount: 0,
+    rolledCount: 0,
+    avgFlowHandoffHours: 0,
+    avgAthenaDaysToSubmit: null,
+    avgAthenaDaysInAR: null,
+    queueCounts: emptyQueueCounts(),
+    missedCollectionReasons: {},
+    rollReasons: {},
+    queryAging: {},
+    unfinishedQueueCounts: {},
+    unfinishedOwnerCounts: {},
+    unfinishedProviderCounts: {},
+  };
 }
 
 function bucketQueryAge(openedAt: Date, now: Date) {
@@ -250,16 +285,28 @@ export async function getRevenueDailyHistoryRollups(
   prisma: PrismaClient,
   clinics: ScopedClinic[],
   dateKeys: string[],
-  options?: { persist?: boolean; forceRecompute?: boolean },
+  options?: { persist?: boolean; forceRecompute?: boolean; cacheOnly?: boolean },
 ) {
   const results: RevenueDailyHistoryPoint[] = [];
+  const buildKey = (clinicId: string, dateKey: string) => `${clinicId}::${dateKey}`;
+  const existingByClinicDate = new Map<string, RevenueCycleDailyRollup>();
+
+  if (!options?.forceRecompute && clinics.length > 0 && dateKeys.length > 0) {
+    const existingRows = await prisma.revenueCycleDailyRollup.findMany({
+      where: {
+        clinicId: { in: clinics.map((clinic) => clinic.id) },
+        dateKey: { in: dateKeys },
+      },
+    });
+    existingRows.forEach((row) => {
+      existingByClinicDate.set(buildKey(row.clinicId, row.dateKey), row);
+    });
+  }
 
   for (const clinic of clinics) {
     for (const dateKey of dateKeys) {
       const existing = !options?.forceRecompute
-        ? await prisma.revenueCycleDailyRollup.findUnique({
-            where: { clinicId_dateKey: { clinicId: clinic.id, dateKey } },
-          })
+        ? existingByClinicDate.get(buildKey(clinic.id, dateKey)) || null
         : null;
 
       if (existing) {
@@ -293,6 +340,11 @@ export async function getRevenueDailyHistoryRollups(
           unfinishedOwnerCounts: asNumberRecord(existing.unfinishedOwnerCountsJson),
           unfinishedProviderCounts: asNumberRecord(existing.unfinishedProviderCountsJson),
         });
+        continue;
+      }
+
+      if (options?.cacheOnly) {
+        results.push(emptyRevenueDailyPoint(clinic, dateKey));
         continue;
       }
 

@@ -25,6 +25,7 @@ export function buildApp() {
     logger: buildLoggerOptions(env.NODE_ENV),
     trustProxy: env.TRUST_PROXY
   });
+  const requestStartedAt = new WeakMap<object, number>();
 
   app.register(cors, {
     origin: (origin, callback) => {
@@ -99,6 +100,7 @@ export function buildApp() {
   });
 
   app.addHook("onRequest", async (request, reply) => {
+    requestStartedAt.set(request, Date.now());
     const externalCorrelationId = request.headers["x-correlation-id"];
     const correlationId =
       typeof externalCorrelationId === "string" && externalCorrelationId.trim().length > 0
@@ -106,6 +108,35 @@ export function buildApp() {
         : request.id;
     request.correlationId = correlationId;
     reply.header("x-correlation-id", correlationId);
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    const startedAt = requestStartedAt.get(request) || Date.now();
+    const durationMs = Date.now() - startedAt;
+    const routePath = request.routeOptions?.url || request.url || "unknown";
+    const shouldLog =
+      durationMs >= 500 ||
+      /^\/(dashboard|admin|revenue-cases|incoming|encounters|rooms)/.test(request.url || "");
+    if (!shouldLog) return;
+
+    const queryKeys =
+      request.query && typeof request.query === "object"
+        ? Object.keys(request.query as Record<string, unknown>).sort()
+        : [];
+    request.log.info(
+      {
+        correlationId: request.correlationId || request.id,
+        method: request.method,
+        route: routePath,
+        url: request.url,
+        statusCode: reply.statusCode,
+        durationMs,
+        facilityId: request.user?.facilityId || null,
+        clinicId: request.user?.clinicId || null,
+        queryKeys,
+      },
+      "Flow API request completed",
+    );
   });
 
   app.setErrorHandler((error, request, reply) => {

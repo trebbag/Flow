@@ -64,6 +64,14 @@ function fmtTimer(totalSec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function summarizeBlockedRooming(result: PreRoomingCheckResult | null) {
+  const reasons = result?.blockedReasons || [];
+  if (reasons.length > 0) {
+    return reasons.map((reason) => `${reason.message}${reason.count > 1 ? ` (${reason.count})` : ""}`).join(" ");
+  }
+  return "None of your rooms are ready right now.";
+}
+
 // ── MA derivation ──
 
 function deriveMAs(encs: Encounter[]) {
@@ -180,7 +188,7 @@ export function MABoardView() {
         navigate(`/encounter/${encounter.id}?${qs.toString()}`);
       } catch (error) {
         toast.error("Room availability check failed", {
-          description: (error as Error).message || "Unable to verify ready rooms",
+          description: (error as Error).message || "Unable to verify ready rooms. Try refreshing Rooms if this persists.",
         });
       } finally {
         setCheckingEncounterId(null);
@@ -358,14 +366,27 @@ export function MABoardView() {
         <DialogContent className="max-w-[520px]">
           <DialogHeader>
             <DialogTitle>No rooms available for rooming</DialogTitle>
-            <DialogDescription>None of your rooms are ready right now.</DialogDescription>
+            <DialogDescription>{summarizeBlockedRooming(blockedRooming)}</DialogDescription>
           </DialogHeader>
+          {blockedRooming?.blockedReasons?.length ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+              {blockedRooming.blockedReasons.map((reason) => (
+                <div key={reason.code} className="flex items-start justify-between gap-3">
+                  <span>{reason.message}</span>
+                  <span className="font-semibold">{reason.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="space-y-2 max-h-[280px] overflow-auto">
             {(blockedRooming?.rooms || []).map((room) => (
               <div key={room.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[13px]" style={{ fontWeight: 700 }}>{room.name}</div>
                   <div className="text-[11px] text-muted-foreground">{room.clinicName}</div>
+                  {room.readinessBlockedReason ? (
+                    <div className="mt-1 text-[11px] text-amber-700">{room.readinessBlockedReason}</div>
+                  ) : null}
                 </div>
                 <div className="text-right">
                   <Badge className="border-0 bg-amber-100 text-amber-700 text-[10px] h-5">{room.operationalStatus}</Badge>

@@ -49,6 +49,9 @@ import { buildIntegrityWarning, recordPersistedJsonAlert } from "../lib/persiste
 import { enterFacilityScope } from "../lib/facility-scope.js";
 import { persistMutationOperationalEventTx, flushOperationalOutbox } from "../lib/operational-events.js";
 import { recordEntityEventTx } from "../lib/entity-events.js";
+import { markEncounterRoomNeedsTurnoverInTx } from "../lib/room-operations.js";
+import { queueRevenueEncounterSync } from "../lib/revenue-sync-queue.js";
+import { withIdempotentMutation } from "../lib/idempotency.js";
 import {
   CURRENT_REVENUE_CYCLE_SETTINGS_SCHEMA_VERSION,
   CURRENT_TEMPLATE_SCHEMA_VERSION,
@@ -364,6 +367,16 @@ const archivedEncounterQuerySchema = z.object({
   to: z.string().trim().optional(),
   unresolvedOnly: z.string().optional(),
   search: z.string().trim().optional()
+});
+
+const staleEncounterCleanupSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  clinicId: z.string().uuid().optional(),
+  from: z.string().trim().optional(),
+  to: z.string().trim().optional(),
+  encounterIds: z.array(z.string().uuid()).optional(),
+  execute: z.boolean().default(false),
+  note: z.string().trim().max(1000).optional()
 });
 
 const updateUserSchema = z.object({
@@ -2285,6 +2298,169 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         archivedForOperations,
         needsRecovery: archivedForOperations && row.currentStatus !== EncounterStatus.Optimized
       };
+    });
+  });
+
+  app.post("/admin/encounters/stale-cleanup", { preHandler: requireRoles(RoleName.Admin) }, async (request) => {
+    const dto = staleEncounterCleanupSchema.parse(request.body || {});
+    return withIdempotentMutation({
+      db: prisma,
+      request,
+      payload: dto,
+      execute: async () => {
+        const facility = await resolveFacilityForRequest(request, dto.facilityId);
+        const timezone = facility.timezone || "America/New_York";
+        const todayStart = DateTime.now().setZone(timezone).startOf("day");
+        const defaultFrom = todayStart.minus({ days: 14 });
+        const defaultTo = todayStart.minus({ days: 1 });
+        const from = parseFacilityDateBoundary(dto.from, timezone, "start", defaultFrom);
+        const to = parseFacilityDateBoundary(dto.to, timezone, "end", defaultTo);
+        requireCondition(to >= from, 400, "Encounter cleanup date range is invalid.");
+
+        const where: Prisma.EncounterWhereInput = {
+          clinic: {
+            facilityId: facility.id,
+            ...(dto.clinicId ? { id: dto.clinicId } : {})
+          },
+          dateOfService: {
+            gte: from.toUTC().toJSDate(),
+            lte: to.toUTC().toJSDate(),
+            lt: todayStart.toUTC().toJSDate()
+          },
+          currentStatus: { not: EncounterStatus.Optimized },
+          ...(dto.encounterIds?.length ? { id: { in: dto.encounterIds } } : {})
+        };
+
+        const candidates = await prisma.encounter.findMany({
+          where,
+          include: {
+            clinic: { select: { id: true, name: true, status: true, facilityId: true } },
+            provider: { select: { id: true, name: true, active: true } },
+            reason: { select: { id: true, name: true } },
+            room: { select: { id: true, name: true, status: true } }
+          },
+          orderBy: [{ dateOfService: "asc" }, { checkInAt: "asc" }],
+          take: 250
+        });
+
+        const toCleanupRow = (row: (typeof candidates)[number]) => ({
+          id: row.id,
+          version: row.version,
+          patientId: row.patientId,
+          clinicId: row.clinicId,
+          clinicName: formatClinicDisplayName(row.clinic),
+          dateOfService: DateTime.fromJSDate(row.dateOfService).setZone(timezone).toISODate() || row.dateOfService.toISOString().slice(0, 10),
+          currentStatus: row.currentStatus,
+          providerName: formatProviderDisplayName(row.provider),
+          reasonForVisit: formatReasonDisplayName(row.reason) || null,
+          roomId: row.roomId,
+          roomName: formatRoomDisplayName(row.room),
+          assignedMaUserId: row.assignedMaUserId,
+          assignedMaName: null,
+          checkInAt: row.checkInAt,
+          roomingStartAt: row.roomingStartAt,
+          roomingCompleteAt: row.roomingCompleteAt,
+          providerStartAt: row.providerStartAt,
+          providerEndAt: row.providerEndAt,
+          checkoutCompleteAt: row.checkoutCompleteAt,
+          closedAt: row.closedAt,
+          closureType: row.closureType,
+          archivedForOperations: true,
+          needsRecovery: row.currentStatus !== EncounterStatus.Optimized
+        });
+
+        if (!dto.execute) {
+          return {
+            status: "dry_run",
+            facilityId: facility.id,
+            candidateCount: candidates.length,
+            releasedRoomCount: candidates.filter((row) => Boolean(row.roomId)).length,
+            candidates: candidates.map(toCleanupRow)
+          };
+        }
+
+        const now = new Date();
+        const note = dto.note?.trim() || "Admin stale operational cleanup";
+        const result = await prisma.$transaction(async (tx) => {
+          const cleaned: Array<ReturnType<typeof toCleanupRow>> = [];
+          let releasedRoomCount = 0;
+          for (const candidate of candidates) {
+            const before = toCleanupRow(candidate);
+            if (candidate.roomId) {
+              await markEncounterRoomNeedsTurnoverInTx(tx, {
+                encounter: { id: candidate.id, clinicId: candidate.clinicId, roomId: candidate.roomId },
+                userId: request.user!.id
+              });
+              releasedRoomCount += 1;
+            }
+            const updated = await tx.encounter.update({
+              where: { id: candidate.id },
+              data: {
+                currentStatus: EncounterStatus.Optimized,
+                roomId: null,
+                checkoutCompleteAt: candidate.checkoutCompleteAt || now,
+                closedAt: now,
+                closureType: "stale_operational_cleanup",
+                closureNotes: note,
+                archivedAt: candidate.archivedAt || now,
+                archivedByUserId: request.user!.id,
+                archivedReason: "stale_operational_cleanup",
+                version: { increment: 1 }
+              },
+              include: {
+                clinic: { select: { id: true, name: true, status: true, facilityId: true } },
+                provider: { select: { id: true, name: true, active: true } },
+                reason: { select: { id: true, name: true } },
+                room: { select: { id: true, name: true, status: true } }
+              }
+            });
+            await tx.statusChangeEvent.create({
+              data: {
+                encounterId: candidate.id,
+                fromStatus: candidate.currentStatus,
+                toStatus: EncounterStatus.Optimized,
+                changedByUserId: request.user!.id,
+                reasonCode: "stale_operational_cleanup"
+              }
+            });
+            const after = toCleanupRow(updated);
+            await recordEntityEventTx({
+              db: tx,
+              request,
+              entityType: "Encounter",
+              entityId: candidate.id,
+              eventType: "encounter.stale_cleanup",
+              before,
+              after,
+              metadata: {
+                note,
+                priorStatus: candidate.currentStatus,
+                releasedRoomId: candidate.roomId || null
+              },
+              facilityId: facility.id,
+              clinicId: candidate.clinicId
+            });
+            await persistMutationOperationalEventTx({
+              db: tx,
+              request,
+              entityType: "Encounter",
+              entityId: candidate.id
+            });
+            await queueRevenueEncounterSync(tx, candidate.id, request.correlationId || request.id);
+            cleaned.push(after);
+          }
+          return { cleaned, releasedRoomCount };
+        });
+
+        await flushOperationalOutbox(prisma);
+        return {
+          status: "cleaned",
+          facilityId: facility.id,
+          cleanedCount: result.cleaned.length,
+          releasedRoomCount: result.releasedRoomCount,
+          encounters: result.cleaned
+        };
+      }
     });
   });
 

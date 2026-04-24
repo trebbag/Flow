@@ -206,6 +206,45 @@ const inflightGets = new Map<string, Promise<unknown>>();
 const mutationIdempotencyKeys = new Map<string, { key: string; expiresAt: number }>();
 const GET_CACHE_MAX_ENTRIES = 200;
 const MUTATION_IDEMPOTENCY_TTL_MS = 60_000;
+const SLOW_API_REQUEST_MS = 750;
+
+function apiPerfLoggingEnabled() {
+  const explicit = String(viteEnv?.VITE_ENABLE_API_PERF_LOG || "").toLowerCase();
+  if (explicit === "false" || explicit === "0") return false;
+  if (explicit === "true" || explicit === "1") return true;
+  return Boolean(viteEnv?.DEV) || String(viteEnv?.MODE || "").toLowerCase() === "staging";
+}
+
+function nowMs() {
+  return typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+}
+
+function logApiTiming(input: {
+  path: string;
+  method: string;
+  durationMs: number;
+  status?: number;
+  cacheHit?: boolean;
+  inflight?: boolean;
+  timedOut?: boolean;
+  ok?: boolean;
+}) {
+  if (!apiPerfLoggingEnabled() && input.durationMs < SLOW_API_REQUEST_MS) return;
+  const level = input.durationMs >= SLOW_API_REQUEST_MS || input.ok === false ? "warn" : "debug";
+  const logger = level === "warn" ? console.warn : console.info;
+  logger("[flow-api]", {
+    path: input.path,
+    method: input.method,
+    durationMs: Math.round(input.durationMs),
+    status: input.status,
+    cacheHit: Boolean(input.cacheHit),
+    inflight: Boolean(input.inflight),
+    timedOut: Boolean(input.timedOut),
+    ok: input.ok !== false,
+  });
+}
 
 export function createIdempotencyKey() {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
@@ -392,11 +431,15 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
   if (cacheKey) {
     const cached = readCachedGetEntry(cacheKey);
     if (cached) {
+      logApiTiming({ path, method, durationMs: 0, cacheHit: true, ok: true });
       return cached.value as T;
     }
     const inflight = inflightGets.get(cacheKey);
     if (inflight) {
-      return (await inflight) as T;
+      const startedAt = nowMs();
+      const value = (await inflight) as T;
+      logApiTiming({ path, method, durationMs: nowMs() - startedAt, inflight: true, ok: true });
+      return value;
     }
   } else if (method !== "GET") {
     clearGetCache();
@@ -404,6 +447,7 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
 
   const performFetch = async () => {
     let res: Response;
+    const requestStartedAt = nowMs();
     const controller = new AbortController();
     let timedOut = false;
     const timeoutId = Number.isFinite(timeoutMs) && timeoutMs > 0
@@ -429,6 +473,7 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
         signal: controller.signal,
       });
     } catch (error) {
+      logApiTiming({ path, method, durationMs: nowMs() - requestStartedAt, timedOut, ok: false });
       if (timeoutId) clearTimeout(timeoutId);
       if (callerSignal) callerSignal.removeEventListener("abort", forwardAbort);
       if (error instanceof DOMException && error.name === "AbortError" && timedOut) {
@@ -457,10 +502,13 @@ async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise
       } catch {
         // keep raw text
       }
+      logApiTiming({ path, method, durationMs: nowMs() - requestStartedAt, status: res.status, ok: false });
       throw new Error(message);
     }
 
-    return (await res.json()) as T;
+    const payload = (await res.json()) as T;
+    logApiTiming({ path, method, durationMs: nowMs() - requestStartedAt, status: res.status, ok: true });
+    return payload;
   };
 
   if (!cacheKey) {
@@ -1002,6 +1050,7 @@ export type RoomLiveCard = {
   dayStartCompleted: boolean;
   dayEndCompleted: boolean;
   assignable: boolean;
+  readinessBlockedCode?: string | null;
   readinessBlockedReason: string | null;
   lowStock: boolean;
   auditDue: boolean;
@@ -1151,6 +1200,7 @@ export type PreRoomingCheckResult = {
   preferredRoomId: string | null;
   lastReadyRoom: boolean;
   blocked: boolean;
+  blockedReasons?: Array<{ code: string; message: string; count: number }>;
   rooms: RoomLiveCard[];
 };
 
@@ -1803,6 +1853,43 @@ export const admin = {
     const q = qs.toString();
     return apiFetch<AdminEncounterRecoveryRow[]>(`/admin/encounters${q ? `?${q}` : ""}`, { cacheTtlMs: 10_000 });
   },
+  previewStaleEncounterCleanup(dto: {
+    facilityId?: string;
+    clinicId?: string;
+    from?: string;
+    to?: string;
+    encounterIds?: string[];
+  }) {
+    return apiFetch<{
+      status: "dry_run";
+      facilityId: string;
+      candidateCount: number;
+      releasedRoomCount: number;
+      candidates: AdminEncounterRecoveryRow[];
+    }>("/admin/encounters/stale-cleanup", {
+      method: "POST",
+      body: JSON.stringify({ ...dto, execute: false }),
+    });
+  },
+  executeStaleEncounterCleanup(dto: {
+    facilityId?: string;
+    clinicId?: string;
+    from?: string;
+    to?: string;
+    encounterIds?: string[];
+    note?: string;
+  }) {
+    return apiFetch<{
+      status: "cleaned";
+      facilityId: string;
+      cleanedCount: number;
+      releasedRoomCount: number;
+      encounters: AdminEncounterRecoveryRow[];
+    }>("/admin/encounters/stale-cleanup", {
+      method: "POST",
+      body: JSON.stringify({ ...dto, execute: true }),
+    });
+  },
   updateAssignment(clinicId: string, dto: { providerUserId?: string | null; maUserId?: string | null }) {
     return apiFetch<ClinicAssignment>(`/admin/assignments/${clinicId}`, {
       method: "POST",
@@ -2213,11 +2300,12 @@ export const dashboards = {
       { cacheTtlMs: 30_000 },
     );
   },
-  ownerAnalytics(params?: { clinicId?: string; from?: string; to?: string }) {
+  ownerAnalytics(params?: { clinicId?: string; from?: string; to?: string; recompute?: boolean }) {
     const qs = new URLSearchParams();
     if (params?.clinicId) qs.set("clinicId", params.clinicId);
     if (params?.from) qs.set("from", params.from);
     if (params?.to) qs.set("to", params.to);
+    if (params?.recompute) qs.set("recompute", "true");
     const q = qs.toString();
     return apiFetch<OwnerAnalyticsSnapshot>(`/dashboard/owner-analytics${q ? `?${q}` : ""}`, {
       cacheTtlMs: 30_000,

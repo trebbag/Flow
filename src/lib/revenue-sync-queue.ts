@@ -32,11 +32,13 @@ export type RevenueSyncWorkerStatus = {
 };
 
 const DEFAULT_SYNC_INTERVAL_MS = 60_000;
+const DEFAULT_SYNC_STARTUP_DELAY_MS = 5 * 60_000;
 const REVENUE_SYNC_TOPIC = "revenue.sync";
 const REVENUE_SYNC_EVENT = "revenue.sync.requested";
 const LEASE_TTL_MS = 5 * 60_000;
 const WORKER_OWNER_ID = `${hostname()}:${process.pid}:revenue-sync`;
 let syncTimer: NodeJS.Timeout | null = null;
+let startupDrainTimer: NodeJS.Timeout | null = null;
 let activeDrain: Promise<void> | null = null;
 let logger: RevenueSyncLogger | null = null;
 let lastSuccessfulDrainAt: Date | null = null;
@@ -383,7 +385,7 @@ export async function getRevenueSyncWorkerStatus(db: PrismaClient = prisma): Pro
   ]);
 
   return {
-    running: Boolean(activeDrain || syncTimer),
+    running: Boolean(activeDrain || syncTimer || startupDrainTimer),
     pendingCount,
     lastSuccessfulDrainAt: lastSuccessfulDrainAt?.toISOString() || null,
     lastFailedDrainAt: lastFailedDrainAt?.toISOString() || null,
@@ -398,19 +400,28 @@ export function startRevenueSyncWorker(options?: {
   logger?: RevenueSyncLogger;
 }) {
   if (env.NODE_ENV === "test") return;
-  if (syncTimer) return;
+  if (syncTimer || startupDrainTimer) return;
 
   logger = options?.logger || null;
   const db = options?.db || prisma;
   const intervalMs = options?.intervalMs || DEFAULT_SYNC_INTERVAL_MS;
-  void flushRevenueSyncQueue(db);
-  syncTimer = setInterval(() => {
+  const startupDelayMs = Number(process.env.REVENUE_SYNC_STARTUP_DELAY_MS || DEFAULT_SYNC_STARTUP_DELAY_MS);
+  startupDrainTimer = setTimeout(() => {
+    startupDrainTimer = null;
     void flushRevenueSyncQueue(db);
-  }, intervalMs);
-  syncTimer.unref?.();
+    syncTimer = setInterval(() => {
+      void flushRevenueSyncQueue(db);
+    }, intervalMs);
+    syncTimer.unref?.();
+  }, Number.isFinite(startupDelayMs) && startupDelayMs >= 0 ? startupDelayMs : DEFAULT_SYNC_STARTUP_DELAY_MS);
+  startupDrainTimer.unref?.();
 }
 
 export async function stopRevenueSyncWorker() {
+  if (startupDrainTimer) {
+    clearTimeout(startupDrainTimer);
+    startupDrainTimer = null;
+  }
   if (syncTimer) {
     clearInterval(syncTimer);
     syncTimer = null;

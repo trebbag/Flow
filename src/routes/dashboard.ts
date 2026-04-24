@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { AlertLevel, EncounterStatus, RoleName } from "@prisma/client";
+import { AlertLevel, EncounterStatus, RoleName, TaskStatus } from "@prisma/client";
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -12,6 +12,7 @@ import { getRoomDailyHistoryRollups } from "../lib/room-rollups.js";
 import { refreshEncounterAlertStates } from "../lib/alert-engine.js";
 import { getRevenueDailyHistoryRollups } from "../lib/revenue-rollups.js";
 import { buildRevenueExpectationSummary, getRevenueSettings } from "../lib/revenue-cycle.js";
+import { clinicDateKeyNow, clinicUtcDayRangeFromDateKey } from "../lib/clinic-time.js";
 
 const dashboardQuerySchema = z.object({
   clinicId: z.string().uuid().optional(),
@@ -21,7 +22,8 @@ const dashboardQuerySchema = z.object({
 const dashboardHistoryQuerySchema = z.object({
   clinicId: z.string().uuid().optional(),
   from: z.string().optional(),
-  to: z.string().optional()
+  to: z.string().optional(),
+  recompute: z.string().optional()
 });
 
 type ScopedClinic = { id: string; timezone: string; facilityId?: string | null };
@@ -121,10 +123,17 @@ function topEntries(value: Record<string, number> | null | undefined, limit = 8)
     .slice(0, limit);
 }
 
-function dateRangeBounds(fromDate: string, toDate: string) {
+function queryBoolean(value: string | undefined, defaultValue = false) {
+  if (value === undefined) return defaultValue;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
+function dateRangeBounds(fromDate: string, toDate: string, timezone: string) {
+  const start = clinicUtcDayRangeFromDateKey(fromDate, timezone).start;
+  const end = clinicUtcDayRangeFromDateKey(toDate, timezone).end;
   return {
-    start: DateTime.fromISO(fromDate, { zone: "utc" }).startOf("day").toJSDate(),
-    end: DateTime.fromISO(toDate, { zone: "utc" }).plus({ days: 1 }).startOf("day").toJSDate(),
+    start,
+    end,
   };
 }
 
@@ -142,48 +151,40 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
   app.get("/dashboard/office-manager", { preHandler: officeGuard }, async (request) => {
     const query = dashboardQuerySchema.parse(request.query);
     const matchers = await resolveEncounterMatchers(request.user!, query.clinicId, query.date);
-    const scopedClinicIds = Array.from(new Set(matchers.map((matcher) => matcher.clinicId)));
 
-    await refreshEncounterAlertStates(prisma, {
-      facilityId: request.user!.facilityId,
-      clinicIds: scopedClinicIds
+    const statusCounts = await prisma.encounter.groupBy({
+      by: ["currentStatus"],
+      where: { OR: matchers },
+      _count: { _all: true }
     });
-
-    const [statusCounts, alerts, activeSafetyCount, openTaskCount, encounters] = await Promise.all([
-      prisma.encounter.groupBy({
-        by: ["currentStatus"],
-        where: { OR: matchers },
-        _count: { _all: true }
-      }),
-      prisma.alertState.groupBy({
-        by: ["currentAlertLevel"],
-        where: { encounter: { OR: matchers } },
-        _count: { _all: true }
-      }),
-      prisma.safetyEvent.count({
-        where: {
-          resolvedAt: null,
-          encounter: { OR: matchers }
-        }
-      }),
-      prisma.task.count({
-        where: {
-          status: { not: "completed" },
-          encounter: { OR: matchers }
-        }
-      }),
-      prisma.encounter.findMany({
-        where: { OR: matchers },
-        select: {
-          currentStatus: true,
-          checkInAt: true,
-          roomingStartAt: true,
-          providerStartAt: true,
-          providerEndAt: true,
-          checkoutCompleteAt: true
-        }
-      })
-    ]);
+    const alerts = await prisma.alertState.groupBy({
+      by: ["currentAlertLevel"],
+      where: { encounter: { OR: matchers } },
+      _count: { _all: true }
+    });
+    const activeSafetyCount = await prisma.safetyEvent.count({
+      where: {
+        resolvedAt: null,
+        encounter: { OR: matchers }
+      }
+    });
+    const openTaskCount = await prisma.task.count({
+      where: {
+        status: { not: TaskStatus.completed },
+        encounter: { OR: matchers }
+      }
+    });
+    const encounters = await prisma.encounter.findMany({
+      where: { OR: matchers },
+      select: {
+        currentStatus: true,
+        checkInAt: true,
+        roomingStartAt: true,
+        providerStartAt: true,
+        providerEndAt: true,
+        checkoutCompleteAt: true
+      }
+    });
 
     const statusMap = Object.fromEntries(
       Object.values(EncounterStatus).map((status) => [
@@ -236,7 +237,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
       facilityId: request.user!.facilityId,
       clinicIds: clinics.map((clinic) => clinic.id)
     });
-    const effectiveTo = (query.to || DateTime.now().toISODate() || "").trim();
+    const effectiveTo = (query.to || clinicDateKeyNow(clinics[0]?.timezone) || "").trim();
     if (!effectiveTo) {
       throw new ApiError(400, "to is required");
     }
@@ -256,7 +257,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
 
     const daily = await getDailyHistoryRollups(prisma, clinics, dateKeys, {
       persist: true,
-      forceRecompute: true
+      forceRecompute: queryBoolean(query.recompute)
     });
 
     return {
@@ -272,7 +273,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
   app.get("/dashboard/rooms/history", { preHandler: officeGuard }, async (request) => {
     const query = dashboardHistoryQuerySchema.parse(request.query);
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
-    const effectiveTo = (query.to || DateTime.now().toISODate() || "").trim();
+    const effectiveTo = (query.to || clinicDateKeyNow(clinics[0]?.timezone) || "").trim();
     if (!effectiveTo) {
       throw new ApiError(400, "to is required");
     }
@@ -292,7 +293,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
 
     const daily = await getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
       persist: true,
-      forceRecompute: true
+      forceRecompute: queryBoolean(query.recompute)
     });
 
     return {
@@ -308,12 +309,15 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
   app.get("/dashboard/owner-analytics", { preHandler: ownerAnalyticsGuard }, async (request) => {
     const query = dashboardHistoryQuerySchema.parse(request.query);
     const clinics = await resolveClinicsInScope(request.user!, query.clinicId);
-    await refreshEncounterAlertStates(prisma, {
-      facilityId: request.user!.facilityId,
-      clinicIds: clinics.map((clinic) => clinic.id),
-    });
+    const forceRecompute = queryBoolean(query.recompute);
+    if (forceRecompute) {
+      await refreshEncounterAlertStates(prisma, {
+        facilityId: request.user!.facilityId,
+        clinicIds: clinics.map((clinic) => clinic.id),
+      });
+    }
 
-    const effectiveTo = (query.to || DateTime.now().toISODate() || "").trim();
+    const effectiveTo = (query.to || clinicDateKeyNow(clinics[0]?.timezone) || "").trim();
     if (!effectiveTo) {
       throw new ApiError(400, "to is required");
     }
@@ -331,57 +335,90 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
       throw new ApiError(400, error instanceof Error ? error.message : "Invalid date range");
     }
 
-    const todayMatchers = await resolveEncounterMatchers(request.user!, query.clinicId, DateTime.now().toISODate() || undefined);
-    const { start, end } = dateRangeBounds(effectiveFrom, effectiveTo);
+    const todayMatchers = await resolveEncounterMatchers(request.user!, query.clinicId, clinicDateKeyNow(clinics[0]?.timezone));
+    const { start, end } = dateRangeBounds(effectiveFrom, effectiveTo, clinics[0]?.timezone || "America/New_York");
     const facilityId = request.user!.facilityId || clinics[0]?.facilityId || null;
     const settings = facilityId ? await getRevenueSettings(prisma, facilityId) : null;
 
-    const [officeDaily, roomDaily, revenueDaily, currentEncounters, rangeRevenueCases, activeSafetyCount, blockingTaskCount] = await Promise.all([
-      getDailyHistoryRollups(prisma, clinics, dateKeys, { persist: true, forceRecompute: true }),
-      getRoomDailyHistoryRollups(prisma, clinics, dateKeys, { persist: true, forceRecompute: true }),
-      getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, { persist: true, forceRecompute: true }),
-      prisma.encounter.findMany({
-        where: { OR: todayMatchers },
-        select: {
-          id: true,
-          currentStatus: true,
-          checkInAt: true,
-          providerStartAt: true,
-          providerEndAt: true,
-          checkoutCompleteAt: true,
-          assignedMaUserId: true,
-          provider: { select: { name: true } },
+    const useCachedRollupsOnly = !forceRecompute;
+    const warnings: Array<{ section: string; message: string }> = [];
+
+    const readSection = async <T>(name: string, work: () => Promise<T>, fallback: T): Promise<T> => {
+      try {
+        return await work();
+      } catch (error) {
+      warnings.push({
+        section: name,
+          message: error instanceof Error ? error.message : `${name} could not be loaded`,
+      });
+      request.log.warn(
+        {
+          correlationId: request.correlationId || request.id,
+          section: name,
+            error: error instanceof Error ? error.message : String(error),
         },
-      }),
-      prisma.revenueCase.findMany({
-        where: {
-          clinicId: { in: clinics.map((clinic) => clinic.id) },
-          dateOfService: { gte: start, lt: end },
+        "Owner analytics section failed",
+      );
+      return fallback;
+      }
+    };
+
+    const officeDaily = await readSection("officeDaily", () => getDailyHistoryRollups(prisma, clinics, dateKeys, {
+      persist: forceRecompute,
+      forceRecompute,
+      cacheOnly: useCachedRollupsOnly,
+    }), []);
+    const roomDaily = await readSection("roomDaily", () => getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
+      persist: forceRecompute,
+      forceRecompute,
+      cacheOnly: useCachedRollupsOnly,
+    }), []);
+    const revenueDaily = await readSection("revenueDaily", () => getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, {
+      persist: forceRecompute,
+      forceRecompute,
+      cacheOnly: useCachedRollupsOnly,
+    }), []);
+    const currentEncounters = await readSection("currentEncounters", () => prisma.encounter.findMany({
+      where: { OR: todayMatchers },
+      select: {
+        id: true,
+        currentStatus: true,
+        checkInAt: true,
+        providerStartAt: true,
+        providerEndAt: true,
+        checkoutCompleteAt: true,
+        assignedMaUserId: true,
+        provider: { select: { name: true } },
+      },
+    }), []);
+    const rangeRevenueCases = await readSection("rangeRevenueCases", () => prisma.revenueCase.findMany({
+      where: {
+        clinicId: { in: clinics.map((clinic) => clinic.id) },
+        dateOfService: { gte: start, lt: end },
+      },
+      include: {
+        financialReadiness: true,
+        checkoutCollectionTracking: true,
+        chargeCaptureRecord: true,
+        providerClarifications: {
+          where: { status: { not: "Resolved" as any } },
+          select: { id: true },
         },
-        include: {
-          financialReadiness: true,
-          checkoutCollectionTracking: true,
-          chargeCaptureRecord: true,
-          providerClarifications: {
-            where: { status: { not: "Resolved" as any } },
-            select: { id: true },
-          },
-        },
-      }),
-      prisma.safetyEvent.count({
-        where: {
-          resolvedAt: null,
-          encounter: { OR: todayMatchers },
-        },
-      }),
-      prisma.task.count({
-        where: {
-          blocking: true,
-          status: { not: "completed" },
-          encounter: { OR: todayMatchers },
-        },
-      }),
-    ]);
+      },
+    }), []);
+    const activeSafetyCount = await readSection("activeSafetyCount", () => prisma.safetyEvent.count({
+      where: {
+        resolvedAt: null,
+        encounter: { OR: todayMatchers },
+      },
+    }), 0);
+    const blockingTaskCount = await readSection("blockingTaskCount", () => prisma.task.count({
+      where: {
+        blocking: true,
+        status: { not: "completed" },
+        encounter: { OR: todayMatchers },
+      },
+    }), 0);
 
     const latestOffice = officeDaily[officeDaily.length - 1] || null;
     const latestRoom = roomDaily[roomDaily.length - 1] || null;
@@ -614,6 +651,7 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
         activeSafetyCount,
         blockingTaskCount,
       },
+      warnings,
     };
   });
 }

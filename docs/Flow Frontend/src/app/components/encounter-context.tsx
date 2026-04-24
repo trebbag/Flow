@@ -223,6 +223,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
   const completedCheckoutsRef = useRef<CompletedCheckout[]>([]);
   const snapshotScopeKeyRef = useRef<string | null>(null);
   const liveBoardHydratedRef = useRef(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     encountersRef.current = encounters;
@@ -604,6 +605,16 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     }
   }, [mapBackendEncounter, mapBackendTask, mapIncomingRow, persistBoardSnapshot]);
 
+  const scheduleRefreshData = useCallback((delayMs = 300) => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      refreshData().catch(() => undefined);
+    }, delayMs);
+  }, [refreshData]);
+
   useEffect(() => {
     liveBoardHydratedRef.current = false;
     hydrateBoardSnapshot().catch(() => undefined);
@@ -639,7 +650,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
           signal: controller.signal,
           onEvent: ({ event }) => {
             if (event !== "connected") {
-              refreshData().catch(() => undefined);
+              scheduleRefreshData();
             }
           },
         });
@@ -660,7 +671,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     const onExternalRefresh = () => {
       liveBoardHydratedRef.current = false;
       hydrateBoardSnapshot().catch(() => undefined);
-      refreshData().catch(() => undefined);
+      scheduleRefreshData();
     };
     if (typeof window !== "undefined") {
       window.addEventListener(ADMIN_REFRESH_EVENT, onExternalRefresh);
@@ -670,6 +681,10 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       clearInterval(poll);
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       streamCloser?.();
       streamAbortController?.abort();
@@ -678,7 +693,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onExternalRefresh);
       }
     };
-  }, [hydrateBoardSnapshot, refreshData]);
+  }, [hydrateBoardSnapshot, refreshData, scheduleRefreshData]);
 
   useEffect(() => {
     if (!liveBoardHydratedRef.current || !snapshotScopeKeyRef.current) {
@@ -942,7 +957,7 @@ export function EncounterProvider({ children }: { children: ReactNode }) {
         return [mapped, ...withoutIncoming.filter((entry) => entry.id !== mapped.id)];
       });
 
-      await refreshData();
+      refreshData().catch(() => undefined);
     },
     [mapBackendEncounter, refreshData],
   );

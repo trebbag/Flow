@@ -11,7 +11,7 @@ import { DateTime } from "luxon";
 import { prisma } from "./prisma.js";
 import { ApiError, requireCondition } from "./errors.js";
 import type { RequestUser } from "./auth.js";
-import { enterFacilityScope } from "./facility-scope.js";
+import { enterFacilityScope, runWithFacilityScope } from "./facility-scope.js";
 import { listActiveTemporaryClinicOverrideIds } from "./assignment-overrides.js";
 
 type RoomOpsTx = Prisma.TransactionClient;
@@ -67,7 +67,14 @@ function effectiveRoomStatus(currentStatus: RoomOperationalStatus, dayStartCompl
   return currentStatus;
 }
 
-function readinessBlockedReason(currentStatus: RoomOperationalStatus, dayStartCompleted: boolean) {
+function readinessBlockedReason(
+  currentStatus: RoomOperationalStatus,
+  dayStartCompleted: boolean,
+  hasStaleOccupancy = false,
+) {
+  if (hasStaleOccupancy) {
+    return "Room has stale occupancy state";
+  }
   if (currentStatus !== RoomOperationalStatus.Ready) {
     return `Room is ${currentStatus}`;
   }
@@ -75,6 +82,36 @@ function readinessBlockedReason(currentStatus: RoomOperationalStatus, dayStartCo
     return "Day Start checklist must be completed before rooming";
   }
   return null;
+}
+
+function readinessBlockedCode(
+  currentStatus: RoomOperationalStatus,
+  dayStartCompleted: boolean,
+  hasStaleOccupancy = false,
+) {
+  if (hasStaleOccupancy) return "STALE_OCCUPANCY_STATE";
+  if (!dayStartCompleted && currentStatus === RoomOperationalStatus.Ready) return "DAY_START_INCOMPLETE";
+  if (currentStatus === RoomOperationalStatus.Hold) return "ROOM_HELD";
+  if (currentStatus === RoomOperationalStatus.Occupied) return "ROOM_OCCUPIED";
+  if (currentStatus === RoomOperationalStatus.NeedsTurnover) return "ROOM_NEEDS_TURNOVER";
+  if (currentStatus === RoomOperationalStatus.NotReady) return "ROOM_NOT_READY";
+  if (currentStatus !== RoomOperationalStatus.Ready) return "ROOM_NOT_ASSIGNABLE";
+  return null;
+}
+
+function blockedReasonSummary(rooms: Array<{ readinessBlockedCode?: string | null; readinessBlockedReason?: string | null }>) {
+  const byCode = new Map<string, { code: string; message: string; count: number }>();
+  rooms.forEach((room) => {
+    const code = room.readinessBlockedCode || "ROOM_NOT_ASSIGNABLE";
+    const message = room.readinessBlockedReason || "Room is not assignable";
+    const existing = byCode.get(code);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+    byCode.set(code, { code, message, count: 1 });
+  });
+  return Array.from(byCode.values());
 }
 
 export async function backfillRoomOperationalStates() {
@@ -481,6 +518,7 @@ export async function listRoomCards(params: {
             select: { id: true, status: true, placesRoomOnHold: true }
           },
           checklistRuns: {
+            where: params.dateKey ? { dateKey: params.dateKey } : undefined,
             select: { kind: true, completed: true, dateKey: true }
           }
         }
@@ -497,7 +535,7 @@ export async function listRoomCards(params: {
     .filter((assignment) => !assignment.room.operationalState)
     .map((assignment) => assignment.roomId);
   if (missingStateRoomIds.length > 0) {
-    await prisma.$transaction(async (tx) =>
+    const createdStates = await prisma.$transaction(async (tx) =>
       Promise.all(
         unique(missingStateRoomIds).map((roomId) =>
           tx.roomOperationalState.upsert({
@@ -512,6 +550,15 @@ export async function listRoomCards(params: {
         ),
       ),
     );
+    const stateByRoomId = new Map(createdStates.map((state) => [state.roomId, state]));
+    assignments.forEach((assignment) => {
+      if (!assignment.room.operationalState) {
+        const state = stateByRoomId.get(assignment.roomId);
+        if (state) {
+          assignment.room.operationalState = { ...state, occupiedEncounter: null };
+        }
+      }
+    });
   }
 
   return assignments.map((assignment) => {
@@ -521,8 +568,10 @@ export async function listRoomCards(params: {
     const todaysChecklistRuns = assignment.room.checklistRuns.filter((run) => run.dateKey === dateKey);
     const dayStartCompleted = isDayStartCompleted(todaysChecklistRuns);
     const dayEndCompleted = isDayEndCompleted(todaysChecklistRuns);
+    const hasStaleOccupancy = currentStatus === RoomOperationalStatus.Ready && Boolean(state?.occupiedEncounter);
     const operationalStatus = effectiveRoomStatus(currentStatus, dayStartCompleted);
-    const blockedReason = readinessBlockedReason(currentStatus, dayStartCompleted);
+    const blockedReason = readinessBlockedReason(currentStatus, dayStartCompleted, hasStaleOccupancy);
+    const blockedCode = readinessBlockedCode(currentStatus, dayStartCompleted, hasStaleOccupancy);
     const minutesInStatus = elapsedMinutes(state?.statusSinceAt || new Date());
     return {
       id: `${assignment.clinicId}:${assignment.roomId}`,
@@ -551,7 +600,8 @@ export async function listRoomCards(params: {
       holdNote: state?.holdNote || null,
       dayStartCompleted,
       dayEndCompleted,
-      assignable: currentStatus === RoomOperationalStatus.Ready && dayStartCompleted,
+      assignable: currentStatus === RoomOperationalStatus.Ready && dayStartCompleted && !hasStaleOccupancy,
+      readinessBlockedCode: blockedCode,
       readinessBlockedReason: blockedReason,
       lowStock: false,
       auditDue: false
@@ -629,21 +679,61 @@ export async function getPreRoomingAvailability(params: {
   user: RequestUser;
   encounterId: string;
 }) {
-  const encounter = await prisma.encounter.findUnique({
-    where: { id: params.encounterId },
-    select: { id: true, clinicId: true, roomId: true, currentStatus: true }
+  return runWithFacilityScope(params.user.activeFacilityId || params.user.facilityId || null, async () => {
+    const encounter = await prisma.encounter.findUnique({
+      where: { id: params.encounterId },
+      select: {
+        id: true,
+        clinicId: true,
+        roomId: true,
+        currentStatus: true,
+        clinic: { select: { timezone: true } },
+      }
+    });
+    requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
+    let rooms: Awaited<ReturnType<typeof listRoomCards>>;
+    try {
+      rooms = await listRoomCards({
+        user: params.user,
+        clinicId: encounter.clinicId,
+        dateKey: currentRoomDateKey(encounter.clinic.timezone),
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 403) {
+        return {
+          encounterId: encounter.id,
+          readyCount: 0,
+          preferredRoomId: null,
+          lastReadyRoom: false,
+          blocked: true,
+          blockedReasons: [
+            {
+              code: error.code || "ROOM_SCOPE_BLOCKED",
+              message: error.message || "No rooms are available in your room scope",
+              count: 1,
+            },
+          ],
+          rooms: [],
+        };
+      }
+      throw error;
+    }
+    const readyRooms = rooms.filter((room) => room.assignable);
+    const blockedRooms = rooms.filter((room) => !room.assignable);
+    return {
+      encounterId: encounter.id,
+      readyCount: readyRooms.length,
+      preferredRoomId: readyRooms.length === 1 ? readyRooms[0]?.roomId || null : null,
+      lastReadyRoom: readyRooms.length === 1,
+      blocked: readyRooms.length === 0,
+      blockedReasons: readyRooms.length > 0
+        ? []
+        : rooms.length === 0
+          ? [{ code: "NO_ROOMS_IN_SCOPE", message: "No active rooms are available in your clinic scope.", count: 1 }]
+          : blockedReasonSummary(blockedRooms),
+      rooms
+    };
   });
-  requireCondition(encounter, 404, "Encounter not found", "ENCOUNTER_NOT_FOUND");
-  const rooms = await listRoomCards({ user: params.user, clinicId: encounter.clinicId });
-  const readyRooms = rooms.filter((room) => room.assignable);
-  return {
-    encounterId: encounter.id,
-    readyCount: readyRooms.length,
-    preferredRoomId: readyRooms.length === 1 ? readyRooms[0]?.roomId || null : null,
-    lastReadyRoom: readyRooms.length === 1,
-    blocked: readyRooms.length === 0,
-    rooms
-  };
 }
 
 export async function resolveRoomActionContext(params: {

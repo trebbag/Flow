@@ -393,7 +393,7 @@ async function main() {
       reasonId: reason.id,
       roomId: room.id,
     };
-  });
+  }, { maxWait: 15_000, timeout: 30_000 });
 
   console.info(JSON.stringify(result));
 }

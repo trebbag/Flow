@@ -2808,6 +2808,12 @@ function ArchivedEncountersTab() {
   const [loading, setLoading] = useState(false);
   const [rowActionKey, setRowActionKey] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminEncounterRecoveryRow[]>([]);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupPreview, setCleanupPreview] = useState<{
+    candidateCount: number;
+    releasedRoomCount: number;
+    candidates: AdminEncounterRecoveryRow[];
+  } | null>(null);
   const [filters, setFilters] = useState(() => {
     const today = new Date();
     const to = new Date(today);
@@ -2849,6 +2855,67 @@ function ArchivedEncountersTab() {
   useEffect(() => {
     loadArchivedEncounters().catch(() => undefined);
   }, [loadArchivedEncounters]);
+
+  const previewStaleCleanup = useCallback(async () => {
+    setCleanupLoading(true);
+    try {
+      const payload = await admin.previewStaleEncounterCleanup({
+        facilityId: facility.id,
+        clinicId: filters.clinicId || undefined,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+      });
+      setCleanupPreview({
+        candidateCount: payload.candidateCount,
+        releasedRoomCount: payload.releasedRoomCount,
+        candidates: payload.candidates || [],
+      });
+      toast.success("Stale cleanup preview ready", {
+        description: `${payload.candidateCount} prior-day in-process encounter(s) would be closed.`,
+      });
+    } catch (error) {
+      toast.error("Unable to preview stale cleanup", {
+        description: (error as Error).message || "Cleanup candidates could not be loaded.",
+      });
+    } finally {
+      setCleanupLoading(false);
+    }
+  }, [facility.id, filters.clinicId, filters.from, filters.to]);
+
+  const executeStaleCleanup = useCallback(async () => {
+    if (!cleanupPreview?.candidates.length) {
+      toast.info("Run preview first", {
+        description: "There are no approved stale encounters selected for cleanup yet.",
+      });
+      return;
+    }
+    const confirmed = window.confirm(
+      `Close ${cleanupPreview.candidateCount} stale prior-day encounter(s), release ${cleanupPreview.releasedRoomCount} room assignment(s), and write audit events?`,
+    );
+    if (!confirmed) return;
+    setCleanupLoading(true);
+    try {
+      const payload = await admin.executeStaleEncounterCleanup({
+        facilityId: facility.id,
+        clinicId: filters.clinicId || undefined,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        encounterIds: cleanupPreview.candidates.map((row) => row.id),
+        note: "Admin stale operational cleanup from Archived Encounters",
+      });
+      setCleanupPreview(null);
+      await Promise.allSettled([loadArchivedEncounters(), encounterContext.refreshData()]);
+      toast.success("Stale encounters cleaned up", {
+        description: `${payload.cleanedCount} encounter(s) closed; ${payload.releasedRoomCount} room assignment(s) released.`,
+      });
+    } catch (error) {
+      toast.error("Unable to run stale cleanup", {
+        description: (error as Error).message || "Cleanup could not be completed.",
+      });
+    } finally {
+      setCleanupLoading(false);
+    }
+  }, [cleanupPreview, encounterContext, facility.id, filters.clinicId, filters.from, filters.to, loadArchivedEncounters]);
 
   const runEncounterRowAction = useCallback(
     async (row: AdminEncounterRecoveryRow, action: string, callback: () => Promise<unknown>) => {
@@ -2898,18 +2965,42 @@ function ArchivedEncountersTab() {
               count={rows.length}
               iconColor="text-indigo-500"
               secondaryAction={(
-                <button
-                  onClick={() => loadArchivedEncounters().catch(() => undefined)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] text-gray-700 hover:bg-gray-50"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Refresh
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => previewStaleCleanup().catch(() => undefined)}
+                    disabled={cleanupLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Preview Cleanup
+                  </button>
+                  <button
+                    onClick={() => executeStaleCleanup().catch(() => undefined)}
+                    disabled={cleanupLoading || !cleanupPreview?.candidates.length}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Run Cleanup
+                  </button>
+                  <button
+                    onClick={() => loadArchivedEncounters().catch(() => undefined)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] text-gray-700 hover:bg-gray-50"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Refresh
+                  </button>
+                </div>
               )}
             />
             <p className="text-[12px] text-muted-foreground mb-4">
               Review prior-day encounters here when they carried over and no longer appear on the active workflow boards. Use the quick actions for the common fixes, or open the encounter when you need a deeper recovery edit.
             </p>
+
+            {cleanupPreview ? (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800" role="status" aria-live="polite">
+                Cleanup preview: {cleanupPreview.candidateCount} stale prior-day encounter(s) would be closed to Optimized with cleanup audit events. {cleanupPreview.releasedRoomCount} room assignment(s) would move to turnover.
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 md:grid-cols-6 gap-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 mb-4">
               <div>
@@ -6547,6 +6638,7 @@ export function AdminConsole() {
 
   useEffect(() => {
     let mounted = true;
+    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const loadAdminData = async () => {
       try {
@@ -6874,7 +6966,11 @@ export function AdminConsole() {
     }, 45000);
 
     const onRefresh = () => {
-      loadAdminData().catch(() => undefined);
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => {
+        refreshTimeout = null;
+        loadAdminData().catch(() => undefined);
+      }, 300);
     };
     if (typeof window !== "undefined") {
       window.addEventListener(ADMIN_REFRESH_EVENT, onRefresh);
@@ -6884,6 +6980,7 @@ export function AdminConsole() {
     return () => {
       mounted = false;
       clearInterval(interval);
+      if (refreshTimeout) clearTimeout(refreshTimeout);
       if (typeof window !== "undefined") {
         window.removeEventListener(ADMIN_REFRESH_EVENT, onRefresh);
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onRefresh);

@@ -1355,17 +1355,12 @@ export function OfficeManagerDashboard() {
         const facilityId = loadSession()?.facilityId;
         const historyTo = new Date().toISOString().slice(0, 10);
         const historyFrom = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const [clinicRows, assignmentRows, roomRows, thresholdApiRows, liveRoomRows, roomHistoryPayload] = await Promise.all([
+        const [clinicRows, assignmentRows, roomRows, thresholdApiRows, liveRoomRows] = await Promise.all([
           admin.listClinics({ facilityId }),
           admin.listAssignments(facilityId),
           admin.listRooms({ facilityId }),
           admin.listThresholds(facilityId),
           roomsApi.live({ mine: true, clinicId: selectedClinic === "all" ? undefined : selectedClinic }),
-          dashboards.roomHistory({
-            clinicId: selectedClinic === "all" ? undefined : selectedClinic,
-            from: historyFrom,
-            to: historyTo,
-          }),
         ]);
         if (!active) return;
 
@@ -1407,9 +1402,18 @@ export function OfficeManagerDashboard() {
           })),
         );
         setLiveRooms(Array.isArray(liveRoomRows) ? liveRoomRows : []);
-        setRoomHistory(Array.isArray(roomHistoryPayload.daily) ? roomHistoryPayload.daily : []);
         setThresholdRows(Array.isArray(thresholdApiRows) ? (thresholdApiRows as any[]) : []);
         setLastSync(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        dashboards.roomHistory({
+          clinicId: selectedClinic === "all" ? undefined : selectedClinic,
+          from: historyFrom,
+          to: historyTo,
+        })
+          .then((roomHistoryPayload) => {
+            if (!active) return;
+            setRoomHistory(Array.isArray(roomHistoryPayload.daily) ? roomHistoryPayload.daily : []);
+          })
+          .catch(() => undefined);
       } catch {
         // EncounterContext still provides live encounter data as the primary source.
       }

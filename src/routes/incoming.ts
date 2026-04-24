@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { normalizeDate, parseAppointmentAt, dateRangeForDay } from "../lib/dates.js";
+import { clinicDateKeyNow } from "../lib/clinic-time.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { enterFacilityScope } from "../lib/facility-scope.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
@@ -1507,14 +1508,14 @@ export async function registerIncomingRoutes(app: FastifyInstance) {
     let dateOfService: Date | undefined;
     let dateRange: { start: Date; end: Date } | undefined;
 
-    if (query.date) {
-      if (scopedClinicId) {
-        const timezone = await getClinicTimezone(scopedClinicId);
-        dateOfService = normalizeDate(query.date, timezone);
-      } else {
-        const timezone = await getFacilityTimezone(user.facilityId);
-        dateRange = dateRangeForDay(query.date, timezone);
-      }
+    if (scopedClinicId) {
+      const timezone = await getClinicTimezone(scopedClinicId);
+      const effectiveDate = query.date || clinicDateKeyNow(timezone);
+      dateOfService = normalizeDate(effectiveDate, timezone);
+    } else {
+      const timezone = await getFacilityTimezone(user.facilityId);
+      const effectiveDate = query.date || clinicDateKeyNow(timezone);
+      dateRange = dateRangeForDay(effectiveDate, timezone);
     }
 
     const incomingWhere: Prisma.IncomingScheduleWhereInput = {

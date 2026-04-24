@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ClipboardCheck,
@@ -179,6 +179,8 @@ function parseCurrencyInputToCents(value: string) {
 export function CheckInView() {
   const navigate = useNavigate();
   const { encounters, checkInPatient, isLiveMode, syncError, refreshData } = useEncounters();
+  const pageTopRef = useRef<HTMLDivElement | null>(null);
+  const lobbyHeadingRef = useRef<HTMLSpanElement | null>(null);
 
   const [clinics, setClinics] = useState<Array<{ id: string; name: string; maRun: boolean }>>([]);
   const [providers, setProviders] = useState<Array<{ id: string; name: string; clinicIds: string[] }>>([]);
@@ -623,6 +625,11 @@ export function CheckInView() {
         description: `${patientId} · ${reason?.name}${selectedProvider ? ` with ${selectedProvider}` : ""}`,
       });
       clearSelection();
+      requestAnimationFrame(() => {
+        pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        lobbyHeadingRef.current?.focus({ preventScroll: true });
+      });
     } catch (error) {
       toast.error("Check-in failed", {
         description: (error as Error).message || "Unable to create encounter",
@@ -643,7 +650,7 @@ export function CheckInView() {
   }).length;
 
   return (
-    <div className="p-6 space-y-5">
+    <div ref={pageTopRef} className="p-6 space-y-5">
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -684,7 +691,7 @@ export function CheckInView() {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-2.5">
                 <Users className="w-4 h-4" style={{ color: statusColors.Lobby }} />
-                <span className="text-[13px]" style={{ fontWeight: 600 }}>In Lobby</span>
+                <span ref={lobbyHeadingRef} tabIndex={-1} className="text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded" style={{ fontWeight: 600 }}>In Lobby</span>
                 <Badge
                   className="border-0 text-[10px] px-2 h-5 ml-1"
                   style={{ backgroundColor: `${statusColors.Lobby}15`, color: statusColors.Lobby }}

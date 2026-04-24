@@ -635,9 +635,11 @@ export function RevenueCycleView() {
       };
       setSettings(nextSettings);
 
-      const candidateId = selectedCaseId && (queuePageRows.some((row) => row.id === selectedCaseId) || Boolean(selectedCaseId))
-        ? selectedCaseId
-        : queuePageRows[0]?.id || null;
+      const candidateId = activeView === "Work Queues"
+        ? selectedCaseId && (queuePageRows.some((row) => row.id === selectedCaseId) || Boolean(selectedCaseId))
+          ? selectedCaseId
+          : queuePageRows[0]?.id || null
+        : null;
       setSelectedCaseId(candidateId);
       toast.dismiss(REVENUE_CORE_TOAST_ID);
     } catch (error) {
@@ -832,7 +834,7 @@ export function RevenueCycleView() {
         window.removeEventListener(FACILITY_CONTEXT_CHANGED_EVENT, onRefresh);
       }
     };
-  }, [dayBucket, workQueue, mineOnly, search, refreshNonce]);
+  }, [activeView, dayBucket, workQueue, mineOnly, search, refreshNonce]);
 
   useEffect(() => {
     if (activeView === "Day Close") {
@@ -872,9 +874,10 @@ export function RevenueCycleView() {
   }, [activeView, selectedCaseId, session?.facilityId]);
 
   useEffect(() => {
-    if (!selectedCaseId) {
+    if (activeView !== "Work Queues" || !selectedCaseId) {
       selectedCaseIdRef.current = null;
       setSelectedCase(null);
+      setSelectedCaseLoading(false);
       return;
     }
     if (selectedCaseIdRef.current === selectedCaseId && selectedCase) {
@@ -899,7 +902,7 @@ export function RevenueCycleView() {
         }
       });
     return () => controller.abort();
-  }, [selectedCaseId]);
+  }, [activeView, selectedCaseId]);
 
   useEffect(() => {
     return () => {

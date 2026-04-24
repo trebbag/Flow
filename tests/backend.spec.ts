@@ -1563,6 +1563,11 @@ describe("Flow backend core relationships", () => {
     });
     expect(blocked.statusCode).toBe(200);
     expect(blocked.json()).toMatchObject({ blocked: true, readyCount: 0 });
+    expect(blocked.json().blockedReasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ROOM_NEEDS_TURNOVER", count: 1 })
+      ])
+    );
 
     const rejectedAssignment = await app.inject({
       method: "PATCH",
@@ -1590,6 +1595,14 @@ describe("Flow backend core relationships", () => {
       preferredRoomId: ctx.clinicRoomA.id,
       lastReadyRoom: true
     });
+    const liveReady = await app.inject({
+      method: "GET",
+      url: "/rooms/live?mine=true",
+      headers: authHeaders(ctx.ma.id, RoleName.MA)
+    });
+    expect(liveReady.statusCode).toBe(200);
+    const assignableRoom = liveReady.json().find((entry: { roomId: string }) => entry.roomId === ctx.clinicRoomA.id);
+    expect(assignableRoom?.assignable).toBe(true);
 
     const assigned = await app.inject({
       method: "PATCH",
@@ -1649,6 +1662,11 @@ describe("Flow backend core relationships", () => {
     });
     expect(blocked.statusCode).toBe(200);
     expect(blocked.json()).toMatchObject({ blocked: true, readyCount: 0 });
+    expect(blocked.json().blockedReasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "DAY_START_INCOMPLETE", count: 1 })
+      ])
+    );
 
     const rejectedAssignment = await app.inject({
       method: "PATCH",
@@ -1908,6 +1926,95 @@ describe("Flow backend core relationships", () => {
     expect(clearedEncounter?.roomId).toBeNull();
     expect(roomCStateAfterClear?.currentStatus).toBe("NeedsTurnover");
     expect(roomCStateAfterClear?.occupiedEncounterId).toBeNull();
+  });
+
+  it("previews and executes audited stale encounter cleanup with room release", async () => {
+    const ctx = await bootstrapCore();
+    const created = await app.inject({
+      method: "POST",
+      url: "/encounters",
+      headers: authHeaders(ctx.checkin.id, RoleName.FrontDeskCheckIn),
+      payload: {
+        patientId: "PT-STALE-CLEANUP-1",
+        clinicId: ctx.clinic.id,
+        reasonForVisitId: ctx.reason.id,
+        walkIn: true
+      }
+    });
+    expect(created.statusCode).toBe(200);
+    let encounter = created.json();
+
+    const roomed = await app.inject({
+      method: "PATCH",
+      url: `/encounters/${encounter.id}/rooming`,
+      headers: authHeaders(ctx.ma.id, RoleName.MA),
+      payload: { roomId: ctx.clinicRoomA.id, data: { vitals: "done" } }
+    });
+    expect(roomed.statusCode).toBe(200);
+    encounter = roomed.json();
+
+    const priorDay = DateTime.now().setZone(ctx.clinic.timezone).minus({ days: 1 }).startOf("day").toUTC().toJSDate();
+    await prisma.encounter.update({
+      where: { id: encounter.id },
+      data: {
+        dateOfService: priorDay,
+        version: { increment: 1 }
+      }
+    });
+
+    const preview = await app.inject({
+      method: "POST",
+      url: "/admin/encounters/stale-cleanup",
+      headers: {
+        ...authHeaders(ctx.admin.id, RoleName.Admin),
+        "Idempotency-Key": "stale-cleanup-preview-1"
+      },
+      payload: {
+        facilityId: ctx.facility.id,
+        encounterIds: [encounter.id],
+        execute: false
+      }
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({
+      status: "dry_run",
+      candidateCount: 1,
+      releasedRoomCount: 1
+    });
+
+    const execute = await app.inject({
+      method: "POST",
+      url: "/admin/encounters/stale-cleanup",
+      headers: {
+        ...authHeaders(ctx.admin.id, RoleName.Admin),
+        "Idempotency-Key": "stale-cleanup-execute-1"
+      },
+      payload: {
+        facilityId: ctx.facility.id,
+        encounterIds: [encounter.id],
+        execute: true,
+        note: "test cleanup"
+      }
+    });
+    expect(execute.statusCode).toBe(200);
+    expect(execute.json()).toMatchObject({
+      status: "cleaned",
+      cleanedCount: 1,
+      releasedRoomCount: 1
+    });
+
+    const cleaned = await prisma.encounter.findUnique({ where: { id: encounter.id } });
+    expect(cleaned?.currentStatus).toBe("Optimized");
+    expect(cleaned?.roomId).toBeNull();
+    expect(cleaned?.closureType).toBe("stale_operational_cleanup");
+    const roomState = await prisma.roomOperationalState.findUnique({ where: { roomId: ctx.clinicRoomA.id } });
+    expect(roomState?.currentStatus).toBe("NeedsTurnover");
+    expect(roomState?.occupiedEncounterId).toBeNull();
+    const event = await prisma.entityEvent.findFirst({
+      where: { entityType: "Encounter", entityId: encounter.id, eventType: "encounter.stale_cleanup" }
+    });
+    expect(event?.beforeJson).toBeTruthy();
+    expect(event?.afterJson).toBeTruthy();
   });
 
   it("moves an occupied room to NeedsTurnover when the encounter enters CheckOut", async () => {

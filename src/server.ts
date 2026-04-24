@@ -21,10 +21,12 @@ async function startBackgroundTasks() {
     app.log.error(error, "Revenue sync worker failed to start after startup");
   }
 
-  try {
-    await backfillCanonicalPatients(prisma);
-  } catch (error) {
-    app.log.error(error, "Canonical patient backfill failed after startup");
+  if (process.env.FLOW_RUN_STARTUP_PATIENT_BACKFILL === "1") {
+    try {
+      await backfillCanonicalPatients(prisma);
+    } catch (error) {
+      app.log.error(error, "Canonical patient backfill failed after startup");
+    }
   }
 }
 

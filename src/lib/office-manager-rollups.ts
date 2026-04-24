@@ -580,6 +580,7 @@ function mergeDailyClinicRollups(dateKey: string, rows: DailyClinicRollupRaw[]):
 type DailyHistoryOptions = {
   persist?: boolean;
   forceRecompute?: boolean;
+  cacheOnly?: boolean;
 };
 
 export async function getDailyHistoryRollups(
@@ -606,20 +607,22 @@ export async function getDailyHistoryRollups(
     });
   }
 
-  await Promise.all(
-    dateKeys.flatMap((dateKey) =>
-      clinics.map(async (clinic) => {
-        const key = buildKey(clinic.id, dateKey);
-        if (!forceRecompute && byClinicDate.has(key)) return;
+  if (!options.cacheOnly) {
+    await Promise.all(
+      dateKeys.flatMap((dateKey) =>
+        clinics.map(async (clinic) => {
+          const key = buildKey(clinic.id, dateKey);
+          if (!forceRecompute && byClinicDate.has(key)) return;
 
-        const computed = await computeDailyClinicRollup(prisma, clinic, dateKey);
-        byClinicDate.set(key, computed);
-        if (persist) {
-          await upsertDailyClinicRollup(prisma, computed);
-        }
-      })
-    )
-  );
+          const computed = await computeDailyClinicRollup(prisma, clinic, dateKey);
+          byClinicDate.set(key, computed);
+          if (persist) {
+            await upsertDailyClinicRollup(prisma, computed);
+          }
+        })
+      )
+    );
+  }
 
   return dateKeys.map((dateKey) => {
     const rows = clinics.map((clinic) => byClinicDate.get(buildKey(clinic.id, dateKey))!).filter(Boolean);

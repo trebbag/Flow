@@ -976,6 +976,7 @@ export interface OwnerAnalyticsSnapshot {
     activeSafetyCount: number;
     blockingTaskCount: number;
   };
+  warnings?: Array<{ section: string; message: string }>;
 }
 
 /** Day closeout row */
