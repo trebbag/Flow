@@ -374,7 +374,10 @@ What it does:
 2. runs `pnpm build`
 3. builds a trimmed Azure runtime dependency tree
 4. packages `dist`, runtime `node_modules`, generated Prisma artifacts, `prisma`, and `azure-startup.sh`
-5. enables `WEBSITE_RUN_FROM_PACKAGE=1` and submits the ZIP through direct Kudu ZipDeploy
+5. uploads the ZIP to a private Azure Blob container and points `WEBSITE_RUN_FROM_PACKAGE` at a short-lived read-only package URL
+6. sets the startup command and restarts the app so App Service mounts the package directly
+
+The deploy path intentionally avoids the slow Kudu `node_modules` extraction path. The workflow may create a private storage account named from the web app, or you can pin one explicitly with `AZURE_PACKAGE_STORAGE_ACCOUNT`.
 
 What you need to configure in GitHub before running it:
 

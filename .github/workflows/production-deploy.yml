@@ -190,27 +190,10 @@ jobs:
         run: |
           scripts/prepare-azure-package.sh
 
-      - name: Enable Run-From-Package and disable Kudu build automation on staging slot
-        run: |
-          az webapp config appsettings set \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --slot staging \
-            --settings WEBSITE_RUN_FROM_PACKAGE=1 SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false WEBSITES_CONTAINER_START_TIME_LIMIT=1800
-
-      - name: Submit Kudu ZipDeploy to staging slot
-        timeout-minutes: 10
+      - name: Publish Run-From-Package artifact to staging slot
         env:
           AZURE_SLOT: staging
-        run: scripts/kudu-zipdeploy.sh
-
-      - name: Configure startup command on staging slot
-        run: |
-          az webapp config set \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --slot staging \
-            --startup-file "bash /home/site/wwwroot/azure-startup.sh"
+        run: scripts/publish-azure-run-package.sh
 
       - name: Health check staging slot
         id: health

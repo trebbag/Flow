@@ -117,20 +117,5 @@ jobs:
         run: |
           scripts/prepare-azure-package.sh
 
-      - name: Enable Run-From-Package and disable Kudu build automation
-        run: |
-          az webapp config appsettings set \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --settings WEBSITE_RUN_FROM_PACKAGE=1 SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false WEBSITES_CONTAINER_START_TIME_LIMIT=1800
-
-      - name: Submit Kudu ZipDeploy
-        timeout-minutes: 10
-        run: scripts/kudu-zipdeploy.sh
-
-      - name: Configure startup command
-        run: |
-          az webapp config set \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --startup-file "bash /home/site/wwwroot/azure-startup.sh"
+      - name: Publish Run-From-Package artifact
+        run: scripts/publish-azure-run-package.sh
