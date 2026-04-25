@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router";
 import { useKeyboardShortcuts } from "./use-keyboard-shortcuts";
 import {
@@ -716,9 +716,17 @@ export function EncounterDetailView() {
     preferredRoomId: searchParams.get("preferredRoomId") || "",
     lastReadyRoom: searchParams.get("lastReadyRoom") === "true",
   }));
+  const mountedRef = useRef(true);
+  const autoAdvanceKeyRef = useRef<string | null>(null);
 
   // Tasks from shared context
   const { maTasks: encMaTasks, createdTasks } = ctx.getTasksForEncounter(id!);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -950,6 +958,8 @@ export function EncounterDetailView() {
   }
 
   // Auto-advance from Lobby -> Rooming or ReadyForProvider -> Optimizing when arriving with query actions.
+  // Do not treat ordinary dependency changes as cancellation: the mutation itself updates encounter context
+  // before the awaiting call resumes, and cancelling there leaves the action button stuck in "Saving...".
   useEffect(() => {
     if (!baseEnc || isAdvancing) return;
     const startRooming = searchParams.get("startRooming");
@@ -957,12 +967,14 @@ export function EncounterDetailView() {
     const effectiveStatus = localStatus ?? baseEnc.status;
 
     if (startRooming === "true" && effectiveStatus === "Lobby") {
-      let cancelled = false;
+      const actionKey = `${baseEnc.id}:startRooming`;
+      if (autoAdvanceKeyRef.current === actionKey) return;
+      autoAdvanceKeyRef.current = actionKey;
       setIsAdvancing(true);
       (async () => {
         try {
           const updated = await ctx.advanceStatus(baseEnc.id, "Rooming");
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           setCompletedStages((prev) => new Set([...prev, "Lobby"]));
           setLocalStatus(updated?.status || "Rooming");
           setLocalStageStartIso(updated?.currentStageStartAtIso || new Date().toISOString());
@@ -971,26 +983,27 @@ export function EncounterDetailView() {
           });
           setSearchParams({}, { replace: true });
         } catch (error) {
-          if (cancelled) return;
+          if (!mountedRef.current) return;
+          autoAdvanceKeyRef.current = null;
           toast.error("Unable to start rooming", {
             description: getAdvanceErrorMessage(error, "The encounter stayed in Lobby. Retry once the page finishes syncing."),
           });
         } finally {
-          if (!cancelled) setIsAdvancing(false);
+          if (mountedRef.current) setIsAdvancing(false);
         }
       })();
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
     if (startVisit === "true" && effectiveStatus === "ReadyForProvider") {
-      let cancelled = false;
+      const actionKey = `${baseEnc.id}:startVisit`;
+      if (autoAdvanceKeyRef.current === actionKey) return;
+      autoAdvanceKeyRef.current = actionKey;
       setIsAdvancing(true);
       (async () => {
         try {
           const updated = await ctx.advanceStatus(baseEnc.id, "Optimizing");
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           setCompletedStages((prev) => new Set([...prev, "ReadyForProvider"]));
           setLocalStatus(updated?.status || "Optimizing");
           setLocalStageStartIso(updated?.currentStageStartAtIso || new Date().toISOString());
@@ -999,17 +1012,15 @@ export function EncounterDetailView() {
           });
           setSearchParams({}, { replace: true });
         } catch (error) {
-          if (cancelled) return;
+          if (!mountedRef.current) return;
+          autoAdvanceKeyRef.current = null;
           toast.error("Unable to start the visit", {
             description: getAdvanceErrorMessage(error, "The encounter stayed ready for the provider. Retry once the page finishes syncing."),
           });
         } finally {
-          if (!cancelled) setIsAdvancing(false);
+          if (mountedRef.current) setIsAdvancing(false);
         }
       })();
-      return () => {
-        cancelled = true;
-      };
     }
   }, [baseEnc, ctx, isAdvancing, localStatus, searchParams, setSearchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
