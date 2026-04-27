@@ -11,7 +11,7 @@ Commit evaluated: `296c992de` (`Harden build-chain audit dependencies`)
 - Hosted `/health`: `200`, `{"status":"ok"}` after App Service cold-start delay.
 - Hosted `/ready`: `200`, database ok, revenue sync worker running, `pendingCount=0`, `staleLeaseCount=0`.
 - Hosted authenticated frontend contract check: passed against staging API with proof-header auth.
-- Hosted performance verification: [PERFORMANCE_VERIFY_2026-04-27T15-48-07.md](PERFORMANCE_VERIFY_2026-04-27T15-48-07.md).
+- Hosted performance verification: [PERFORMANCE_VERIFY_2026-04-27T16-46-50.md](PERFORMANCE_VERIFY_2026-04-27T16-46-50.md).
 - Azure runtime hardening follow-up on April 27, 2026: staging App Service `flow-staging-api` now has `alwaysOn=true` and platform `healthCheckPath=/health`.
 - Azure production-resource discovery on April 27, 2026: no separate production App Service, Static Web App, PostgreSQL server, or Key Vault was visible in the current subscription; production Postgres URLs/runtime role/secret storage remain external cutover inputs.
 
@@ -33,8 +33,8 @@ Commit evaluated: `296c992de` (`Harden build-chain audit dependencies`)
 | Area | Status | Percent Complete | Production Notes |
 |---|---:|---:|---|
 | Encounter workflow and room operations | Strong | 99% | Backend-enforced transitions, room release, stale cleanup, JSON validation, audit events, and pre-rooming checks are in place. Final confidence needs role-by-role live UAT. |
-| Revenue cycle workflow | Strong | 96% | Persisted revenue status, sync leases, idempotency, version guards, and staging queue/dashboard proof exist. Remaining work is performance tuning on queue page and final service/charge/payer rule confirmation. |
-| Analytics and reporting | Pilot-ready, not fully polished | 96% | Hosted owner analytics returns 200, but staging still measured about 4s. Cached rollup design is good; continue shaving latency toward a stable sub-2s target. |
+| Revenue cycle workflow | Strong | 97% | Persisted revenue status, sync leases, idempotency, version guards, and staging queue/dashboard proof exist. Latest hosted revenue dashboard and queue proof are sub-second; remaining work is final service/charge/payer rule confirmation. |
+| Analytics and reporting | Strong | 97% | Hosted owner analytics returns 200 and latest steady-state staging proof is sub-second. Final confidence still depends on real-user UAT with production-like data volume. |
 | Admin console and master data | Strong | 97% | Archive-first behavior, scoped admin routes, structured JSON settings validation, and staging admin endpoints are healthy. Final UAT should exercise real master-data edits with pilot users. |
 | Data integrity and persistence controls | Very strong | 99% | Postgres RLS, exact version triggers, append-only runtime privileges, cipher-pairing checks, tenant non-null hardening, audit/outbox patterns, and idempotency are implemented and documented. |
 | Security and PHI controls in code | Very strong | 99% | Entra JWT mode, dev-auth shutdown, scoped authorization, RLS, CORS constraints, rate limits, audit posture, and structured errors are implemented. |
@@ -52,7 +52,7 @@ Commit evaluated: `296c992de` (`Harden build-chain audit dependencies`)
 3. Complete broader authenticated role-by-role staging/UAT with real sessions for Admin, FrontDesk, MA, Clinician, OfficeManager, Revenue, and Analytics/Owner paths.
 4. Create or expose the production Azure resources, then confirm production Postgres migration/admin URL, distinct runtime URL, `POSTGRES_APP_ROLE`, secret storage location, and region/backups before production rollout.
 5. Enable App Service AlwaysOn or equivalent warm capacity for production once the production App Service exists; staging already has AlwaysOn and `/health` configured.
-6. Tune remaining hosted latency outliers: encounter board page, revenue queue page, and owner analytics should be made consistently sub-2s for current pilot volume.
+6. Keep monitoring hosted latency under production-like data volume; the latest staging proof is sub-2s for current pilot-volume surfaces.
 7. Finalize service catalog, charge schedule, payer/financial-class reimbursement rules, and any clinic-specific CPT/service taxonomy differences.
 8. Configure AthenaOne connector only if Athena comparison/import is in pilot scope; otherwise leave it out of the pilot acceptance criteria.
 9. Finish final keyboard-only and screen-reader checks during UAT, especially remaining custom controls and rooming/revenue/admin flows.
