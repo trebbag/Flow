@@ -6,7 +6,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ApiError, requireCondition } from "../lib/errors.js";
 import { dateRangeForDay, normalizeDate } from "../lib/dates.js";
-import { clinicNow } from "../lib/clinic-time.js";
+import { clinicDateKeyNow, clinicNow } from "../lib/clinic-time.js";
 import { requireRoles, type RequestUser } from "../lib/auth.js";
 import { withIdempotentMutation } from "../lib/idempotency.js";
 import { paginateItems, paginationQuerySchema, resolveOptionalPagination } from "../lib/pagination.js";
@@ -152,6 +152,7 @@ const listEncountersSchema = z
     status: z.nativeEnum(EncounterStatus).optional(),
     assignedMaUserId: z.string().uuid().optional(),
     date: z.string().optional(),
+    refreshAlerts: z.string().optional(),
   })
   .merge(paginationQuerySchema);
 
@@ -200,6 +201,11 @@ function withEncounterViewAliases<
       status: encounter.assignedMaStatus || null
     })
   };
+}
+
+function queryBoolean(value: string | undefined, defaultValue = false) {
+  if (value === undefined) return defaultValue;
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
 function formatAppointmentTime(value?: Date | null) {
@@ -657,6 +663,14 @@ async function listEncountersForRole(filters: {
     } else {
       const timezone = await getFacilityTimezone(filters.facilityId);
       dateRange = dateRangeForDay(filters.date, timezone);
+    }
+  } else {
+    const timezone = filters.clinicId ? await getClinicTimezone(filters.clinicId) : await getFacilityTimezone(filters.facilityId);
+    const activeDate = clinicDateKeyNow(timezone);
+    if (filters.clinicId) {
+      dateOfService = normalizeDate(activeDate, timezone);
+    } else {
+      dateRange = dateRangeForDay(activeDate, timezone);
     }
   }
 
@@ -1227,10 +1241,12 @@ export async function registerEncounterRoutes(app: FastifyInstance) {
       await resolveScopedClinic(user, scopedClinicId);
     }
 
-    await refreshEncounterAlertStates(prisma, {
-      facilityId: user.facilityId,
-      clinicIds: scopedClinicId ? [scopedClinicId] : undefined
-    });
+    if (queryBoolean(query.refreshAlerts)) {
+      await refreshEncounterAlertStates(prisma, {
+        facilityId: user.facilityId,
+        clinicIds: scopedClinicId ? [scopedClinicId] : undefined
+      });
+    }
 
     const rows = await listEncountersForRole({
       clinicId: scopedClinicId,

@@ -13,6 +13,13 @@ These are the remaining owner or tenant-admin inputs required before pilot activ
    - provide the matching runtime database connection secret separately from the migration/admin connection secret
    - `pnpm db:push:postgres` now fails closed if append-only protections cannot be installed for a runtime role distinct from the migration/admin role
    - staging now has `POSTGRES_APP_ROLE=flow_app_user`; repeat this same role separation for production before production rollout
+   - Azure discovery on April 27, 2026 found only staging resources in the current subscription:
+     - App Service: `flow-staging-api`
+     - Static Web App: `flow-staging-web`
+     - PostgreSQL Flexible Server: `flow-staging-pg`
+     - no production App Service, Static Web App, production PostgreSQL server, or Key Vault was visible
+   - staging currently uses App Service app settings for secrets; confirm whether production secrets should live in Azure Key Vault or production App Service app settings before production cutover
+   - staging PostgreSQL backup posture is 7-day automated local backups with geo-redundant backup disabled; production needs the approved PITR retention and same-region backup posture configured on the final production server
 
 2. Final Entra security posture
    - Conditional Access is unavailable in the current Entra edition

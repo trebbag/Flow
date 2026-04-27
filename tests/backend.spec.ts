@@ -4934,7 +4934,7 @@ describe("Flow backend core relationships", () => {
 
     const listed = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&refreshAlerts=1`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listed.statusCode).toBe(200);
@@ -5010,7 +5010,7 @@ describe("Flow backend core relationships", () => {
 
     const listed = await app.inject({
       method: "GET",
-      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}`,
+      url: `/encounters?clinicId=${ctx.clinic.id}&date=${ctx.day.toISOString().slice(0, 10)}&refreshAlerts=1`,
       headers: authHeaders(ctx.admin.id, RoleName.Admin)
     });
     expect(listed.statusCode).toBe(200);

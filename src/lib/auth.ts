@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { RoleName } from "@prisma/client";
 import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from "jose";
 import { env } from "./env.js";
@@ -81,6 +81,10 @@ const jwtAudiences = Array.from(
   )
 );
 
+const SAFE_AUTH_CACHE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const AUTH_RESOLUTION_CACHE_TTL_MS = 30_000;
+const authResolutionCache = new Map<string, { expiresAt: number; user: RequestUser }>();
+
 if (env.AUTH_MODE === "jwt" && !jwtSecret && !remoteJwks) {
   throw new Error("AUTH_MODE=jwt requires JWT_SECRET or JWT_JWKS_URI");
 }
@@ -140,6 +144,50 @@ function extractBearerToken(request: FastifyRequest): string | null {
 
 function hasBearerToken(request: FastifyRequest) {
   return Boolean(extractBearerToken(request));
+}
+
+function cloneRequestUser(user: RequestUser): RequestUser {
+  return {
+    ...user,
+    roles: [...user.roles],
+    availableFacilityIds: [...user.availableFacilityIds],
+  };
+}
+
+function canUseAuthResolutionCache(request: FastifyRequest) {
+  return SAFE_AUTH_CACHE_METHODS.has(String(request.method || "GET").toUpperCase());
+}
+
+function authCacheGet(key: string | null, request: FastifyRequest) {
+  if (!key || !canUseAuthResolutionCache(request)) return null;
+  const cached = authResolutionCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    authResolutionCache.delete(key);
+    return null;
+  }
+  return cloneRequestUser(cached.user);
+}
+
+function authCacheSet(key: string | null, user: RequestUser | null, request: FastifyRequest) {
+  if (!key || !user || !canUseAuthResolutionCache(request)) return user;
+  authResolutionCache.set(key, {
+    expiresAt: Date.now() + AUTH_RESOLUTION_CACHE_TTL_MS,
+    user: cloneRequestUser(user),
+  });
+  if (authResolutionCache.size > 500) {
+    const now = Date.now();
+    for (const [entryKey, entry] of authResolutionCache.entries()) {
+      if (entry.expiresAt <= now || authResolutionCache.size > 500) {
+        authResolutionCache.delete(entryKey);
+      }
+    }
+  }
+  return user;
+}
+
+function hashCachePart(value: string) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function matchesProofSecret(candidate: string | null) {
@@ -266,6 +314,10 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
   const token = extractBearerToken(request);
   if (!token) return null;
   if (!jwtSecret && !remoteJwks) return null;
+  const headerFacilityId = (request.headers["x-facility-id"] as string | undefined)?.trim() || null;
+  const jwtCacheKey = `jwt:${hashCachePart(token)}:${headerFacilityId || ""}`;
+  const cachedUser = authCacheGet(jwtCacheKey, request);
+  if (cachedUser) return cachedUser;
 
   try {
     const verifyOptions = {
@@ -300,7 +352,6 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
     const tokenRoles = roleClaims(payload);
     const clinicScope = firstClaim(payload, jwtClinicClaims);
     const facilityScope = firstClaim(payload, jwtFacilityClaims);
-    const headerFacilityId = (request.headers["x-facility-id"] as string | undefined)?.trim() || null;
 
     if (env.ENTRA_STRICT_MODE) {
       if (tokenIdentityType === "app") {
@@ -459,7 +510,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
         ?.clinicId ??
       null;
 
-    return {
+    return authCacheSet(jwtCacheKey, {
       id: user.id,
       role: selectedRole,
       roles: Array.from(availableRoleSet.values()),
@@ -471,7 +522,7 @@ async function resolveUserFromJwt(request: FastifyRequest): Promise<RequestUser 
       identityProvider: user.identityProvider,
       entraObjectId: resolveStoredEntraObjectId(user),
       entraTenantId: user.entraTenantId || tokenTenantId
-    };
+    }, request);
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
@@ -567,13 +618,16 @@ async function resolveUserFromProofHeaders(request: FastifyRequest): Promise<Req
   const headerUserId = (request.headers["x-proof-user-id"] as string | undefined)?.trim() || null;
   const headerRole = asRole((request.headers["x-proof-role"] as string | undefined)?.trim());
   const headerFacilityId = (request.headers["x-facility-id"] as string | undefined)?.trim() || null;
+  const proofCacheKey = `proof:${headerUserId || ""}:${headerRole || ""}:${headerFacilityId || ""}`;
+  const cachedUser = authCacheGet(proofCacheKey, request);
+  if (cachedUser) return cachedUser;
 
-  return resolveHeaderScopedUser({
+  return authCacheSet(proofCacheKey, await resolveHeaderScopedUser({
     userId: headerUserId,
     role: headerRole,
     facilityId: headerFacilityId,
     authSource: "proof_header",
-  });
+  }), request);
 }
 
 export async function resolveRequestUser(request: FastifyRequest): Promise<RequestUser | null> {
