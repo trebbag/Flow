@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { buildSignedProofHeaders } from "./proof-header-signing.mjs";
 
 const apiBaseUrl =
@@ -252,6 +253,9 @@ async function request(path, { method = "GET", body, auth = false } = {}) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const headers = auth ? await authHeaders(normalizedMethod, path, body) : {};
+    if (auth && !SAFE_RETRY_METHODS.has(normalizedMethod)) {
+      headers["Idempotency-Key"] = `frontend-browser:${normalizedMethod}:${randomUUID()}`;
+    }
     if (body) {
       headers["content-type"] = "application/json";
     }
