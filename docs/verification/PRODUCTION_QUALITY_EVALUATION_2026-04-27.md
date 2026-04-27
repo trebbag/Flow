@@ -2,16 +2,16 @@
 
 Captured: 2026-04-27
 Branch: `main`
-Commit evaluated: `296c992de` (`Harden build-chain audit dependencies`)
+Commit evaluated: `ebf43a986` (`Add idempotency keys to browser e2e mutations`)
 
 ## Deployment And Verification Evidence
 
-- Backend staging deploy: Run-From-Package artifact `flow-staging-api/manual-20260427154105.zip` published to `flow-staging-api` and app restarted.
+- Backend staging deploy: Run-From-Package artifact `flow-staging-api/manual-20260427163540.zip` published to `flow-staging-api` and app restarted.
 - Frontend staging deploy: GitHub Actions run `25004751386` completed successfully.
 - Hosted `/health`: `200`, `{"status":"ok"}` after App Service cold-start delay.
 - Hosted `/ready`: `200`, database ok, revenue sync worker running, `pendingCount=0`, `staleLeaseCount=0`.
 - Hosted authenticated frontend contract check: passed against staging API with proof-header auth.
-- Hosted performance verification: [PERFORMANCE_VERIFY_2026-04-27T16-46-50.md](PERFORMANCE_VERIFY_2026-04-27T16-46-50.md).
+- Hosted authenticated performance verification: [PERFORMANCE_VERIFY_2026-04-27T16-51-16.md](PERFORMANCE_VERIFY_2026-04-27T16-51-16.md). Target surfaces remained under 2 seconds in the warm staging sample: encounter board `694ms`, owner analytics `1646ms`, revenue queue `1453ms`.
 - Azure runtime hardening follow-up on April 27, 2026: staging App Service `flow-staging-api` now has `alwaysOn=true` and platform `healthCheckPath=/health`.
 - Azure production-resource discovery on April 27, 2026: no separate production App Service, Static Web App, PostgreSQL server, or Key Vault was visible in the current subscription; production Postgres URLs/runtime role/secret storage remain external cutover inputs.
 
@@ -22,8 +22,8 @@ Commit evaluated: `296c992de` (`Harden build-chain audit dependencies`)
 - `pnpm test`: passed, 129 passed, 1 skipped.
 - `pnpm lint`: passed.
 - `pnpm pilot:preflight`: passed with staging Azure app settings loaded.
-- `pnpm audit --audit-level high`: passed; remaining root advisories are moderate.
-- `pnpm --dir 'docs/Flow Frontend' audit --audit-level high`: passed; remaining frontend advisories are moderate.
+- `pnpm audit --audit-level moderate`: passed.
+- `pnpm --dir 'docs/Flow Frontend' audit --audit-level moderate`: passed.
 - `pnpm --dir 'docs/Flow Frontend' build`: passed.
 - `pnpm --dir 'docs/Flow Frontend' test:bundle-budget`: passed.
 - `pnpm --dir 'docs/Flow Frontend' test:contract`: passed against hosted staging; local unconfigured run fails if no local API is running, which is expected.
