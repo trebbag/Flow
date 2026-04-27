@@ -48,7 +48,7 @@
     "@prisma/adapter-better-sqlite3": "^7.7.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^12.9.0",
     "csv-parse": "^5.6.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.5",
