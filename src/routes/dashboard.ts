@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { AlertLevel, EncounterStatus, ProviderClarificationStatus, RoleName, TaskStatus } from "@prisma/client";
+import { AlertLevel, EncounterStatus, ProviderClarificationStatus, RoleName, TaskStatus, type Prisma } from "@prisma/client";
 import { DateTime } from "luxon";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -375,84 +375,87 @@ export async function registerDashboardRoutes(app: FastifyInstance) {
       activeSafetyCount,
       blockingTaskCount,
       settings,
-    ] = await Promise.all([
-      readSection("officeDaily", () => getDailyHistoryRollups(prisma, clinics, dateKeys, {
-        persist: forceRecompute,
-        forceRecompute,
-        cacheOnly: useCachedRollupsOnly,
-      }), []),
-      readSection("roomDaily", () => getRoomDailyHistoryRollups(prisma, clinics, dateKeys, {
-        persist: forceRecompute,
-        forceRecompute,
-        cacheOnly: useCachedRollupsOnly,
-      }), []),
-      readSection("revenueDaily", () => getRevenueDailyHistoryRollups(prisma, clinics, dateKeys, {
-        persist: forceRecompute,
-        forceRecompute,
-        cacheOnly: useCachedRollupsOnly,
-      }), []),
-      readSection("currentEncounters", () => prisma.encounter.findMany({
-        where: { OR: todayMatchers },
-        select: {
-          id: true,
-          currentStatus: true,
-          checkInAt: true,
-          providerStartAt: true,
-          providerEndAt: true,
-          checkoutCompleteAt: true,
-          assignedMaUserId: true,
-          provider: { select: { name: true } },
-        },
-      }), []),
-      readSection("rangeRevenueCases", () => prisma.revenueCase.findMany({
-        where: {
-          clinicId: { in: clinicIds },
-          dateOfService: { gte: start, lt: end },
-        },
-        select: {
-          currentBlockerCategory: true,
-          currentBlockerText: true,
-          dueAt: true,
-          financialReadiness: {
-            select: {
-              primaryPayerName: true,
-              financialClass: true,
+    ] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const db = tx as unknown as typeof prisma;
+      return Promise.all([
+        readSection("officeDaily", () => getDailyHistoryRollups(db, clinics, dateKeys, {
+          persist: forceRecompute,
+          forceRecompute,
+          cacheOnly: useCachedRollupsOnly,
+        }), []),
+        readSection("roomDaily", () => getRoomDailyHistoryRollups(db, clinics, dateKeys, {
+          persist: forceRecompute,
+          forceRecompute,
+          cacheOnly: useCachedRollupsOnly,
+        }), []),
+        readSection("revenueDaily", () => getRevenueDailyHistoryRollups(db, clinics, dateKeys, {
+          persist: forceRecompute,
+          forceRecompute,
+          cacheOnly: useCachedRollupsOnly,
+        }), []),
+        readSection("currentEncounters", () => tx.encounter.findMany({
+          where: { OR: todayMatchers },
+          select: {
+            id: true,
+            currentStatus: true,
+            checkInAt: true,
+            providerStartAt: true,
+            providerEndAt: true,
+            checkoutCompleteAt: true,
+            assignedMaUserId: true,
+            provider: { select: { name: true } },
+          },
+        }), []),
+        readSection("rangeRevenueCases", () => tx.revenueCase.findMany({
+          where: {
+            clinicId: { in: clinicIds },
+            dateOfService: { gte: start, lt: end },
+          },
+          select: {
+            currentBlockerCategory: true,
+            currentBlockerText: true,
+            dueAt: true,
+            financialReadiness: {
+              select: {
+                primaryPayerName: true,
+                financialClass: true,
+              },
+            },
+            checkoutCollectionTracking: {
+              select: {
+                collectionOutcome: true,
+              },
+            },
+            chargeCaptureRecord: {
+              select: {
+                documentationComplete: true,
+                icd10CodesJson: true,
+                procedureLinesJson: true,
+                serviceCaptureItemsJson: true,
+              },
+            },
+            providerClarifications: {
+              where: { status: { not: ProviderClarificationStatus.Resolved } },
+              select: { id: true },
             },
           },
-          checkoutCollectionTracking: {
-            select: {
-              collectionOutcome: true,
-            },
+        }), []),
+        readSection("activeSafetyCount", () => tx.safetyEvent.count({
+          where: {
+            resolvedAt: null,
+            encounter: { OR: todayMatchers },
           },
-          chargeCaptureRecord: {
-            select: {
-              documentationComplete: true,
-              icd10CodesJson: true,
-              procedureLinesJson: true,
-              serviceCaptureItemsJson: true,
-            },
+        }), 0),
+        readSection("blockingTaskCount", () => tx.task.count({
+          where: {
+            blocking: true,
+            status: { not: TaskStatus.completed },
+            encounter: { OR: todayMatchers },
           },
-          providerClarifications: {
-            where: { status: { not: ProviderClarificationStatus.Resolved } },
-            select: { id: true },
-          },
-        },
-      }), []),
-      readSection("activeSafetyCount", () => prisma.safetyEvent.count({
-        where: {
-          resolvedAt: null,
-          encounter: { OR: todayMatchers },
-        },
-      }), 0),
-      readSection("blockingTaskCount", () => prisma.task.count({
-        where: {
-          blocking: true,
-          status: { not: TaskStatus.completed },
-          encounter: { OR: todayMatchers },
-        },
-      }), 0),
-      facilityId ? readSection("revenueSettings", () => getRevenueSettings(prisma, facilityId), null) : Promise.resolve(null),
-    ]);
+        }), 0),
+        facilityId ? readSection("revenueSettings", () => getRevenueSettings(tx, facilityId), null) : Promise.resolve(null),
+      ]);
+    });
 
     const latestOffice = officeDaily[officeDaily.length - 1] || null;
     const latestRoom = roomDaily[roomDaily.length - 1] || null;
